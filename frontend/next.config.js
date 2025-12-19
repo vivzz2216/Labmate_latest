@@ -25,10 +25,20 @@ const nextConfig = {
   // Railway-friendly: avoid browser CORS by proxying same-origin requests to the backend.
   // Frontend code should call `/api/...` and `/uploads/...` etc; Next will forward to backend.
   async rewrites() {
-    const backend =
+    const raw =
       process.env.NEXT_PUBLIC_API_URL ||
       process.env.BACKEND_URL ||
       'http://localhost:8000'
+
+    // Make the value robust to common misconfig:
+    // - allow "labmatelatest-production.up.railway.app" (we'll prefix https://)
+    // - strip trailing slashes
+    const backend = (() => {
+      const v = String(raw || '').trim().replace(/\/+$/, '')
+      if (!v) return 'http://localhost:8000'
+      if (v.startsWith('http://') || v.startsWith('https://')) return v
+      return `https://${v}`
+    })()
 
     return [
       { source: '/api/:path*', destination: `${backend}/api/:path*` },
