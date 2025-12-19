@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Mail, Lock, User, Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '@/contexts/BasicAuthContext'
+import { isValidEmail, validatePasswordStrength } from '@/lib/sanitize'
 
 interface LoginModalProps {
   isOpen: boolean
@@ -55,6 +56,16 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
       if (isLogin) {
         await login(email, password)
       } else {
+        // Client-side validation to avoid 422 spam (backend enforces strong password rules)
+        if (!isValidEmail(email)) {
+          setError('Please enter a valid email address')
+          return
+        }
+        const { isValid, errors } = validatePasswordStrength(password)
+        if (!isValid) {
+          setError(errors.join('\n'))
+          return
+        }
         await signup(email, name, password)
       }
       onClose()
@@ -158,7 +169,7 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
               </div>
 
               {error && (
-                <div className="bg-red-500/10 border border-red-500/50 text-red-400 p-3 rounded-lg text-sm">
+                <div className="bg-red-500/10 border border-red-500/50 text-red-400 p-3 rounded-lg text-sm whitespace-pre-line">
                   {error}
                 </div>
               )}
