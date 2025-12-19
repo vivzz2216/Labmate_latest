@@ -59,7 +59,11 @@ def get_db() -> Generator[Session, None, None]:
         Exception: If database is not configured
     """
     if SessionLocal is None:
-        raise Exception("Database not configured. Please set DATABASE_URL environment variable.")
+        # Railway-friendly: return an HTTP error (not a crash / generic 500)
+        raise HTTPException(
+            status_code=503,
+            detail="Database not configured. Please set DATABASE_URL in environment variables.",
+        )
     
     db = SessionLocal()
     try:
@@ -93,7 +97,10 @@ def get_db_transaction() -> Generator[Session, None, None]:
             # Transaction commits automatically on exit if no exception
     """
     if SessionLocal is None:
-        raise Exception("Database not configured. Please set DATABASE_URL environment variable.")
+        raise HTTPException(
+            status_code=503,
+            detail="Database not configured. Please set DATABASE_URL in environment variables.",
+        )
     
     db = SessionLocal()
     try:
