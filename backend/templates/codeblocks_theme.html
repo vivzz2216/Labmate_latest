@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Code::Blocks IDE</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            overflow: auto;
+            min-height: 100vh;
+            background: #ffffff;
+            padding: 30px;
+        }
+
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            background: #ffffff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 40px;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        /* Title Bar */
+        .title-bar {
+            display: flex;
+            align-items: center;
+            height: 30px;
+            background: white;
+            border-bottom: 1px solid #c0c0c0;
+            padding: 0 8px;
+        }
+
+        .title-bar-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex: 1;
+        }
+
+        .title-bar-logo {
+            width: 20px;
+            height: 20px;
+        }
+
+        .title-bar-text {
+            color: #333;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .title-bar-controls {
+            display: flex;
+            gap: 4px;
+        }
+
+        .title-bar-btn {
+            padding: 4px;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .title-bar-btn:hover {
+            background: #e0e0e0;
+        }
+
+        .title-bar-btn.close:hover {
+            background: #e81123;
+            color: white;
+        }
+
+        /* Menu Bar */
+        .menu-bar {
+            display: flex;
+            align-items: center;
+            height: 25px;
+            background: #f0f0f0;
+            border-bottom: 1px solid #c0c0c0;
+            padding: 0 4px;
+        }
+
+        .menu-item {
+            padding: 2px 8px;
+            font-size: 12px;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .menu-item:hover {
+            background: #e5f3ff;
+        }
+
+        /* Toolbar */
+        .toolbar {
+            background: #ebebeb;
+            border-bottom: 1px solid #b4b4b4;
+        }
+
+        .toolbar-row {
+            display: flex;
+            align-items: center;
+            padding: 0 8px;
+            border-bottom: 1px solid #d0d0d0;
+        }
+
+        .toolbar-row-1 {
+            height: 32px;
+        }
+
+        .toolbar-row-2 {
+            height: 30px;
+            gap: 4px;
+        }
+
+        .toolbar-row-3 {
+            height: 32px;
+        }
+
+        .toolbar-img {
+            height: 28px;
+        }
+
+        .toolbar-select {
+            font-size: 12px;
+            height: 22px;
+            padding: 0 8px;
+            border: 1px solid #b4b4b4;
+            background: white;
+            flex: 1;
+            max-width: 600px;
+        }
+
+        .toolbar-nav-btn {
+            width: 22px;
+            height: 22px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid transparent;
+            background: transparent;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .toolbar-nav-btn:hover {
+            background: #d8d8d8;
+            border-color: #a0a0a0;
+        }
+
+        /* Main Content */
+        .main-content {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 240px;
+            background: #f5f5f5;
+            border-right: 1px solid #c0c0c0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-header {
+            height: 25px;
+            background: #f0f0f0;
+            border-bottom: 1px solid #c0c0c0;
+            padding: 0 8px;
+            display: flex;
+            align-items: center;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .sidebar-tabs {
+            display: flex;
+            border-bottom: 1px solid #c0c0c0;
+        }
+
+        .sidebar-tab {
+            flex: 1;
+            padding: 4px 8px;
+            font-size: 12px;
+            border: none;
+            background: #e8e8e8;
+            cursor: pointer;
+        }
+
+        .sidebar-tab.active {
+            background: white;
+            font-weight: 600;
+        }
+
+        .sidebar-tab:first-child {
+            border-right: 1px solid #c0c0c0;
+        }
+
+        .sidebar-tree {
+            flex: 1;
+            overflow: auto;
+            background: white;
+            padding: 8px;
+            font-size: 12px;
+        }
+
+        .tree-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 0;
+        }
+
+        .tree-expand-btn {
+            width: 12px;
+            height: 12px;
+            border: 1px solid #808080;
+            background: #ffffff;
+            cursor: default;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            line-height: 1;
+            color: #333;
+            margin-right: 4px;
+            pointer-events: none; /* non-interactive */
+        }
+
+        .tree-expand-btn:hover {
+            background: #f0f0f0;
+        }
+
+        .tree-icon {
+            width: 16px;
+            height: 16px;
+        }
+
+        .tree-children {
+            margin-left: 16px;
+            border-left: 1px dotted #bfbfbf;
+            padding-left: 8px;
+        }
+
+        .tree-item {
+            position: relative;
+        }
+        
+        .tree-item::before {
+            content: "";
+            position: absolute;
+            left: -8px;
+            top: 50%;
+            width: 8px;
+            height: 0;
+            border-top: 1px dotted #bfbfbf;
+        }
+
+        .tree-file {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 4px;
+            cursor: pointer;
+            width: 100%;
+            border: none;
+            background: transparent;
+            text-align: left;
+        }
+
+        .tree-file:hover {
+            background: #e0e0e0;
+        }
+
+        .tree-file.selected {
+            background: #cce8ff;
+        }
+
+        /* Editor */
+        .editor-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background: transparent;
+        }
+
+        /* White page wrapper behind the editor */
+        .editor-page {
+            background: #ffffff;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+            border: 1px solid #e6e6e6;
+            border-radius: 2px;
+            margin: 12px 12px 16px 12px; /* bottom margin gives space above terminal */
+        }
+
+        .editor-tabs {
+            display: flex;
+            align-items: center;
+            height: 25px;
+            background: #f0f0f0;
+            border-bottom: 1px solid #c0c0c0;
+        }
+
+        .editor-tab {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: white;
+            border-right: 1px solid #c0c0c0;
+            padding: 0 12px;
+            height: 100%;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .editor-tab-close {
+            padding: 2px;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            border-radius: 2px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .editor-tab-close:hover {
+            background: #e0e0e0;
+        }
+        
+        .editor-content {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+        
+        .line-numbers {
+            background: #f5f5f5;
+            border-right: 1px solid #e0e0e0;
+            padding: 8px;
+            user-select: none;
+        }
+        
+        .line-number {
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 10pt;
+            color: #999;
+            text-align: right;
+            line-height: 1.4;
+            height: 1.4em;
+        }
+
+        .code-area {
+            flex: 1;
+            padding: 8px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 10pt;
+            line-height: 1.4;
+            overflow: auto;
+            position: relative;
+        }
+        
+        .code-line {
+            height: 1.4em;
+            white-space: pre;
+        }
+        
+        .keyword {
+            color: #000080; /* Bold Navy Blue */
+            font-weight: bold;
+        }
+        
+        .string {
+            color: #4169E1; /* Light Navy Blue */
+        }
+
+        .preprocessor {
+            color: #90EE90; /* Light Green */
+        }
+
+        .function {
+            color: #000000; /* Black */
+        }
+
+        .variable {
+            color: #000000; /* Black */
+        }
+
+        .operator {
+            color: #000000; /* Black */
+        }
+
+        .number {
+            color: #800000; /* Dark Red */
+        }
+
+        .comment {
+            color: #008000; /* Green */
+        }
+
+        .macro {
+            color: #90EE90; /* Light Green */
+        }
+
+        .builtin {
+            color: #000000; /* Black */
+        }
+
+        .constant {
+            color: #000000; /* Black */
+        }
+
+        .punctuation {
+            color: #000000; /* Black */
+        }
+
+        .cursor {
+            display: inline-block;
+            width: 2px;
+            height: 1.2em;
+            background: black;
+            animation: blink 1s step-end infinite;
+            vertical-align: text-bottom;
+        }
+
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+
+        /* Status Bar */
+        .status-bar {
+            display: flex;
+            align-items: center;
+            height: 22px;
+            background: #f0f0f0;
+            border-top: 1px solid #c0c0c0;
+            padding: 0 8px;
+            font-size: 12px;
+        }
+
+        .status-bar-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-bar-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-left: auto;
+        }
+        
+        .hidden {
+            display: none;
+        }
+
+        .spacer {
+            flex: 1;
+        }
+
+        /* Terminal Output Section - Separate Screenshot Style */
+        .terminal-section {
+            background: #000000;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            margin-top: 0;
+            margin-bottom: 0;
+        }
+
+        .terminal-header {
+            background: #2d2d2d;
+            padding: 8px 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 40px;
+        }
+
+        .terminal-title-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .terminal-icon {
+            width: 16px;
+            height: 16px;
+            margin-right: 8px;
+        }
+
+        .terminal-title {
+            color: #ffffff;
+            font-size: 12px;
+            font-weight: 400;
+        }
+
+        .terminal-controls {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .terminal-btn {
+            background: transparent;
+            border: none;
+            color: #ffffff;
+            padding: 0;
+            font-size: 16px;
+            cursor: pointer;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+        }
+
+        .terminal-btn:hover {
+            background: rgba(255,255,255,0.1);
+        }
+
+        .terminal-content {
+            padding: 12px 16px;
+            overflow-y: auto;
+            background: #000000;
+            min-height: 150px;
+        }
+
+        .terminal-output {
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .terminal-line {
+            color: #ffffff;
+            margin-bottom: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Title Bar -->
+        <div class="title-bar">
+            <div class="title-bar-left">
+                <img src="/public/pngwing.com_1760964148870.png" alt="Code::Blocks" class="title-bar-logo">
+                <span class="title-bar-text">{{ filename or 'main.c' }} [vv] - Code::Blocks 25.03</span>
+            </div>
+            <div class="title-bar-controls">
+                <button class="title-bar-btn" onclick="console.log('Minimize')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                </button>
+                <button class="title-bar-btn" onclick="console.log('Maximize')">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="5" y="5" width="14" height="14"></rect>
+                    </svg>
+                </button>
+                <button class="title-bar-btn close" onclick="console.log('Close')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Menu Bar -->
+        <div class="menu-bar">
+            <button class="menu-item" onclick="console.log('File')">File</button>
+            <button class="menu-item" onclick="console.log('Edit')">Edit</button>
+            <button class="menu-item" onclick="console.log('View')">View</button>
+            <button class="menu-item" onclick="console.log('Search')">Search</button>
+            <button class="menu-item" onclick="console.log('Project')">Project</button>
+            <button class="menu-item" onclick="console.log('Build')">Build</button>
+            <button class="menu-item" onclick="console.log('Debug')">Debug</button>
+            <button class="menu-item" onclick="console.log('Fortran')">Fortran</button>
+            <button class="menu-item" onclick="console.log('wxSmith')">wxSmith</button>
+            <button class="menu-item" onclick="console.log('Tools')">Tools</button>
+            <button class="menu-item" onclick="console.log('Tools+')">Tools+</button>
+            <button class="menu-item" onclick="console.log('Plugins')">Plugins</button>
+            <button class="menu-item" onclick="console.log('DoxyBlocks')">DoxyBlocks</button>
+            <button class="menu-item" onclick="console.log('Settings')">Settings</button>
+            <button class="menu-item" onclick="console.log('Help')">Help</button>
+        </div>
+        
+        <!-- Toolbar -->
+        <div class="toolbar">
+            <div class="toolbar-row toolbar-row-1">
+                <img src="/public/image_1760964456628.png" alt="Toolbar" class="toolbar-img">
+            </div>
+            <div class="toolbar-row toolbar-row-2">
+                <select class="toolbar-select">
+                    <option>&lt;global&gt;</option>
+                </select>
+                <div class="spacer"></div>
+                <button class="toolbar-nav-btn" onclick="console.log('Previous')">←</button>
+                <button class="toolbar-nav-btn" onclick="console.log('Next')">→</button>
+            </div>
+            <div class="toolbar-row toolbar-row-3">
+                <img src="/public/image_1760964794889.png" alt="Additional toolbar" class="toolbar-img">
+            </div>
+        </div>
+        
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Sidebar -->
+            <div class="sidebar">
+                <div class="sidebar-header">Management</div>
+                <div class="sidebar-tabs">
+                    <button class="sidebar-tab active" id="tab-projects" onclick="switchTab('projects')">Projects</button>
+                    <button class="sidebar-tab" id="tab-symbols" onclick="switchTab('symbols')">Symbols</button>
+                </div>
+                <div class="sidebar-tree">
+                    <div id="projects-view">
+                        <!-- Workspace -->
+                        <div class="tree-item">
+                            <button class="tree-expand-btn" onclick="toggleExpand('workspace')">−</button>
+                            <img src="/public/image_1760965761967.png" alt="Workspace" class="tree-icon">
+                            <span style="font-weight: 600;">Workspace</span>
+                        </div>
+                        <div id="workspace-children" class="tree-children">
+                            <!-- vv folder -->
+                            <div class="tree-item">
+                                <button class="tree-expand-btn" onclick="toggleExpand('vv')">−</button>
+                                <img src="/public/pngwing.com_1760964148870.png" alt="Project" class="tree-icon">
+                                <span style="font-weight: 600;">vv</span>
+                            </div>
+                            <div id="vv-children" class="tree-children">
+                                <!-- Sources folder -->
+                                <div class="tree-item">
+                                    <button class="tree-expand-btn" id="btn-sources">−</button>
+                                    <img src="/public/image-removebg-preview (1)_1760966102213.png" alt="Folder" class="tree-icon">
+                                    <span>Sources</span>
+                                </div>
+                                <div id="sources-children" class="tree-children" style="display: block;">
+                                    <!-- main.c file -->
+                                    <button class="tree-file selected" onclick="selectFile('{{ filename if filename else 'main.c' }}')">
+                                        <span style="width: 12px;"></span>
+                                        <img src="/public/image_1760966294109.png" alt="File" class="tree-icon">
+                                        <span>{{ filename or 'main.c' }}</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="symbols-view" class="hidden" style="padding: 8px; color: #666;">
+                        No symbols to display
+                    </div>
+                </div>
+        </div>
+        
+            <!-- Editor -->
+        <div class="editor-container">
+                <div class="editor-tabs editor-page">
+                    <div class="editor-tab">
+                        <span>{{ filename or 'main.c' }}</span>
+                        <button class="editor-tab-close" onclick="console.log('Close tab')">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="editor-content editor-page">
+            <div class="line-numbers" id="line-numbers">
+                        <!-- Line numbers will be generated by JavaScript -->
+                    </div>
+                    <div class="code-area" id="code-area">
+                        <!-- Code content will be generated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Status Bar -->
+        <div class="status-bar">
+            <div class="status-bar-left">
+                <span>&lt;global&gt;</span>
+            </div>
+            <div class="status-bar-right">
+                <span>Line 5, Col 1</span>
+                <span>INS</span>
+                <span>R/W</span>
+        </div>
+        </div>
+    </div>
+
+    <!-- Terminal Output Section - Separate Screenshot -->
+    <div class="terminal-section">
+        <div class="terminal-header">
+            <div class="terminal-title-left">
+                <img src="/public/terminal.png" alt="Terminal" class="terminal-icon">
+                <span class="terminal-title">C:\Users\{{ username or 'user' }}\OneDrive\Desk</span>
+            </div>
+            <div class="terminal-controls">
+                <button class="terminal-btn">−</button>
+                <button class="terminal-btn">□</button>
+                <button class="terminal-btn">✕</button>
+            </div>
+        </div>
+        <div class="terminal-content">
+            <div class="terminal-output">
+                <div class="terminal-line">{{ output_content or 'Hello world!' }}</div>
+                <div class="terminal-line"></div>
+                <div class="terminal-line">Process returned 0 (0x0)   execution time : 0.044 s</div>
+                <div class="terminal-line">Press any key to continue.</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Tab switching function
+        function switchTab(tabName) {
+            // Update tab buttons
+            document.getElementById('tab-projects').classList.remove('active');
+            document.getElementById('tab-symbols').classList.remove('active');
+            document.getElementById(`tab-${tabName}`).classList.add('active');
+
+            // Update content
+            document.getElementById('projects-view').classList.toggle('hidden', tabName !== 'projects');
+            document.getElementById('symbols-view').classList.toggle('hidden', tabName !== 'symbols');
+        }
+
+        // Expansion disabled (sidebar stays open)
+        function toggleExpand(_id) {
+            /* no-op */
+        }
+
+        // Select file function
+        function selectFile(fileName) {
+            // Remove selection from all files
+            document.querySelectorAll('.tree-file').forEach(file => {
+                file.classList.remove('selected');
+            });
+
+            // Add selection to clicked file
+            event.currentTarget.classList.add('selected');
+            console.log('Selected file:', fileName);
+        }
+
+        // Code display functions
+        function updateLineNumbers(code) {
+            const lines = code.split('\n');
+            const lineNumbersDiv = document.getElementById('line-numbers');
+            lineNumbersDiv.innerHTML = '';
+            
+            lines.forEach((_, index) => {
+                const lineNumber = document.createElement('div');
+                lineNumber.className = 'line-number';
+                lineNumber.textContent = index + 1;
+                lineNumbersDiv.appendChild(lineNumber);
+            });
+        }
+
+        function updateCode(code) {
+            const codeAreaDiv = document.getElementById('code-area');
+            const lines = code.split('\n');
+            codeAreaDiv.innerHTML = '';
+            
+            lines.forEach(line => {
+                const codeLine = document.createElement('div');
+                codeLine.className = 'code-line';
+                codeLine.innerHTML = line;
+                codeAreaDiv.appendChild(codeLine);
+            });
+        }
+        
+        // Get code and output from URL parameters or use defaults
+        const urlParams = new URLSearchParams(window.location.search);
+        const code = urlParams.get('code') || {{ (code_content or '') | tojson }};
+        const output = urlParams.get('output') || {{ (output_content or 'Hello, World!') | tojson }};
+        
+        updateCode(code);
+        updateLineNumbers(code);
+    </script>
+</body>
+</html>

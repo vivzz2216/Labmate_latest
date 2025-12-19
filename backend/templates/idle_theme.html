@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Python IDLE</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background-color: #ffffff;
+            color: #000000;
+            margin: 0;
+            padding: 0;
+            font-size: 12px;
+        }
+        
+        .editor-window {
+            background-color: #ffffff;
+            border: 1px solid #c0c0c0;
+            margin: 20px auto;
+            width: 800px;
+            box-shadow: 2px 2px 10px rgba(0,0,0,0.3);
+        }
+        
+        .title-bar {
+            background: linear-gradient(to bottom, #ece9d8, #d4d0c8);
+            height: 30px;
+            border-bottom: 1px solid #c0c0c0;
+            display: flex;
+            align-items: center;
+            padding: 0 8px;
+            font-size: 11px;
+            font-weight: normal;
+            color: #000000;
+        }
+        
+        .title-icon {
+            width: 16px;
+            height: 16px;
+            margin-right: 8px;
+            border-radius: 2px;
+            background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAdUlEQVR4AQBpAJb/Ary8vC7b29vT29vb07m5uaMAAAAAAgICAg329vYs+Pj4LBoaGlytra04Avz8/AADAwMA5OzyAIe02gAJCf0KAvz8/AACAgIAirvjAE4hygA/JsevAuHh4fsBAQHggkgW4kwkyfd2i+lZAAAA//896zYQAAAABklEQVQDAHcKMPrPM1tsAAAAAElFTkSuQmCC');
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+        }
+        
+        .menu-bar {
+            background-color: #ffffff;
+            border-bottom: 1px solid #c0c0c0;
+            height: 22px;
+            display: flex;
+            align-items: center;
+            padding: 0 8px;
+            font-size: 11px;
+        }
+        
+        .menu-item {
+            margin-right: 15px;
+            color: #000000;
+            cursor: default;
+        }
+        
+        .code-editor {
+            background-color: #ffffff;
+            padding: 8px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.4;
+            white-space: pre;
+            color: #000000;
+            min-height: 150px;
+        }
+        
+        .status-bar {
+            background-color: #ffffff;
+            border-top: 1px solid #c0c0c0;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding: 0 8px;
+            font-size: 11px;
+            color: #000000;
+        }
+        
+        .shell-window {
+            background-color: #ffffff;
+            border: 1px solid #c0c0c0;
+            margin: 10px auto;
+            width: 800px;
+            box-shadow: 2px 2px 10px rgba(0,0,0,0.3);
+        }
+        
+        .shell-output {
+            background-color: #ffffff;
+            padding: 8px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.4;
+            white-space: pre;
+            color: #000000;
+            min-height: 120px;
+        }
+        
+        .prompt {
+            color: #000000;
+        }
+        
+        .output-text {
+            color: #000000;
+        }
+        
+        /* Exact Python IDLE syntax highlighting */
+        .keyword { 
+            color: #FF8000; 
+            font-weight: bold; 
+        }
+        .string { 
+            color: #008000; 
+        }
+        .comment { 
+            color: #FF0000; 
+            font-style: italic; 
+        }
+        .number { 
+            color: #800080; 
+        }
+        .function { 
+            color: #0000FF; 
+            font-weight: bold; 
+        }
+        .class { 
+            color: #800000; 
+            font-weight: bold; 
+        }
+        .operator { 
+            color: #000000; 
+        }
+        .variable {
+            color: #000000;
+        }
+        .builtin {
+            color: #000000;
+        }
+    </style>
+</head>
+<body>
+    <!-- Python Editor Window -->
+    <div class="editor-window">
+        <div class="title-bar">
+            <div class="title-icon"></div>
+            <span>{{ filename }} - C:/Users/{{ username }}/OneDrive/Desktop/{{ filename }} (3.10.0)</span>
+        </div>
+        <div class="menu-bar">
+            <span class="menu-item">File</span>
+            <span class="menu-item">Edit</span>
+            <span class="menu-item">Format</span>
+            <span class="menu-item">Run</span>
+            <span class="menu-item">Options</span>
+            <span class="menu-item">Window</span>
+            <span class="menu-item">Help</span>
+        </div>
+        <div class="code-editor" id="code-content">
+{{ code_content }}
+        </div>
+        <div class="status-bar">
+            <span>Ln: 6 Col: 4</span>
+        </div>
+    </div>
+    
+    <!-- Python Shell Window -->
+    <div class="shell-window">
+        <div class="title-bar">
+            <div class="title-icon"></div>
+            <span>Python 3.10.0 Shell</span>
+        </div>
+        <div class="menu-bar">
+            <span class="menu-item">File</span>
+            <span class="menu-item">Edit</span>
+            <span class="menu-item">Shell</span>
+            <span class="menu-item">Debug</span>
+            <span class="menu-item">Options</span>
+            <span class="menu-item">Window</span>
+            <span class="menu-item">Help</span>
+        </div>
+        <div class="shell-output" id="output-content">
+Python 3.10.0 (tags/v3.10.0:1234567, Oct 11 2025, 00:00:00) [MSC v.1900 64 bit (AMD64)] on win32
+Type "help", "copyright", "credits" or "license()" for more information.
+>>> 
+========== RESTART: C:/Users/{{ username }}/OneDrive/Desktop/{{ filename }} ==========
+{{ output_content }}
+>>> 
+        </div>
+    </div>
+</body>
+</html>

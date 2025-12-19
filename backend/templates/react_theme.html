@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VS Code - React</title>
+    <style>
+        /* VS Code Dark Theme Colors */
+        :root {
+            --vscode-bg: hsl(210, 11%, 12%);
+            --vscode-editor: hsl(0, 0%, 12%);
+            --vscode-sidebar: hsl(210, 11%, 15%);
+            --vscode-activity-bar: hsl(0, 0%, 20%);
+            --vscode-title-bar: hsl(0, 0%, 14%);
+            --vscode-accent: hsl(207, 100%, 42%);
+            --vscode-text: hsl(0, 0%, 80%);
+            --vscode-text-secondary: hsl(0, 0%, 60%);
+            --vscode-border: hsl(0, 0%, 16%);
+            --vscode-line-number: hsl(0, 0%, 44%);
+            --vscode-selection: hsl(210, 100%, 17%);
+            
+            /* Syntax highlighting */
+            --syntax-keyword: hsl(197, 71%, 73%);
+            --syntax-string: hsl(30, 67%, 72%);
+            --syntax-number: hsl(95, 38%, 62%);
+            --syntax-comment: hsl(0, 0%, 44%);
+            --syntax-tag: hsl(122, 39%, 49%);
+            --syntax-attribute: hsl(36, 60%, 70%);
+            --syntax-class: hsl(27, 92%, 61%);
+            --syntax-function: hsl(27, 92%, 61%);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            overflow: hidden;
+            height: 100vh;
+            background: var(--vscode-bg);
+            color: var(--vscode-text);
+        }
+
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+        }
+
+        /* Title Bar */
+        .title-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 36px;
+            background: var(--vscode-title-bar);
+            border-bottom: 1px solid var(--vscode-border);
+            padding: 0 8px;
+        }
+
+        .title-bar-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .menu-bar {
+            display: flex;
+            gap: 16px;
+            font-size: 12px;
+        }
+
+        .menu-item {
+            cursor: pointer;
+            padding: 4px 8px;
+            transition: color 0.2s;
+        }
+
+        .menu-item:hover {
+            color: white;
+        }
+
+        .title-bar-right {
+            display: flex;
+            align-items: center;
+        }
+
+        .search-input {
+            background: var(--vscode-activity-bar);
+            color: var(--vscode-text);
+            font-size: 12px;
+            padding: 4px 12px;
+            border-radius: 4px;
+            border: 1px solid var(--vscode-border);
+            outline: none;
+            width: 256px;
+        }
+
+        /* Main Container */
+        .main-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* Activity Bar */
+        .activity-bar {
+            width: 48px;
+            background: var(--vscode-activity-bar);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 8px 0;
+            border-right: 1px solid var(--vscode-border);
+        }
+
+        .activity-btn {
+            background: none;
+            border: none;
+            color: var(--vscode-text);
+            cursor: pointer;
+            padding: 12px;
+            position: relative;
+            transition: color 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+        }
+
+        .activity-btn:hover {
+            color: white;
+        }
+
+        .activity-btn.active {
+            color: white;
+        }
+
+        .activity-btn.active::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: var(--vscode-accent);
+        }
+
+        .activity-spacer {
+            flex: 1;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 208px;
+            background: var(--vscode-sidebar);
+            border-right: 1px solid var(--vscode-border);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 16px;
+            font-size: 11px;
+            color: var(--vscode-text-secondary);
+            text-transform: uppercase;
+        }
+
+        .more-actions {
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .file-tree {
+            flex: 1;
+            overflow-y: auto;
+            color: var(--vscode-text);
+            padding: 4px 0;
+        }
+
+        .folder,
+        .file {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 8px;
+            font-size: 12px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .folder:hover,
+        .file:hover {
+            background: var(--vscode-selection);
+        }
+
+        /* Editor Area */
+        .editor-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: var(--vscode-editor);
+        }
+
+        /* Tab Bar */
+        .tab-bar {
+            height: 36px;
+            background: var(--vscode-sidebar);
+            display: flex;
+            align-items: center;
+            border-bottom: 1px solid var(--vscode-border);
+        }
+
+        .tab {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            font-size: 12px;
+            background: var(--vscode-editor);
+            border-right: 1px solid var(--vscode-border);
+            cursor: pointer;
+            color: var(--vscode-text);
+        }
+
+        .tab.active {
+            color: white;
+        }
+
+        /* Breadcrumb */
+        .breadcrumb {
+            height: 24px;
+            background: var(--vscode-editor);
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            font-size: 12px;
+            color: var(--vscode-text-secondary);
+            border-bottom: 1px solid var(--vscode-border);
+            gap: 4px;
+        }
+
+        .breadcrumb-item {
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .breadcrumb-item:hover {
+            color: white;
+        }
+
+        .breadcrumb-item.tag {
+            color: var(--syntax-tag);
+        }
+
+        .breadcrumb-item.active {
+            color: white;
+        }
+
+        /* Editor */
+        .editor {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+
+        .line-numbers {
+            width: 48px;
+            background: var(--vscode-editor);
+            color: var(--vscode-line-number);
+            text-align: right;
+            padding: 4px 16px 4px 4px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.4rem;
+            user-select: none;
+            overflow: hidden;
+        }
+
+        .code-content {
+            flex: 1;
+            background: var(--vscode-editor);
+            overflow: auto;
+            padding: 4px 0;
+        }
+
+        pre {
+            margin: 0;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.4rem;
+            color: var(--vscode-text);
+        }
+
+        code {
+            display: block;
+            white-space: pre;
+        }
+
+        /* JSX Syntax Highlighting */
+        .k { color: var(--syntax-keyword); }
+        .kd { color: var(--syntax-keyword); }
+        .kr { color: var(--syntax-keyword); }
+        .nf { color: var(--syntax-function); }
+        .nx { color: #9cdcfe; }
+        .s { color: var(--syntax-string); }
+        .s1 { color: var(--syntax-string); }
+        .s2 { color: var(--syntax-string); }
+        .c1 { color: var(--syntax-comment); }
+        .cm { color: var(--syntax-comment); }
+        .nt { color: var(--syntax-tag); }
+        .na { color: #9cdcfe; }
+        .mi { color: var(--syntax-number); }
+
+        /* Scrollbar Styling */
+        ::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--vscode-editor);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--vscode-activity-bar);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: hsl(0, 0%, 30%);
+        }
+
+        /* Browser Preview (Below Editor) */
+        .browser-container {
+            background: #ffffff;
+            border-radius: 0 0 8px 8px;
+            overflow: hidden;
+            margin-top: 20px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .browser-chrome {
+            background: #f0f0f0;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            padding: 0 15px;
+            border-bottom: 1px solid #d0d0d0;
+        }
+
+        .browser-controls {
+            display: flex;
+            gap: 8px;
+            margin-right: 15px;
+        }
+
+        .browser-btn {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .browser-btn.close { background: #ff5f56; }
+        .browser-btn.minimize { background: #ffbd2e; }
+        .browser-btn.maximize { background: #27c93f; }
+
+        .address-bar {
+            flex: 1;
+            background: white;
+            border: 1px solid #d0d0d0;
+            border-radius: 5px;
+            padding: 5px 15px;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .react-badge {
+            background: #61dafb;
+            color: #000;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+
+        .browser-output {
+            background: white;
+            padding: 20px;
+            min-height: 200px;
+            color: #000;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Title Bar -->
+        <div class="title-bar">
+            <div class="title-bar-left">
+                <img src="/public/vscode-logo.png" alt="VS Code" class="vscode-logo" style="width: 16px; height: 16px; margin-right: 8px;">
+                <div class="menu-bar">
+                    <span class="menu-item">File</span>
+                    <span class="menu-item">Edit</span>
+                    <span class="menu-item">Selection</span>
+                    <span class="menu-item">View</span>
+                    <span class="menu-item">Go</span>
+                    <span class="menu-item">Run</span>
+                    <span class="menu-item">Terminal</span>
+                    <span class="menu-item">Help</span>
+                </div>
+            </div>
+            <div class="title-bar-right">
+                <input type="text" placeholder="{{ filename or 'App.jsx' }}" class="search-input" readonly>
+            </div>
+        </div>
+
+        <div class="main-container">
+            <!-- Activity Bar -->
+            <div class="activity-bar">
+                <button class="activity-btn active" title="Explorer">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
+                        <polyline points="13 2 13 9 20 9"></polyline>
+                    </svg>
+                </button>
+                <button class="activity-btn" title="Search">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <path d="m21 21-4.35-4.35"></path>
+                    </svg>
+                </button>
+                <button class="activity-btn" title="Source Control">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="6" y1="3" x2="6" y2="15"></line>
+                        <circle cx="18" cy="6" r="3"></circle>
+                        <circle cx="6" cy="18" r="3"></circle>
+                        <path d="M18 9a9 9 0 0 1-9 9"></path>
+                    </svg>
+                </button>
+                <button class="activity-btn" title="Run and Debug">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polygon points="10 8 16 12 10 16 10 8"></polygon>
+                    </svg>
+                </button>
+                <button class="activity-btn" title="Extensions">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                    </svg>
+                </button>
+                <div class="activity-spacer"></div>
+                <button class="activity-btn" title="Accounts">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="12" cy="7" r="4"></circle>
+                    </svg>
+                </button>
+                <button class="activity-btn" title="Settings">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="sidebar">
+                <div class="sidebar-header">
+                    <span>EXPLORER</span>
+                    <span class="more-actions">...</span>
+                </div>
+                <div class="file-tree">
+                    <div class="folder expanded" style="padding-left: 8px;">
+                        <span>▼</span>
+                        <span style="margin-left: 4px;">react-spa</span>
+                    </div>
+                    
+                    <!-- node_modules -->
+                    <div class="folder" style="padding-left: 20px;">
+                        <span>▶</span>
+                        <span style="margin-left: 4px;">node_modules</span>
+                    </div>
+                    
+                    <!-- public -->
+                    <div class="folder expanded" style="padding-left: 20px;">
+                        <span>▼</span>
+                        <span style="margin-left: 4px;">public</span>
+                    </div>
+                    <div class="file" style="padding-left: 44px;">
+                        <span style="color: #ff6b6b;">📄</span>
+                        <span style="margin-left: 4px;">favicon.ico</span>
+                    </div>
+                    <div class="file" style="padding-left: 44px;">
+                        <span style="color: #4ecdc4;">📄</span>
+                        <span style="margin-left: 4px;">index.html</span>
+                    </div>
+                    <div class="file" style="padding-left: 44px;">
+                        <span style="color: #45b7d1;">🖼</span>
+                        <span style="margin-left: 4px;">logo192.png</span>
+                    </div>
+                    <div class="file" style="padding-left: 44px;">
+                        <span style="color: #45b7d1;">🖼</span>
+                        <span style="margin-left: 4px;">logo512.png</span>
+                    </div>
+                    <div class="file" style="padding-left: 44px;">
+                        <span style="color: #96ceb4;">📄</span>
+                        <span style="margin-left: 4px;">manifest.json</span>
+                    </div>
+                    <div class="file" style="padding-left: 44px;">
+                        <span style="color: #feca57;">📄</span>
+                        <span style="margin-left: 4px;">robots.txt</span>
+                    </div>
+                    
+                    <!-- src -->
+                    <div class="folder expanded" style="padding-left: 20px;">
+                        <span>▼</span>
+                        <span style="margin-left: 4px;">src</span>
+                    </div>
+                    
+                    {% for file_path, file_content in project_files.items() %}
+                        {% if file_path.startswith('src/') and not file_path.startswith('src/components/') %}
+                            <div class="file" style="padding-left: 44px;">
+                                {% if file_path.endswith('.js') or file_path.endswith('.jsx') %}
+                                    <span style="color: #61dafb; font-weight: bold;">⚛</span>
+                                {% elif file_path.endswith('.css') %}
+                                    <span style="color: #ff6b6b;">🎨</span>
+                                {% else %}
+                                    <span style="color: #4ecdc4;">📄</span>
+                                {% endif %}
+                                <span style="margin-left: 4px;">{{ file_path.split('/')[-1] }}</span>
+                            </div>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    <!-- components -->
+                    {% set has_components = false %}
+                    {% for file_path in project_files.keys() %}
+                        {% if file_path.startswith('src/components/') %}
+                            {% set has_components = true %}
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if has_components %}
+                    <div class="folder expanded" style="padding-left: 44px;">
+                        <span>▼</span>
+                        <span style="margin-left: 4px;">components</span>
+                    </div>
+                    {% for file_path, file_content in project_files.items() %}
+                        {% if file_path.startswith('src/components/') %}
+                            <div class="file" style="padding-left: 68px;">
+                                <span style="color: #61dafb; font-weight: bold;">⚛</span>
+                                <span style="margin-left: 4px;">{{ file_path.split('/')[-1] }}</span>
+                            </div>
+                        {% endif %}
+                    {% endfor %}
+                    {% endif %}
+                    
+                    <!-- Root files -->
+                    <div class="file" style="padding-left: 20px;">
+                        <span style="color: #96ceb4;">📄</span>
+                        <span style="margin-left: 4px;">.gitignore</span>
+                    </div>
+                    <div class="file" style="padding-left: 20px;">
+                        <span style="color: #f0db4f; font-weight: bold;">JS</span>
+                        <span style="margin-left: 4px;">package.json</span>
+                    </div>
+                    <div class="file" style="padding-left: 20px;">
+                        <span style="color: #f0db4f; font-weight: bold;">JS</span>
+                        <span style="margin-left: 4px;">package-lock.json</span>
+                    </div>
+                    <div class="file" style="padding-left: 20px;">
+                        <span style="color: #4ecdc4;">📄</span>
+                        <span style="margin-left: 4px;">README.md</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Editor Area -->
+            <div class="editor-area">
+                <!-- Tab Bar -->
+                <div class="tab-bar">
+                    <div class="tab active">
+                        <span style="color: #61dafb; font-weight: bold;">⚛</span>
+                        <span>{{ filename or 'App.jsx' }}</span>
+                    </div>
+                </div>
+
+                <!-- Breadcrumb -->
+                <div class="breadcrumb">
+                    <span class="breadcrumb-item">react-spa</span>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                    <span class="breadcrumb-item">src</span>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                    <span class="breadcrumb-item active">{{ filename or 'App.jsx' }}</span>
+                </div>
+
+                <!-- Editor -->
+                <div class="editor">
+                    <div class="line-numbers" id="lineNumbers"></div>
+                    <div class="code-content">
+                        <pre><code id="codeContent">{{ code_content | safe }}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Browser Preview (Separate Section Below) -->
+    <div class="browser-container">
+        <div class="browser-chrome">
+            <div class="browser-controls">
+                <div class="browser-btn close"></div>
+                <div class="browser-btn minimize"></div>
+                <div class="browser-btn maximize"></div>
+            </div>
+            <div class="address-bar">
+                http://localhost:3001
+                <span class="react-badge">REACT</span>
+            </div>
+        </div>
+
+        <div class="browser-output">
+            {{ output_content | safe }}
+        </div>
+    </div>
+
+    <script>
+        // Generate line numbers based on code content
+        function generateLineNumbers() {
+            const codeElement = document.getElementById('codeContent');
+            const lineNumbersElement = document.getElementById('lineNumbers');
+            
+            if (codeElement && lineNumbersElement) {
+                const code = codeElement.textContent;
+                const lines = code.split('\n');
+                lineNumbersElement.innerHTML = lines.map((_, i) => `<div>${i + 1}</div>`).join('');
+            }
+        }
+
+        // Initialize on load
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', generateLineNumbers);
+        } else {
+            generateLineNumbers();
+        }
+    </script>
+</body>
+</html>

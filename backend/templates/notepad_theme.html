@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notepad - Java Code</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            overflow: auto;
+            min-height: 100vh;
+            background: #ffffff; /* White page background */
+            padding: 20px; /* Padding around the entire content */
+        }
+
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            background: #f0f0f0; /* Notepad window background */
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1); /* Shadow for the window */
+            margin-bottom: 20px; /* Space between editor and terminal */
+        }
+
+        /* Title Bar */
+        .title-bar {
+            background: linear-gradient(to bottom, #ece9d8, #d4d0c8);
+            height: 30px;
+            border-bottom: 1px solid #c0c0c0;
+            display: flex;
+            align-items: center;
+            padding: 0 8px;
+            font-size: 11px;
+            font-weight: normal;
+            color: #000000;
+        }
+
+        .title-icon {
+            width: 16px;
+            height: 16px;
+            margin-right: 8px;
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+        }
+
+        .title-text {
+            flex: 1;
+        }
+
+        .title-controls {
+            display: flex;
+            gap: 2px;
+        }
+
+        .title-btn {
+            width: 16px;
+            height: 14px;
+            background: #ece9d8;
+            border: 1px solid #c0c0c0;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            color: #000000;
+        }
+
+        .title-btn:hover {
+            background: #d4d0c8;
+        }
+
+        /* Menu Bar */
+        .menu-bar {
+            background-color: #f0f0f0;
+            height: 22px;
+            border-bottom: 1px solid #c0c0c0;
+            display: flex;
+            align-items: center;
+            padding: 0 4px;
+            font-size: 11px;
+        }
+
+        .menu-item {
+            padding: 2px 8px;
+            cursor: default;
+            border: 1px solid transparent;
+            color: #000000;
+        }
+
+        .menu-item:hover {
+            background-color: #e0e0e0;
+            border: 1px solid #c0c0c0;
+        }
+
+        /* Editor Area */
+        .editor-area {
+            background-color: #ffffff;
+            padding: 8px;
+            min-height: 400px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.4;
+            white-space: pre-wrap;
+            overflow-x: auto;
+            position: relative;
+        }
+
+        .code-line {
+            margin: 0;
+            padding: 0;
+            height: 1.4em;
+            white-space: pre;
+        }
+
+        /* Java syntax highlighting */
+        .keyword {
+            color: #0000ff; /* Blue */
+            font-weight: bold;
+        }
+        
+        .string {
+            color: #008000; /* Green */
+        }
+        
+        .comment {
+            color: #808080; /* Gray */
+            font-style: italic;
+        }
+        
+        .number {
+            color: #ff0000; /* Red */
+        }
+        
+        .operator {
+            color: #000000; /* Black */
+            font-weight: bold;
+        }
+        
+        .class-name {
+            color: #800080; /* Purple */
+            font-weight: bold;
+        }
+        
+        .method-name {
+            color: #000080; /* Navy Blue */
+        }
+        
+        .variable {
+            color: #000000; /* Black */
+        }
+        
+        .annotation {
+            color: #808000; /* Olive */
+            font-style: italic;
+        }
+
+        .preprocessor {
+            color: #008000; /* Green */
+        }
+
+        .macro {
+            color: #008000; /* Green */
+        }
+
+        .builtin {
+            color: #000000; /* Black */
+        }
+
+        .constant {
+            color: #000000; /* Black */
+        }
+
+        .punctuation {
+            color: #000000; /* Black */
+        }
+
+        /* Status Bar */
+        .status-bar {
+            background-color: #f0f0f0;
+            height: 20px;
+            border-top: 1px solid #c0c0c0;
+            display: flex;
+            align-items: center;
+            padding: 0 8px;
+            font-size: 11px;
+            color: #000000;
+        }
+
+        .status-text {
+            margin-right: 20px;
+        }
+
+        .line-col {
+            margin-left: auto;
+        }
+
+        /* Terminal Output Section - Separate Screenshot */
+        .terminal-section {
+            background: #000000;
+            border-radius: 8px; /* Rounded corners for terminal */
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            margin-top: 20px; /* Space between editor and terminal */
+        }
+
+        .terminal-header {
+            background: #2d2d30;
+            border-bottom: 1px solid #555555;
+            padding: 6px 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+            color: #cccccc;
+        }
+
+        .terminal-title-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .terminal-icon {
+            width: 16px;
+            height: 16px;
+            margin-right: 8px;
+        }
+
+        .terminal-title {
+            color: #ffffff;
+            font-size: 12px;
+            font-weight: normal;
+        }
+
+        .terminal-controls {
+            display: flex;
+            gap: 4px;
+        }
+
+        .terminal-btn {
+            background: transparent;
+            border: none;
+            color: #cccccc;
+            padding: 2px 6px;
+            font-size: 12px;
+            cursor: pointer;
+            border-radius: 2px;
+        }
+
+        .terminal-btn:hover {
+            background: #3c3c3c;
+        }
+
+        .terminal-content {
+            flex: 1;
+            padding: 8px 12px;
+            overflow-y: auto;
+            background: #000000;
+        }
+
+        .terminal-output {
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        .terminal-line {
+            color: #ffffff;
+            margin-bottom: 2px;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Title Bar -->
+        <div class="title-bar">
+            <img src="/public/Windows_Notepad_icon.png" alt="Notepad" class="title-icon">
+            <span class="title-text">{{ filename or 'Helloworld.java' }} - Notepad</span>
+            <div class="title-controls">
+                <div class="title-btn">−</div>
+                <div class="title-btn">□</div>
+                <div class="title-btn">✕</div>
+            </div>
+        </div>
+        
+        <!-- Menu Bar -->
+        <div class="menu-bar">
+            <span class="menu-item">File</span>
+            <span class="menu-item">Edit</span>
+            <span class="menu-item">View</span>
+        </div>
+        
+        <!-- Editor Area -->
+        <div class="editor-area" id="editor">
+            <div class="code-line"><span class="comment">// Simple Java Program</span></div>
+            <div class="code-line"><span class="keyword">public class</span> <span class="class-name">Helloworld</span> {</div>
+            <div class="code-line">    <span class="keyword">public static void</span> <span class="method-name">main</span>(<span class="class-name">String</span>[] <span class="variable">args</span>) {</div>
+            <div class="code-line">        <span class="class-name">System</span>.<span class="variable">out</span>.<span class="method-name">println</span>(<span class="string">"Hello, World!"</span>);</div>
+            <div class="code-line">    }</div>
+            <div class="code-line">}</div>
+        </div>
+        
+        <!-- Status Bar -->
+        <div class="status-bar">
+            <span class="status-text">Ready</span>
+            <span class="line-col">Ln 1, Col 1</span>
+        </div>
+    </div>
+
+    <!-- Terminal Output Section - Separate Screenshot -->
+    <div class="terminal-section">
+        <div class="terminal-header">
+            <div class="terminal-title-left">
+                <img src="/public/terminal.png" alt="Terminal" class="terminal-icon">
+                <span class="terminal-title">Command Prompt</span>
+            </div>
+            <div class="terminal-controls">
+                <button class="terminal-btn">−</button>
+                <button class="terminal-btn">□</button>
+                <button class="terminal-btn">✕</button>
+            </div>
+        </div>
+        <div class="terminal-content">
+            <div class="terminal-output" id="terminal-output">
+                <!-- Will be populated by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Extract filename without extension from the full filename
+        const fullFilename = `{{ filename or 'Helloworld.java' }}`;
+        const fileBaseName = fullFilename.replace('.java', '');
+        
+        // Update the editor content with the provided code
+        function updateCode(code) {
+            const editor = document.getElementById('editor');
+            editor.innerHTML = '';
+            
+            const lines = code.split('\n');
+            lines.forEach(line => {
+                const lineDiv = document.createElement('div');
+                lineDiv.className = 'code-line';
+                lineDiv.innerHTML = line || '&nbsp;';
+                editor.appendChild(lineDiv);
+            });
+        }
+        
+        // Update the terminal output with Java commands
+        function updateTerminalOutput(output) {
+            const terminalOutput = document.getElementById('terminal-output');
+            if (!terminalOutput) return;
+            
+            terminalOutput.innerHTML = '';
+            
+            // Add javac compile command
+            const compileLine = document.createElement('div');
+            compileLine.className = 'terminal-line';
+            compileLine.textContent = `C:\\Users\\user\\OneDrive\\Desktop>javac ${fullFilename}`;
+            terminalOutput.appendChild(compileLine);
+            
+            // Add blank line
+            const blankLine1 = document.createElement('div');
+            blankLine1.className = 'terminal-line';
+            blankLine1.innerHTML = '&nbsp;';
+            terminalOutput.appendChild(blankLine1);
+            
+            // Add java run command
+            const runLine = document.createElement('div');
+            runLine.className = 'terminal-line';
+            runLine.textContent = `C:\\Users\\user\\OneDrive\\Desktop>java ${fileBaseName}`;
+            terminalOutput.appendChild(runLine);
+            
+            // Add program output
+            const outputLines = (output || 'Hello, World!').split('\\n');
+            outputLines.forEach(line => {
+                const outputLine = document.createElement('div');
+                outputLine.className = 'terminal-line';
+                outputLine.textContent = line;
+                terminalOutput.appendChild(outputLine);
+            });
+            
+            // Add blank line
+            const blankLine2 = document.createElement('div');
+            blankLine2.className = 'terminal-line';
+            blankLine2.innerHTML = '&nbsp;';
+            terminalOutput.appendChild(blankLine2);
+            
+            // Add final prompt
+            const finalPrompt = document.createElement('div');
+            finalPrompt.className = 'terminal-line';
+            finalPrompt.textContent = 'C:\\Users\\user\\OneDrive\\Desktop>';
+            terminalOutput.appendChild(finalPrompt);
+        }
+        
+        // Get code and output from template variables
+        const code = `{{ code_content | replace('`', '\\`') | replace('\n', '\\n') | replace('\r', '\\r') }}`;
+        const output = `{{ output_content | replace('`', '\\`') | replace('\n', '\\n') | replace('\r', '\\r') }}`;
+        
+        updateCode(code);
+        updateTerminalOutput(output);
+    </script>
+</body>
+</html>
