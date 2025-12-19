@@ -16,6 +16,9 @@ from pydantic import BaseModel, Field, validator
 import magic  # python-magic for file type validation
 import logging
 import mammoth
+import pdfplumber
+from docx import Document
+from zipfile import BadZipFile
 
 # Set up logging for debugging
 logger = logging.getLogger(__name__)
@@ -274,99 +277,119 @@ async def preview_docx(
             logger.warning(f"Preview failed: User {current_user.id} attempted to access upload {upload_id} owned by {upload.user_id}")
             raise HTTPException(status_code=403, detail="Access denied")
         
-        # Only convert DOCX files
-        if upload.file_type != 'docx':
-            raise HTTPException(status_code=400, detail="Preview only available for DOCX files")
+        # Only preview DOCX/PDF files (DOCX -> HTML via mammoth/docx fallback; PDF -> extracted text HTML)
+        if upload.file_type not in ('docx', 'pdf'):
+            raise HTTPException(status_code=400, detail="Preview only available for DOCX/PDF files")
         
         # Check if file exists
         if not os.path.exists(upload.file_path):
             logger.warning(f"Preview failed: File not found at {upload.file_path}")
             raise HTTPException(status_code=404, detail="File not found")
         
-        # Convert DOCX to HTML using Mammoth
+        def _wrap_html(inner: str) -> str:
+            return f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <style>
+                    body {{
+                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                        line-height: 1.6;
+                        color: #1f2937;
+                        max-width: 100%;
+                        margin: 0;
+                        padding: 20px;
+                        background: #ffffff;
+                    }}
+                    p {{ margin: 0.75em 0; }}
+                    h1, h2, h3, h4, h5, h6 {{
+                        margin-top: 1.5em;
+                        margin-bottom: 0.75em;
+                        font-weight: 600;
+                        color: #111827;
+                    }}
+                    ul, ol {{ margin: 0.75em 0; padding-left: 2em; }}
+                    li {{ margin: 0.25em 0; }}
+                    table {{ border-collapse: collapse; width: 100%; margin: 1em 0; }}
+                    table td, table th {{ border: 1px solid #e5e7eb; padding: 8px 12px; text-align: left; }}
+                    table th {{ background-color: #f9fafb; font-weight: 600; }}
+                    code {{ background-color: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-family: 'Courier New', monospace; font-size: 0.9em; }}
+                    pre {{ background-color: #f3f4f6; padding: 12px; border-radius: 6px; overflow-x: auto; margin: 1em 0; }}
+                    pre code {{ background-color: transparent; padding: 0; }}
+                </style>
+            </head>
+            <body>
+                {inner}
+            </body>
+            </html>
+            """
+
+        # PDF preview: extract text from first few pages
+        if upload.file_type == 'pdf':
+            try:
+                pages_out = []
+                with pdfplumber.open(upload.file_path) as pdf:
+                    max_pages = min(len(pdf.pages), 5)
+                    for i in range(max_pages):
+                        text = (pdf.pages[i].extract_text() or "").strip()
+                        if not text:
+                            continue
+                        escaped = (
+                            text.replace("&", "&amp;")
+                            .replace("<", "&lt;")
+                            .replace(">", "&gt;")
+                        )
+                        pages_out.append(f"<h3>Page {i+1}</h3><pre>{escaped}</pre>")
+
+                if not pages_out:
+                    return HTMLResponse(content=_wrap_html("<p><em>No extractable text found in this PDF.</em></p>"))
+
+                return HTMLResponse(content=_wrap_html("".join(pages_out)))
+            except Exception as pdf_err:
+                logger.error(f"PDF preview failed for upload_id={upload_id}: {pdf_err}", exc_info=True)
+                raise HTTPException(status_code=500, detail="Failed to render PDF preview")
+
+        # DOCX preview: try Mammoth first (best HTML), then fallback to python-docx (plain HTML)
         try:
             with open(upload.file_path, "rb") as docx_file:
                 result = mammoth.convert_to_html(docx_file)
-                html_content = result.value
-                
-                # Add basic styling for better readability
-                styled_html = f"""
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <meta charset="UTF-8">
-                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    <style>
-                        body {{
-                            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-                            line-height: 1.6;
-                            color: #1f2937;
-                            max-width: 100%;
-                            margin: 0;
-                            padding: 20px;
-                            background: #ffffff;
-                        }}
-                        p {{
-                            margin: 0.75em 0;
-                        }}
-                        h1, h2, h3, h4, h5, h6 {{
-                            margin-top: 1.5em;
-                            margin-bottom: 0.75em;
-                            font-weight: 600;
-                            color: #111827;
-                        }}
-                        ul, ol {{
-                            margin: 0.75em 0;
-                            padding-left: 2em;
-                        }}
-                        li {{
-                            margin: 0.25em 0;
-                        }}
-                        table {{
-                            border-collapse: collapse;
-                            width: 100%;
-                            margin: 1em 0;
-                        }}
-                        table td, table th {{
-                            border: 1px solid #e5e7eb;
-                            padding: 8px 12px;
-                            text-align: left;
-                        }}
-                        table th {{
-                            background-color: #f9fafb;
-                            font-weight: 600;
-                        }}
-                        code {{
-                            background-color: #f3f4f6;
-                            padding: 2px 6px;
-                            border-radius: 4px;
-                            font-family: 'Courier New', monospace;
-                            font-size: 0.9em;
-                        }}
-                        pre {{
-                            background-color: #f3f4f6;
-                            padding: 12px;
-                            border-radius: 6px;
-                            overflow-x: auto;
-                            margin: 1em 0;
-                        }}
-                        pre code {{
-                            background-color: transparent;
-                            padding: 0;
-                        }}
-                    </style>
-                </head>
-                <body>
-                    {html_content}
-                </body>
-                </html>
-                """
-                
-                return HTMLResponse(content=styled_html)
-                
-        except Exception as conversion_error:
-            logger.error(f"DOCX to HTML conversion failed for upload_id={upload_id}: {conversion_error}", exc_info=True)
-            raise HTTPException(status_code=500, detail=f"Failed to convert DOCX to HTML: {str(conversion_error)}")
+                html_content = result.value or ""
+
+            if html_content.strip():
+                return HTMLResponse(content=_wrap_html(html_content))
+        except (BadZipFile, ValueError) as bad_docx:
+            logger.warning(f"Invalid DOCX for upload_id={upload_id}: {bad_docx}")
+            raise HTTPException(status_code=400, detail="Invalid DOCX file")
+        except Exception as mammoth_err:
+            logger.warning(f"Mammoth conversion failed for upload_id={upload_id}, falling back: {mammoth_err}", exc_info=True)
+
+        # Fallback: python-docx -> minimal HTML
+        try:
+            doc = Document(upload.file_path)
+            parts = []
+            for p in doc.paragraphs:
+                t = (p.text or "").strip()
+                if not t:
+                    continue
+                escaped = (
+                    t.replace("&", "&amp;")
+                    .replace("<", "&lt;")
+                    .replace(">", "&gt;")
+                )
+                parts.append(f"<p>{escaped}</p>")
+
+            if not parts:
+                parts.append("<p><em>No previewable text found in this DOCX.</em></p>")
+
+            return HTMLResponse(content=_wrap_html("".join(parts)))
+        except (BadZipFile, ValueError) as bad_docx2:
+            logger.warning(f"Invalid DOCX (fallback) for upload_id={upload_id}: {bad_docx2}")
+            raise HTTPException(status_code=400, detail="Invalid DOCX file")
+        except Exception as fallback_err:
+            logger.error(f"DOCX preview failed for upload_id={upload_id}: {fallback_err}", exc_info=True)
+            raise HTTPException(status_code=500, detail="Failed to render DOCX preview")
     
     except HTTPException:
         raise
