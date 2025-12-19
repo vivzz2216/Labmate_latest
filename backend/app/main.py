@@ -50,10 +50,19 @@ if settings.RATE_LIMIT_ENABLED:
 
 # Configure CORS with security best practices
 # In production, set ALLOWED_ORIGINS environment variable to your frontend domain
-allowed_origins = settings.ALLOWED_ORIGINS if hasattr(settings, 'ALLOWED_ORIGINS') else [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-]
+def _parse_allowed_origins(value: object) -> list:
+    # `Settings.ALLOWED_ORIGINS` is stored as a string (comma-separated) for Railway friendliness.
+    # Accept a list as well (for local/dev callers).
+    if value is None:
+        return ["http://localhost:3000", "http://127.0.0.1:3000"]
+    if isinstance(value, list):
+        return [str(v).strip() for v in value if str(v).strip()]
+    raw = str(value).strip()
+    if not raw:
+        return ["http://localhost:3000", "http://127.0.0.1:3000"]
+    return [v.strip() for v in raw.split(",") if v.strip()]
+
+allowed_origins = _parse_allowed_origins(getattr(settings, "ALLOWED_ORIGINS", None))
 
 app.add_middleware(
     CORSMiddleware,

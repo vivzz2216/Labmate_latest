@@ -29,7 +29,10 @@ class Settings(BaseSettings):
         print("⚠ WARNING: Using auto-generated SECRET_KEY for development. Set SECRET_KEY env var!")
     
     # CORS settings
-    ALLOWED_ORIGINS: list = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+    # IMPORTANT (Railway-friendly):
+    # Pydantic treats list fields as "complex" env vars and expects JSON (e.g. ["https://a.com"]).
+    # In Railway you typically paste a plain string. We store it as a string and split it ourselves.
+    ALLOWED_ORIGINS: str = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
     CORS_ALLOW_CREDENTIALS: bool = True
     CORS_MAX_AGE: int = 600
     
