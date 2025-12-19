@@ -124,6 +124,11 @@ wheels/
 .installed.cfg
 *.egg
 
+# --- Frontend (Next.js) ---
+# Keep global Python packaging `lib/` ignore, but DO NOT ignore our Next.js source folder.
+!frontend/lib/
+!frontend/lib/**
+
 # PyInstaller
 *.manifest
 *.spec
