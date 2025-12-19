@@ -46,15 +46,17 @@ RUN playwright install chromium
 WORKDIR /app
 
 # NOTE (Railway build context):
-# Railway typically builds Dockerfiles with the *repo root* as the build context.
-# This Dockerfile therefore copies from `backend/...` paths so it works reliably on Railway.
+# This service is intended to be deployed on Railway with:
+# - Root Directory: backend
+# - Dockerfile Path: Dockerfile  (or backend/Dockerfile with backend as context)
+# In that setup, the Docker build context is the backend folder, so paths must be relative to it.
 
 # Copy requirements and install Python dependencies
-COPY backend/requirements.txt ./requirements.txt
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy backend application code into /app
-COPY backend/ ./
+COPY . .
 
 # Create necessary directories
 RUN mkdir -p /app/uploads /app/screenshots /app/reports
