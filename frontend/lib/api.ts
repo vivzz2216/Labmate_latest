@@ -1,6 +1,8 @@
 import axios from 'axios'
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+// Call same-origin paths (e.g. `/api/...`) and let Next.js rewrites proxy to the backend.
+// This avoids browser CORS issues on Railway.
+const API_BASE_URL = ''
 
 // Create axios instance with default config
 // Conditionally include the beta key header only when a build-time env var is provided.
