@@ -20,8 +20,9 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 
-EXPOSE 3000
-ENV PORT=3000
+# Railway sets $PORT (commonly 8080). Next.js standalone server reads process.env.PORT.
+# Do NOT hardcode PORT=3000 here.
+EXPOSE 8080
 ENV HOSTNAME="0.0.0.0"
 
 # Use Next.js production server
