@@ -10,7 +10,9 @@ class Settings(BaseSettings):
 
 
     # Database - Railway will provide DATABASE_URL environment variable
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "")
+    # Railway Postgres plugin typically provides DATABASE_URL to the *service you attach it to*.
+    # Some setups expose DATABASE_PUBLIC_URL instead; accept it as a fallback for robustness.
+    DATABASE_URL: str = os.getenv("DATABASE_URL") or os.getenv("DATABASE_PUBLIC_URL", "")
     
     if not DATABASE_URL:
         print("⚠ WARNING: DATABASE_URL is not set! Database features will not work.")
