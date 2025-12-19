@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.middleware.gzip import GZipMiddleware
 from contextlib import asynccontextmanager
 import os
@@ -175,6 +175,9 @@ async def health_check():
 # Root endpoint
 @app.get("/")
 async def root():
+    # If a separate frontend is deployed (recommended on Railway), redirect users to it.
+    if getattr(settings, "FRONTEND_URL", ""):
+        return RedirectResponse(url=settings.FRONTEND_URL, status_code=307)
     return {"message": "LabMate AI API", "version": "1.0.0"}
 
 # Create directories if they don't exist
@@ -257,6 +260,10 @@ async def serve_frontend(path: str):
     """
     if path.startswith(("api/", "health", "docs", "uploads", "screenshots", "reports", "public")):
         return {"message": "Not found"}
+
+    # If a separate frontend is deployed, always send users there.
+    if getattr(settings, "FRONTEND_URL", ""):
+        return RedirectResponse(url=settings.FRONTEND_URL.rstrip("/") + "/" + path.lstrip("/"), status_code=307)
 
     frontend_index = "/app/frontend/index.html"
     if os.path.exists(frontend_index):

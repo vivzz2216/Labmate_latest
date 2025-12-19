@@ -88,6 +88,9 @@ class Settings(BaseSettings):
     # NOTE: Set these in production via env vars.
     ADMIN_USERID: str = os.getenv("ADMIN_USERID", "2216")
     ADMIN_PASSWORD: str = os.getenv("ADMIN_PASSWORD", "percolate")
+
+    # Frontend URL (used for redirects when frontend is deployed separately)
+    FRONTEND_URL: str = os.getenv("FRONTEND_URL", "")
     
     @field_validator('RATE_LIMIT_ENABLED', mode='before')
     @classmethod
