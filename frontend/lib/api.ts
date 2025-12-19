@@ -307,7 +307,7 @@ export const apiService = {
   },
 
   // Get user assignments
-  async getUserAssignments(userId: number): Promise<any[]> {
+  async getUserAssignments(userId: number): Promise<unknown> {
     const response = await api.get(`/api/assignments/?user_id=${userId}`)
     return response.data
   },

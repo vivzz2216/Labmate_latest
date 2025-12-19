@@ -59,7 +59,14 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
       }
       onClose()
     } catch (err: any) {
-      setError(err.response?.data?.detail || err.message || 'Authentication failed')
+      // Ensure we always render a string (FastAPI validation errors can be an array/object)
+      const detail = err?.response?.data?.detail
+      const msg =
+        (typeof detail === 'string' && detail) ||
+        (Array.isArray(detail) ? detail.map((d) => d?.msg).filter(Boolean).join('\n') : '') ||
+        err?.message ||
+        'Authentication failed'
+      setError(String(msg))
     } finally {
       setLoading(false)
     }

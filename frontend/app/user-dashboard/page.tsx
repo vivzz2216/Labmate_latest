@@ -45,8 +45,9 @@ export default function UserDashboard() {
     
     try {
       setLoading(true)
-      const data = await apiService.getUserAssignments(user.id)
-      setAssignments(data)
+      const data: any = await apiService.getUserAssignments(user.id)
+      const list = Array.isArray(data) ? data : (data?.assignments ?? data?.data ?? [])
+      setAssignments(Array.isArray(list) ? list : [])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch assignments')
       console.error('Error fetching assignments:', err)

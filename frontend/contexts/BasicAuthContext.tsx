@@ -54,6 +54,32 @@ const setAuthHeaders = (accessToken?: string | null, csrfToken?: string | null) 
   }
 }
 
+const formatApiErrorDetail = (detail: any): string => {
+  if (!detail) return ''
+  if (typeof detail === 'string') return detail
+  if (Array.isArray(detail)) {
+    // FastAPI/Pydantic validation errors: [{loc:..., msg:...}, ...]
+    const msgs = detail
+      .map((d) => (typeof d?.msg === 'string' ? d.msg : null))
+      .filter(Boolean) as string[]
+    if (msgs.length) return msgs.join('\n')
+    try {
+      return JSON.stringify(detail)
+    } catch {
+      return String(detail)
+    }
+  }
+  if (typeof detail === 'object') {
+    if (typeof (detail as any).message === 'string') return (detail as any).message
+    try {
+      return JSON.stringify(detail)
+    } catch {
+      return String(detail)
+    }
+  }
+  return String(detail)
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
@@ -209,10 +235,11 @@ const loadStoredTokens = () => {
       handleAuthSuccess(response)
     } catch (error: any) {
       // FIXED: Extract error message properly from axios error
-      const errorMessage = error?.response?.data?.detail || 
-                          error?.response?.data?.message || 
-                          error?.message || 
-                          'Signup failed. Please check your information and try again.'
+      const errorMessage =
+        formatApiErrorDetail(error?.response?.data?.detail) ||
+        formatApiErrorDetail(error?.response?.data?.message) ||
+        formatApiErrorDetail(error?.message) ||
+        'Signup failed. Please check your information and try again.'
       console.error('Signup failed:', errorMessage, error)
       // Create a new error with the proper message
       const signupError = new Error(errorMessage)
@@ -229,10 +256,11 @@ const loadStoredTokens = () => {
       handleAuthSuccess(response)
     } catch (error: any) {
       // FIXED: Extract error message properly from axios error
-      const errorMessage = error?.response?.data?.detail || 
-                          error?.response?.data?.message || 
-                          error?.message || 
-                          'Login failed. Please check your credentials and try again.'
+      const errorMessage =
+        formatApiErrorDetail(error?.response?.data?.detail) ||
+        formatApiErrorDetail(error?.response?.data?.message) ||
+        formatApiErrorDetail(error?.message) ||
+        'Login failed. Please check your credentials and try again.'
       console.error('Login failed:', errorMessage, error)
       // Create a new error with the proper message
       const loginError = new Error(errorMessage)

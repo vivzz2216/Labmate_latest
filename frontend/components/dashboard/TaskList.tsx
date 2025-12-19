@@ -38,7 +38,9 @@ export default function TaskList({
   const [executionStage, setExecutionStage] = useState<'code' | 'screenshot'>('code')
   const [taskAnswers, setTaskAnswers] = useState<Record<number, string>>({})
   const [screenshotPrefs, setScreenshotPrefs] = useState<Record<number, boolean>>({})
-  const apiBaseUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000').replace(/\/$/, '')
+  // Use same-origin paths on Railway. URLs returned by backend are often relative (e.g. /screenshots/...),
+  // and we proxy /api via Next route handler, so we should not prepend localhost here.
+  const apiBaseUrl = ''
 
   const handleTaskToggle = (taskId: number) => {
     setSelectedTasks(prev => 

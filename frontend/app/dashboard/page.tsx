@@ -164,8 +164,10 @@ const DashboardContent = ({ onUploadClick }: { onUploadClick: () => void }) => {
     
     try {
       setLoading(true)
-      const data = await apiService.getUserAssignments(user.id)
-      setAssignments(data)
+      const data: any = await apiService.getUserAssignments(user.id)
+      // Defensive: ensure we always store an array to avoid runtime crashes (Railway proxy/auth issues)
+      const list = Array.isArray(data) ? data : (data?.assignments ?? data?.data ?? [])
+      setAssignments(Array.isArray(list) ? list : [])
     } catch (err) {
       console.error('Error fetching assignments:', err)
     } finally {
@@ -176,13 +178,13 @@ const DashboardContent = ({ onUploadClick }: { onUploadClick: () => void }) => {
   const weeklyReports = [
     {
       title: 'Manuals Uploaded',
-      value: assignments.length.toString(),
+      value: String(assignments?.length ?? 0),
       sub: 'Total uploads',
       badge: 'bg-[#ffe9d0] text-[#f08a24]',
     },
     {
       title: 'Screenshots Generated',
-      value: assignments.reduce((sum, a) => sum + a.completed_tasks, 0).toString(),
+      value: String((assignments || []).reduce((sum, a) => sum + (a?.completed_tasks ?? 0), 0)),
       sub: 'Total screenshots',
       badge: 'bg-[#e4fdf4] text-[#19a974]',
     },
