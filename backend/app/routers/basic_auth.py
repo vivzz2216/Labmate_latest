@@ -104,19 +104,35 @@ def check_account_lockout(user: User) -> bool:
 
 def handle_failed_login(db: Session, user: User):
     """Handle failed login attempt with progressive lockout"""
-    user.failed_login_attempts += 1
-    
-    if user.failed_login_attempts >= MAX_LOGIN_ATTEMPTS:
-        # Lock account for LOCKOUT_DURATION_MINUTES
-        user.locked_until = datetime.utcnow() + timedelta(minutes=LOCKOUT_DURATION_MINUTES)
-    
-    db.commit()
+    # Best-effort: never let tracking/lockout updates turn a normal 401 into a 500.
+    try:
+        user.failed_login_attempts = int(user.failed_login_attempts or 0) + 1
+
+        if user.failed_login_attempts >= MAX_LOGIN_ATTEMPTS:
+            # Lock account for LOCKOUT_DURATION_MINUTES
+            user.locked_until = datetime.utcnow() + timedelta(minutes=LOCKOUT_DURATION_MINUTES)
+
+        db.commit()
+    except Exception as e:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        logger.warning(f"Failed to update failed_login_attempts for user {getattr(user, 'id', None)}: {e}", exc_info=True)
 
 def reset_failed_attempts(db: Session, user: User):
     """Reset failed login attempts after successful login"""
-    user.failed_login_attempts = 0
-    user.locked_until = None
-    db.commit()
+    # Best-effort: do not fail login if this bookkeeping update fails.
+    try:
+        user.failed_login_attempts = 0
+        user.locked_until = None
+        db.commit()
+    except Exception as e:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        logger.warning(f"Failed to reset failed_login_attempts for user {getattr(user, 'id', None)}: {e}", exc_info=True)
 
 @router.post("/signup", response_model=TokenResponse)
 async def signup(request: UserSignup, db: Session = Depends(get_db)):
@@ -126,102 +142,85 @@ async def signup(request: UserSignup, db: Session = Depends(get_db)):
     """
     logger.debug(f"Signup request received for email: {request.email}")
     
-    # Use transaction to prevent race conditions in concurrent signups
-    user_id = None
-    user_email = None
-    
+    user = None
+
     try:
-        with get_db_transaction() as transaction_db:
-            # Check if user already exists (case-insensitive email check)
-            # Use SELECT FOR UPDATE to prevent race conditions
-            logger.debug(f"Checking if user exists with email: {request.email}")
-            existing_user = transaction_db.query(User).filter(
-                func.lower(User.email) == func.lower(request.email)
-            ).with_for_update().first()  # Lock row to prevent concurrent inserts
-            
-            if existing_user:
-                logger.warning(f"Signup failed: Email already registered - {request.email}")
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Email already registered"
-                )
-            
-            # Hash the password securely
-            logger.debug("Hashing password...")
-            hashed_password = hash_password(request.password)
-            logger.debug("Password hashed successfully")
-            
-            # Create new user with hashed password
-            logger.debug(f"Creating user record for: {request.email}")
-            user = User(
-                email=request.email.lower(),  # Store email in lowercase for consistency
-                name=request.name,
-                password_hash=hashed_password,
-                google_id=None,
-                profile_picture=None,
-                is_active=True,
-                failed_login_attempts=0,
-                created_at=datetime.utcnow(),
-                last_login=datetime.utcnow()
+        # Check if user already exists (case-insensitive email check)
+        logger.debug(f"Checking if user exists with email: {request.email}")
+        existing_user = db.query(User).filter(
+            func.lower(User.email) == func.lower(request.email)
+        ).first()
+
+        if existing_user:
+            logger.warning(f"Signup failed: Email already registered - {request.email}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered"
             )
-            
-            transaction_db.add(user)
-            transaction_db.flush()  # Flush to get user.id
-            transaction_db.refresh(user)
-            
-            logger.info(f"User created successfully: id={user.id}, email={user.email}")
-            
-            # Transaction commits automatically on exit
-            # Store user data for JWT generation after transaction commits
-            user_id = user.id
-            user_email = user.email
-            
+
+        # Hash the password securely
+        logger.debug("Hashing password...")
+        hashed_password = hash_password(request.password)
+        logger.debug("Password hashed successfully")
+
+        # Create new user with hashed password
+        logger.debug(f"Creating user record for: {request.email}")
+        user = User(
+            email=request.email.lower(),  # Store email in lowercase for consistency
+            name=request.name,
+            password_hash=hashed_password,
+            google_id=None,
+            profile_picture=None,
+            is_active=True,
+            failed_login_attempts=0,
+            created_at=datetime.utcnow(),
+            last_login=datetime.utcnow()
+        )
+
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        logger.info(f"User created successfully: id={user.id}, email={user.email}")
+
     except HTTPException:
-        # Re-raise HTTPExceptions as-is (they're valid responses)
         raise
     except IntegrityError as e:
         # Handle unique constraint violation (race condition caught)
         logger.warning(f"Signup race condition detected for email {request.email}: {e}")
+        try:
+            db.rollback()
+        except Exception:
+            pass
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email already registered"
         )
     except Exception as e:
         logger.error(f"Signup failed for email {request.email}: {e}", exc_info=True)
+        try:
+            db.rollback()
+        except Exception:
+            pass
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create user account"
         )
     
-    # Generate JWT tokens after transaction commits (to avoid rollback on JWT errors)
-    if not user_id:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="User creation failed"
-        )
-    
     try:
-        token_data = {"sub": str(user_id), "email": user_email}
+        token_data = {"sub": str(user.id), "email": user.email}
         access_token = create_access_token(data=token_data)
         refresh_token = create_refresh_token(data=token_data)
         
         # Generate CSRF token
         csrf_token = generate_csrf_token()
-        store_csrf_token(csrf_token, user_id)
+        store_csrf_token(csrf_token, user.id)
     except ValueError as jwt_error:
         # JWT generation failed (e.g., SECRET_KEY not set)
         logger.error(f"JWT token generation failed: {jwt_error}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Server configuration error: JWT token generation failed"
-        )
-    
-    # Get user from database for response (transaction already committed)
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="User not found after creation"
         )
     
     # Return tokens and user info

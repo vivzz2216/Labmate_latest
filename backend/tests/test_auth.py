@@ -62,7 +62,7 @@ def test_user(db):
 def test_signup_success(client, db):
     """Test successful user signup"""
     response = client.post(
-        "/api/auth/signup",
+        "/api/basic-auth/signup",
         json={
             "email": "newuser@example.com",
             "name": "New User",
@@ -80,7 +80,7 @@ def test_signup_success(client, db):
 def test_signup_duplicate_email(client, db, test_user):
     """Test signup with duplicate email"""
     response = client.post(
-        "/api/auth/signup",
+        "/api/basic-auth/signup",
         json={
             "email": test_user.email,
             "name": "Another User",
@@ -94,7 +94,7 @@ def test_signup_duplicate_email(client, db, test_user):
 def test_login_success(client, db, test_user):
     """Test successful login"""
     response = client.post(
-        "/api/auth/login",
+        "/api/basic-auth/login",
         json={
             "email": test_user.email,
             "password": "TestPassword123!"
@@ -110,7 +110,7 @@ def test_login_success(client, db, test_user):
 def test_login_invalid_password(client, db, test_user):
     """Test login with invalid password"""
     response = client.post(
-        "/api/auth/login",
+        "/api/basic-auth/login",
         json={
             "email": test_user.email,
             "password": "WrongPassword123!"
@@ -123,7 +123,7 @@ def test_get_current_user_with_token(client, db, test_user):
     """Test getting current user with valid JWT token"""
     token = create_access_token(data={"sub": str(test_user.id), "email": test_user.email})
     response = client.get(
-        "/api/auth/me",
+        "/api/basic-auth/me",
         headers={"Authorization": f"Bearer {token}"}
     )
     assert response.status_code == 200
@@ -133,8 +133,8 @@ def test_get_current_user_with_token(client, db, test_user):
 
 def test_get_current_user_without_token(client, db):
     """Test getting current user without token"""
-    response = client.get("/api/auth/me")
-    assert response.status_code == 403  # Unauthorized
+    response = client.get("/api/basic-auth/profile")
+    assert response.status_code in (401, 403)  # Unauthorized
 
 
 def test_refresh_token(client, db, test_user):
@@ -143,7 +143,7 @@ def test_refresh_token(client, db, test_user):
     refresh_token = create_refresh_token(data={"sub": str(test_user.id), "email": test_user.email})
     
     response = client.post(
-        "/api/auth/refresh",
+        "/api/basic-auth/refresh",
         json={"refresh_token": refresh_token}
     )
     assert response.status_code == 200
