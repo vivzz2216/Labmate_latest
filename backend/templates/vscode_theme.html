@@ -1,0 +1,1186 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Visual Studio Code — {{ filename }}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #ffffff;
+      margin: 0;
+      padding: 24px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Segoe WPC", Roboto, Helvetica, Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .vscode-window {
+      background: #181818;
+      border: 1px solid #2b2b2b;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 14px 44px rgba(0,0,0,0.40);
+      width: 1080px;
+      height: 780px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Title Bar ─────────────────────────────────── */
+    .vs-titlebar {
+      height: 35px;
+      background: #181818;
+      border-bottom: 1px solid #2b2b2b;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 0 0 10px;
+      font-size: 12px;
+      color: #cccccc;
+      flex-shrink: 0;
+      user-select: none;
+    }
+    .vs-title-left { display: flex; align-items: center; gap: 12px; }
+    .vs-menus { display: flex; gap: 10px; font-size: 11.5px; color: #999; }
+    .vs-window-title { color: #cccccc; font-size: 12px; }
+    .win-controls { display: flex; height: 100%; }
+    .win-btn {
+      width: 44px; height: 35px;
+      display: flex; align-items: center; justify-content: center;
+      color: #cccccc;
+    }
+    .win-btn.close:hover { background: #e81123; color: #fff; }
+
+    /* ── Main Layout: Sidebar & Right Column ────────── */
+    .vs-main-layout {
+      display: flex;
+      flex: 1;
+      height: calc(100% - 57px);
+      overflow: hidden;
+      background: #181818;
+    }
+
+    /* ── Activity Bar (Full Height) ─────────────────── */
+    .vs-activitybar {
+      width: 48px;
+      background: #181818;
+      border-right: 1px solid #252526;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 10px 0 8px 0;
+      flex-shrink: 0;
+      user-select: none;
+    }
+    .vs-activitybar-top {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      width: 100%;
+    }
+    .vs-activitybar-bottom {
+      margin-top: auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      width: 100%;
+    }
+    .vs-act-icon {
+      width: 44px;
+      height: 38px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #858585;
+      cursor: pointer;
+    }
+    .vs-act-icon.active {
+      color: #ffffff;
+      border-left: 2px solid #ffffff;
+    }
+
+    /* ── Explorer Sidebar (Full Height Down to Statusbar) ── */
+    .vs-sidebar {
+      width: 220px;
+      background: #181818;
+      border-right: 1px solid #252526;
+      display: flex;
+      flex-direction: column;
+      font-size: 13px;
+      color: #cccccc;
+      flex-shrink: 0;
+      overflow: hidden;
+      user-select: none;
+      height: 100%;
+    }
+    .vs-explorer-hdr {
+      height: 35px;
+      padding: 0 14px 0 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+      font-weight: 600;
+      color: #9aaab8;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      flex-shrink: 0;
+    }
+    .vs-explorer-more {
+      color: #859bb0;
+      font-size: 14px;
+      letter-spacing: 1px;
+      cursor: pointer;
+    }
+    .vs-section-hdr {
+      height: 24px;
+      background: #181818;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 8px 0 8px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #bbbbbb;
+      letter-spacing: 0.3px;
+      text-transform: uppercase;
+      flex-shrink: 0;
+      border-top: 1px solid #252526;
+    }
+    .vs-section-left {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .vs-section-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #859bb0;
+    }
+    .vs-section-actions svg {
+      width: 14px;
+      height: 14px;
+      cursor: pointer;
+      opacity: 0.85;
+    }
+
+    .vs-file-tree {
+      display: flex;
+      flex-direction: column;
+      padding: 2px 0 4px 0;
+      overflow: hidden;
+      flex: 1;
+    }
+
+    .vs-tree-row {
+      height: 22px;
+      display: flex;
+      align-items: center;
+      padding-right: 8px;
+      font-size: 13px;
+      line-height: 22px;
+      color: #cccccc;
+      cursor: pointer;
+      white-space: nowrap;
+      position: relative;
+    }
+    .vs-tree-row:hover {
+      background: #2a2d2e;
+    }
+    .vs-tree-row.active {
+      background: #04395e !important;
+      color: #ffffff !important;
+    }
+
+    /* Indent guides */
+    .vs-indent {
+      width: 10px;
+      height: 100%;
+      flex-shrink: 0;
+      position: relative;
+    }
+    .vs-indent.guide::after {
+      content: '';
+      position: absolute;
+      left: 4px;
+      top: 0;
+      bottom: 0;
+      width: 1px;
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .vs-chevron-box {
+      width: 14px;
+      height: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-right: 2px;
+      flex-shrink: 0;
+      color: #859bb0;
+    }
+    .vs-chevron-box svg {
+      width: 11px;
+      height: 11px;
+    }
+
+    .vs-icon-box {
+      width: 16px;
+      height: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-right: 6px;
+      flex-shrink: 0;
+    }
+    .vs-icon-box svg {
+      width: 15px;
+      height: 15px;
+    }
+
+    .vs-row-label {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 13px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    /* Bottom collapsible sections in Explorer matching reference screenshot */
+    .vs-sidebar-bottom-sections {
+      border-top: 1px solid #252526;
+      margin-top: auto;
+      flex-shrink: 0;
+    }
+    .vs-sub-section {
+      height: 22px;
+      padding: 0 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #bbbbbb;
+      letter-spacing: 0.3px;
+      cursor: pointer;
+      border-bottom: 1px solid #202020;
+    }
+    .vs-sub-section .vs-chevron {
+      color: #859bb0;
+      font-size: 10px;
+    }
+
+    /* ── Right Column: Editor on Top + Terminal Underneath (No Sidebar Collision!) ── */
+    .vs-right-column {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: #1f1f1f;
+      overflow: hidden;
+      min-width: 0;
+      height: 100%;
+    }
+
+    /* Editor Container */
+    .vs-editor-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: #1f1f1f;
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    /* Tabs */
+    .vs-tabbar {
+      height: 35px;
+      background: #181818;
+      display: flex;
+      align-items: center;
+      border-bottom: 1px solid #252526;
+      flex-shrink: 0;
+      padding-right: 12px;
+    }
+    .vs-tab {
+      background: #1f1f1f;
+      color: #ffffff;
+      height: 100%;
+      padding: 0 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      border-top: 1px solid #007acc;
+      white-space: nowrap;
+    }
+    .vs-tab-inactive {
+      color: #969696;
+      height: 100%;
+      padding: 0 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .vs-tabbar-actions {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #858585;
+    }
+
+    /* Breadcrumbs */
+    .vs-breadcrumbs {
+      height: 22px;
+      background: #1f1f1f;
+      padding: 0 14px;
+      display: flex;
+      align-items: center;
+      font-size: 11px;
+      color: #888888;
+      gap: 6px;
+      border-bottom: 1px solid #282828;
+      flex-shrink: 0;
+    }
+
+    /* Code Editor — scrollable */
+    .vs-editor-inner {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+      min-height: 0;
+    }
+    .vs-linenumbers {
+      width: 44px;
+      padding: 8px 10px 8px 0;
+      text-align: right;
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      color: #555;
+      user-select: none;
+      flex-shrink: 0;
+      overflow: hidden;
+    }
+    .vs-code {
+      flex: 1;
+      padding: 8px 12px;
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      color: #d4d4d4;
+      white-space: pre-wrap;
+      word-break: break-all;
+      overflow: hidden;
+      min-width: 0;
+    }
+
+    /* ── VS Code Dark+ Syntax ───────────────────────── */
+    .vs-code .k,  .vs-code .kd, .vs-code .kn, .vs-code .keyword   { color: #569cd6 !important; }
+    .vs-code .s,  .vs-code .s1, .vs-code .s2, .vs-code .string    { color: #ce9178 !important; }
+    .vs-code .nf, .vs-code .function                               { color: #dcdcaa !important; }
+    .vs-code .nc, .vs-code .class-name                             { color: #4ec9b0 !important; }
+    .vs-code .c,  .vs-code .c1, .vs-code .comment                 { color: #6a9955 !important; font-style: italic; }
+    .vs-code .m,  .vs-code .mi, .vs-code .number                  { color: #b5cea8 !important; }
+    .vs-code .nb, .vs-code .builtin                                { color: #4ec9b0 !important; }
+    .vs-code .na, .vs-code .attribute                              { color: #9cdcfe !important; }
+    .vs-code .nt, .vs-code .tag                                    { color: #569cd6 !important; }
+    .vs-code .o,  .vs-code .operator                               { color: #d4d4d4 !important; }
+    .vs-code .variable                                             { color: #9cdcfe !important; }
+
+    /* ── Integrated Terminal (Strictly Under Editor, Matching Reference) ── */
+    .vs-terminal {
+      height: 230px;
+      background: #181818; /* Exact dark charcoal/black from reference image */
+      border-top: 1px solid #2b2b2b;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+    .vs-term-hdr {
+      height: 30px;
+      background: #181818;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 14px;
+      font-size: 11px;
+      border-bottom: 1px solid #252526;
+      flex-shrink: 0;
+      user-select: none;
+    }
+    .vs-term-tabs {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .vs-term-tab {
+      color: #969696;
+      font-size: 11px;
+      letter-spacing: 0.4px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      text-transform: uppercase;
+      cursor: pointer;
+      padding-bottom: 2px;
+    }
+    .vs-term-tab.active {
+      color: #ffffff;
+      font-weight: 500;
+      border-bottom: 1px solid #ffffff; /* Crisp white underline matching reference image */
+    }
+    .vs-term-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #858585;
+    }
+    .vs-term-icon {
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0.85;
+    }
+    .vs-term-icon:hover {
+      opacity: 1;
+      color: #ffffff;
+    }
+
+    .vs-term-body {
+      padding: 10px 14px;
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 12.5px;
+      line-height: 1.45;
+      color: #cccccc;
+      white-space: pre-wrap;
+      overflow: hidden;
+      flex: 1;
+      background: #181818;
+    }
+
+    /* Terminal solid block cursor */
+    .term-cursor {
+      display: inline-block;
+      width: 7.5px;
+      height: 14px;
+      background: #ffffff;
+      vertical-align: middle;
+      margin-left: 2px;
+    }
+
+    /* Terminal color helpers */
+    .tc-green  { color: #4ec994; }
+    .tc-cyan   { color: #29b8db; }
+    .tc-yellow { color: #e8bf6a; }
+    .tc-red    { color: #f44747; }
+    .tc-blue   { color: #388bfd; }
+    .tc-dim    { color: #777777; }
+    .tc-white  { color: #ffffff; }
+    .tc-prompt { color: #ffffff; }
+    .tc-path   { color: #ffffff; }
+    .tc-cmd    { color: #ffffff; }
+    .tc-warn   { color: #e8bf6a; }
+    .tc-ok     { color: #4ec994; font-weight: 600; }
+    .tc-err    { color: #f44747; font-weight: 600; }
+
+    /* ── Status Bar (Full Width Spanning Entire Window) ── */
+    .vs-statusbar {
+      height: 22px;
+      background: #007acc;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 12px;
+      font-size: 11px;
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+
+{% set lines_list = code_content.splitlines() %}
+{% set total_lines = lines_list|length %}
+
+{# Derive file extension and labels #}
+{% set ext = filename.split('.')[-1]|lower %}
+{% set lang_label = {
+  'html': 'HTML',
+  'css':  'CSS',
+  'js':   'JavaScript',
+  'jsx':  'JavaScript React',
+  'ts':   'TypeScript',
+  'tsx':  'TypeScript React',
+  'json': 'JSON'
+}.get(ext, 'Plain Text') %}
+
+{# Project configuration based on active file #}
+{% if ext == 'html' or filename in ['validate.js', 'navbar.js', 'style.css'] %}
+  {% set project_name = 'web-dev-lab' %}
+  {% set project_dir_display = 'web-dev-lab' %}
+{% elif ext in ['jsx','tsx'] or 'todo' in filename.lower() or 'app' in filename.lower() and ext != 'js' %}
+  {% set project_name = 'react-todo-app' %}
+  {% set project_dir_display = 'react-todo-app' %}
+{% elif ext == 'js' and ('server' in filename.lower() or 'app' in filename.lower() or 'cookie' in filename.lower() or 'route' in filename.lower()) %}
+  {% set project_name = 'node-auth-service' %}
+  {% set project_dir_display = 'node-auth-service' %}
+{% else %}
+  {% set project_name = 'web-project' %}
+  {% set project_dir_display = 'web-project' %}
+{% endif %}
+
+<div class="vscode-window">
+
+  <!-- Title Bar -->
+  <div class="vs-titlebar">
+    <div class="vs-title-left">
+      <svg width="15" height="15" viewBox="0 0 100 100" fill="none">
+        <path d="M72 98L97 86V14L72 2L32 38L15 25L3 32V68L15 75L32 62L72 98Z" fill="#007ACC"/>
+        <path d="M72 24L39 50L72 76V24Z" fill="#1F9CF0"/>
+      </svg>
+      <div class="vs-menus">
+        <span>File</span><span>Edit</span><span>Selection</span>
+        <span>View</span><span>Go</span><span>Run</span>
+        <span>Terminal</span><span>Help</span>
+      </div>
+    </div>
+    <div class="vs-window-title">● {{ filename }} — {{ project_name }} — Visual Studio Code</div>
+    <div class="win-controls">
+      <span class="win-btn">─</span>
+      <span class="win-btn">□</span>
+      <span class="win-btn close">✕</span>
+    </div>
+  </div>
+
+  <!-- Main Layout -->
+  <div class="vs-main-layout">
+
+    <!-- Activity Bar (Runs full height down to statusbar) -->
+    <div class="vs-activitybar">
+      <div class="vs-activitybar-top">
+        <div class="vs-act-icon active">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 3H10L12 6H21V21H3V3Z"/>
+          </svg>
+        </div>
+        <div class="vs-act-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+        </div>
+        <div class="vs-act-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/>
+            <path d="M6 9V21M18 9C18 12.5 6 13 6 16"/>
+          </svg>
+        </div>
+        <div class="vs-act-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="5 3 19 12 5 21 5 3"/>
+          </svg>
+        </div>
+      </div>
+      <div class="vs-activitybar-bottom">
+        <div class="vs-act-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+            <circle cx="12" cy="7" r="4"/>
+          </svg>
+        </div>
+        <div class="vs-act-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- Explorer Sidebar (Runs full height down to statusbar — terminal does not collide!) -->
+    <div class="vs-sidebar">
+      <div class="vs-explorer-hdr">
+        <span>Explorer</span>
+        <span class="vs-explorer-more">•••</span>
+      </div>
+
+      <!-- Root Folder Section -->
+      <div class="vs-section-hdr">
+        <div class="vs-section-left">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#859bb0" stroke-width="1.8">
+            <path d="M4 6l4 4 4-4"/>
+          </svg>
+          <span>{{ project_dir_display }}</span>
+        </div>
+        <div class="vs-section-actions">
+          <svg title="New File" viewBox="0 0 16 16"><path fill="currentColor" d="M9 1H3v14h10V5L9 1zm1 4V2.5L12.5 5H10zM13 9h-2V7h-1v2H8v1h2v2h1v-2h2V9z"/></svg>
+          <svg title="New Folder" viewBox="0 0 16 16"><path fill="currentColor" d="M7 2L5.5 3.5H2v10h12V5H8.5L7 2zM13 8h-2V6h-1v2H8v1h2v2h1V9h2V8z"/></svg>
+          <svg title="Refresh Explorer" viewBox="0 0 16 16"><path fill="currentColor" d="M13.6 2.4A7.9 7.9 0 1 0 16 8h-1.5a6.5 6.5 0 1 1-1.9-4.6L10 6h6V0l-2.4 2.4z"/></svg>
+          <svg title="Collapse Folders in Explorer" viewBox="0 0 16 16"><path fill="currentColor" d="M9 2H2v10h7V2zm-1 9H3V3h5v8zm6-7h-1v8H5v1h9V4z"/></svg>
+        </div>
+      </div>
+
+      <!-- Directory Tree Rows -->
+      <div class="vs-file-tree">
+
+      {% if project_name == 'web-dev-lab' %}
+        <!-- > backend (closed) -->
+        <div class="vs-tree-row">
+          <div class="vs-indent"></div>
+          <div class="vs-chevron-box"><svg viewBox="0 0 16 16"><path fill="none" stroke="#859bb0" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" d="M6 4.5l3.5 3.5-3.5 3.5"/></svg></div>
+          <div class="vs-icon-box">
+            <svg viewBox="0 0 16 16" fill="none" stroke="#859bb0" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1.5 3.5A1.5 1.5 0 0 1 3 2h3.2a1.5 1.5 0 0 1 1.06.44L8.7 3.9A1.5 1.5 0 0 0 9.76 4.3H13a1.5 1.5 0 0 1 1.5 1.5v6.7a1.5 1.5 0 0 1-1.5 1.5H3A1.5 1.5 0 0 1 1.5 12.5v-9z"/>
+            </svg>
+          </div>
+          <span class="vs-row-label">backend</span>
+        </div>
+
+        <!-- > docs (closed with blue dot) -->
+        <div class="vs-tree-row">
+          <div class="vs-indent"></div>
+          <div class="vs-chevron-box"><svg viewBox="0 0 16 16"><path fill="none" stroke="#859bb0" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" d="M6 4.5l3.5 3.5-3.5 3.5"/></svg></div>
+          <div class="vs-icon-box">
+            <svg viewBox="0 0 16 16" fill="none">
+              <path d="M1.5 3.5A1.5 1.5 0 0 1 3 2h3.2a1.5 1.5 0 0 1 1.06.44L8.7 3.9A1.5 1.5 0 0 0 9.76 4.3H13a1.5 1.5 0 0 1 1.5 1.5v6.7a1.5 1.5 0 0 1-1.5 1.5H3A1.5 1.5 0 0 1 1.5 12.5v-9z" stroke="#859bb0" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+              <circle cx="6.5" cy="8.5" r="1.6" fill="#3b82f6"/>
+            </svg>
+          </div>
+          <span class="vs-row-label">docs</span>
+        </div>
+
+        <!-- ∨ client (open) -->
+        <div class="vs-tree-row">
+          <div class="vs-indent"></div>
+          <div class="vs-chevron-box"><svg viewBox="0 0 16 16"><path fill="none" stroke="#859bb0" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" d="M4.5 6l3.5 3.5 3.5-3.5"/></svg></div>
+          <div class="vs-icon-box">
+            <svg viewBox="0 0 16 16" fill="none" stroke="#859bb0" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1.5 4A1.5 1.5 0 0 1 3 2.5h3.2a1.5 1.5 0 0 1 1.06.44L8.7 4.4A1.5 1.5 0 0 0 9.76 4.8H13A1.5 1.5 0 0 1 14.5 6.3v1H2.7L1.5 12.5V4z"/>
+              <path d="M2.5 8h11.8a1 1 0 0 1 1 1.25l-1.3 4.5a1 1 0 0 1-.96.75H2.5a1 1 0 0 1-.98-1.22l1-4.5A1 1 0 0 1 3.5 8z"/>
+            </svg>
+          </div>
+          <span class="vs-row-label">client</span>
+        </div>
+
+        <!--   ∨ css (open) -->
+        <div class="vs-tree-row">
+          <div class="vs-indent guide"></div>
+          <div class="vs-indent"></div>
+          <div class="vs-chevron-box"><svg viewBox="0 0 16 16"><path fill="none" stroke="#859bb0" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" d="M4.5 6l3.5 3.5 3.5-3.5"/></svg></div>
+          <div class="vs-icon-box">
+            <svg viewBox="0 0 16 16" fill="none" stroke="#859bb0" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1.5 4A1.5 1.5 0 0 1 3 2.5h3.2a1.5 1.5 0 0 1 1.06.44L8.7 4.4A1.5 1.5 0 0 0 9.76 4.8H13A1.5 1.5 0 0 1 14.5 6.3v1H2.7L1.5 12.5V4z"/>
+              <path d="M2.5 8h11.8a1 1 0 0 1 1 1.25l-1.3 4.5a1 1 0 0 1-.96.75H2.5a1 1 0 0 1-.98-1.22l1-4.5A1 1 0 0 1 3.5 8z"/>
+            </svg>
+          </div>
+          <span class="vs-row-label">css</span>
+        </div>
+
+        <!--     style.css -->
+        <div class="vs-tree-row {% if filename == 'style.css' %}active{% endif %}">
+          <div class="vs-indent guide"></div>
+          <div class="vs-indent guide"></div>
+          <div class="vs-indent"></div>
+          <div class="vs-chevron-box"></div>
+          <div class="vs-icon-box">
+            <svg viewBox="0 0 16 16"><path fill="#42a5f5" d="M3 2h10l-1 11.5L8 15l-4-1.5L3 2zm2.5 3h5l-.2 2.2H6.2l.2 2.3 1.6.5 1.6-.5.2-1.7h1.4l-.3 2.7-2.9 1-2.9-1-.5-5.5z"/></svg>
+          </div>
+          <span class="vs-row-label">style.css</span>
+        </div>
+
+        <!--   ∨ js (open) -->
+        <div class="vs-tree-row">
+          <div class="vs-indent guide"></div>
+          <div class="vs-indent"></div>
+          <div class="vs-chevron-box"><svg viewBox="0 0 16 16"><path fill="none" stroke="#859bb0" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" d="M4.5 6l3.5 3.5 3.5-3.5"/></svg></div>
+          <div class="vs-icon-box">
+            <svg viewBox="0 0 16 16" fill="none" stroke="#859bb0" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1.5 4A1.5 1.5 0 0 1 3 2.5h3.2a1.5 1.5 0 0 1 1.06.44L8.7 4.4A1.5 1.5 0 0 0 9.76 4.8H13A1.5 1.5 0 0 1 14.5 6.3v1H2.7L1.5 12.5V4z"/>
+              <path d="M2.5 8h11.8a1 1 0 0 1 1 1.25l-1.3 4.5a1 1 0 0 1-.96.75H2.5a1 1 0 0 1-.98-1.22l1-4.5A1 1 0 0 1 3.5 8z"/>
+            </svg>
+          </div>
+          <span class="vs-row-label">js</span>
+        </div>
+
+        <!--     validate.js -->
+        <div class="vs-tree-row {% if filename == 'validate.js' %}active{% endif %}">
+          <div class="vs-indent guide"></div>
+          <div class="vs-indent guide"></div>
+          <div class="vs-indent"></div>
+          <div class="vs-chevron-box"></div>
+          <div class="vs-icon-box">
+            <svg viewBox="0 0 16 16"><rect x="1" y="1" width="14" height="14" rx="2" fill="#f7df1e"/><text x="3.5" y="11.5" font-family="'Segoe UI', sans-serif" font-weight="900" font-size="8.5" fill="#000">JS</text></svg>
+          </div>
+          <span class="vs-row-label">validate.js</span>
+        </div>
+
+        <!--     navbar.js -->
+        <div class="vs-tree-row {% if filename == 'navbar.js' %}active{% endif %}">
+          <div class="vs-indent guide"></div>
+          <div class="vs-indent guide"></div>
+          <div class="vs-indent"></div>
+          <div class="vs-chevron-box"></div>
+          <div class="vs-icon-box">
+            <svg viewBox="0 0 16 16"><rect x="1" y="1" width="14" height="14" rx="2" fill="#f7df1e"/><text x="3.5" y="11.5" font-family="'Segoe UI', sans-serif" font-weight="900" font-size="8.5" fill="#000">JS</text></svg>
+          </div>
+          <span class="vs-row-label">navbar.js</span>
+        </div>
+
+        <!--   index.html -->
+        <div class="vs-tree-row {% if filename == 'index.html' %}active{% endif %}">
+          <div class="vs-indent guide"></div>
+          <div class="vs-indent"></div>
+          <div class="vs-chevron-box"></div>
+          <div class="vs-icon-box">
+            <svg viewBox="0 0 16 16"><path fill="#e34c26" d="M2.5 1h11l-1 12.5L8 15l-4.5-1.5L2.5 1zm2.3 3.5l.2 2.5h6l-.2-2.5H4.8zm.4 4l.2 2.5 2.6.8 2.6-.8.3-3.2H5.6z"/></svg>
+          </div>
+          <span class="vs-row-label">index.html</span>
+        </div>
+
+        <!--   navbar.html -->
+        <div class="vs-tree-row {% if filename == 'navbar.html' %}active{% endif %}">
+          <div class="vs-indent guide"></div>
+          <div class="vs-indent"></div>
+          <div class="vs-chevron-box"></div>
+          <div class="vs-icon-box">
+            <svg viewBox="0 0 16 16"><path fill="#e34c26" d="M2.5 1h11l-1 12.5L8 15l-4.5-1.5L2.5 1zm2.3 3.5l.2 2.5h6l-.2-2.5H4.8zm.4 4l.2 2.5 2.6.8 2.6-.8.3-3.2H5.6z"/></svg>
+          </div>
+          <span class="vs-row-label">navbar.html</span>
+        </div>
+
+        <!-- package.json -->
+        <div class="vs-tree-row">
+          <div class="vs-indent"></div>
+          <div class="vs-chevron-box"></div>
+          <div class="vs-icon-box">
+            <svg viewBox="0 0 16 16"><path fill="#cbcb41" d="M5.5 3c-.8 0-1.5.7-1.5 1.5v1.8c0 .6-.4 1.1-1 1.2.6.1 1 .6 1 1.2v1.8c0 .8.7 1.5 1.5 1.5h.5v-1.2h-.5c-.2 0-.3-.1-.3-.3V8.8c0-.7-.5-1.3-1.2-1.3.7 0 1.2-.6 1.2-1.3V4.5c0-.2.1-.3.3-.3h.5V3h-.5zm5 0h-.5v1.2h.5c.2 0 .3.1.3.3v1.7c0 .7.5 1.3 1.2 1.3-.7 0-1.2.6-1.2 1.3v1.7c0 .2-.1.3-.3.3h-.5V12h.5c.8 0 1.5-.7 1.5-1.5V8.7c0-.6.4-1.1 1-1.2-.6-.1-1-.6-1-1.2V4.5c0-.8-.7-1.5-1.5-1.5z"/></svg>
+          </div>
+          <span class="vs-row-label">package.json</span>
+        </div>
+
+        <!-- README.md -->
+        <div class="vs-tree-row">
+          <div class="vs-indent"></div>
+          <div class="vs-chevron-box"></div>
+          <div class="vs-icon-box">
+            <svg viewBox="0 0 16 16"><rect x="1" y="2" width="14" height="12" rx="1.5" fill="none" stroke="#519aba" stroke-width="1.2"/><path fill="#519aba" d="M3 5v6h1.5V7.5L6 9.5l1.5-2V11H9V5H7.5L6 7 4.5 5H3zm7 0h3v2h-1v4h-1V7h-1V5z"/></svg>
+          </div>
+          <span class="vs-row-label">README.md</span>
+        </div>
+
+      {% elif project_name == 'react-todo-app' %}
+        <!-- > node_modules (closed) -->
+        <div class="vs-tree-row">
+          <div class="vs-indent"></div>
+          <div class="vs-chevron-box"><svg viewBox="0 0 16 16"><path fill="none" stroke="#859bb0" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" d="M6 4.5l3.5 3.5-3.5 3.5"/></svg></div>
+          <div class="vs-icon-box">
+            <svg viewBox="0 0 16 16" fill="none" stroke="#859bb0" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1.5 3.5A1.5 1.5 0 0 1 3 2h3.2a1.5 1.5 0 0 1 1.06.44L8.7 3.9A1.5 1.5 0 0 0 9.76 4.3H13a1.5 1.5 0 0 1 1.5 1.5v6.7a1.5 1.5 0 0 1-1.5 1.5H3A1.5 1.5 0 0 1 1.5 12.5v-9z"/>
+            </svg>
+          </div>
+          <span class="vs-row-label">node_modules</span>
+        </div>
+
+        <!-- > public (closed) -->
+        <div class="vs-tree-row">
+          <div class="vs-indent"></div>
+          <div class="vs-chevron-box"><svg viewBox="0 0 16 16"><path fill="none" stroke="#859bb0" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" d="M6 4.5l3.5 3.5-3.5 3.5"/></svg></div>
+          <div class="vs-icon-box">
+            <svg viewBox="0 0 16 16" fill="none" stroke="#859bb0" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1.5 3.5A1.5 1.5 0 0 1 3 2h3.2a1.5 1.5 0 0 1 1.06.44L8.7 3.9A1.5 1.5 0 0 0 9.76 4.3H13a1.5 1.5 0 0 1 1.5 1.5v6.7a1.5 1.5 0 0 1-1.5 1.5H3A1.5 1.5 0 0 1 1.5 12.5v-9z"/>
+            </svg>
+          </div>
+          <span class="vs-row-label">public</span>
+        </div>
+
+        <!-- ∨ src (open) -->
+        <div class="vs-tree-row">
+          <div class="vs-indent"></div>
+          <div class="vs-chevron-box"><svg viewBox="0 0 16 16"><path fill="none" stroke="#859bb0" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" d="M4.5 6l3.5 3.5 3.5-3.5"/></svg></div>
+          <div class="vs-icon-box">
+            <svg viewBox="0 0 16 16" fill="none" stroke="#859bb0" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1.5 4A1.5 1.5 0 0 1 3 2.5h3.2a1.5 1.5 0 0 1 1.06.44L8.7 4.4A1.5 1.5 0 0 0 9.76 4.8H13A1.5 1.5 0 0 1 14.5 6.3v1H2.7L1.5 12.5V4z"/>
+              <path d="M2.5 8h11.8a1 1 0 0 1 1 1.25l-1.3 4.5a1 1 0 0 1-.96.75H2.5a1 1 0 0 1-.98-1.22l1-4.5A1 1 0 0 1 3.5 8z"/>
+            </svg>
+          </div>
+          <span class="vs-row-label">src</span>
+        </div>
+
+        <!--   > assets (closed) -->
+        <div class="vs-tree-row">
+          <div class="vs-indent guide"></div>
+          <div class="vs-indent"></div>
+          <div class="vs-chevron-box"><svg viewBox="0 0 16 16"><path fill="none" stroke="#859bb0" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" d="M6 4.5l3.5 3.5-3.5 3.5"/></svg></div>
+          <div class="vs-icon-box">
+            <svg viewBox="0 0 16 16" fill="none" stroke="#859bb0" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1.5 3.5A1.5 1.5 0 0 1 3 2h3.2a1.5 1.5 0 0 1 1.06.44L8.7 3.9A1.5 1.5 0 0 0 9.76 4.3H13a1.5 1.5 0 0 1 1.5 1.5v6.7a1.5 1.5 0 0 1-1.5 1.5H3A1.5 1.5 0 0 1 1.5 12.5v-9z"/>
+            </svg>
+          </div>
+          <span class="vs-row-label">assets</span>
+        </div>
+
+        <!--   ∨ components (open) -->
+        <div class="vs-tree-row">
+          <div class="vs-indent guide"></div>
+          <div class="vs-indent"></div>
+          <div class="vs-chevron-box"><svg viewBox="0 0 16 16"><path fill="none" stroke="#859bb0" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" d="M4.5 6l3.5 3.5 3.5-3.5"/></svg></div>
+          <div class="vs-icon-box">
+            <svg viewBox="0 0 16 16" fill="none" stroke="#859bb0" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1.5 4A1.5 1.5 0 0 1 3 2.5h3.2a1.5 1.5 0 0 1 1.06.44L8.7 4.4A1.5 1.5 0 0 0 9.76 4.8H13A1.5 1.5 0 0 1 14.5 6.3v1H2.7L1.5 12.5V4z"/>
+              <path d="M2.5 8h11.8a1 1 0 0 1 1 1.25l-1.3 4.5a1 1 0 0 1-.96.75H2.5a1 1 0 0 1-.98-1.22l1-4.5A1 1 0 0 1 3.5 8z"/>
+            </svg>
+          </div>
+          <span class="vs-row-label">components</span>
+        </div>
+
+        <!--     TodoApp.jsx -->
+        <div class="vs-tree-row {% if filename == 'TodoApp.jsx' %}active{% endif %}">
+          <div class="vs-indent guide"></div>
+          <div class="vs-indent guide"></div>
+          <div class="vs-indent"></div>
+          <div class="vs-chevron-box"></div>
+          <div class="vs-icon-box">
+            <svg viewBox="0 0 16 16"><ellipse cx="8" cy="8" rx="6.8" ry="2.6" fill="none" stroke="#61dafb" stroke-width="1.1"/><ellipse cx="8" cy="8" rx="6.8" ry="2.6" transform="rotate(60 8 8)" fill="none" stroke="#61dafb" stroke-width="1.1"/><ellipse cx="8" cy="8" rx="6.8" ry="2.6" transform="rotate(120 8 8)" fill="none" stroke="#61dafb" stroke-width="1.1"/><circle cx="8" cy="8" r="1.3" fill="#61dafb"/></svg>
+          </div>
+          <span class="vs-row-label">TodoApp.jsx</span>
+        </div>
+
+        <!--   App.jsx -->
+        <div class="vs-tree-row {% if filename == 'App.jsx' %}active{% endif %}">
+          <div class="vs-indent guide"></div>
+          <div class="vs-indent"></div>
+          <div class="vs-chevron-box"></div>
+          <div class="vs-icon-box">
+            <svg viewBox="0 0 16 16"><ellipse cx="8" cy="8" rx="6.8" ry="2.6" fill="none" stroke="#61dafb" stroke-width="1.1"/><ellipse cx="8" cy="8" rx="6.8" ry="2.6" transform="rotate(60 8 8)" fill="none" stroke="#61dafb" stroke-width="1.1"/><ellipse cx="8" cy="8" rx="6.8" ry="2.6" transform="rotate(120 8 8)" fill="none" stroke="#61dafb" stroke-width="1.1"/><circle cx="8" cy="8" r="1.3" fill="#61dafb"/></svg>
+          </div>
+          <span class="vs-row-label">App.jsx</span>
+        </div>
+
+        <!--   main.jsx -->
+        <div class="vs-tree-row">
+          <div class="vs-indent guide"></div>
+          <div class="vs-indent"></div>
+          <div class="vs-chevron-box"></div>
+          <div class="vs-icon-box">
+            <svg viewBox="0 0 16 16"><ellipse cx="8" cy="8" rx="6.8" ry="2.6" fill="none" stroke="#61dafb" stroke-width="1.1"/><ellipse cx="8" cy="8" rx="6.8" ry="2.6" transform="rotate(60 8 8)" fill="none" stroke="#61dafb" stroke-width="1.1"/><ellipse cx="8" cy="8" rx="6.8" ry="2.6" transform="rotate(120 8 8)" fill="none" stroke="#61dafb" stroke-width="1.1"/><circle cx="8" cy="8" r="1.3" fill="#61dafb"/></svg>
+          </div>
+          <span class="vs-row-label">main.jsx</span>
+        </div>
+
+        <!--   App.css -->
+        <div class="vs-tree-row">
+          <div class="vs-indent guide"></div>
+          <div class="vs-indent"></div>
+          <div class="vs-chevron-box"></div>
+          <div class="vs-icon-box">
+            <svg viewBox="0 0 16 16"><path fill="#42a5f5" d="M3 2h10l-1 11.5L8 15l-4-1.5L3 2zm2.5 3h5l-.2 2.2H6.2l.2 2.3 1.6.5 1.6-.5.2-1.7h1.4l-.3 2.7-2.9 1-2.9-1-.5-5.5z"/></svg>
+          </div>
+          <span class="vs-row-label">App.css</span>
+        </div>
+
+        <!-- package.json -->
+        <div class="vs-tree-row">
+          <div class="vs-indent"></div>
+          <div class="vs-chevron-box"></div>
+          <div class="vs-icon-box">
+            <svg viewBox="0 0 16 16"><path fill="#cbcb41" d="M5.5 3c-.8 0-1.5.7-1.5 1.5v1.8c0 .6-.4 1.1-1 1.2.6.1 1 .6 1 1.2v1.8c0 .8.7 1.5 1.5 1.5h.5v-1.2h-.5c-.2 0-.3-.1-.3-.3V8.8c0-.7-.5-1.3-1.2-1.3.7 0 1.2-.6 1.2-1.3V4.5c0-.2.1-.3.3-.3h.5V3h-.5zm5 0h-.5v1.2h.5c.2 0 .3.1.3.3v1.7c0 .7.5 1.3 1.2 1.3-.7 0-1.2.6-1.2 1.3v1.7c0 .2-.1.3-.3.3h-.5V12h.5c.8 0 1.5-.7 1.5-1.5V8.7c0-.6.4-1.1 1-1.2-.6-.1-1-.6-1-1.2V4.5c0-.8-.7-1.5-1.5-1.5z"/></svg>
+          </div>
+          <span class="vs-row-label">package.json</span>
+        </div>
+
+        <!-- vite.config.js -->
+        <div class="vs-tree-row">
+          <div class="vs-indent"></div>
+          <div class="vs-chevron-box"></div>
+          <div class="vs-icon-box">
+            <svg viewBox="0 0 16 16"><rect x="1" y="1" width="14" height="14" rx="2" fill="#f7df1e"/><text x="3.5" y="11.5" font-family="'Segoe UI', sans-serif" font-weight="900" font-size="8.5" fill="#000">JS</text></svg>
+          </div>
+          <span class="vs-row-label">vite.config.js</span>
+        </div>
+
+      {% elif project_name == 'node-auth-service' %}
+        <!-- > config (closed) -->
+        <div class="vs-tree-row">
+          <div class="vs-indent"></div>
+          <div class="vs-chevron-box"><svg viewBox="0 0 16 16"><path fill="none" stroke="#859bb0" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" d="M6 4.5l3.5 3.5-3.5 3.5"/></svg></div>
+          <div class="vs-icon-box">
+            <svg viewBox="0 0 16 16" fill="none" stroke="#859bb0" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1.5 3.5A1.5 1.5 0 0 1 3 2h3.2a1.5 1.5 0 0 1 1.06.44L8.7 3.9A1.5 1.5 0 0 0 9.76 4.3H13a1.5 1.5 0 0 1 1.5 1.5v6.7a1.5 1.5 0 0 1-1.5 1.5H3A1.5 1.5 0 0 1 1.5 12.5v-9z"/>
+            </svg>
+          </div>
+          <span class="vs-row-label">config</span>
+        </div>
+
+        <!-- > middleware (closed) -->
+        <div class="vs-tree-row">
+          <div class="vs-indent"></div>
+          <div class="vs-chevron-box"><svg viewBox="0 0 16 16"><path fill="none" stroke="#859bb0" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" d="M6 4.5l3.5 3.5-3.5 3.5"/></svg></div>
+          <div class="vs-icon-box">
+            <svg viewBox="0 0 16 16" fill="none" stroke="#859bb0" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1.5 3.5A1.5 1.5 0 0 1 3 2h3.2a1.5 1.5 0 0 1 1.06.44L8.7 3.9A1.5 1.5 0 0 0 9.76 4.3H13a1.5 1.5 0 0 1 1.5 1.5v6.7a1.5 1.5 0 0 1-1.5 1.5H3A1.5 1.5 0 0 1 1.5 12.5v-9z"/>
+            </svg>
+          </div>
+          <span class="vs-row-label">middleware</span>
+        </div>
+
+        <!-- > node_modules (closed) -->
+        <div class="vs-tree-row">
+          <div class="vs-indent"></div>
+          <div class="vs-chevron-box"><svg viewBox="0 0 16 16"><path fill="none" stroke="#859bb0" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" d="M6 4.5l3.5 3.5-3.5 3.5"/></svg></div>
+          <div class="vs-icon-box">
+            <svg viewBox="0 0 16 16" fill="none" stroke="#859bb0" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1.5 3.5A1.5 1.5 0 0 1 3 2h3.2a1.5 1.5 0 0 1 1.06.44L8.7 3.9A1.5 1.5 0 0 0 9.76 4.3H13a1.5 1.5 0 0 1 1.5 1.5v6.7a1.5 1.5 0 0 1-1.5 1.5H3A1.5 1.5 0 0 1 1.5 12.5v-9z"/>
+            </svg>
+          </div>
+          <span class="vs-row-label">node_modules</span>
+        </div>
+
+        <!-- ∨ routes (open) -->
+        <div class="vs-tree-row">
+          <div class="vs-indent"></div>
+          <div class="vs-chevron-box"><svg viewBox="0 0 16 16"><path fill="none" stroke="#859bb0" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" d="M4.5 6l3.5 3.5 3.5-3.5"/></svg></div>
+          <div class="vs-icon-box">
+            <svg viewBox="0 0 16 16" fill="none" stroke="#859bb0" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1.5 4A1.5 1.5 0 0 1 3 2.5h3.2a1.5 1.5 0 0 1 1.06.44L8.7 4.4A1.5 1.5 0 0 0 9.76 4.8H13A1.5 1.5 0 0 1 14.5 6.3v1H2.7L1.5 12.5V4z"/>
+              <path d="M2.5 8h11.8a1 1 0 0 1 1 1.25l-1.3 4.5a1 1 0 0 1-.96.75H2.5a1 1 0 0 1-.98-1.22l1-4.5A1 1 0 0 1 3.5 8z"/>
+            </svg>
+          </div>
+          <span class="vs-row-label">routes</span>
+        </div>
+
+        <!--   auth.routes.js -->
+        <div class="vs-tree-row">
+          <div class="vs-indent guide"></div>
+          <div class="vs-indent"></div>
+          <div class="vs-chevron-box"></div>
+          <div class="vs-icon-box">
+            <svg viewBox="0 0 16 16"><rect x="1" y="1" width="14" height="14" rx="2" fill="#f7df1e"/><text x="3.5" y="11.5" font-family="'Segoe UI', sans-serif" font-weight="900" font-size="8.5" fill="#000">JS</text></svg>
+          </div>
+          <span class="vs-row-label">auth.routes.js</span>
+        </div>
+
+        <!-- app.js -->
+        <div class="vs-tree-row {% if filename == 'app.js' %}active{% endif %}">
+          <div class="vs-indent"></div>
+          <div class="vs-chevron-box"></div>
+          <div class="vs-icon-box">
+            <svg viewBox="0 0 16 16"><rect x="1" y="1" width="14" height="14" rx="2" fill="#f7df1e"/><text x="3.5" y="11.5" font-family="'Segoe UI', sans-serif" font-weight="900" font-size="8.5" fill="#000">JS</text></svg>
+          </div>
+          <span class="vs-row-label">app.js</span>
+        </div>
+
+        <!-- server.js -->
+        <div class="vs-tree-row {% if filename == 'server.js' %}active{% endif %}">
+          <div class="vs-indent"></div>
+          <div class="vs-chevron-box"></div>
+          <div class="vs-icon-box">
+            <svg viewBox="0 0 16 16"><rect x="1" y="1" width="14" height="14" rx="2" fill="#f7df1e"/><text x="3.5" y="11.5" font-family="'Segoe UI', sans-serif" font-weight="900" font-size="8.5" fill="#000">JS</text></svg>
+          </div>
+          <span class="vs-row-label">server.js</span>
+        </div>
+
+        <!-- package.json -->
+        <div class="vs-tree-row">
+          <div class="vs-indent"></div>
+          <div class="vs-chevron-box"></div>
+          <div class="vs-icon-box">
+            <svg viewBox="0 0 16 16"><path fill="#cbcb41" d="M5.5 3c-.8 0-1.5.7-1.5 1.5v1.8c0 .6-.4 1.1-1 1.2.6.1 1 .6 1 1.2v1.8c0 .8.7 1.5 1.5 1.5h.5v-1.2h-.5c-.2 0-.3-.1-.3-.3V8.8c0-.7-.5-1.3-1.2-1.3.7 0 1.2-.6 1.2-1.3V4.5c0-.2.1-.3.3-.3h.5V3h-.5zm5 0h-.5v1.2h.5c.2 0 .3.1.3.3v1.7c0 .7.5 1.3 1.2 1.3-.7 0-1.2.6-1.2 1.3v1.7c0 .2-.1.3-.3.3h-.5V12h.5c.8 0 1.5-.7 1.5-1.5V8.7c0-.6.4-1.1 1-1.2-.6-.1-1-.6-1-1.2V4.5c0-.8-.7-1.5-1.5-1.5z"/></svg>
+          </div>
+          <span class="vs-row-label">package.json</span>
+        </div>
+
+        <!-- .env -->
+        <div class="vs-tree-row">
+          <div class="vs-indent"></div>
+          <div class="vs-chevron-box"></div>
+          <div class="vs-icon-box">
+            <svg viewBox="0 0 16 16"><path fill="#e8bf6a" d="M8 1a3 3 0 0 0-3 3v2H4a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1h-1V4a3 3 0 0 0-3-3zm1.5 5h-3V4a1.5 1.5 0 0 1 3 0v2z"/></svg>
+          </div>
+          <span class="vs-row-label">.env</span>
+        </div>
+
+      {% else %}
+        <!-- Generic fallback -->
+        <div class="vs-tree-row">
+          <div class="vs-indent"></div>
+          <div class="vs-chevron-box"><svg viewBox="0 0 16 16"><path fill="none" stroke="#859bb0" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" d="M6 4.5l3.5 3.5-3.5 3.5"/></svg></div>
+          <div class="vs-icon-box">
+            <svg viewBox="0 0 16 16" fill="none" stroke="#859bb0" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1.5 3.5A1.5 1.5 0 0 1 3 2h3.2a1.5 1.5 0 0 1 1.06.44L8.7 3.9A1.5 1.5 0 0 0 9.76 4.3H13a1.5 1.5 0 0 1 1.5 1.5v6.7a1.5 1.5 0 0 1-1.5 1.5H3A1.5 1.5 0 0 1 1.5 12.5v-9z"/>
+            </svg>
+          </div>
+          <span class="vs-row-label">backend</span>
+        </div>
+        <div class="vs-tree-row">
+          <div class="vs-indent"></div>
+          <div class="vs-chevron-box"><svg viewBox="0 0 16 16"><path fill="none" stroke="#859bb0" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" d="M6 4.5l3.5 3.5-3.5 3.5"/></svg></div>
+          <div class="vs-icon-box">
+            <svg viewBox="0 0 16 16" fill="none">
+              <path d="M1.5 3.5A1.5 1.5 0 0 1 3 2h3.2a1.5 1.5 0 0 1 1.06.44L8.7 3.9A1.5 1.5 0 0 0 9.76 4.3H13a1.5 1.5 0 0 1 1.5 1.5v6.7a1.5 1.5 0 0 1-1.5 1.5H3A1.5 1.5 0 0 1 1.5 12.5v-9z" stroke="#859bb0" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+              <circle cx="6.5" cy="8.5" r="1.6" fill="#3b82f6"/>
+            </svg>
+          </div>
+          <span class="vs-row-label">docs</span>
+        </div>
+        <div class="vs-tree-row">
+          <div class="vs-indent"></div>
+          <div class="vs-chevron-box"><svg viewBox="0 0 16 16"><path fill="none" stroke="#859bb0" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" d="M4.5 6l3.5 3.5 3.5-3.5"/></svg></div>
+          <div class="vs-icon-box">
+            <svg viewBox="0 0 16 16" fill="none" stroke="#859bb0" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1.5 4A1.5 1.5 0 0 1 3 2.5h3.2a1.5 1.5 0 0 1 1.06.44L8.7 4.4A1.5 1.5 0 0 0 9.76 4.8H13A1.5 1.5 0 0 1 14.5 6.3v1H2.7L1.5 12.5V4z"/>
+              <path d="M2.5 8h11.8a1 1 0 0 1 1 1.25l-1.3 4.5a1 1 0 0 1-.96.75H2.5a1 1 0 0 1-.98-1.22l1-4.5A1 1 0 0 1 3.5 8z"/>
+            </svg>
+          </div>
+          <span class="vs-row-label">src</span>
+        </div>
+        <div class="vs-tree-row active">
+          <div class="vs-indent guide"></div>
+          <div class="vs-indent"></div>
+          <div class="vs-chevron-box"></div>
+          <div class="vs-icon-box">
+            <svg viewBox="0 0 16 16"><path fill="#e34c26" d="M2.5 1h11l-1 12.5L8 15l-4.5-1.5L2.5 1zm2.3 3.5l.2 2.5h6l-.2-2.5H4.8zm.4 4l.2 2.5 2.6.8 2.6-.8.3-3.2H5.6z"/></svg>
+          </div>
+          <span class="vs-row-label">{{ filename }}</span>
+        </div>
+        <div class="vs-tree-row">
+          <div class="vs-indent"></div>
+          <div class="vs-chevron-box"></div>
+          <div class="vs-icon-box">
+            <svg viewBox="0 0 16 16"><path fill="#cbcb41" d="M5.5 3c-.8 0-1.5.7-1.5 1.5v1.8c0 .6-.4 1.1-1 1.2.6.1 1 .6 1 1.2v1.8c0 .8.7 1.5 1.5 1.5h.5v-1.2h-.5c-.2 0-.3-.1-.3-.3V8.8c0-.7-.5-1.3-1.2-1.3.7 0 1.2-.6 1.2-1.3V4.5c0-.2.1-.3.3-.3h.5V3h-.5zm5 0h-.5v1.2h.5c.2 0 .3.1.3.3v1.7c0 .7.5 1.3 1.2 1.3-.7 0-1.2.6-1.2 1.3v1.7c0 .2-.1.3-.3.3h-.5V12h.5c.8 0 1.5-.7 1.5-1.5V8.7c0-.6.4-1.1 1-1.2-.6-.1-1-.6-1-1.2V4.5c0-.8-.7-1.5-1.5-1.5z"/></svg>
+          </div>
+          <span class="vs-row-label">package.json</span>
+        </div>
+      {% endif %}
+
+      </div><!-- end vs-file-tree -->
+
+      <!-- Bottom sections matching reference screenshot -->
+      <div class="vs-sidebar-bottom-sections">
+        <div class="vs-sub-section"><span class="vs-chevron">&gt;</span> OUTLINE</div>
+        <div class="vs-sub-section"><span class="vs-chevron">&gt;</span> TIMELINE</div>
+      </div>
+    </div><!-- end vs-sidebar -->
+
+    <!-- Right Column: Editor on top + Terminal underneath (Strictly right of sidebar!) -->
+    <div class="vs-right-column">
+
+      <!-- Editor Container -->
+      <div class="vs-editor-container">
+        <div class="vs-tabbar">
+          <div class="vs-tab">
+            <span class="vs-icon-box" style="margin-right:2px;">
+              {% if ext == 'html' %}
+                <svg viewBox="0 0 16 16"><path fill="#e34c26" d="M2.5 1h11l-1 12.5L8 15l-4.5-1.5L2.5 1zm2.3 3.5l.2 2.5h6l-.2-2.5H4.8zm.4 4l.2 2.5 2.6.8 2.6-.8.3-3.2H5.6z"/></svg>
+              {% elif ext in ['jsx','tsx'] %}
+                <svg viewBox="0 0 16 16"><ellipse cx="8" cy="8" rx="6.8" ry="2.6" fill="none" stroke="#61dafb" stroke-width="1.1"/><ellipse cx="8" cy="8" rx="6.8" ry="2.6" transform="rotate(60 8 8)" fill="none" stroke="#61dafb" stroke-width="1.1"/><ellipse cx="8" cy="8" rx="6.8" ry="2.6" transform="rotate(120 8 8)" fill="none" stroke="#61dafb" stroke-width="1.1"/><circle cx="8" cy="8" r="1.3" fill="#61dafb"/></svg>
+              {% elif ext == 'css' %}
+                <svg viewBox="0 0 16 16"><path fill="#42a5f5" d="M3 2h10l-1 11.5L8 15l-4-1.5L3 2zm2.5 3h5l-.2 2.2H6.2l.2 2.3 1.6.5 1.6-.5.2-1.7h1.4l-.3 2.7-2.9 1-2.9-1-.5-5.5z"/></svg>
+              {% else %}
+                <svg viewBox="0 0 16 16"><rect x="1" y="1" width="14" height="14" rx="2" fill="#f7df1e"/><text x="3.5" y="11.5" font-family="'Segoe UI', sans-serif" font-weight="900" font-size="8.5" fill="#000">JS</text></svg>
+              {% endif %}
+            </span>
+            <span>{{ filename }}</span>
+            <span style="font-size:10px;color:#858585;margin-left:4px;">✕</span>
+          </div>
+          {% if ext == 'html' %}
+            <div class="vs-tab-inactive">
+              <span style="color:#f7df1e;font-weight:700;font-size:10px;">JS</span> validate.js
+            </div>
+            <div class="vs-tab-inactive">
+              <span style="color:#519aba;font-weight:700;font-size:10px;">M↓</span> README.md
+            </div>
+          {% elif ext in ['jsx','tsx'] %}
+            <div class="vs-tab-inactive">
+              <span style="color:#61dafb;font-size:11px;">⚛</span> App.jsx
+            </div>
+            <div class="vs-tab-inactive">
+              <span style="color:#519aba;font-weight:700;font-size:10px;">M↓</span> README.md
+            </div>
+          {% else %}
+            <div class="vs-tab-inactive">
+              <span style="color:#cbcb41;font-size:11px;">{}</span> package.json
+            </div>
+            <div class="vs-tab-inactive">
+              <span style="color:#519aba;font-weight:700;font-size:10px;">M↓</span> README.md
+            </div>
+          {% endif %}
+          <div class="vs-tabbar-actions">
+            <!-- Split Editor icon matching reference image -->
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2" y="2" width="12" height="12" rx="1"/><line x1="8" y1="2" x2="8" y2="14"/></svg>
+            <span style="font-size:14px;letter-spacing:1px;cursor:pointer;">···</span>
+          </div>
+        </div>
+
+        <div class="vs-breadcrumbs">
+          <span>{{ project_name }}</span> &gt;
+          <span>src</span> &gt;
+          <span style="color:#ddd;">{{ filename }}</span>
+        </div>
+
+        <div class="vs-editor-inner">
+          <div class="vs-linenumbers">
+            {% for i in range(1, [total_lines + 1, 26]|min) %}
+            {{ i }}<br>
+            {% endfor %}
+            {% if total_lines > 25 %}
+            ...<br>
+            {% endif %}
+          </div>
+          <div class="vs-code">{{ code_content }}</div>
+        </div>
+      </div><!-- end vs-editor-container -->
+
+      <!-- Integrated Terminal — starts under the editor ONLY! -->
+      <div class="vs-terminal">
+        <div class="vs-term-hdr">
+          <div class="vs-term-tabs">
+            <span class="vs-term-tab">PROBLEMS</span>
+            <span class="vs-term-tab">OUTPUT</span>
+            <span class="vs-term-tab active">TERMINAL</span>
+            <span class="vs-term-tab">PORTS</span>
+          </div>
+          <div class="vs-term-actions">
+            <span class="vs-term-icon" title="Terminal Options" style="font-size:13px;color:#858585;">@</span>
+            <svg class="vs-term-icon" title="Split Terminal" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2" y="2" width="12" height="12" rx="1"/><line x1="8" y1="2" x2="8" y2="14"/></svg>
+            <svg class="vs-term-icon" title="Kill Terminal" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M3.5 4.5l.6 8.5a1 1 0 0 0 1 .9h5.8a1 1 0 0 0 1-.9l.6-8.5M2 4.5h12M6 2.5h4"/></svg>
+            <span class="vs-term-icon" style="font-size:14px;letter-spacing:1px;color:#858585;" title="More Actions">···</span>
+            <svg class="vs-term-icon" title="Toggle Panel Size" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2" y="2" width="12" height="12" rx="1"/><line x1="2" y1="6" x2="14" y2="6"/></svg>
+          </div>
+        </div>
+        <div class="vs-term-body">
+{% if output_content %}{{ output_content | safe }}{% else %}<span class="tc-prompt">PS C:\Users\{{ username or 'Student' }}\{{ project_name }}&gt;</span> <span class="term-cursor"></span>{% endif %}
+        </div>
+      </div><!-- end vs-terminal -->
+
+    </div><!-- end vs-right-column -->
+
+  </div><!-- end vs-main-layout -->
+
+  <!-- Status Bar (Spans full width at bottom) -->
+  <div class="vs-statusbar">
+    <div style="display:flex;gap:12px;align-items:center;">
+      <span>⑂ main</span>
+      <span>0 ⊗&nbsp; 0 ⚠</span>
+    </div>
+    <div style="display:flex;gap:14px;align-items:center;">
+      <span>Ln {{ total_lines }}, Col 1</span>
+      <span>Spaces: 2</span>
+      <span>UTF-8</span>
+      <span>{{ lang_label }}</span>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

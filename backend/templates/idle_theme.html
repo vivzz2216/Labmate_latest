@@ -1,0 +1,502 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>{{ filename }} - Python 3.11.4</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    /* Clean white canvas as explicitly requested by user */
+    body {
+      background: #ffffff;
+      margin: 0;
+      padding: 24px;
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Roboto', sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Container for layout styles */
+    .idle-workspace {
+      width: 100%;
+      display: flex;
+      position: relative;
+    }
+
+    /* ========================================================
+       STYLE 1: OUTPUT DOWN (Editor on Top, Shell Overlapping Below)
+       ======================================================== */
+    .layout-style-1 {
+      width: 900px;
+      height: 940px;
+      position: relative;
+    }
+    .layout-style-1 .editor-window {
+      position: absolute;
+      left: 10px;
+      top: 10px;
+      width: 860px;
+      height: 520px;
+      z-index: 1;
+    }
+    .layout-style-1 .shell-window {
+      position: absolute;
+      left: 25px;
+      top: 310px;
+      width: 770px;
+      height: 550px;
+      z-index: 2;
+    }
+
+    /* ========================================================
+       STYLE 2: OUTPUT SIDE (Editor Left, Shell Overlapping Right)
+       ======================================================== */
+    .layout-style-2 {
+      width: 1120px;
+      height: 720px;
+      position: relative;
+    }
+    .layout-style-2 .editor-window {
+      position: absolute;
+      left: 10px;
+      top: 10px;
+      width: 630px;
+      height: 670px;
+      z-index: 1;
+    }
+    .layout-style-2 .shell-window {
+      position: absolute;
+      left: 480px;
+      top: 85px;
+      width: 620px;
+      height: 580px;
+      z-index: 2;
+    }
+
+    /* ========================================================
+       STYLE 3: TWO DIFFERENT WINDOWS (Side-by-Side Dual Windows)
+       ======================================================== */
+    .layout-style-3 {
+      display: flex;
+      flex-direction: row;
+      justify-content: center;
+      align-items: flex-start;
+      gap: 20px;
+      width: 1260px;
+    }
+    .layout-style-3 .editor-window {
+      width: 640px;
+      height: 680px;
+    }
+    .layout-style-3 .shell-window {
+      width: 590px;
+      height: 580px;
+      margin-top: 50px;
+    }
+
+    /* ========================================================
+       WINDOWS 11 WINDOW FRAME STYLING
+       ======================================================== */
+    .win-window {
+      background: #ffffff;
+      border: 1px solid #d4d4d4;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.16), 0 2px 8px rgba(0, 0, 0, 0.08);
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Title Bar */
+    .win-titlebar {
+      height: 34px;
+      background: #fdfdfd;
+      border-bottom: 1px solid #e5e5e5;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 0 0 10px;
+      user-select: none;
+    }
+    .win-title-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+    .win-icon {
+      width: 16px;
+      height: 16px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .win-title-text {
+      font-size: 12px;
+      color: #333333;
+      font-family: 'Segoe UI', -apple-system, sans-serif;
+      font-weight: 400;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .win-controls {
+      display: flex;
+      height: 100%;
+    }
+    .win-btn {
+      width: 44px;
+      height: 34px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #1a1a1a;
+      transition: background 0.15s;
+    }
+    .win-btn.close:hover {
+      background: #e81123;
+      color: #ffffff;
+    }
+
+    /* Menu Bar */
+    .win-menubar {
+      height: 25px;
+      background: #ffffff;
+      border-bottom: 1px solid #efefef;
+      display: flex;
+      align-items: center;
+      padding: 0 10px;
+      gap: 14px;
+      font-size: 12px;
+      color: #2b2b2b;
+      font-family: 'Segoe UI', -apple-system, sans-serif;
+    }
+    .win-menubar span {
+      cursor: default;
+    }
+
+    /* Code & Shell Editor Content Area */
+    .win-body {
+      background: #ffffff;
+      flex: 1;
+      padding: 8px 12px;
+      overflow: hidden;
+      display: flex;
+      position: relative;
+    }
+    .win-body-inner {
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* Status Bar */
+    .win-statusbar {
+      height: 22px;
+      background: #fbfbfb;
+      border-top: 1px solid #eaeaea;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding: 0 14px;
+      font-size: 11px;
+      color: #555555;
+      font-family: 'Segoe UI', -apple-system, sans-serif;
+    }
+
+    /* Scrollbar imitation */
+    .win-scrollbar {
+      width: 14px;
+      background: #fdfdfd;
+      border-left: 1px solid #f0f0f0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2px 0;
+      user-select: none;
+      box-sizing: border-box;
+    }
+    .scrollbar-arrow {
+      width: 10px;
+      height: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 8px;
+      color: #888888;
+      flex-shrink: 0;
+      user-select: none;
+    }
+    .scrollbar-track {
+      flex: 1;
+      width: 100%;
+      position: relative;
+      margin: 1px 0;
+    }
+    .scrollbar-thumb {
+      width: 8px;
+      background: #cdcdcd;
+      border-radius: 4px;
+      position: absolute;
+      top: 0px; /* Strictly docked at the top when viewing top section */
+      left: 3px;
+      min-height: 48px;
+      height: 64px;
+    }
+
+    /* ========================================================
+       IDLE CLASSIC SYNTAX HIGHLIGHTING (EXACT COLOR MATCH)
+       ======================================================== */
+    .idle-text {
+      font-family: 'Consolas', 'Courier New', Courier, monospace;
+      font-size: 13.5px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      word-break: break-all;
+      color: #000000;
+    }
+
+    /* IDLE Classic Colors */
+    .idle-text .k, .idle-text .kd, .idle-text .kn, .idle-text .kp, .idle-text .kr, .idle-text .ow, .idle-text .keyword {
+      color: #ff7700 !important; /* IDLE Orange: def, return, lambda, if, else, for, while, in, is, etc. */
+      font-weight: normal;
+    }
+    .idle-text .nb, .idle-text .bp, .idle-text .builtin {
+      color: #900090 !important; /* IDLE Purple: print, len, sum, range, list, map, filter, sorted, int, str, dict */
+    }
+    .idle-text .nf, .idle-text .function {
+      color: #0000ff !important; /* IDLE Blue: function definition names */
+    }
+    .idle-text .nc, .idle-text .class-name {
+      color: #0000ff !important; /* IDLE Blue: class names */
+    }
+    .idle-text .s, .idle-text .s1, .idle-text .s2, .idle-text .sa, .idle-text .sb, .idle-text .sc, 
+    .idle-text .sd, .idle-text .se, .idle-text .sh, .idle-text .si, .idle-text .sx, .idle-text .sr, 
+    .idle-text .ss, .idle-text .string {
+      color: #00aa00 !important; /* IDLE Green: strings */
+    }
+    .idle-text .c, .idle-text .c1, .idle-text .ch, .idle-text .cm, .idle-text .cp, .idle-text .cpf, 
+    .idle-text .cs, .idle-text .comment {
+      color: #dd0000 !important; /* IDLE Red: comments */
+    }
+    .idle-text .m, .idle-text .mb, .idle-text .mf, .idle-text .mh, .idle-text .mi, .idle-text .il, 
+    .idle-text .mo, .idle-text .number {
+      color: #000000 !important; /* IDLE numbers are black */
+    }
+    .idle-text .o, .idle-text .operator, .idle-text .p, .idle-text .punctuation {
+      color: #000000 !important; /* IDLE operators and punctuation are black */
+    }
+    .idle-text .n, .idle-text .variable, .idle-text .name {
+      color: #000000 !important; /* IDLE variables are black */
+    }
+
+    /* ========================================================
+       IDLE SHELL OUTPUT WINDOW
+       ======================================================== */
+    .shell-header {
+      color: #000000;
+      margin-bottom: 2px;
+    }
+    .shell-prompt {
+      color: #aa0000;
+      font-weight: 500;
+    }
+    .shell-restart {
+      color: #aa0000;
+      white-space: pre-wrap;
+      overflow: visible;
+      margin: 4px 0;
+    }
+    .shell-stdout {
+      color: #0000cc;
+      margin: 0;
+      padding: 0;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .shell-stderr {
+      color: #dd0000; /* Stderr in IDLE is red */
+      margin: 0;
+      padding: 0;
+      white-space: pre-wrap;
+    }
+    .shell-cursor {
+      display: inline-block;
+      width: 1.5px;
+      height: 14px;
+      background: #000000;
+      vertical-align: middle;
+      margin-left: 2px;
+    }
+    /* Keep both full windows visible; a fixed-height overlapping shell hid
+       the actual source and the lower lines of interactive output. */
+    .idle-workspace.layout-style-1, .idle-workspace.layout-style-2,
+    .idle-workspace.layout-style-3 {
+      width: 100%; height: auto; display: flex; flex-direction: column; gap: 18px;
+    }
+    .idle-workspace .editor-window, .idle-workspace .shell-window {
+      position: static; left: auto; top: auto; width: 100%; height: auto;
+      min-height: 0; z-index: auto;
+    }
+    .idle-workspace.shell-only .editor-window { display: none; }
+    .idle-workspace.editor-only .shell-window { display: none; }
+    .idle-workspace .win-body, .idle-workspace .win-body-inner { overflow: visible; }
+    .idle-workspace .win-body { min-height: 165px; }
+    .idle-workspace .shell-window .win-body { min-height: 270px; }
+    .shell-input { color: #000000; white-space: pre-wrap; }
+    .shell-stdout, .shell-stderr { display: inline; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+
+{% set style = screenshot_style|default('style_1') %}
+{% set lines_list = code_content.splitlines() %}
+{% set total_lines = lines_list|length %}
+
+<div class="idle-workspace layout-{{ style|replace('_', '-') }} {{ 'shell-only' if view_mode == 'shell' else 'editor-only' if view_mode == 'editor' else 'split' }}">
+
+  <!-- 1. PYTHON EDITOR WINDOW -->
+  {% if view_mode != 'shell' %}
+  <div class="win-window editor-window">
+    <div class="win-titlebar">
+      <div class="win-title-left">
+        <span class="win-icon">
+          <svg width="15" height="15" viewBox="0 0 110 110" fill="none">
+            <path d="M54.2 2C27.4 2 28.7 13.6 28.7 13.6L28.8 25.6H54.6V29.3H18.2C18.2 29.3 2 27.5 2 54.4C2 81.3 16.2 79.5 16.2 79.5H25.9V66C25.9 50.4 39.4 50.8 39.4 50.8H65.2C77.4 50.8 77.2 38.6 77.2 38.6V13.6C77.2 13.6 78.5 2 54.2 2ZM41.8 9.9C44.6 9.9 46.8 12.1 46.8 14.9C46.8 17.6 44.6 19.8 41.8 19.8C39.1 19.8 36.9 17.6 36.9 14.9C36.9 12.1 39.1 9.9 41.8 9.9Z" fill="#3673A5"/>
+            <path d="M55.8 108C82.6 108 81.3 96.4 81.3 96.4L81.2 84.4H55.4V80.7H91.8C91.8 80.7 108 82.5 108 55.6C108 28.7 93.8 30.5 93.8 30.5H84.1V44C84.1 59.6 70.6 59.2 70.6 59.2H44.8C32.6 59.2 32.8 71.4 32.8 71.4V96.4C32.8 96.4 31.5 108 55.8 108ZM68.2 100.1C65.4 100.1 63.2 97.9 63.2 95.1C63.2 92.4 65.4 90.2 68.2 90.2C70.9 90.2 73.1 92.4 73.1 95.1C73.1 97.9 70.9 100.1 68.2 100.1Z" fill="#FFD43B"/>
+          </svg>
+        </span>
+        <span class="win-title-text">{{ filename }} - Python 3.11.4</span>
+      </div>
+      <div class="win-controls">
+        <span class="win-btn">
+          <svg width="10" height="1" viewBox="0 0 10 1"><rect width="10" height="1" fill="#1e1e1e"/></svg>
+        </span>
+        <span class="win-btn">
+          <svg width="10" height="10" viewBox="0 0 10 10"><rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="#1e1e1e" stroke-width="1"/></svg>
+        </span>
+        <span class="win-btn close">
+          <svg width="10" height="10" viewBox="0 0 10 10"><path d="M1 1L9 9M9 1L1 9" stroke="#1e1e1e" stroke-width="1.2"/></svg>
+        </span>
+      </div>
+    </div>
+    <div class="win-menubar">
+      <span>File</span>
+      <span>Edit</span>
+      <span>Format</span>
+      <span>Run</span>
+      <span>Options</span>
+      <span>Window</span>
+      <span>Help</span>
+    </div>
+    <div class="win-body">
+      <div class="win-body-inner">
+        <div class="idle-text">{{ code_content }}</div>
+      </div>
+      <div class="win-scrollbar">
+        <span class="scrollbar-arrow">▲</span>
+        <div class="scrollbar-track">
+          <div class="scrollbar-thumb"></div>
+        </div>
+        <span class="scrollbar-arrow">▼</span>
+      </div>
+    </div>
+    <div class="win-statusbar">
+      <span>Ln: {{ total_lines }}   Col: 0</span>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- 2. PYTHON IDLE SHELL OUTPUT WINDOW -->
+  {% if view_mode != 'editor' %}
+  <div class="win-window shell-window">
+    <div class="win-titlebar">
+      <div class="win-title-left">
+        <span class="win-icon">
+          <svg width="15" height="15" viewBox="0 0 110 110" fill="none">
+            <path d="M54.2 2C27.4 2 28.7 13.6 28.7 13.6L28.8 25.6H54.6V29.3H18.2C18.2 29.3 2 27.5 2 54.4C2 81.3 16.2 79.5 16.2 79.5H25.9V66C25.9 50.4 39.4 50.8 39.4 50.8H65.2C77.4 50.8 77.2 38.6 77.2 38.6V13.6C77.2 13.6 78.5 2 54.2 2ZM41.8 9.9C44.6 9.9 46.8 12.1 46.8 14.9C46.8 17.6 44.6 19.8 41.8 19.8C39.1 19.8 36.9 17.6 36.9 14.9C36.9 12.1 39.1 9.9 41.8 9.9Z" fill="#3673A5"/>
+            <path d="M55.8 108C82.6 108 81.3 96.4 81.3 96.4L81.2 84.4H55.4V80.7H91.8C91.8 80.7 108 82.5 108 55.6C108 28.7 93.8 30.5 93.8 30.5H84.1V44C84.1 59.6 70.6 59.2 70.6 59.2H44.8C32.6 59.2 32.8 71.4 32.8 71.4V96.4C32.8 96.4 31.5 108 55.8 108ZM68.2 100.1C65.4 100.1 63.2 97.9 63.2 95.1C63.2 92.4 65.4 90.2 68.2 90.2C70.9 90.2 73.1 92.4 73.1 95.1C73.1 97.9 70.9 100.1 68.2 100.1Z" fill="#FFD43B"/>
+          </svg>
+        </span>
+        <span class="win-title-text">Python 3.11.4 Shell</span>
+      </div>
+      <div class="win-controls">
+        <span class="win-btn">
+          <svg width="10" height="1" viewBox="0 0 10 1"><rect width="10" height="1" fill="#1e1e1e"/></svg>
+        </span>
+        <span class="win-btn">
+          <svg width="10" height="10" viewBox="0 0 10 10"><rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="#1e1e1e" stroke-width="1"/></svg>
+        </span>
+        <span class="win-btn close">
+          <svg width="10" height="10" viewBox="0 0 10 10"><path d="M1 1L9 9M9 1L1 9" stroke="#1e1e1e" stroke-width="1.2"/></svg>
+        </span>
+      </div>
+    </div>
+    <div class="win-menubar">
+      <span>File</span>
+      <span>Edit</span>
+      <span>Shell</span>
+      <span>Debug</span>
+      <span>Options</span>
+      <span>Window</span>
+      <span>Help</span>
+    </div>
+    <div class="win-body">
+      <div class="win-body-inner">
+        <div class="idle-text"><div class="shell-header">Python 3.11.4 (tags/v3.11.4, Jun  7 2023, 05:45:37) [MSC v.1934 64 bit (AMD64)] on win32<br>Type "help", "copyright", "credits" or "license()" for more information.</div><span class="shell-prompt">&gt;&gt;&gt;&#10;</span><span class="shell-restart">========================= RESTART: C:/Users/{{ username or 'Student' }}/Desktop/{{ filename }} =========================&#10;</span>{% for segment in session_segments %}<span class="shell-{{ segment.kind }}">{{ segment.text }}</span>{% endfor %}{% if session_segments and not session_segments[-1].text.endswith('\n') %}<br>{% endif %}<span class="shell-prompt">&gt;&gt;&gt;</span><span class="shell-cursor"></span>
+        </div>
+      </div>
+      <div class="win-scrollbar">
+        <span class="scrollbar-arrow">▲</span>
+        <div class="scrollbar-track">
+          <div class="scrollbar-thumb"></div>
+        </div>
+        <span class="scrollbar-arrow">▼</span>
+      </div>
+    </div>
+    <div class="win-statusbar">
+      <span>Ln: 8   Col: 20</span>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+
+<script>
+  window.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.win-window').forEach(win => {
+      const inner = win.querySelector('.win-body-inner');
+      const track = win.querySelector('.scrollbar-track');
+      const thumb = win.querySelector('.scrollbar-thumb');
+      if (!inner || !track || !thumb) return;
+      
+      const contentHeight = inner.scrollHeight;
+      const visibleHeight = inner.clientHeight;
+      const trackHeight = track.clientHeight || (win.clientHeight - 70);
+      
+      if (trackHeight <= 0) return;
+      
+      if (contentHeight <= visibleHeight + 10) {
+        // Content completely fits within window:
+        // In Tkinter IDLE, thumb covers track or sits docked at top filling track
+        thumb.style.top = '0px';
+        thumb.style.height = `${Math.max(trackHeight - 2, 30)}px`;
+        thumb.style.opacity = '0.35';
+      } else {
+        // Content overflows, but we are displaying the top section (line 1):
+        const ratio = Math.min(1, Math.max(0.15, visibleHeight / contentHeight));
+        const thumbHeight = Math.max(Math.round(trackHeight * ratio), 44);
+        thumb.style.height = `${thumbHeight}px`;
+        thumb.style.top = '0px'; // Strictly at the top!
+        thumb.style.opacity = '1';
+      }
+    });
+  });
+</script>
+</body>
+</html>

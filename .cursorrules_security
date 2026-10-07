@@ -1,0 +1,34 @@
+# SECURITY NOTICE FOR DEVELOPERS
+
+## ⚠️ CRITICAL: API Keys and Secrets
+
+**NEVER** commit API keys, secrets, or credentials to version control!
+
+### Files that should NEVER be committed:
+- `.env` - Contains production secrets
+- `.cursor/mcp.json` - May contain API keys
+- Any file with credentials or tokens
+
+### What to do if you accidentally committed secrets:
+
+1. **Immediately rotate the exposed key/secret**
+2. **Remove from git history:**
+   ```bash
+   git filter-branch --force --index-filter \
+   "git rm --cached --ignore-unmatch path/to/file" \
+   --prune-empty --tag-name-filter cat -- --all
+   ```
+3. **Force push (ONLY for this emergency):**
+   ```bash
+   git push origin --force --all
+   ```
+4. **Update the secret in your environment**
+
+### Best Practices:
+- Use `.env` files (already in .gitignore)
+- Use environment variables for all secrets
+- Never hardcode credentials
+- Use secret management services (AWS Secrets Manager, etc.)
+- Rotate keys regularly
+- Use different keys for dev/staging/production
+

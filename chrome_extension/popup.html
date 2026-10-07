@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LabMate Assistant</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <!-- Header -->
+    <header class="popup-header">
+      <div class="brand">
+        <div class="brand-logo">⚡</div>
+        <div class="brand-info">
+          <h1>LabMate</h1>
+          <span class="brand-subtitle">AI Lab Manual Assistant</span>
+        </div>
+      </div>
+      <div id="status-badge" class="status-badge status-offline">
+        <span class="status-dot"></span>
+        <span id="status-text">Checking...</span>
+      </div>
+    </header>
+
+    <!-- User Profile Card -->
+    <div id="auth-card" class="card auth-card">
+      <div class="user-row">
+        <div class="user-avatar" id="user-avatar">👤</div>
+        <div class="user-details">
+          <div class="user-name" id="user-name">Guest Student</div>
+          <div class="user-email" id="user-email">Not authenticated</div>
+        </div>
+      </div>
+      <div class="auth-actions" id="auth-actions">
+        <button id="login-btn" class="btn btn-primary btn-sm">Log In via Web App</button>
+        <button id="logout-btn" class="btn btn-secondary btn-sm" style="display: none;">Sign Out</button>
+      </div>
+    </div>
+
+    <!-- Quick Navigation -->
+    <div class="card actions-card">
+      <div class="card-title">Quick Access</div>
+      <div class="btn-grid">
+        <button id="open-workspace-btn" class="btn btn-gradient">
+          <span class="btn-icon">📁</span> Open Student Workspace
+        </button>
+        <button id="open-dashboard-btn" class="btn btn-outline">
+          <span class="btn-icon">📊</span> View Dashboard
+        </button>
+      </div>
+    </div>
+
+    <!-- Drive Instructions Tip -->
+    <div class="card tip-card">
+      <div class="tip-header">
+        <span class="tip-icon">💡</span>
+        <span class="tip-title">Google Drive Integration</span>
+      </div>
+      <p class="tip-text">
+        Open any lab manual PDF or DOCX in Google Drive preview. The <strong>⚡ Send to LabMate</strong> button will appear in the top bar to send directly to your workspace!
+      </p>
+    </div>
+
+    <!-- Collapsible Settings -->
+    <details class="settings-accordion">
+      <summary class="settings-summary">⚙️ Server & Network Settings</summary>
+      <div class="settings-body">
+        <div class="form-group">
+          <label for="server-url">Backend API URL:</label>
+          <input type="text" id="server-url" placeholder="http://localhost:8000">
+        </div>
+        <div class="form-group">
+          <label for="web-url">Web App URL:</label>
+          <input type="text" id="web-url" placeholder="http://localhost:3000">
+        </div>
+        <div class="settings-btn-row">
+          <button id="test-conn-btn" class="btn btn-secondary btn-xs">Test Connection</button>
+          <button id="save-settings-btn" class="btn btn-primary btn-xs">Save Settings</button>
+        </div>
+        <div id="conn-result" class="conn-result"></div>
+      </div>
+    </details>
+
+    <!-- Footer -->
+    <footer class="popup-footer">
+      <span>LabMate v1.0 • Multi-turn AI Execution</span>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

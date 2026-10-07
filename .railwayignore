@@ -1,0 +1,12 @@
+# Ignore frontend directory to prevent Railway from auto-detecting package.json
+frontend/
+frontend/*
+!frontend/out/
+
+# Ignore node_modules everywhere
+**/node_modules/
+**/.next/
+
+# Ignore other build artifacts
+**/dist/
+**/build/

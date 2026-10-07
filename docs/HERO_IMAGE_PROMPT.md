@@ -1,0 +1,5 @@
+# Homepage hero image provenance
+
+`frontend/public/labmate-hero-desk.png` was generated for this homepage with this prompt:
+
+> Create a high-resolution, wide 16:9 photorealistic background photograph for a modern university programming-lab software homepage. Bright airy study desk in morning daylight, very pale powder-blue and white color palette, soft depth of field. On the FAR LEFT EDGE: a modest stack of 3-4 thick computer science textbooks in muted navy/blue, an open student notebook with a pen extending from the lower left corner. On the FAR RIGHT EDGE: a small healthy green desk plant and a partially visible modern open laptop, cropped naturally. The entire central 75% and upper center must be quiet, soft, light and almost empty, suitable for text and a UI overlay. Sophisticated natural editorial product photography, soft shadows, credible material texture, no people, no writing, no readable text, no icons, no logos, no watermark, no website UI. This is a still image, not a mockup.

@@ -1,0 +1,1286 @@
+/* ========================================================
+   LABMATE DARK WORKSPACE STYLES (Full Viewport & Full Page Waves)
+   ======================================================== */
+
+.page {
+  width: 100vw;
+  height: 100vh;
+  max-width: 100vw;
+  max-height: 100vh;
+  overflow: hidden;
+  background: #000000;
+  color: #f1f5f9;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  box-sizing: border-box;
+}
+
+/* Background DotGrid: pure CSS matrix dots covering entire page edge to edge */
+.pageDotsContainer {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 0;
+  background-color: #02040a;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.14) 1.2px, transparent 1.2px);
+  background-size: 22px 22px;
+}
+
+.content {
+  position: relative;
+  z-index: 1;
+  width: 100vw;
+  height: 100vh;
+  max-width: 100vw;
+  max-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* Header */
+.header {
+  height: 52px;
+  min-height: 52px;
+  padding: 0 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(8, 12, 22, 0.75);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  z-index: 10;
+  box-sizing: border-box;
+}
+
+.headerLead {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  color: #ffffff;
+  text-decoration: none;
+}
+
+.headerCopy h1 {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: -0.01em;
+}
+
+.headerCopy p {
+  margin: 0;
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.account {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #cbd5e1;
+}
+
+.topAvatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #1e293b;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* ========================================================
+   MAIN LAYOUT: Full-Screen Edge-to-Edge Grid
+   ======================================================== */
+.layout {
+  flex: 1;
+  min-height: 0;
+  width: 100vw;
+  max-width: 100vw;
+  margin: 0;
+  padding: 14px 18px;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: 460px 1fr;
+  gap: 16px;
+  align-items: stretch;
+  height: calc(100vh - 52px);
+  max-height: calc(100vh - 52px);
+  overflow: hidden;
+}
+
+/* ========================================================
+   LEFT COLUMN: Setup Panel (Glassmorphism & Scroll)
+   ======================================================== */
+.setupPanel {
+  height: 100%;
+  max-height: 100%;
+  padding: 22px 24px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  background: rgba(10, 14, 26, 0.82);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+.setupPanel::-webkit-scrollbar {
+  width: 6px;
+}
+
+.setupPanel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.setupPanel::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+}
+
+.setupPanel::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.panelTitle {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #f8fafc;
+}
+
+.setupIntro {
+  margin: 5px 0 18px;
+  color: #94a3b8;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+/* Steps */
+.step {
+  position: relative;
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: 12px;
+  padding-bottom: 20px;
+}
+
+.step:before {
+  content: "";
+  position: absolute;
+  left: 12px;
+  top: 26px;
+  bottom: 0;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.lastStep:before {
+  display: none;
+}
+
+.stepNumber {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #2563eb;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.35);
+}
+
+.step h2 {
+  margin: 2px 0 3px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #f1f5f9;
+  line-height: 1.3;
+}
+
+.step h2 > span {
+  color: #64748b;
+  font-weight: 400;
+  font-size: 11px;
+}
+
+.step p {
+  margin: 0 0 8px;
+  color: #94a3b8;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.step select,
+.step textarea {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: #0f172a;
+  color: #f1f5f9;
+  font: 11.5px/1.5 "Segoe UI", sans-serif;
+  padding: 8px 10px;
+  box-sizing: border-box;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.step select:focus,
+.step textarea:focus {
+  border-color: #3b82f6;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+}
+
+.step textarea {
+  min-height: 64px;
+  resize: vertical;
+}
+
+.step select {
+  height: 38px;
+  cursor: pointer;
+}
+
+.step textarea::placeholder {
+  color: #64748b;
+}
+
+/* Personalize & Mode Selector */
+.personalizeBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  background: rgba(34, 197, 94, 0.12);
+  border: 1px solid rgba(34, 197, 94, 0.25);
+  border-radius: 6px;
+  color: #4ade80;
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.personalizeBtn:hover {
+  background: rgba(34, 197, 94, 0.22);
+  border-color: rgba(34, 197, 94, 0.4);
+}
+
+.modeSelector {
+  display: flex;
+  background: rgba(15, 23, 42, 0.85);
+  padding: 3px;
+  border-radius: 8px;
+  gap: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  margin-top: 6px;
+}
+
+.modeButton {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.modeButton:hover {
+  color: #f1f5f9;
+}
+
+.modeButtonActive {
+  background: #1e293b;
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.handwrittenNotice {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 7px 10px;
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 7px;
+  font-size: 10.5px;
+  color: #94a3b8;
+  line-height: 1.4;
+}
+
+/* DropZone */
+.dropZone {
+  width: 100%;
+  padding: 18px 12px;
+  border: 1.5px dashed rgba(99, 102, 241, 0.35);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.6);
+  color: #818cf8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 7px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.dropZone:hover,
+.dragging {
+  background: rgba(30, 41, 59, 0.75);
+  border-color: #6366f1;
+}
+
+.dropZone strong {
+  font-size: 11.5px;
+  color: #e2e8f0;
+}
+
+.dropZone small {
+  font-size: 10px;
+  color: #64748b;
+}
+
+/* File Card */
+.fileCard {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 11px;
+  min-height: 54px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: #111827;
+  color: #38bdf8;
+  box-sizing: border-box;
+}
+
+.fileCard > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.fileCard strong {
+  color: #f1f5f9;
+  font-size: 11px;
+  word-break: break-word;
+}
+
+.fileCard small {
+  color: #94a3b8;
+  font-size: 10px;
+}
+
+.fileCard button {
+  background: none;
+  border: 0;
+  color: #64748b;
+  padding: 4px;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.fileCard button:hover {
+  color: #ef4444;
+}
+
+.fileCheck {
+  color: #22c55e;
+  flex-shrink: 0;
+}
+
+/* Batch Section */
+.batchSection {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.batchHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+
+.batchHeader strong {
+  font-size: 11px;
+  color: #cbd5e1;
+}
+
+.batchZipButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  background: #059669;
+  color: #ffffff;
+  font-size: 10.5px;
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.batchZipButton:hover {
+  background: #047857;
+}
+
+.batchItemCard {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  background: #111827;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 7px;
+}
+
+.batchItemInfo {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.batchItemName {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #f1f5f9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.batchItemMeta {
+  font-size: 9.5px;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.batchItemProgress {
+  width: 100%;
+  height: 3px;
+  background: #1e293b;
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 3px;
+}
+
+.batchItemProgressBar {
+  height: 100%;
+  background: #4f46e5;
+}
+
+.badgeStatus {
+  padding: 2px 6px;
+  border-radius: 8px;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.badgeCompleted {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.badgeProcessing {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.badgeFailed {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.badgePending {
+  background: rgba(148, 163, 184, 0.1);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+/* Status Row */
+.statusRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 7px;
+  color: #38bdf8;
+  font-size: 11px;
+}
+
+.statusRow span {
+  color: #94a3b8;
+}
+
+.textButton {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 0;
+  border: 0;
+  background: none;
+  color: #38bdf8;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* Question Editor */
+.questionsButton {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: rgba(15, 23, 42, 0.7);
+  color: #38bdf8;
+  cursor: pointer;
+  font-size: 10.5px;
+}
+
+.questionsButton > span:first-of-type {
+  color: #e2e8f0;
+  flex: 1;
+  text-align: left;
+}
+
+.questionsButton:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.questionEditor {
+  max-height: 320px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 4px 2px;
+}
+
+.questionEditor label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.questionEditor strong {
+  font-size: 10.5px;
+  color: #818cf8;
+}
+
+.questionEditor textarea {
+  min-height: 80px;
+}
+
+/* File Settings */
+.filenameLabel {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.filenameLabel > div {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  background: #0f172a;
+}
+
+.filenameLabel input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  padding: 7px 8px;
+  background: none;
+  color: #f1f5f9;
+  font-size: 11px;
+}
+
+.filenameLabel input:focus {
+  outline: none;
+}
+
+.filenameLabel > div > span {
+  padding: 0 7px;
+  color: #64748b;
+  font-size: 10.5px;
+}
+
+.formatRow {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 7px;
+  color: #94a3b8;
+  font-size: 10.5px;
+}
+
+.formatRow strong {
+  font-size: 10.5px;
+  color: #e2e8f0;
+  font-weight: 600;
+}
+
+/* Start Button */
+.startButton {
+  width: 100%;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 0;
+  border-radius: 8px;
+  background: #2563eb;
+  color: #ffffff;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 4px;
+  transition: background 0.2s ease, transform 0.1s ease;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+}
+
+.startButton:hover {
+  background: #1d4ed8;
+  transform: translateY(-1px);
+}
+
+.startButton:disabled {
+  background: rgba(255, 255, 255, 0.08);
+  color: #64748b;
+  cursor: default;
+  box-shadow: none;
+  transform: none;
+}
+
+.errorBox,
+.warningBox {
+  padding: 9px 11px;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 7px;
+  background: rgba(239, 68, 68, 0.1);
+  color: #fca5a5;
+  font-size: 11px;
+  line-height: 1.45;
+  margin-bottom: 8px;
+}
+
+.spin {
+  animation: spinLoader 1s linear infinite;
+}
+
+@keyframes spinLoader {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ========================================================
+   RIGHT COLUMN: Workspace (Glassmorphic Dot Matrix UI)
+   ======================================================== */
+.workspaceBox {
+  height: 100%;
+  max-height: 100%;
+  position: relative;
+  min-width: 0;
+  border-radius: 16px;
+  background: rgba(6, 10, 20, 0.72);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+  box-sizing: border-box;
+}
+
+/* Floating Top Bar */
+.workspaceOverlayTop {
+  position: absolute;
+  top: 16px;
+  right: 18px;
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  pointer-events: auto;
+}
+
+.darkLogsBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+  transition: all 0.2s ease;
+}
+
+.darkLogsBtn:hover {
+  background: rgba(30, 41, 59, 0.95);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+/* Center Stage for LatticeLoader */
+.centerStageBox {
+  position: relative;
+  z-index: 10;
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 30px;
+  text-align: center;
+  pointer-events: auto;
+}
+
+.loaderGlassCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 28px 40px;
+  border-radius: 18px;
+  background: rgba(8, 12, 24, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+}
+
+.downloadDoneBtn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px 22px;
+  border: none;
+  border-radius: 999px;
+  background: #22c55e;
+  color: #ffffff;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.1s ease;
+  box-shadow: 0 4px 18px rgba(34, 197, 94, 0.35);
+}
+
+.downloadDoneBtn:hover {
+  background: #16a34a;
+  transform: translateY(-1px);
+}
+
+.failedActions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 9px;
+  margin-top: 10px;
+}
+
+.failedText {
+  color: #f87171;
+  font-size: 11.5px;
+  max-width: 380px;
+}
+
+.retryBtn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 16px;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  border-radius: 8px;
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.retryBtn:hover {
+  background: rgba(239, 68, 68, 0.25);
+  color: #ffffff;
+}
+
+/* Floating Log Drawer */
+.floatingLogPanel {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  max-height: 280px;
+  background: rgba(10, 15, 29, 0.95);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(16px);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  color: #e2e8f0;
+}
+
+.logPanelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 11px;
+  font-weight: 700;
+  color: #94a3b8;
+}
+
+.logPanelHeader button {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+}
+
+.logPanelHeader button:hover {
+  color: #ffffff;
+}
+
+.logList {
+  overflow-y: auto;
+  padding: 10px 14px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.logEntry {
+  display: flex;
+  gap: 10px;
+}
+
+.logEntry time {
+  color: #64748b;
+  flex-shrink: 0;
+}
+
+.logEntry span {
+  color: #cbd5e1;
+}
+
+.logEmpty {
+  color: #64748b;
+  font-size: 10.5px;
+  margin: 0;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .page {
+    height: auto;
+    max-height: none;
+    overflow-y: auto;
+  }
+  .content {
+    height: auto;
+    max-height: none;
+  }
+  .layout {
+    grid-template-columns: 1fr;
+    height: auto;
+    max-height: none;
+    padding: 12px;
+    gap: 16px;
+  }
+  .setupPanel {
+    height: auto;
+    max-height: none;
+  }
+  .workspaceBox {
+    min-height: 540px;
+    height: 540px;
+  }
+}
+
+/* ========================================================
+   REACT BITS–INSPIRED MONOCHROME GLASS SURFACE
+   Frosted graphite, neutral specular edges, zero blue chrome
+   ======================================================== */
+.page {
+  --glass-ink: #050506;
+  --glass-panel: rgba(10, 10, 12, 0.68);
+  --glass-control: rgba(255, 255, 255, 0.045);
+  --glass-control-hover: rgba(255, 255, 255, 0.075);
+  --glass-border: rgba(255, 255, 255, 0.11);
+  --glass-border-bright: rgba(255, 255, 255, 0.2);
+  --glass-text: #f4f4f5;
+  --glass-muted: #a1a1aa;
+  --glass-dim: #71717a;
+  background: #000000;
+}
+
+.header {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent),
+    rgba(5, 5, 6, 0.76);
+  border-bottom-color: var(--glass-border);
+  backdrop-filter: blur(22px) saturate(120%);
+  -webkit-backdrop-filter: blur(22px) saturate(120%);
+}
+
+.headerCopy p,
+.account {
+  color: var(--glass-muted);
+}
+
+.topAvatar {
+  background: linear-gradient(145deg, #262629, #111113);
+  border-color: var(--glass-border-bright);
+}
+
+.setupPanel {
+  border-color: var(--glass-border);
+  background: #090e1a;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 22px 56px rgba(0, 0, 0, 0.48);
+}
+
+.workspaceBox {
+  border-color: var(--glass-border);
+  background: #050814;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  position: relative;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 22px 56px rgba(0, 0, 0, 0.48);
+}
+
+.setupPanel {
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+
+.setupPanel::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.setupPanel::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.panelTitle,
+.step h2 {
+  color: var(--glass-text);
+}
+
+.setupIntro,
+.step p,
+.formatRow,
+.filenameLabel,
+.fileCard small,
+.batchItemMeta,
+.statusRow span {
+  color: var(--glass-muted);
+}
+
+.step::before {
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.035));
+}
+
+.stepNumber {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: linear-gradient(145deg, #3f3f46, #18181b);
+  color: #ffffff;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 5px 14px rgba(0, 0, 0, 0.38);
+}
+
+.step h2 > span {
+  color: var(--glass-dim);
+}
+
+.step select,
+.step textarea,
+.filenameLabel > div,
+.modeSelector,
+.statusRow,
+.questionsButton,
+.fileCard,
+.batchItemCard {
+  border-color: var(--glass-border);
+  background: #0f172a;
+  color: var(--glass-text);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+}
+
+.step select:focus,
+.step textarea:focus,
+.filenameLabel > div:focus-within {
+  border-color: rgba(255, 255, 255, 0.38);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.075);
+}
+
+.step select option {
+  background: #111113;
+  color: #f4f4f5;
+}
+
+.step textarea::placeholder {
+  color: #6f6f78;
+}
+
+.personalizeBtn {
+  border-color: var(--glass-border);
+  background: rgba(255, 255, 255, 0.045);
+  color: #d4d4d8;
+}
+
+.personalizeBtn svg {
+  color: #d4d4d8 !important;
+}
+
+.personalizeBtn:hover {
+  border-color: var(--glass-border-bright);
+  background: var(--glass-control-hover);
+  color: #ffffff;
+}
+
+.modeSelector {
+  background: #0c1222;
+  border-color: var(--glass-border);
+}
+
+.modeButton {
+  color: #8f8f99;
+}
+
+.modeButton:hover {
+  color: #f4f4f5;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.modeButtonActive {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: #1e293b;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.handwrittenNotice {
+  border-color: var(--glass-border);
+  background: #0c1222;
+  color: var(--glass-muted);
+}
+
+.dropZone {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: #0c1222;
+  color: #d4d4d8;
+}
+
+.dropZone:hover,
+.dragging {
+  border-color: rgba(255, 255, 255, 0.38);
+  background: #11182c;
+}
+
+.dropZone strong,
+.fileCard strong,
+.batchItemName,
+.formatRow strong,
+.questionsButton > span:first-of-type {
+  color: var(--glass-text);
+}
+
+.dropZone small,
+.filenameLabel > div > span {
+  color: var(--glass-dim);
+}
+
+.fileCard,
+.statusRow,
+.questionsButton,
+.questionEditor strong,
+.textButton,
+.batchFileIcon {
+  color: #d4d4d8;
+}
+
+.fileCheck {
+  color: #d4d4d8;
+}
+
+.questionsButton:hover:not(:disabled),
+.statusRow:hover {
+  border-color: var(--glass-border-bright);
+  background: var(--glass-control-hover);
+}
+
+.batchItemProgress {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.batchItemProgressBar {
+  background: #d4d4d8;
+}
+
+.badgeProcessing,
+.badgePending {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.065);
+  color: #d4d4d8;
+}
+
+.batchZipButton,
+.startButton,
+.downloadDoneBtn {
+  border: 1px solid rgba(255, 255, 255, 0.88);
+  background: #f4f4f5;
+  color: #09090b;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.38);
+}
+
+.batchZipButton:hover,
+.startButton:hover,
+.downloadDoneBtn:hover {
+  background: #d4d4d8;
+  color: #000000;
+}
+
+.startButton:disabled {
+  border-color: var(--glass-border);
+  background: rgba(255, 255, 255, 0.055);
+  color: #6f6f78;
+}
+
+.workspaceOverlayTop,
+.centerStageBox,
+.floatingLogPanel {
+  position: relative;
+  z-index: 2;
+}
+
+.workspaceOverlayTop {
+  position: absolute;
+}
+
+.darkLogsBtn,
+.loaderGlassCard,
+.floatingLogPanel {
+  border-color: var(--glass-border);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.07), transparent 42%),
+    rgba(8, 8, 10, 0.66);
+  backdrop-filter: blur(22px) saturate(120%);
+  -webkit-backdrop-filter: blur(22px) saturate(120%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+.darkLogsBtn {
+  color: #d4d4d8;
+}
+
+.darkLogsBtn:hover {
+  border-color: var(--glass-border-bright);
+  background: rgba(255, 255, 255, 0.09);
+  color: #ffffff;
+}
+
+.floatingLogPanel {
+  position: absolute;
+  background: rgba(7, 7, 9, 0.92);
+}
+
+.logPanelHeader,
+.logEntry span {
+  color: #d4d4d8;
+}
+
+.logEntry time,
+.logEmpty {
+  color: var(--glass-dim);
+}
+
+.page :is(button, a, select, textarea, input):focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.75);
+  outline-offset: 2px;
+}
+
+.page ::selection {
+  background: #e4e4e7;
+  color: #09090b;
+}
