@@ -10,7 +10,7 @@ from ..config import settings
 
 try:
     import openai
-    OPENAI_AVAILABLE = bool(settings.OPENAI_API_KEY)
+    OPENAI_AVAILABLE = settings.LLM_PROVIDER.lower() == "openai" and bool(settings.OPENAI_API_KEY)
 except ImportError:
     OPENAI_AVAILABLE = False
 except Exception:
