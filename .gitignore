@@ -233,5 +233,7 @@ reports/
 !.env.example
 !**/.env.example
 !frontend/app/screenshots/
+!frontend/app/reports/
+!frontend/app/reports/**
 !frontend/app/screenshots/**
 backend/local_data/
