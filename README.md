@@ -1,5 +1,9 @@
 # LabMate
 
+## Railway deployment
+
+Use [RAILWAY.md](RAILWAY.md) for the current, verified service roots, variables, private networking, and persistent-volume layout. Older deployment notes under `docs/` describe previous setups.
+
 LabMate is a web app for programming labs. It accepts PDF and DOCX assignments, organizes questions, helps produce and run code, captures output, and prepares downloadable reports.
 
 ## Project layout

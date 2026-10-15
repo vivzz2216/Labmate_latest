@@ -17,8 +17,8 @@ interface AuthContextType {
   user: User | null
   loading: boolean
   profileComplete: boolean
-  signup: (email: string, name: string, password: string) => Promise<void>
-  login: (email: string, password: string) => Promise<void>
+  signup: (email: string, name: string, password: string, redirectTo?: string) => Promise<void>
+  login: (email: string, password: string, redirectTo?: string) => Promise<void>
   signOut: () => Promise<void>
   getCurrentUser: () => User | null
   checkProfileComplete: () => Promise<boolean>
@@ -161,7 +161,7 @@ const loadStoredTokens = () => {
     }
   }
 
-  const handleAuthSuccess = async (response: TokenResponse) => {
+  const handleAuthSuccess = async (response: TokenResponse, redirectTo = '/dashboard') => {
     const userPayload = response?.user
     if (!userPayload) {
       throw new Error('Authentication succeeded but user data is missing in the response.')
@@ -171,8 +171,8 @@ const loadStoredTokens = () => {
     persistTokens(response)
     persistUser(sanitizedUserData)
     
-    // Always redirect to dashboard - it will check profile and show onboarding if needed
-    router.push('/dashboard')
+    // Homepage actions can send the user directly to the upload studio after sign-in.
+    router.push(redirectTo === '/code-execution' ? redirectTo : '/dashboard')
   }
 
   useEffect(() => {
@@ -228,11 +228,11 @@ const loadStoredTokens = () => {
     initializeStoredSession()
   }, [])
 
-  const signup = async (email: string, name: string, password: string) => {
+  const signup = async (email: string, name: string, password: string, redirectTo?: string) => {
     try {
       setLoading(true)
       const response = await apiService.signup(email, name, password)
-      handleAuthSuccess(response)
+      await handleAuthSuccess(response, redirectTo)
     } catch (error: any) {
       // FIXED: Extract error message properly from axios error
       const errorMessage =
@@ -249,11 +249,11 @@ const loadStoredTokens = () => {
     }
   }
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string, redirectTo?: string) => {
     try {
       setLoading(true)
       const response = await apiService.login(email, password)
-      handleAuthSuccess(response)
+      await handleAuthSuccess(response, redirectTo)
     } catch (error: any) {
       // FIXED: Extract error message properly from axios error
       const errorMessage =

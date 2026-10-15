@@ -1,70 +1,29 @@
-FROM mirror.gcr.io/library/python:3.10-slim
+FROM node:22-bookworm-slim AS node
+FROM python:3.11-slim-bookworm
 
-# Install system dependencies including Playwright dependencies, Java, Docker CLI, and libmagic
-RUN apt-get update && apt-get install -y \
-    gcc \
-    g++ \
-    nodejs \
-    npm \
-    libpq-dev \
-    # Java JDK for Java code execution
-    default-jdk \
-    # Docker CLI for Docker-in-Docker (web framework execution)
-    docker.io \
-    # libmagic for file type detection (python-magic dependency)
-    libmagic1 \
-    file \
-    # Playwright dependencies
-    wget \
-    ca-certificates \
-    fonts-liberation \
-    libasound2 \
-    libatk-bridge2.0-0 \
-    libatk1.0-0 \
-    libatspi2.0-0 \
-    libcups2 \
-    libdbus-1-3 \
-    libdrm2 \
-    libgbm1 \
-    libgtk-3-0 \
-    libnspr4 \
-    libnss3 \
-    libwayland-client0 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxfixes3 \
-    libxkbcommon0 \
-    libxrandr2 \
-    xdg-utils \
-    libu2f-udev \
-    libvulkan1 \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install Playwright and browsers
-RUN pip install playwright==1.40.0
-RUN playwright install chromium
-
-# Set working directory
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
+    DATA_DIR=/data
 WORKDIR /app
 
-# NOTE (Railway build context):
-# This service is intended to be deployed on Railway with:
-# - Root Directory: backend
-# - Dockerfile Path: Dockerfile  (or backend/Dockerfile with backend as context)
-# In that setup, the Docker build context is the backend folder, so paths must be relative to it.
+# Match the Node and Python Debian releases. No Docker daemon/socket is needed.
+COPY --from=node /usr/local/bin/node /usr/local/bin/node
+COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
+RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
+    && ln -s /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends gcc g++ default-jdk-headless libmagic1 ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install Python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt ./requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt \
+    && python -m playwright install --with-deps chromium \
+    && rm -rf /var/lib/apt/lists/*
+COPY app ./app
+COPY templates ./templates
+COPY migrations ./migrations
+COPY start.sh ./start.sh
+RUN chmod +x /app/start.sh
 
-# Copy backend application code into /app
-COPY . .
-
-# Create necessary directories
-RUN mkdir -p /app/uploads /app/screenshots /app/reports
-
-# Expose port
 EXPOSE 8000
-
-# Run the application and respect the $PORT env var (Railway sets this)
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["/app/start.sh"]

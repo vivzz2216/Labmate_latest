@@ -5,6 +5,7 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.middleware.gzip import GZipMiddleware
 from contextlib import asynccontextmanager
 import os
+import asyncio
 import logging
 from .config import settings
 from .database import engine, Base
@@ -17,27 +18,37 @@ from .workflow_schema import ensure_workflow_columns
 
 logger = logging.getLogger(__name__)
 
-# Create database tables with error handling
-try:
+def initialize_database():
+    if engine is None:
+        raise RuntimeError("DATABASE_URL is required to initialize the database.")
     Base.metadata.create_all(bind=engine)
     ensure_workflow_columns(engine)
-    print("[SUCCESS] Database tables created successfully")
-except Exception as e:
-    print(f"[WARNING] Could not create database tables: {e}")
-    print("The application will continue, but database features may not work.")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifespan - start/stop background workers"""
+    # Initialize at runtime: private Railway networking is unavailable during builds.
+    if engine is not None:
+        for attempt in range(12):
+            try:
+                await asyncio.to_thread(initialize_database)
+                break
+            except Exception:
+                if attempt == 11:
+                    raise RuntimeError("Database initialization failed; refusing to start.") from None
+                logger.warning("Database initialization not ready; retrying (%s/12).", attempt + 1)
+                await asyncio.sleep(2)
     # Startup
     logger.info("Starting background workers...")
     start_background_workers(num_workers=3)
     start_workflow_workers()
-    yield
-    # Shutdown
-    logger.info("Stopping background workers...")
-    stop_background_workers()
-    await stop_workflow_workers()
+    try:
+        yield
+    finally:
+        logger.info("Stopping background workers...")
+        stop_background_workers()
+        await stop_workflow_workers()
 
 # Create FastAPI app
 app = FastAPI(
@@ -171,7 +182,7 @@ async def health_check(response: Response):
     if db_status != "healthy":
         is_ready = False
         overall_status = "unhealthy" if db_status == "unhealthy" else "degraded"
-    elif settings.RATE_LIMIT_ENABLED and redis_status != "healthy":
+    elif (settings.RATE_LIMIT_ENABLED or settings.REDIS_REQUIRED) and redis_status != "healthy":
         is_ready = False
         overall_status = "degraded"
     elif redis_status == "unhealthy":
@@ -213,7 +224,7 @@ async def root():
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
 os.makedirs(settings.SCREENSHOT_DIR, exist_ok=True)
 os.makedirs(settings.REPORT_DIR, exist_ok=True)
-public_dir = os.getenv("PUBLIC_DIR", "/app/public")
+public_dir = os.getenv("PUBLIC_DIR", os.path.join(settings.DATA_DIR, "public"))
 os.makedirs(public_dir, exist_ok=True)
 
 # Mount static files

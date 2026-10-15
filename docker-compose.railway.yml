@@ -1,0 +1,76 @@
+services:
+  postgres:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_USER: labmate
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-labmate_local_only}
+      POSTGRES_DB: labmate
+    volumes:
+      - railway_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U labmate -d labmate"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - railway_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql://labmate:${POSTGRES_PASSWORD:-labmate_local_only}@postgres:5432/labmate
+      SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY to at least 32 characters}
+      BETA_KEY: ${BETA_KEY:-}
+      PORT: "8000"
+      DATA_DIR: /data
+      STORAGE_BACKEND: local
+      WORKFLOW_WORKERS: "2"
+      REDIS_URL: redis://redis:6379/0
+      REDIS_REQUIRED: "true"
+      RATE_LIMIT_ENABLED: "false"
+      LLM_PROVIDER: ${LLM_PROVIDER:-groq}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_MODEL: ${GROQ_MODEL:-openai/gpt-oss-120b}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.8-flash}
+    volumes:
+      - railway_files:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready', timeout=5)"]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_SITE_URL: http://localhost:3000
+    environment:
+      BACKEND_URL: http://backend:8000
+      BETA_KEY: ${BETA_KEY:-}
+      PORT: "3000"
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  railway_postgres:
+  railway_files:
+  railway_redis:

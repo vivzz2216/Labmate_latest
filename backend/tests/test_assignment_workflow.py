@@ -48,6 +48,9 @@ class AssignmentReportTests(unittest.TestCase):
             self.assertNotIn("print(120)", appended)
             self.assertNotIn("Captured output", appended)
             self.assertNotIn("Additional instructions", appended)
+            # The original manual needs one separator before the first program.
+            page_breaks = report.element.xpath('.//w:br[@w:type="page"]')
+            self.assertEqual(len(page_breaks), 1)
             with ZipFile(report_path) as package:
                 self.assertTrue(any(name.startswith("word/media/") for name in package.namelist()))
 

@@ -4,6 +4,8 @@
 @tailwind components;
 @tailwind utilities;
 
+@import "../components/ui/SpecularButton.css";
+
 :root {
   --font-heading: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-serif-luxury: 'Playfair Display', 'Cormorant Garamond', 'Newsreader', Georgia, serif;

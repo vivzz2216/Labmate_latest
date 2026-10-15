@@ -9,9 +9,10 @@ import { isValidEmail, validatePasswordStrength } from "@/lib/sanitize";
 interface LoginModalProps {
   isOpen: boolean;
   onClose: () => void;
+  redirectTo?: "/dashboard" | "/code-execution";
 }
 
-export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
+export default function LoginModal({ isOpen, onClose, redirectTo = "/dashboard" }: LoginModalProps) {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
@@ -53,7 +54,7 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 
     try {
       if (isLogin) {
-        await login(email, password);
+        await login(email, password, redirectTo);
       } else {
         // Client-side validation to avoid 422 spam (backend enforces strong password rules)
         if (!isValidEmail(email)) {
@@ -65,7 +66,7 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
           setError(errors.join("\n"));
           return;
         }
-        await signup(email, name, password);
+        await signup(email, name, password, redirectTo);
       }
       onClose();
     } catch (err: any) {

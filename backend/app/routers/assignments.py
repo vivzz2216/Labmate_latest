@@ -53,6 +53,7 @@ def assignment_response(upload, db):
 
 
 @router.get("/", response_model=list[AssignmentResponse])
+@router.get("", response_model=list[AssignmentResponse])
 async def get_user_assignments(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     uploads = db.query(Upload).filter_by(user_id=current_user.id).order_by(Upload.uploaded_at.desc()).all()
     return [assignment_response(upload, db) for upload in uploads]

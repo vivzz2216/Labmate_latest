@@ -19,7 +19,6 @@ frontend/.vercel/
 *.log
 
 # Docker
-.dockerignore
 
 # Local env
 .env
@@ -48,7 +47,6 @@ backend/.pytest_cache/
 *.sqlite3
 
 # Docker
-.dockerignore
 
 # IDE
 .vscode/
@@ -230,3 +228,10 @@ reports/
 *.docx
 *.pdf
 
+
+# Deployment samples and build exclusions are source files.
+!.env.example
+!**/.env.example
+!frontend/app/screenshots/
+!frontend/app/screenshots/**
+backend/local_data/

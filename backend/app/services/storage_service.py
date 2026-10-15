@@ -18,12 +18,9 @@ class StorageService:
     @property
     def is_s3_enabled(self) -> bool:
         backend = (settings.STORAGE_BACKEND or "local").lower()
-        has_credentials = bool(
-            settings.S3_ENDPOINT_URL
-            and settings.S3_ACCESS_KEY_ID
-            and settings.S3_SECRET_ACCESS_KEY
-        )
-        return backend == "s3" or has_credentials
+        # Explicit local storage must stay local even when old S3 credentials
+        # remain in the environment after moving to a Railway volume.
+        return backend == "s3"
 
     def _get_client(self):
         if self._s3_client is None:

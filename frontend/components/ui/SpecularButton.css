@@ -1,0 +1,47 @@
+.specular-button {
+  --sb-radius: 18px;
+  --sb-tint: #ffffff;
+  --sb-tint-percent: 4%;
+  --sb-blur: 0px;
+  --sb-text-color: #f5f5f5;
+  --sb-line-color: #ffffff;
+
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5em;
+  margin: 0;
+  border: 1px solid color-mix(in srgb, var(--sb-line-color) 45%, transparent);
+  border-radius: var(--sb-radius);
+  font: inherit;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  color: var(--sb-text-color);
+  background: color-mix(in srgb, var(--sb-tint) var(--sb-tint-percent), #0b0b11);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.08), 0 8px 24px rgba(0, 0, 0, 0.25);
+  -webkit-backdrop-filter: blur(var(--sb-blur));
+  backdrop-filter: blur(var(--sb-blur));
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 180ms ease, border-color 180ms ease, transform 180ms ease;
+}
+
+.specular-button:hover {
+  border-color: color-mix(in srgb, var(--sb-line-color) 75%, transparent);
+  background: color-mix(in srgb, var(--sb-tint) 24%, #0b0b11);
+  transform: translateY(-1px);
+}
+
+.specular-button:active { transform: translateY(0); }
+.specular-button:focus-visible { outline: 2px solid var(--sb-line-color); outline-offset: 3px; }
+.specular-button:disabled { opacity: 0.5; cursor: default; transform: none; }
+.specular-button--sm { padding: 10px 20px; font-size: 0.875rem; }
+.specular-button--md { padding: 14px 28px; font-size: 1rem; }
+.specular-button--lg { padding: 18px 38px; font-size: 1.125rem; }
+.specular-button__label { display: inline-flex; align-items: center; gap: inherit; color: inherit; }
+
+@media (prefers-reduced-motion: reduce) {
+  .specular-button { transition: none; }
+}

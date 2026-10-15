@@ -936,6 +936,16 @@
   gap: 20px;
 }
 
+.dashboardError {
+  margin: 0 20px 16px;
+  padding: 12px 14px;
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  border-radius: 8px;
+  color: #fca5a5;
+  background: rgba(127, 29, 29, 0.14);
+  font-size: 13px;
+}
+
 .continueCard {
   padding: 20px 22px;
   background: var(--continue-bg);

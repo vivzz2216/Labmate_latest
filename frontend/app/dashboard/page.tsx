@@ -50,49 +50,6 @@ interface Assignment {
   report_filename?: string;
 }
 
-const DEMO_ASSIGNMENTS: Assignment[] = [
-  {
-    id: 1,
-    filename: "Data_Structures_Lab_Manual.pdf",
-    original_filename: "Data_Structures_Lab_Manual.pdf",
-    language: "python",
-    uploaded_at: new Date(Date.now() - 1000 * 60 * 60 * 3).toISOString(),
-    total_tasks: 12,
-    completed_tasks: 12,
-    failed_tasks: 0,
-    in_progress_tasks: 0,
-    report_download_url: "/api/reports/1/download",
-    report_id: 1,
-    report_filename: "Data_Structures_Lab_Report.docx",
-  },
-  {
-    id: 2,
-    filename: "Operating_Systems_Process_Scheduling.pdf",
-    original_filename: "Operating_Systems_Process_Scheduling.pdf",
-    language: "c",
-    uploaded_at: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
-    total_tasks: 8,
-    completed_tasks: 6,
-    failed_tasks: 0,
-    in_progress_tasks: 2,
-    report_download_url: "",
-  },
-  {
-    id: 3,
-    filename: "Object_Oriented_Programming_Java.pdf",
-    original_filename: "Object_Oriented_Programming_Java.pdf",
-    language: "java",
-    uploaded_at: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(),
-    total_tasks: 10,
-    completed_tasks: 10,
-    failed_tasks: 0,
-    in_progress_tasks: 0,
-    report_download_url: "/api/reports/3/download",
-    report_id: 3,
-    report_filename: "Java_OOP_Accredited_Manual.docx",
-  },
-];
-
 const navItems = [
   { label: "Dashboard", icon: LayoutDashboard, href: "/dashboard" },
   { label: "Workspace", icon: FolderGit2, href: "/workspace" },
@@ -165,6 +122,7 @@ export default function DashboardPage() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [search, setSearch] = useState("");
 
   // Dual Theme State: "dark" (Runway-grade homepage aesthetic) & "light" (classic light theme)
@@ -189,13 +147,10 @@ export default function DashboardPage() {
 
     const loadDashboard = async () => {
       setLoading(true);
+      setLoadError("");
       try {
         if (!user) {
-          // If not logged in yet, show preview data so dashboard can be tested seamlessly
-          if (active) {
-            setAssignments(DEMO_ASSIGNMENTS);
-            setLoading(false);
-          }
+          router.replace("/");
           return;
         }
 
@@ -207,17 +162,13 @@ export default function DashboardPage() {
           ? response
           : (response?.assignments ?? response?.data ?? []);
         
-        if (active) {
-          if (Array.isArray(list) && list.length > 0) {
-            setAssignments(list);
-          } else {
-            // If user has 0 assignments, fallback to demo assignments for a populated preview
-            setAssignments(DEMO_ASSIGNMENTS);
-          }
-        }
+        if (active) setAssignments(Array.isArray(list) ? list : []);
       } catch (error) {
         console.error("Failed to load dashboard data:", error);
-        if (active) setAssignments(DEMO_ASSIGNMENTS);
+        if (active) {
+          setAssignments([]);
+          setLoadError("We couldn't load your lab manuals. Please refresh the page and try again.");
+        }
       } finally {
         if (active) setLoading(false);
       }
@@ -230,7 +181,7 @@ export default function DashboardPage() {
     return () => {
       active = false;
     };
-  }, [authLoading, checkProfileComplete, user]);
+  }, [authLoading, checkProfileComplete, router, user]);
 
   const filteredAssignments = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -467,6 +418,7 @@ export default function DashboardPage() {
                   )}
                 </div>
 
+                {loadError && <p role="alert" className={styles.dashboardError}>{loadError}</p>}
                 {loading ? (
                   <LoadingState />
                 ) : filteredAssignments.length === 0 ? (
@@ -587,7 +539,7 @@ function StatCard({
       <div>
         <span>{label}</span>
         <strong>{value}</strong>
-        <small>{value === 0 ? "No activity yet" : "From university cohort"}</small>
+        <small>{value === 0 ? "No activity yet" : "Across your lab manuals"}</small>
       </div>
     </article>
   );

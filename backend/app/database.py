@@ -19,17 +19,21 @@ if not settings.DATABASE_URL:
     SessionLocal = None
     Base = declarative_base()
 else:
-    if settings.DATABASE_URL.startswith("sqlite:"):
+    db_url = settings.DATABASE_URL
+    if db_url.startswith("postgres://"):
+        db_url = db_url.replace("postgres://", "postgresql://", 1)
+
+    if db_url.startswith("sqlite:"):
         # Local recovery runs can use a file database without PostgreSQL.
         engine = create_engine(
-            settings.DATABASE_URL,
+            db_url,
             pool_pre_ping=True,
             connect_args={"check_same_thread": False},
         )
     else:
         # Production PostgreSQL pool settings.
         engine = create_engine(
-            settings.DATABASE_URL,
+            db_url,
             pool_pre_ping=True,
             pool_recycle=300,
             pool_size=settings.DB_POOL_SIZE,
@@ -38,7 +42,7 @@ else:
             echo=False,
             isolation_level="READ COMMITTED",
             connect_args={
-                "connect_timeout": 10,
+                "connect_timeout": 5,
                 "application_name": "labmate_api"
             }
         )

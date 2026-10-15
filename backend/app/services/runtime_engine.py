@@ -254,7 +254,7 @@ class RuntimeEngine:
                 source.write_text(code, encoding="utf-8")
                 context = prepare_files(directory) if prepare_files else None
                 inputs = python_stdin(code) if stdin is None else stdin
-                docker = shutil.which("docker")
+                docker = shutil.which("docker") if settings.USE_DOCKER else None
                 docker_ready = False
                 if docker:
                     probe = await run_process([docker, "version", "--format", "{{.Server.Version}}"], directory, timeout=3)
@@ -285,13 +285,16 @@ class RuntimeEngine:
                     return RuntimeResult(False, error="Java source must declare a class.", exit_code=2)
                 source = directory / f"{name}.java"
                 source.write_text(code, encoding="utf-8")
-                compiled = await run_process([settings.JAVAC_COMMAND, "-encoding", "UTF-8", "-d", directory, source], directory, timeout=settings.COMPILATION_TIMEOUT)
+                # JVMs reserve large virtual address ranges; RLIMIT_AS can stop
+                # them before startup. Bound their heap explicitly instead.
+                compiled = await run_process([settings.JAVAC_COMMAND, "-J-Xmx256m", "-encoding", "UTF-8", "-d", directory, source], directory,
+                                             timeout=settings.COMPILATION_TIMEOUT, resource_limits={"max_memory_bytes": 0})
                 if not compiled.success:
                     compiled.error = "Compilation error: " + compiled.error
                     return compiled
                 package = re.search(r"^\s*package\s+([\w.]+)\s*;", code, re.M)
                 qualified = f"{package.group(1)}.{name}" if package else name
-                java_limits = {"max_memory_bytes": 1024 * 1024 * 1024, "max_cpu_seconds": 20}
+                java_limits = {"max_memory_bytes": 0, "max_cpu_seconds": 20}
                 return await run_process([settings.JAVA_COMMAND, "-Xmx256m", "-Dfile.encoding=UTF-8", "-cp", directory, qualified], directory, java_stdin(code) if stdin is None else stdin, resource_limits=java_limits)
             if language in {"c", "cpp"}:
                 cpp = detect_cpp(code, language, filename)
@@ -329,7 +332,8 @@ class RuntimeEngine:
                         return "npm is required for React/Express execution."
                     command = [npm_executable]
                 installed = await run_process(command + ["install", "--ignore-scripts", "--no-audit", "--no-fund"], cache, timeout=180,
-                                              extras={"npm_config_cache": str(cache / ".npm-cache")})
+                                              extras={"npm_config_cache": str(cache / ".npm-cache"), "NODE_OPTIONS": "--max-old-space-size=256"},
+                                              resource_limits={"max_memory_bytes": 0})
                 if not installed.success:
                     return "Runtime dependency installation failed: " + installed.error[-1500:]
                 (cache / ".ready").touch()
@@ -437,7 +441,8 @@ class RuntimeEngine:
             command = [settings.NODE_COMMAND, directory / "node_modules/vite/bin/vite.js", "--host", "127.0.0.1", "--port", str(port), "--strictPort"]
         reservation.close()  # Release immediately before binding the child; all captures use its assigned port.
         try:
-            process = await start_process(command, directory, {"PORT": str(port), "NODE_ENV": "development"})
+            process = await start_process(command, directory, {"PORT": str(port), "NODE_ENV": "development", "NODE_OPTIONS": "--max-old-space-size=256"},
+                                          resource_limits={"max_memory_bytes": 0})
         except FileNotFoundError:
             return RuntimeResult(False, error="Node.js is not installed.", exit_code=127)
         process.stdin.close()

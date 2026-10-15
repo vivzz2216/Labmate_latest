@@ -486,7 +486,7 @@ def build_word_report(upload, workflow):
             embed_theory_block(document, result["question"], result.get("answer", ""), result.get("id", 1))
         else:
             # Start each program on a fresh page to avoid mid-page collisions
-            if idx > 0 or (workflow.results and upload.file_type == "docx"):
+            if idx > 0:
                 document.add_page_break()
             question = document.add_paragraph()
             question.paragraph_format.keep_with_next = True

@@ -26,6 +26,10 @@ class ExecutorService:
     """Service for executing Python code in Docker containers"""
     
     def __init__(self):
+        if not settings.USE_DOCKER:
+            self.client = None
+            self.image = settings.DOCKER_IMAGE
+            return
         try:
             self.client = docker.from_env()
             self.image = settings.DOCKER_IMAGE

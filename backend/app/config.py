@@ -1,5 +1,5 @@
 from pydantic_settings import BaseSettings
-from pydantic import ConfigDict, field_validator
+from pydantic import ConfigDict, field_validator, model_validator
 from typing import Optional
 import os
 
@@ -38,11 +38,14 @@ class Settings(BaseSettings):
     CORS_ALLOW_CREDENTIALS: bool = True
     CORS_MAX_AGE: int = 600
     
+    # A single Railway volume mounted at /data holds all durable artifacts.
+    DATA_DIR: str = os.getenv("DATA_DIR", "/app")
+
     # File paths
-    UPLOAD_DIR: str = "/app/uploads"
-    SCREENSHOT_DIR: str = "/app/screenshots"
-    REPORT_DIR: str = "/app/reports"
-    REACT_TEMP_DIR: str = "/app/react_temp"
+    UPLOAD_DIR: str = os.path.join(os.getenv("DATA_DIR", "/app"), "uploads")
+    SCREENSHOT_DIR: str = os.path.join(os.getenv("DATA_DIR", "/app"), "screenshots")
+    REPORT_DIR: str = os.path.join(os.getenv("DATA_DIR", "/app"), "reports")
+    REACT_TEMP_DIR: str = os.path.join(os.getenv("DATA_DIR", "/app"), "react_temp")
     HOST_PROJECT_ROOT: str = os.getenv("HOST_PROJECT_ROOT", os.getcwd())
     
     # Durable Object Storage (Cloudflare R2 / AWS S3)
@@ -55,6 +58,7 @@ class Settings(BaseSettings):
     S3_PUBLIC_URL_PREFIX: str = os.getenv("S3_PUBLIC_URL_PREFIX", "")
     
     # Docker settings
+    USE_DOCKER: bool = True
     DOCKER_IMAGE: str = "python:3.10-slim"
     CONTAINER_TIMEOUT: int = 30
     MEMORY_LIMIT: str = "512m"
@@ -122,11 +126,32 @@ class Settings(BaseSettings):
     
     # Redis
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    REDIS_REQUIRED: bool = bool(os.getenv("RAILWAY_ENVIRONMENT_ID"))
     REDIS_CACHE_TTL: int = 3600
     
     # Rate limiting
     RATE_LIMIT_ENABLED: bool = False
     RATE_LIMIT_PER_MINUTE: int = 1000
+
+    @model_validator(mode="after")
+    def initialize_storage_paths(self):
+        for name, folder in (("UPLOAD_DIR", "uploads"), ("SCREENSHOT_DIR", "screenshots"),
+                             ("REPORT_DIR", "reports"), ("REACT_TEMP_DIR", "react_temp")):
+            if name not in self.model_fields_set:
+                setattr(self, name, os.path.join(self.DATA_DIR, folder))
+        return self
+
+    @model_validator(mode="after")
+    def validate_railway_settings(self):
+        if os.getenv("RAILWAY_ENVIRONMENT_ID"):
+            self.REDIS_REQUIRED = True
+            if not self.DATABASE_URL.startswith(("postgres://", "postgresql://", "postgresql+psycopg2://")):
+                raise ValueError("Railway requires DATABASE_URL referencing the PostgreSQL service.")
+            if self.SECRET_KEY == self._default_secret or len(self.SECRET_KEY) < 32:
+                raise ValueError("Set a stable SECRET_KEY of at least 32 characters on Railway.")
+            if not self.REDIS_URL.startswith(("redis://", "rediss://")):
+                raise ValueError("Railway requires REDIS_URL for CSRF token storage.")
+        return self
 
     # Admin dashboard (Basic Auth)
     # NOTE: Set these in production via env vars.

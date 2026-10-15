@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -11,6 +11,14 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 
 export default function PreviewPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading preview...</div>}>
+      <PreviewContent />
+    </Suspense>
+  )
+}
+
+function PreviewContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [jobs, setJobs] = useState<JobStatus[]>([])
@@ -34,7 +42,7 @@ export default function PreviewPage() {
         const jobResults: JobStatus[] = JSON.parse(jobResultsParam)
         setUploadId(parseInt(uploadIdParam))
         
-        const apiBaseUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000').replace(/\/$/, '')
+        const apiBaseUrl = ''
         const normalizeUrl = (url?: string | null) => {
           if (!url) return undefined
           return url.startsWith('http') ? url : `${apiBaseUrl}${url}`
@@ -126,7 +134,7 @@ export default function PreviewPage() {
     setReportGenerated(null)
     router.push('/dashboard')
   }
-  const apiBaseUrl = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '')
+  const apiBaseUrl = ''
 
   if (loading) {
     return (

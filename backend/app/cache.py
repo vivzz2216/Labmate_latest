@@ -24,9 +24,9 @@ try:
         socket_keepalive=True,  # Keep connection alive for cloud Redis
         socket_keepalive_options={}  # TCP keepalive options
     )
-    # Test connection
-    redis_client.ping()
-    logger.info(f"[SUCCESS] Redis connection established: {redis_url.split('@')[-1] if '@' in redis_url else redis_url}")
+    # Connect lazily. Keep the same client object in modules importing it so
+    # startup races/restarts of Redis can recover on the next command.
+    logger.info("Redis client configured")
 except Exception as e:
     logger.warning(f"[WARNING] Redis not available: {e}. Caching will be disabled.")
     logger.warning(f"Redis URL was: {settings.REDIS_URL.split('@')[-1] if '@' in settings.REDIS_URL else settings.REDIS_URL}")
