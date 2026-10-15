@@ -9,7 +9,6 @@ import {
   ArrowRight,
   FolderOpen,
   Laptop,
-  Chrome,
   CheckCircle2,
   FileText,
   Terminal,
@@ -167,7 +166,7 @@ export default function HomePage() {
             intensity={0.8}
             glow={0.6}
           >
-            <Chrome size={15} /> Add to Chrome
+            <ArrowRight size={15} /> See the 2 steps
           </SpecularButton>
         </div>
 
