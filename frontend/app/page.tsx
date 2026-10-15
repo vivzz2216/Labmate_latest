@@ -275,13 +275,13 @@ export default function HomePage() {
             <span>Linux Shell</span>
           </div>
 
-          {/* Docker Sandbox */}
-          <div className={styles.langItem} title="Sandboxed Execution Environment">
+          {/* Execution runner */}
+          <div className={styles.langItem} title="Code Execution Runner">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M13 8.5h2v2h-2zm-3 0h2v2h-2zm-3 0h2v2H7zm6-3h2v2h-2zm-3 0h2v2h-2zm6 6h2v2h-2zm-3 0h2v2h-2zm-3 0h2v2H7zm-3 0h2v2H4z" fill="#2496ED"/>
-              <path d="M22.5 13.5c-.3 0-.6-.1-.8-.2-.5-.3-.9-.6-1.5-.6-.7 0-1.4.3-1.8.8-1-1-2.4-1.5-3.8-1.5H3c-.6 0-1 .4-1 1 0 3.9 3.1 7 7 7 4.2 0 7.8-2.6 8.7-6.5.9.1 1.8-.1 2.5-.7.5-.4.8-1 .9-1.6-.4.2-.8.3-1.3.3h-.7v.1z" fill="#2496ED"/>
+              <rect x="2" y="4" width="20" height="16" rx="3" stroke="#2496ED" strokeWidth="1.7"/>
+              <path d="m6 9 3 3-3 3m6 0h6" stroke="#2496ED" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
-            <span>Docker Sandbox</span>
+            <span>Code Runner</span>
           </div>
 
           {/* Word DOCX */}
@@ -524,7 +524,7 @@ export default function HomePage() {
             <div className={styles.footerColTitle}>Capabilities</div>
             <ul className={styles.footerNavList}>
               <li><a href="#how-it-works" className={styles.footerLink}>Question Parser</a></li>
-              <li><a href="#how-it-works" className={styles.footerLink}>Sandboxed Runner</a></li>
+              <li><a href="#how-it-works" className={styles.footerLink}>Code Runner</a></li>
               <li><a href="#features" className={styles.footerLink}>Terminal Screenshots</a></li>
               <li><a href="#how-it-works" className={styles.footerLink}>Word (.docx) Export</a></li>
             </ul>
