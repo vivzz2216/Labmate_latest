@@ -180,9 +180,113 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         result = await runtime_engine.execute('<!doctype html><h1>Actual browser output</h1><script>document.body.dataset.ready="yes"</script>', "html")
         self.assertTrue(result.success, result.error)
         self.assertIn("Actual browser output", result.output)
+        self.assertEqual(result.verification["status"], "not_required")
         self.assertTrue(Path(result.screenshots["/"]).is_file())
         with Image.open(result.screenshots["/"]) as image:
             self.assertGreater(image.width, 1000)
+
+    async def test_html_capture_blocks_external_requests(self):
+        requests = []
+
+        async def serve(reader, writer):
+            request = await reader.read(4096)
+            if request:
+                requests.append(request)
+                writer.write(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok")
+                await writer.drain()
+            writer.close()
+
+        server = await asyncio.start_server(serve, "127.0.0.1", 0)
+        try:
+            async with server:
+                port = server.sockets[0].getsockname()[1]
+                code = f'<h1>Local render</h1><iframe src="http://127.0.0.1:{port}/external"></iframe>'
+                result = await runtime_engine.execute(code, "html")
+                await asyncio.sleep(.1)
+            self.assertTrue(result.success, result.error)
+            self.assertEqual(requests, [])
+        finally:
+            server.close()
+            await server.wait_closed()
+
+    async def test_html_interaction_test_clicks_add_and_verifies_sum(self):
+        code = '''<!doctype html><label for="first">First number</label><input id="first" type="number">
+        <label for="second">Second number</label><input id="second" type="number">
+        <button type="button" onclick="document.querySelector('#result').textContent = Number(document.querySelector('#first').value) + Number(document.querySelector('#second').value)">Add</button>
+        <output id="result"></output>'''
+        tests = [{"name": "Add two numbers", "actions": [
+            {"action": "fill", "locator_type": "label", "locator": "First number", "role": "", "value": "2"},
+            {"action": "fill", "locator_type": "label", "locator": "Second number", "role": "", "value": "3"},
+            {"action": "click", "locator_type": "role", "locator": "Add", "role": "button", "value": ""},
+        ], "expected_text": ["5"]}]
+        with tempfile.TemporaryDirectory() as directory, \
+                patch("app.services.runtime_engine.settings.SCREENSHOT_DIR", directory), \
+                patch("app.services.runtime_engine.settings.REACT_TEMP_DIR", directory):
+            result = await runtime_engine.execute(code, "html", browser_tests=tests, interaction_is_required=True)
+            self.assertTrue(Path(result.screenshots["/"]).is_file())
+        self.assertTrue(result.success, result.error)
+        self.assertEqual(result.verification["status"], "passed")
+        self.assertIn("5", result.verification["tests"][0]["observed_text"])
+        self.assertIn("Browser interaction verification: PASSED", result.output)
+
+    async def test_html_interaction_test_fails_for_wrong_calculation_and_captures_evidence(self):
+        code = '''<!doctype html><label for="a">First</label><input id="a" type="number">
+        <label for="b">Second</label><input id="b" type="number">
+        <button onclick="document.querySelector('#result').textContent = document.querySelector('#a').value + document.querySelector('#b').value">Add</button><output id="result"></output>'''
+        tests = [{"name": "Add two numbers", "actions": [
+            {"action": "fill", "locator_type": "label", "locator": "First", "role": "", "value": "2"},
+            {"action": "fill", "locator_type": "label", "locator": "Second", "role": "", "value": "3"},
+            {"action": "click", "locator_type": "role", "locator": "Add", "role": "button", "value": ""},
+        ], "expected_text": ["5"]}]
+        with tempfile.TemporaryDirectory() as directory, \
+                patch("app.services.runtime_engine.settings.SCREENSHOT_DIR", directory), \
+                patch("app.services.runtime_engine.settings.REACT_TEMP_DIR", directory):
+            result = await runtime_engine.execute(code, "html", browser_tests=tests, interaction_is_required=True)
+            self.assertTrue(Path(result.screenshots["/"]).is_file())
+        self.assertFalse(result.success)
+        self.assertEqual(result.verification["status"], "failed")
+        self.assertIn("23", result.verification["tests"][0]["observed_text"])
+        self.assertIn("expected_text", result.verification["tests"][0])
+        self.assertIn("Browser interaction test 'Add two numbers' failed", result.error)
+
+    async def test_html_interaction_test_fails_when_button_has_no_handler(self):
+        code = '<!doctype html><label for="a">First</label><input id="a"><label for="b">Second</label><input id="b"><button>Add</button><output></output>'
+        tests = [{"name": "Add two numbers", "actions": [
+            {"action": "fill", "locator_type": "label", "locator": "First", "role": "", "value": "2"},
+            {"action": "fill", "locator_type": "label", "locator": "Second", "role": "", "value": "3"},
+            {"action": "click", "locator_type": "role", "locator": "Add", "role": "button", "value": ""},
+        ], "expected_text": ["5"]}]
+        with tempfile.TemporaryDirectory() as directory, \
+                patch("app.services.runtime_engine.settings.SCREENSHOT_DIR", directory), \
+                patch("app.services.runtime_engine.settings.REACT_TEMP_DIR", directory):
+            result = await runtime_engine.execute(code, "html", browser_tests=tests, interaction_is_required=True)
+        self.assertFalse(result.success)
+        self.assertEqual(result.verification["tests"][0]["status"], "failed")
+        self.assertIn("Expected visible text '5'", result.verification["tests"][0]["error"])
+
+    async def test_html_interaction_test_fails_when_control_is_missing(self):
+        code = '<!doctype html><p>No interactive control was generated.</p>'
+        tests = [{"name": "Click Add", "actions": [
+            {"action": "click", "locator_type": "role", "locator": "Add", "role": "button", "value": ""},
+        ], "expected_text": ["5"]}]
+        with tempfile.TemporaryDirectory() as directory, \
+                patch("app.services.runtime_engine.settings.SCREENSHOT_DIR", directory), \
+                patch("app.services.runtime_engine.settings.REACT_TEMP_DIR", directory):
+            result = await runtime_engine.execute(code, "html", browser_tests=tests, interaction_is_required=True)
+        self.assertFalse(result.success)
+        self.assertEqual(result.verification["tests"][0]["status"], "failed")
+        self.assertIn("found 0", result.verification["tests"][0]["error"])
+
+    async def test_html_interaction_required_without_test_plan_is_not_verified(self):
+        code = '<!doctype html><button>Add</button><p>Page rendered</p>'
+        with tempfile.TemporaryDirectory() as directory, \
+                patch("app.services.runtime_engine.settings.SCREENSHOT_DIR", directory), \
+                patch("app.services.runtime_engine.settings.REACT_TEMP_DIR", directory):
+            result = await runtime_engine.execute(code, "html", browser_tests=[], interaction_is_required=True)
+            self.assertTrue(Path(result.screenshots["/"]).is_file())
+        self.assertFalse(result.success)
+        self.assertEqual(result.verification["status"], "failed")
+        self.assertIn("no valid browser test plan", result.error)
 
     async def test_protected_route_401_is_valid_captured_output(self):
         body = b"Authentication required"

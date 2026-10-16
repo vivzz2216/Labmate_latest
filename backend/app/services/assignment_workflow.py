@@ -6,6 +6,7 @@ import logging
 import os
 import re
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
@@ -42,7 +43,22 @@ ANSWER_SCHEMA = {
         "answer": {"type": "STRING"}, "code": {"type": "STRING"},
         "language": {"type": "STRING", "enum": LANGUAGES},
         "stdin": {"type": "STRING"},
-    }, "required": ["answer", "code", "language", "stdin"],
+        "browser_tests": {"type": "ARRAY", "items": {
+            "type": "OBJECT", "properties": {
+                "name": {"type": "STRING"},
+                "actions": {"type": "ARRAY", "items": {
+                    "type": "OBJECT", "properties": {
+                        "action": {"type": "STRING", "enum": ["fill", "click"]},
+                        "locator_type": {"type": "STRING", "enum": ["role", "label", "placeholder"]},
+                        "locator": {"type": "STRING"},
+                        "role": {"type": "STRING"},
+                        "value": {"type": "STRING"},
+                    }, "required": ["action", "locator_type", "locator", "role", "value"],
+                }},
+                "expected_text": {"type": "ARRAY", "items": {"type": "STRING"}},
+            }, "required": ["name", "actions", "expected_text"],
+        }},
+    }, "required": ["answer", "code", "language", "stdin", "browser_tests"],
 }
 THEORY_ANSWER_SCHEMA = {
     "type": "OBJECT", "properties": {"answer": {"type": "STRING"}},
@@ -89,6 +105,33 @@ def document_snapshot(upload):
     """Never pass session-bound ORM objects into worker threads."""
     return SimpleNamespace(file_path=upload.file_path, file_type=upload.file_type,
                            original_filename=upload.original_filename)
+
+
+def interaction_required(question: str) -> bool:
+    """Identify WebDev tasks whose stated behavior requires a user action."""
+    return bool(re.search(
+        r"\b(click(?:ing)?|press(?:ing)?|submit(?:ting)?|type|typing|enter(?:ing)?|"
+        r"select(?:ing)?|choose|choosing|toggle|toggling|check(?:ing)?|uncheck(?:ing)?|"
+        r"drag(?:ging)?|hover(?:ing)?|interactive|button|form|calculator|calculate|"
+        r"validation|validate|dropdown|counter|quiz|to.do.list)\b",
+        question or "", re.IGNORECASE,
+    ))
+
+
+@dataclass
+class SolutionExecution:
+    success: bool
+    output: str
+    error: str
+    screenshots: list
+    verification: dict | None = None
+
+    def __iter__(self):
+        # Preserve the existing four-value unpacking contract for callers.
+        yield self.success
+        yield self.output
+        yield self.error
+        yield self.screenshots
 
 
 async def extract_assignment(workflow_id: int):
@@ -204,11 +247,16 @@ def student_friendly_filename(question_text: str, language: str, index: int) -> 
     return f"exp{index + 1}_{slug}{ext}"
 
 
-async def execute_solution(code, language, question, group_id, username, stdin_data=None, filename="solution.txt"):
+async def execute_solution(code, language, question, group_id, username, stdin_data=None, filename="solution.txt",
+                           browser_tests=None, interaction_is_required=False):
     validate_generated_code(code, language)
     success, output, errors, _, files = await executor_service.execute_code(
-        code, language, filename, question, stdin_data=stdin_data)
-    return success, output, errors, [item["path"] for item in files if item.get("path") and os.path.isfile(item["path"])]
+        code, language, filename, question, stdin_data=stdin_data,
+        browser_tests=browser_tests, interaction_is_required=interaction_is_required)
+    verification = next((item.get("verification") for item in files
+                         if item.get("type") == "browser_verification"), None)
+    screenshots = [item["path"] for item in files if item.get("path") and os.path.isfile(item["path"])]
+    return SolutionExecution(success, output, errors, screenshots, verification)
 
 
 async def process_assignment(workflow_id: int):
@@ -238,7 +286,13 @@ async def process_assignment(workflow_id: int):
             for index, question in enumerate(questions):
                 if index < len(workflow.results or []):
                     previous = workflow.results[index]
-                    if previous.get("status") == "completed" and (
+                    previous_verification = previous.get("verification") or {}
+                    browser_checkpoint_ok = previous.get("language") != "html" or (
+                        previous_verification.get("status") == "passed" or (
+                            previous_verification.get("status") == "not_required"
+                            and not previous_verification.get("required")
+                            and not interaction_required(question["text"] + " " + (workflow.instructions or ""))))
+                    if previous.get("status") == "completed" and browser_checkpoint_ok and (
                         previous.get("is_theory") or previous.get("language") == "theory"
                         or (previous.get("screenshot_paths") and all(os.path.isfile(path) for path in previous["screenshot_paths"]))
                     ):
@@ -288,6 +342,20 @@ async def process_assignment(workflow_id: int):
                         "6. For interactive programs with input()/scanf()/cin, provide realistic finite newline-separated stdin values in the 'stdin' field that thoroughly test the program and choose the menu exit option; use an empty string for non-interactive programs.\n"
                         "7. Return an explanation in answer and complete executable source code in code. Return only schema JSON."
                     )
+                    if language == "html":
+                        code_instruction += (
+                            "\n8. Return browser_tests as declarative browser steps, never JavaScript or Python test code. "
+                            "For a static page with no user interaction, return an empty array. For a task that asks the user "
+                            "to interact with the page, return 1–3 scenarios, each with 1–8 actions and expected_text values. "
+                            "Actions may only be fill or click. Locate controls by accessible role and name, label, or placeholder. "
+                            "Use locator_type=role with role such as button/textbox/spinbutton and locator as its accessible name; "
+                            "use role=\"\" for label/placeholder locators. Every click must have value=\"\". "
+                            "Add labels or accessible names to controls when needed. Use test values that demonstrate the requested "
+                            "behavior; for two-number addition, fill 2 and 3, click Add, and expect visible text 5. "
+                            "Expected text must come from the task's required behavior, not invented features."
+                        )
+                    else:
+                        code_instruction += "\n8. Return browser_tests as an empty array for non-HTML assignments."
                     solution = await generation_service.generate_json(
                         code_instruction,
                         f"Language: {language}\n{personalization_prompt}\nAdditional requirements: {workflow.instructions}\nQuestion:\n{question['text']}\nContext:\n{source[:2000]}",
@@ -297,6 +365,7 @@ async def process_assignment(workflow_id: int):
                     code = normalize_generated_code(solution.get("code", "")).strip()
                     actual_language = solution.get("language", language)
                     stdin_data = str(solution.get("stdin", ""))[:10000] or None
+                    browser_tests = solution.get("browser_tests", []) if actual_language == "html" else []
                 except GenerationUnavailableError:
                     # Preserve checkpoints and wait for the real model to return.
                     # A fallback here silently substitutes a different answer.
@@ -307,16 +376,22 @@ async def process_assignment(workflow_id: int):
                     code = parser_service._generate_code_from_prompt(question["text"], actual_language)
                     answer = parser_service._generate_ai_answer(question["text"], code)
                     stdin_data = None
+                    browser_tests = []
                 
                 if actual_language not in LANGUAGES or not answer or not code:
                     actual_language = language
                     code = parser_service._generate_code_from_prompt(question["text"], actual_language)
                     answer = parser_service._generate_ai_answer(question["text"], code)
                     stdin_data = None
+                    browser_tests = []
                 if actual_language == "python" and re.search(r"\binput\s*\(", code) and not stdin_data:
                     raise ValueError(f"Question {index + 1} needs explicit sample input before it can be verified.")
+                requires_interaction = actual_language == "html" and bool(
+                    browser_tests or interaction_required(question["text"] + " " + (workflow.instructions or "")))
                 screenshots = []
+                screenshot_captions = None
                 output, error, success = "", "", True
+                verification = None
                 group = f"workflow_{workflow.id}_{uuid.uuid4().hex[:8]}"
                 
                 # Build student-like filename for IDE and runtime
@@ -325,19 +400,29 @@ async def process_assignment(workflow_id: int):
                 if code:
                     record(workflow, db, "execute", progress, f"Running question {index + 1} ({actual_language}).")
                     try:
-                        success, output, error, screenshots = await execute_solution(
-                            code, actual_language, question["text"], group, username, stdin_data, filename=src_filename)
+                        execution = await execute_solution(
+                            code, actual_language, question["text"], group, username, stdin_data, filename=src_filename,
+                            browser_tests=browser_tests, interaction_is_required=requires_interaction)
+                        success, output, error, screenshots = execution
+                        verification = getattr(execution, "verification", None)
                     except Exception as execution_error:
                         success, error = False, str(execution_error)
-                    if not success and settings.LLM_PROVIDER.lower() == "groq":
+                        if requires_interaction:
+                            verification = {"required": True, "status": "failed", "tests": [],
+                                            "error": "The required browser interaction could not be verified."}
+                    if not success and settings.LLM_PROVIDER.lower() == "groq" and not (
+                            verification and verification.get("error")):
                         for repair_attempt in range(2):
                             record(workflow, db, "execute", progress,
                                    f"Repairing question {index + 1} after execution failure (attempt {repair_attempt + 1}).")
                             try:
                                 repaired = await repair_generated_code(question["text"], actual_language, code, error or output)
                                 code = repaired
-                                success, output, error, screenshots = await execute_solution(
-                                    code, actual_language, question["text"], group, username, stdin_data, filename=src_filename)
+                                execution = await execute_solution(
+                                    code, actual_language, question["text"], group, username, stdin_data, filename=src_filename,
+                                    browser_tests=browser_tests, interaction_is_required=requires_interaction)
+                                success, output, error, screenshots = execution
+                                verification = getattr(execution, "verification", None)
                                 if success:
                                     break
                             except GenerationUnavailableError:
@@ -381,6 +466,7 @@ async def process_assignment(workflow_id: int):
                     else:
                         display_output = output if success else (error or "Execution did not complete.")
 
+                    browser_captures = list(screenshots) if actual_language == "html" else []
                     for capture_view in capture_views:
                         ok, path, _, _ = await screenshot_service.generate_screenshot(
                             code,
@@ -400,7 +486,20 @@ async def process_assignment(workflow_id: int):
                         else:
                             success = False
                             error = (error + f"\n{capture_view.title()} screenshot could not be captured. Check the browser runtime.").strip()
-                    if actual_language in {"html", "react", "node"} and len(screenshots) >= 2:
+                    if actual_language == "html":
+                        editor_captures = screenshots[len(browser_captures):]
+                        browser_previews = []
+                        for raw_browser in browser_captures:
+                            browser_ok, browser_path, _, _ = await screenshot_service.generate_browser_preview_from_image(
+                                raw_browser, group, src_filename)
+                            # Retain genuine raw evidence if decorative browser framing fails.
+                            browser_previews.append(browser_path if browser_ok else raw_browser)
+                        screenshots = editor_captures + browser_previews
+                        screenshot_captions = ["Code"] * len(editor_captures) + ["Browser Evidence"] * len(browser_previews)
+                        if not browser_captures:
+                            success = False
+                            error = (error + "\nRendered browser output is missing.").strip()
+                    elif actual_language in {"react", "node"} and len(screenshots) >= 2:
                         raw_browser = screenshots[0]
                         editor_path = screenshots[1]
                         browser_ok, browser_path, _, _ = await screenshot_service.generate_browser_preview_from_image(
@@ -413,7 +512,21 @@ async def process_assignment(workflow_id: int):
                     elif actual_language in {"html", "react", "node"}:
                         success = False
                         error = (error + "\nRendered browser output is missing.").strip()
-                result = {"id": question["id"], "question": question["text"], "language": actual_language, "answer": answer, "code": code, "output": output, "error": error, "status": "completed" if success else "failed", "screenshot_paths": screenshots}
+                if requires_interaction and verification is None:
+                    verification = {"required": True, "status": "failed", "tests": [],
+                                    "error": "The required browser interaction could not be verified."}
+                    success = False
+                    error = (error + "\n" + verification["error"]).strip()
+                if verification and verification.get("required") and verification.get("status") != "passed":
+                    success = False
+                if verification and requires_interaction and not verification.get("required"):
+                    verification.update(required=True, status="failed", error="Required interactions were not tested.")
+                    success = False
+                result = {"id": question["id"], "question": question["text"], "language": actual_language,
+                          "answer": answer, "code": code, "output": output, "error": error,
+                          "status": "completed" if success else "failed", "screenshot_paths": screenshots,
+                          **({"screenshot_captions": screenshot_captions} if screenshot_captions is not None else {}),
+                          **({"verification": verification} if verification is not None else {})}
                 workflow.results = [*(workflow.results or []), result]
                 record(workflow, db, "capture", 20 + int(65 * (index + 1) / len(questions)), f"Question {index + 1} finished" + ("." if success else " with an execution warning."))
             incomplete = [result.get("id") for result in (workflow.results or []) if
@@ -421,7 +534,14 @@ async def process_assignment(workflow_id: int):
                               not result.get("is_theory") and result.get("language") != "theory"
                               and (not result.get("screenshot_paths") or
                                    not all(os.path.isfile(path) for path in result["screenshot_paths"]))) ]
-            if incomplete:
+            diagnostic_failures = [result for result in (workflow.results or [])
+                                   if result.get("status") == "failed"
+                                   and result.get("language") == "html"
+                                   and result.get("verification", {}).get("required")
+                                   and result.get("verification", {}).get("status") == "failed"]
+            diagnostic_ids = {result.get("id") for result in diagnostic_failures}
+            other_incomplete = [question_id for question_id in incomplete if question_id not in diagnostic_ids]
+            if other_incomplete:
                 raise ValueError(f"Cannot produce a verified report: question(s) {', '.join(map(str, incomplete))} lack successful execution or complete screenshots.")
             record(workflow, db, "report", 90, "Combining the laboratory manual, questions, and captured screenshots into Word.")
             report_data = SimpleNamespace(
@@ -439,8 +559,14 @@ async def process_assignment(workflow_id: int):
             db.add(report)
             db.flush()
             workflow.report_id = report.id
-            workflow.status = "completed"
-            record(workflow, db, "complete", 100, "Word document ready to preview and download.")
+            if diagnostic_failures:
+                workflow.status = "failed"
+                failed_ids = ", ".join(str(result.get("id")) for result in diagnostic_failures)
+                workflow.error = f"WebDev interaction verification failed for question(s) {failed_ids}. A diagnostic report is ready to download."
+                record(workflow, db, "complete", 100, workflow.error)
+            else:
+                workflow.status = "completed"
+                record(workflow, db, "complete", 100, "Word document ready to preview and download.")
         except GenerationUnavailableError as error:
             workflow.status, workflow.error = ("failed" if workflow.batch_id else "paused"), str(error)
             record(workflow, db, workflow.stage, workflow.progress, str(error))
@@ -492,16 +618,54 @@ def build_word_report(upload, workflow):
             question.paragraph_format.keep_with_next = True
             question.add_run(f"Program {result['id']}: ").bold = True
             question.add_run(result["question"])
+            verification = result.get("verification")
+            if verification:
+                status = str(verification.get("status", "unknown")).replace("_", " ").upper()
+                document.add_paragraph(f"Browser interaction verification: {status}")
+                if verification.get("error"):
+                    document.add_paragraph(f"Verification details: {verification['error']}")
+                for test in verification.get("tests", []):
+                    document.add_paragraph(f"{test.get('status', 'unknown').upper()}: {test.get('name', 'Browser test')}")
+                    for step_index, action in enumerate(test.get("actions", []), 1):
+                        target = f"{action.get('locator_type', '')} {action.get('role', '')} {action.get('locator', '')}".strip()
+                        detail = f"Step {step_index}: {action.get('action', '')} {target}"
+                        if action.get("action") == "fill":
+                            detail += f" with {action.get('value', '')!r}"
+                        document.add_paragraph(detail)
+                    if test.get("expected_text"):
+                        document.add_paragraph("Expected visible text: " + "; ".join(test["expected_text"]))
+                    if test.get("observed_text"):
+                        document.add_paragraph("Observed page text: " + str(test["observed_text"])[:2000])
+                    if test.get("error"):
+                        document.add_paragraph("Failure details: " + str(test["error"])[:500])
+                if verification.get("status") == "failed":
+                    document.add_paragraph("Diagnostic report — this solution has not passed browser verification.")
+                    if result.get("error"):
+                        document.add_paragraph("Execution details: " + str(result["error"])[:2000])
+                    document.add_paragraph("Source code:")
+                    document.add_paragraph(result.get("code", "")[:20000])
+                    if not result.get("screenshot_paths") or (
+                            result.get("screenshot_captions") is not None
+                            and "Browser Evidence" not in result["screenshot_captions"]):
+                        document.add_paragraph("Browser evidence unavailable: the browser could not capture this run.")
             screenshot_paths = result.get("screenshot_paths", [])
             for ss_idx, screenshot in enumerate(screenshot_paths):
                 # Build a descriptive caption for each screenshot
-                if len(screenshot_paths) == 1:
-                    cap = f"Program {result['id']}"
+                captions = result.get("screenshot_captions") or []
+                if ss_idx < len(captions):
+                    cap = f"Program {result['id']} — {captions[ss_idx]}"
+                elif len(screenshot_paths) == 1:
+                    cap = (f"Program {result['id']} — Browser Evidence"
+                           if result.get("language") == "html" else f"Program {result['id']}")
                 elif ss_idx == 0:
                     cap = f"Program {result['id']} — Code"
                 else:
-                    cap = f"Program {result['id']} — Output"
-                embed_screenshot(document, screenshot, caption=cap)
+                    cap = (f"Program {result['id']} — Browser Evidence"
+                           if result.get("language") == "html" else f"Program {result['id']} — Output")
+                if os.path.isfile(screenshot):
+                    embed_screenshot(document, screenshot, caption=cap)
+                elif verification and verification.get("status") == "failed":
+                    document.add_paragraph("Browser evidence unavailable: an evidence file is missing.")
     filename = re.sub(r"[^A-Za-z0-9_-]", "_", workflow.output_name)[:80].strip("_") or "lab_report"
     filename += ".docx"
     directory = os.path.join(settings.REPORT_DIR, "workflows", str(workflow.id))

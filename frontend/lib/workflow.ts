@@ -25,6 +25,22 @@ export interface LabResult {
   error: string;
   status: string;
   screenshots: number;
+  verification?: {
+    required: boolean;
+    status: "not_required" | "passed" | "failed";
+    error?: string;
+    tests: {
+      name: string;
+      status: "not_run" | "passed" | "failed";
+      actions?: { action: "fill" | "click"; locator_type: "role" | "label" | "placeholder"; locator: string; role: string; value: string }[];
+      executed_steps?: number;
+      screenshot_key?: string;
+      expected_text: string[];
+      observed_text: string;
+      failed_step?: number;
+      error?: string;
+    }[];
+  };
 }
 export interface LabWorkflow {
   id: number;

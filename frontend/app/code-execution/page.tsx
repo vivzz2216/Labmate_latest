@@ -398,6 +398,9 @@ export default function AssignmentPage() {
                         stage: runWf.error || "Failed",
                         progress: 100,
                         error: runWf.error || "Execution warning",
+                        reportId: runWf.report?.id,
+                        reportFilename: runWf.report?.filename,
+                        workflow: runWf,
                       }
                     : it
                 )
@@ -427,9 +430,9 @@ export default function AssignmentPage() {
   };
 
   const downloadAllBatch = async () => {
-    const completed = batchItems.filter((it) => it.status === "completed" && it.reportId);
-    if (!completed.length) return;
-    for (const it of completed) {
+    const reports = batchItems.filter((it) => it.reportId);
+    if (!reports.length) return;
+    for (const it of reports) {
       if (it.reportId && it.reportFilename) {
         await saveReport(it.reportId, it.reportFilename);
         await new Promise((r) => setTimeout(r, 600));
@@ -650,8 +653,8 @@ export default function AssignmentPage() {
                     <strong>
                       Batch Progress: {batchItems.filter((b) => b.status === "completed").length} / {batchItems.length} Completed
                     </strong>
-                    {batchItems.some((b) => b.status === "completed") && (
-                      <button className={styles.batchZipButton} onClick={downloadAllBatch} title="Download all finished manuals">
+                    {batchItems.some((b) => b.reportId) && (
+                      <button className={styles.batchZipButton} onClick={downloadAllBatch} title="Download all generated reports, including diagnostics">
                         <Archive size={14} /> Download All
                       </button>
                     )}
@@ -685,11 +688,12 @@ export default function AssignmentPage() {
                       >
                         {item.status}
                       </span>
-                      {item.status === "completed" && item.reportId && (
+                      {item.reportId && (
                         <button
                           onClick={() => saveReport(item.reportId!, item.reportFilename || "lab_manual.docx")}
                           className={styles.batchDownloadButton}
-                          title="Download document"
+                          title={item.status === "failed" ? "Download diagnostic report" : "Download document"}
+                          aria-label={item.status === "failed" ? `Download diagnostic report for ${item.file.name}` : `Download report for ${item.file.name}`}
                         >
                           <Download size={16} />
                         </button>
@@ -1001,6 +1005,16 @@ export default function AssignmentPage() {
                   <p className={styles.failedText}>
                     {workflow?.error || "Processing encountered an issue."}
                   </p>
+                  {workflow?.report && (
+                    <button
+                      className={styles.downloadDoneBtn}
+                      onClick={download}
+                      disabled={downloading}
+                    >
+                      {downloading ? <Loader2 className={styles.spin} size={16} /> : <Download size={16} />}
+                      Download Diagnostic Word Report (.docx)
+                    </button>
+                  )}
                   <button
                     className={styles.retryBtn}
                     onClick={questions.length ? process : retryExtraction}

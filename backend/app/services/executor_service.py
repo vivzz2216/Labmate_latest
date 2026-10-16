@@ -392,7 +392,8 @@ class ExecutorService:
     
     async def execute_code(self, code: str, language: str = "python", filename: Optional[str] = None,
                            question_text: Optional[str] = None, project_type: Optional[str] = None,
-                           project_config: Optional[Dict[str, Any]] = None, stdin_data: Optional[str] = None):
+                           project_config: Optional[Dict[str, Any]] = None, stdin_data: Optional[str] = None,
+                           browser_tests=None, interaction_is_required=False):
         """Execute only through the bounded runtime engine; preserve the public result tuple."""
         from .runtime_engine import runtime_engine
         config = project_config or {}
@@ -403,10 +404,13 @@ class ExecutorService:
             result = await runtime_engine.execute(code, language, filename,
                 stdin=stdin_data if stdin_data is not None else config.get("stdin"),
                 project_files=config.get("project_files"), routes=config.get("routes"),
-                prepare_files=prepare, collect_files=collect)
+                prepare_files=prepare, collect_files=collect, browser_tests=browser_tests,
+                interaction_is_required=interaction_is_required)
             files = result.files + [{"filename": Path(path).name, "content": "", "type": "generated",
                                      "path": path, "route": route, "screenshot_url": "/screenshots/" + os.path.relpath(path, settings.SCREENSHOT_DIR).replace("\\", "/")}
                                     for route, path in result.screenshots.items()]
+            if result.verification is not None:
+                files.append({"type": "browser_verification", "verification": result.verification})
             return result.success, result.output, result.error, result.exit_code, files
         except Exception as error:
             return False, "", f"Runtime error: {error}", 1, []

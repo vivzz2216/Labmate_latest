@@ -12,10 +12,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
-from app.models import AssignmentWorkflow, Upload, User
+from app.models import AssignmentWorkflow, Report, Upload, User
 from app.security.generated_code import validate_generated_code
 from app.services.runtime_engine import runtime_engine
-from app.services.assignment_workflow import process_assignment
+from app.services.assignment_workflow import SolutionExecution, process_assignment
 
 
 class ExecutionEvidenceTests(unittest.TestCase):
@@ -124,6 +124,84 @@ class FailedReportGateTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(result.status, "failed")
                 self.assertIsNone(result.report_id)
                 self.assertIn("verified report", result.error)
+            engine.dispose()
+
+    async def test_failed_html_interaction_creates_downloadable_diagnostic_report(self):
+        await self._assert_html_diagnostic(evidence_available=True)
+
+    async def test_browser_unavailable_still_produces_failed_diagnostic_report(self):
+        await self._assert_html_diagnostic(evidence_available=False)
+
+    async def test_old_render_only_checkpoint_is_reverified(self):
+        await self._assert_html_diagnostic(evidence_available=True, old_checkpoint=True)
+
+    async def _assert_html_diagnostic(self, evidence_available, old_checkpoint=False):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = Document()
+            source.add_paragraph("Create a page where clicking Add displays the sum of two numbers.")
+            source_path = root / "manual.docx"
+            source.save(source_path)
+            screenshot = root / "failure.png"
+            Image.new("RGB", (320, 200), "white").save(screenshot)
+            engine = create_engine("sqlite:///:memory:")
+            Base.metadata.create_all(engine)
+            factory = sessionmaker(bind=engine)
+            with factory() as db:
+                user = User(email="webdiag@example.test", name="Web Test Student")
+                db.add(user)
+                db.flush()
+                upload = Upload(user_id=user.id, filename="manual.docx", original_filename="manual.docx",
+                                file_path=str(source_path), file_type="docx", file_size=source_path.stat().st_size)
+                db.add(upload)
+                db.flush()
+                workflow = AssignmentWorkflow(upload_id=upload.id, status="processing", stage="generate",
+                    questions=[{"id": 1, "text": "Create a page where clicking Add displays the sum of two numbers.", "language": "html"}],
+                    results=[], language="auto", output_name="web_diagnostic")
+                if old_checkpoint:
+                    workflow.results = [{"id": 1, "status": "completed", "language": "html",
+                                         "screenshot_paths": [str(screenshot)]}]
+                db.add(workflow)
+                db.commit()
+                workflow_id = workflow.id
+
+            generated = {"answer": "Add two numbers.", "code": '<button>Add</button><output>23</output>',
+                         "language": "html", "stdin": "", "browser_tests": []}
+            verification = {"required": True, "status": "failed", "tests": [{
+                "name": "Add two numbers", "status": "failed", "expected_text": ["5"],
+                "actions": [{"action": "click", "locator_type": "role", "locator": "Add", "role": "button", "value": ""}],
+                "observed_text": "23", "failed_step": 3, "error": "Expected text was not visible."}]}
+            with patch("app.services.assignment_workflow.SessionLocal", factory), \
+                 patch("app.services.assignment_workflow.generation_service.generate_json", AsyncMock(return_value=generated)), \
+                 patch("app.services.assignment_workflow.execute_solution", AsyncMock(return_value=SolutionExecution(
+                     False, "Rendered page text\nBrowser interaction verification: FAILED",
+                     "Browser interaction test 'Add two numbers' failed: Expected text was not visible.",
+                     [str(screenshot)] if evidence_available else [], verification))), \
+                 patch("app.services.assignment_workflow.screenshot_service.generate_screenshot",
+                       AsyncMock(return_value=(evidence_available, str(screenshot), 320, 200))), \
+                 patch("app.services.assignment_workflow.screenshot_service.generate_browser_preview_from_image",
+                       AsyncMock(return_value=(True, str(screenshot), 320, 200))), \
+                 patch("app.services.assignment_workflow.settings.REPORT_DIR", str(root / "reports")):
+                await process_assignment(workflow_id)
+
+            with factory() as db:
+                result = db.get(AssignmentWorkflow, workflow_id)
+                self.assertEqual(result.status, "failed")
+                self.assertIsNotNone(result.report_id)
+                self.assertIn("diagnostic report is ready", result.error)
+                self.assertEqual(result.results[0]["verification"]["status"], "failed")
+                report = db.get(Report, result.report_id)
+                report_doc = Document(report.file_path)
+                paragraph_text = "\n".join(p.text for p in report_doc.paragraphs)
+                self.assertIn("Browser interaction verification: FAILED", paragraph_text)
+                self.assertIn("Expected visible text: 5", paragraph_text)
+                self.assertIn("Observed page text: 23", paragraph_text)
+                self.assertIn("Step 1: click role button Add", paragraph_text)
+                if evidence_available:
+                    self.assertGreater(len(report_doc.inline_shapes), 0)
+                else:
+                    self.assertEqual(len(report_doc.inline_shapes), 0)
+                    self.assertIn("Browser evidence unavailable", paragraph_text)
             engine.dispose()
 
 
