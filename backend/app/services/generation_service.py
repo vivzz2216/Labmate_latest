@@ -166,13 +166,20 @@ class GenerationService:
                         raise previous_error
                     raise
             if previous_error:
-                raise previous_error
+                if getattr(previous_error, 'repairable', False):
+                    raise previous_error
+                # With no separate Groq backup, retain the original bounded
+                # primary retry after a depleted Gemini account.
+                self._groq_unavailable_until = 0
+                return await self._primary(instructions, content, schema, on_retry, bool(self._free_providers()))
             raise GenerationUnavailableError('Configured backup providers are unavailable.')
         if (available or model_backup) and time.monotonic() < self._groq_unavailable_until:
             return await recover()
         try:
             return await self._primary(instructions, content, schema, on_retry, available or model_backup or bool(self._free_providers()))
         except GenerationError as primary_error:
+            if not isinstance(primary_error, GenerationUnavailableError) and not getattr(primary_error, 'repairable', False):
+                raise  # Credentials/model configuration is not a malformed answer.
             if not available and not model_backup: raise
             if isinstance(primary_error, GenerationUnavailableError):
                 self._groq_unavailable_until = max(self._groq_unavailable_until, time.monotonic() + settings.LLM_FALLBACK_COOLDOWN_SECONDS)

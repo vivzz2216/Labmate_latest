@@ -100,6 +100,24 @@ class WebContractTests(unittest.TestCase):
 
 
 class ProviderBackupTests(unittest.IsolatedAsyncioTestCase):
+    async def test_flask_manifest_accepts_python_files_with_consistent_generation_contract(self):
+        from fixtures.app_ui_cases import FLASK_FILES, FLASK_TESTS
+        response={'answer':'Adds and validates on the Flask server.','entrypoint':'app.py','readme':FLASK_FILES['README.md'],
+            'source_capture_files':['app.py','templates/index.html'],
+            'files':[{'path':name,'content':source} for name,source in FLASK_FILES.items() if name!='README.md'],
+            'browser_tests':[{k:v for k,v in test.items() if k!='version'} for test in FLASK_TESTS]}
+        with patch('app.services.web_project.generation_service.generate_json',AsyncMock(return_value=response)) as generate:
+            _,project=await generate_web_project('Build a Flask calculator to add two numbers with server-side validation for invalid input.','python')
+        instructions,_,schema=generate.await_args.args
+        self.assertIn('Allowed files: py/html/css/js/md/svg.',instructions)
+        self.assertNotIn('Allowed files: html/css/js/jsx/cjs/mjs/json/md/svg.',instructions)
+        self.assertIn('two concise sentences',instructions)
+        self.assertIn('integer versus decimal formatting',instructions)
+        self.assertIn('Flask startup',schema['properties']['readme']['description'])
+        self.assertEqual(project['project_type'],'flask')
+        self.assertEqual(project['project_files']['app.py'],FLASK_FILES['app.py'])
+        self.assertEqual(len(project['browser_tests']),2)
+
     async def test_react_source_screenshot_preferences_do_not_change_node_assignment_type(self):
         response={'answer':'List records','entrypoint':'server.cjs','source_capture_files':['server.cjs'],
             'readme':'Run npm install express, then node server.cjs.',

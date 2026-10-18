@@ -237,6 +237,8 @@ async def generate_web_project(question, language, on_retry=None, previous=None,
         schema['properties']['browser_tests']['items']['properties']['requirement_ids']['items']['enum']=behavior_ids
     provider_schema=deepcopy(schema)
     provider_schema['properties']['readme']={'type':'STRING','description':'Required startup instructions in Markdown. HTML: open the supplied entry HTML file in a browser. React: npm install react@18.2.0 react-dom@18.2.0 react-router-dom@6.30.1 vite@5.4.21 then npx vite. Explain any required API/mock service; fullstack needs separate Node and Vite startup with matching local API proxy. No package.json is supplied. Do not claim verification.'}
+    if kind=='flask':
+        provider_schema['properties']['readme']['description']='Required Flask startup instructions in Markdown: python -m pip install Flask==3.1.3, then flask --app app run. List the supplied Python entrypoint, templates and static assets. No Node, Vite or npm setup is required. Do not claim verification.'
     provider_schema['required']=[*provider_schema['required'],'readme']
     if 'browser_tests' in provider_schema['properties']:
         from .browser_scenarios import ROLES
@@ -249,6 +251,7 @@ async def generate_web_project(question, language, on_retry=None, previous=None,
     try:
         instructions=INSTRUCTIONS
         if kind=='flask':
+            instructions=instructions.replace('Allowed files: html/css/js/jsx/cjs/mjs/json/md/svg.', 'Allowed files: py/html/css/js/md/svg.')
             instructions+='\nFLASK RUNTIME: Supply a Python entrypoint (normally app.py) defining a global Flask app, plus every referenced templates/ and static/ file. Flask 3.1.3 is installed. Use local assets only, no database or extra pip dependencies unless the task supports them. No environment/system imports. Put app.run only under the main guard; the host starts a loopback WSGI server with debugging/reloading disabled. Use real GET/POST routes and server-side form validation, not a static HTML substitute. Select app.py and relevant template/JS logic for source_capture_files. Browser tests must exercise actual server-backed success and invalid states. Include README instructions: python -m pip install Flask==3.1.3, then flask --app app run.'
         raw=await generation_service.generate_json(instructions,prompt,provider_schema,on_retry=on_retry)
     except GenerationError as error:
