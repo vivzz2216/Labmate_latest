@@ -112,4 +112,3 @@ def test_flask_paths_and_templates_cannot_request_host_files():
     files=deepcopy(FLASK_FILES);files['templates/index.html']='{{ config.__class__ }}'
     with pytest.raises(ValueError,match='introspection'):
         validate_project({'project_type':'flask','entrypoint':'app.py','files':[{'path':n,'content':c} for n,c in files.items()]})
-

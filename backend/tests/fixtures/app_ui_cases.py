@@ -108,4 +108,3 @@ GUI_TESTS=[
  scenario('Show invalid integer feedback',[
     step('fill','first','abc','testid'),step('fill','second','3','testid'),
     step('click','Add','','role','button'),step('assert_visible','Enter two integers','','text'),step('screenshot')],['validation'])]
-
