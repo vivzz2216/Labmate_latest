@@ -24,6 +24,15 @@ class GenerationUnavailableError(GenerationError):
     """The workflow must retain its checkpoint after a transient provider failure."""
 
 
+def invalid_answer(message, draft=None):
+    """A reachable model's malformed output can use the bounded repair loop."""
+    error = GenerationError(message)
+    error.repairable = True
+    if draft is not None:
+        error.draft = draft
+    return error
+
+
 def student_personalization_prompt(student_name, roll_no, department, institution):
     """Keep the same student identity across generated examples and test runs."""
     return (
@@ -139,26 +148,41 @@ class GenerationService:
         available = fallback == "gemini" and bool(settings.GEMINI_API_KEY) and settings.LLM_PROVIDER.lower() == "groq" and time.monotonic() >= self._backup_unavailable_until
         model_backup = bool(settings.LLM_PROVIDER.lower()=='groq' and settings.GROQ_API_KEY and settings.GROQ_FALLBACK_MODEL and settings.GROQ_FALLBACK_MODEL!=settings.GROQ_MODEL)
         async def recover():
+            previous_error = None
             if available:
                 try:
-                    logger.warning('Trying configured Gemini backup after Groq unavailability.')
+                    logger.warning('Trying configured Gemini backup after Groq failure.')
                     return await self._gemini(instructions, content, schema, on_retry)
-                except GenerationError:
-                    self._backup_unavailable_until = time.monotonic() + 300
+                except GenerationError as error:
+                    previous_error = error
+                    if not getattr(error, 'repairable', False):
+                        self._backup_unavailable_until = time.monotonic() + 300
             if model_backup:
                 logger.warning('Trying configured Groq backup model %s.',settings.GROQ_FALLBACK_MODEL)
-                return await self._primary(instructions, content, schema, on_retry, bool(self._free_providers()), model_override=settings.GROQ_FALLBACK_MODEL)
-            self._groq_unavailable_until=0
-            return await self._primary(instructions, content, schema, on_retry, bool(self._free_providers()))
+                try:
+                    return await self._primary(instructions, content, schema, on_retry, bool(self._free_providers()), model_override=settings.GROQ_FALLBACK_MODEL)
+                except GenerationError as error:
+                    if previous_error and getattr(previous_error, 'repairable', False) and not getattr(error, 'repairable', False):
+                        raise previous_error
+                    raise
+            if previous_error:
+                raise previous_error
+            raise GenerationUnavailableError('Configured backup providers are unavailable.')
         if (available or model_backup) and time.monotonic() < self._groq_unavailable_until:
             return await recover()
         try:
             return await self._primary(instructions, content, schema, on_retry, available or model_backup or bool(self._free_providers()))
-        except GenerationUnavailableError:
+        except GenerationError as primary_error:
             if not available and not model_backup: raise
-            self._groq_unavailable_until = max(self._groq_unavailable_until, time.monotonic() + settings.LLM_FALLBACK_COOLDOWN_SECONDS)
-            if on_retry: await on_retry(1, 0, 429)
-            return await recover()
+            if isinstance(primary_error, GenerationUnavailableError):
+                self._groq_unavailable_until = max(self._groq_unavailable_until, time.monotonic() + settings.LLM_FALLBACK_COOLDOWN_SECONDS)
+            if on_retry: await on_retry(1, 0, 429 if isinstance(primary_error, GenerationUnavailableError) else None)
+            try:
+                return await recover()
+            except GenerationError as backup_error:
+                if getattr(primary_error, 'repairable', False) and not getattr(backup_error, 'repairable', False):
+                    raise primary_error
+                raise
 
     async def _gemini(self, instructions, content, schema, on_retry):
         try:
@@ -168,7 +192,9 @@ class GenerationService:
         except GeminiUnavailableError as error:
             raise GenerationUnavailableError(str(error)) from None
         except (GeminiError, ValidationError) as error:
-            raise GenerationError("Gemini returned an invalid structured answer." if isinstance(error, ValidationError) else str(error)) from None
+            if isinstance(error, ValidationError):
+                raise invalid_answer("Gemini returned an invalid structured answer.", result) from None
+            raise GenerationError(str(error)) from None
 
     async def _primary(self, instructions, content, schema, on_retry, can_fallback=False, model_override=None):
         provider = settings.LLM_PROVIDER.lower()
@@ -247,30 +273,26 @@ class GenerationService:
                     except ValidationError as validation_error:
                         path = '.'.join(str(p) for p in validation_error.absolute_path)[:150] or 'root'
                         fields = ', missing ' + ', '.join(k for k in validation_error.validator_value if k not in validation_error.instance) if validation_error.validator == 'required' else ''
-                        error=GenerationError(f'Provider JSON draft violates {validation_error.validator} at {path}{fields}. Regenerate using the exact response schema.')
-                        error.draft=draft
-                        raise error from None
+                        raise invalid_answer(f'Provider JSON draft violates {validation_error.validator} at {path}{fields}. Regenerate using the exact response schema.', draft) from None
                     except json.JSONDecodeError as error:
-                        raise GenerationError(f'Provider returned invalid JSON: {error.msg} at character {error.pos}. Return one complete JSON object with escaped source strings; no markdown fences or trailing text.') from None
+                        raise invalid_answer(f'Provider returned invalid JSON: {error.msg} at character {error.pos}. Return one complete JSON object with escaped source strings; no markdown fences or trailing text.') from None
                     except (ValueError, TypeError):
-                        raise GenerationError('Provider returned truncated or invalid JSON. Keep the complete project and tests concise enough for the response token limit.') from None
+                        raise invalid_answer('Provider returned truncated or invalid JSON. Keep the complete project and tests concise enough for the response token limit.') from None
             except (ValueError, AttributeError):
                 pass
             raise GenerationError(f"Groq rejected the request (HTTP {response.status_code}). Check the model, schema, and document size.")
         try:
             message = response.json()["choices"][0]
             if message.get("finish_reason") == "length":
-                raise GenerationError("Groq's answer exceeded the response limit. Try a smaller programming question.")
+                raise invalid_answer("Groq's answer exceeded the response limit. Keep the complete project and tests concise enough for the response token limit.")
             if message["message"].get("refusal"):
                 raise GenerationError("Groq could not answer this programming question.")
             result = json.loads(message["message"]["content"])
             validate(instance=result, schema=converted)
         except ValidationError:
-            error=GenerationError('Groq returned an invalid structured answer. Retry processing.')
-            error.draft=result
-            raise error from None
+            raise invalid_answer('Groq returned an invalid structured answer. Retry processing.', result) from None
         except (ValueError, TypeError, KeyError, IndexError):
-            raise GenerationError("Groq returned an incomplete or invalid structured answer. Retry processing.") from None
+            raise invalid_answer("Groq returned an incomplete or invalid structured answer. Retry processing.") from None
         return result
 
 

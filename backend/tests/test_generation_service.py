@@ -7,7 +7,7 @@ import httpx
 from app.config import settings
 from app.services.gemini_service import GeminiUnavailableError
 from app.services.generation_service import (
-    GenerationError, GenerationUnavailableError, generation_service, strict_json_schema,
+    GenerationError, GenerationUnavailableError, GenerationService, invalid_answer, generation_service, strict_json_schema,
 )
 
 SCHEMA = {"type": "OBJECT", "properties": {"answer": {"type": "STRING"}}, "required": ["answer"]}
@@ -80,3 +80,50 @@ class GenerationServiceTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(settings, "LLM_PROVIDER", "gemini"), patch("app.services.generation_service.gemini_service.generate_json", AsyncMock(side_effect=GeminiUnavailableError("Provider busy"))):
             with self.assertRaises(GenerationUnavailableError):
                 await generation_service.generate_json("Return JSON", "Question", SCHEMA)
+
+    async def test_malformed_primary_json_tries_configured_backup_model(self):
+        calls=[]
+        def handler(request):
+            model=json.loads(request.content)['model'];calls.append(model)
+            if model=='openai/gpt-oss-120b':
+                return httpx.Response(400,json={'error':{'code':'json_validate_failed','failed_generation':'{"answer":'}})
+            return httpx.Response(200,json={'choices':[{'message':{'content':'{"answer":"recovered"}'}}]})
+        actual=httpx.AsyncClient
+        with patch.object(settings,'GEMINI_API_KEY',''),patch.object(settings,'GROQ_FALLBACK_MODEL','openai/gpt-oss-20b'),\
+             patch.object(settings,'OPENROUTER_API_KEY',''),patch('app.services.generation_service.httpx.AsyncClient',side_effect=lambda **kw:actual(transport=httpx.MockTransport(handler),**kw)):
+            self.assertEqual(await GenerationService().generate_json('Return JSON','Question',SCHEMA),{'answer':'recovered'})
+        self.assertEqual(calls,['openai/gpt-oss-120b','openai/gpt-oss-20b'])
+
+    async def test_bad_json_is_still_repairable_when_free_backup_is_down(self):
+        for provider_response in [httpx.Response(400,json={'error':{'code':'json_validate_failed','failed_generation':'{"answer":'}}),
+                                  httpx.Response(200,json={'choices':[{'message':{'content':'{"answer":'}}]})]:
+            actual=httpx.AsyncClient;service=GenerationService()
+            with patch.object(settings,'GEMINI_API_KEY',''),patch.object(settings,'OPENROUTER_API_KEY','fixture-router'),\
+                 patch.object(settings,'FREE_LLM_FALLBACK_ORDER','openrouter'),\
+                 patch.object(service,'_free_generation',AsyncMock(side_effect=GenerationUnavailableError('Backup timed out'))),\
+                 patch('app.services.generation_service.httpx.AsyncClient',side_effect=lambda **kw:actual(transport=httpx.MockTransport(lambda request:provider_response),**kw)):
+                with self.assertRaises(GenerationError) as failure:
+                    await service.generate_json('Return JSON','Question',SCHEMA)
+                self.assertNotIsInstance(failure.exception,GenerationUnavailableError)
+                self.assertTrue(failure.exception.repairable)
+
+    async def test_repairable_primary_failure_survives_configured_backup_outages(self):
+        service=GenerationService();bad=invalid_answer('Malformed generated source JSON.')
+        primary=AsyncMock(side_effect=[bad,GenerationUnavailableError('Secondary model quota')])
+        with patch.object(settings,'GEMINI_API_KEY','fixture-gemini'),patch.object(settings,'LLM_FALLBACK_PROVIDER','gemini'),\
+             patch.object(settings,'GROQ_FALLBACK_MODEL','openai/gpt-oss-20b'),patch.object(settings,'OPENROUTER_API_KEY',''),\
+             patch.object(service,'_primary',primary),patch.object(service,'_gemini',AsyncMock(side_effect=GenerationUnavailableError('Gemini quota'))):
+            with self.assertRaises(GenerationError) as failure:await service.generate_json('Return JSON','Question',SCHEMA)
+            self.assertIs(failure.exception,bad)
+        self.assertEqual(primary.await_count,2)
+        self.assertEqual(service._groq_unavailable_until,0)
+
+    async def test_repairable_gemini_output_survives_secondary_model_outage(self):
+        service=GenerationService();bad=invalid_answer('Gemini schema violation.',{'answer':3})
+        with patch.object(settings,'GEMINI_API_KEY','fixture-gemini'),patch.object(settings,'LLM_FALLBACK_PROVIDER','gemini'),\
+             patch.object(settings,'GROQ_FALLBACK_MODEL','openai/gpt-oss-20b'),patch.object(settings,'OPENROUTER_API_KEY',''),\
+             patch.object(service,'_primary',AsyncMock(side_effect=GenerationUnavailableError('Groq quota'))),\
+             patch.object(service,'_gemini',AsyncMock(side_effect=bad)):
+            with self.assertRaises(GenerationError) as failure:await service.generate_json('Return JSON','Question',SCHEMA)
+            self.assertIs(failure.exception,bad)
+        self.assertEqual(service._backup_unavailable_until,0)
