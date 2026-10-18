@@ -4,6 +4,7 @@ from ..database import get_db
 from ..schemas import TasksSubmitRequest, TasksSubmitResponse, JobStatusResponse
 from ..services.task_service import task_service
 from ..middleware.auth import get_current_user, verify_upload_ownership
+from ..security.execution_access import legacy_execution_user as execution_user
 from ..middleware.csrf import require_csrf_token
 from ..models import User
 
@@ -15,7 +16,7 @@ async def submit_tasks(
     http_request: Request,
     request: TasksSubmitRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(execution_user),
     csrf_valid: bool = Depends(require_csrf_token)
 ):
     """

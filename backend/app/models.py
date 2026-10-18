@@ -223,6 +223,63 @@ class Subscription(Base):
     user = relationship("User", back_populates="subscriptions")
 
 
+class CreditWallet(Base):
+    __tablename__ = 'credit_wallets'
+    user_id = Column(Integer, ForeignKey('users.id'), primary_key=True)
+    mode = Column(String(8), primary_key=True)
+    balance = Column(Integer, nullable=False, default=0)
+    reserved = Column(Integer, nullable=False, default=0)
+
+
+class PackPurchase(Base):
+    __tablename__ = 'pack_purchases'
+    __table_args__ = (UniqueConstraint('user_id', 'mode', 'request_key', name='uq_pack_request'),)
+    id = Column(String(36), primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    mode = Column(String(8), nullable=False)
+    request_key = Column(String(36), nullable=False)
+    pack_id = Column(String(32), nullable=False)
+    amount = Column(Integer, nullable=False)  # INR paise, fixed by the server
+    currency = Column(String(3), nullable=False, default='INR')
+    credits = Column(Integer, nullable=False)
+    status = Column(String(24), nullable=False, default='creating')
+    gateway_order_id = Column(String(64), unique=True, nullable=True)
+    gateway_payment_id = Column(String(64), unique=True, nullable=True)
+    key_id = Column(String(64), nullable=False)
+    fulfilled_at = Column(DateTime(timezone=True), nullable=True)
+    refunded_amount = Column(Integer, nullable=False, default=0)
+    reversed_credits = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class CreditLedger(Base):
+    __tablename__ = 'credit_ledger'
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    mode = Column(String(8), nullable=False)
+    reference = Column(String(130), unique=True, nullable=False)
+    kind = Column(String(24), nullable=False)
+    delta = Column(Integer, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class WorkflowCreditHold(Base):
+    __tablename__ = 'workflow_credit_holds'
+    workflow_id = Column(Integer, ForeignKey('assignment_workflows.id'), primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    mode = Column(String(8), nullable=False)
+    run_token = Column(String(36), nullable=False)
+    amount = Column(Integer, nullable=False)
+    baseline_ids = Column(JSON, nullable=False, default=list)
+    state = Column(String(16), nullable=False, default='held')
+
+
+class PaymentWebhookEvent(Base):
+    __tablename__ = 'payment_webhook_events'
+    id = Column(String(130), primary_key=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
 class StudentFeedback(Base):
     __tablename__ = "student_feedback"
 

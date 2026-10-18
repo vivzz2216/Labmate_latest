@@ -90,7 +90,11 @@ class ScreenshotService:
             os.makedirs(screenshot_dir, exist_ok=True)
             
             # For Java themes, extract the class name from code to use as filename
-            if theme == 'notepad':
+            if kwargs.get('presentation') in {'evidence','vscode_evidence'}:
+                # Evidence names are the real manifest paths (including .cjs,
+                # CSS and SVG), not an invented IDE/student filename.
+                pass
+            elif theme == 'notepad':
                 class_name = self._extract_java_class_name(code)
                 if class_name:
                     filename = f"{class_name}.java"
@@ -159,6 +163,9 @@ class ScreenshotService:
             else:
                 vp_width, min_height = 1000, 750
 
+            if kwargs.get("presentation") in {'evidence','vscode_evidence'}:
+                vp_width, min_height = 960, 160
+                if kwargs.get('presentation')=='vscode_evidence':vp_width,min_height=1128,260
             screenshot_path = os.path.join(
                 screenshot_dir, 
                 f"screenshot_{uuid.uuid4().hex[:8]}.png"
@@ -346,29 +353,18 @@ class ScreenshotService:
     async def generate_browser_preview_from_image(
         self, image_path: str, job_id: str, filename: str,
     ) -> Tuple[bool, str, int, int]:
-        """Place an actual Playwright page capture inside the Chrome preview template."""
+        """Return genuine browser pixels without a synthetic browser window or resizing."""
         source = os.path.realpath(image_path)
         screenshot_root = os.path.realpath(settings.SCREENSHOT_DIR)
         if os.path.commonpath([source, screenshot_root]) != screenshot_root or not os.path.isfile(source):
             return False, "Browser capture is outside the screenshot directory.", 0, 0
         if os.path.getsize(source) > 15 * 1024 * 1024:
             return False, "Browser capture exceeds the preview size limit.", 0, 0
-        destination = os.path.join(settings.SCREENSHOT_DIR, self._sanitize_screenshot_filename(str(job_id)))
-        os.makedirs(destination, exist_ok=True)
-        output_path = os.path.join(destination, f"browser_preview_{uuid.uuid4().hex[:8]}.png")
-        template = Environment(loader=FileSystemLoader(self.template_dir), autoescape=True).get_template(
-            "browser_preview_theme.html")
-        with open(source, "rb") as image_file:
-            preview_image = base64.b64encode(image_file.read()).decode("ascii")
-        html_content = template.render(
-            filename=self._sanitize_screenshot_filename(filename), output_content="",
-            preview_image=preview_image,
-        )
-        ok, width, height = await self._take_screenshot(html_content, output_path, 1130, 768)
-        if ok:
-            from .storage_service import storage_service
-            storage_service.sync_file(output_path)
-        return ok, output_path if ok else "Browser preview capture failed.", width, height
+        from PIL import Image
+        with Image.open(source) as image:
+            image.verify()
+            width, height = image.size
+        return True, source, width, height
     
     
     def _highlight_code(self, code: str, theme: str = "idle") -> str:
@@ -515,6 +511,66 @@ class ScreenshotService:
         **kwargs
     ) -> str:
         """Render HTML template with code and output"""
+        if kwargs.get("presentation") in {'evidence','vscode_evidence'}:
+            from pygments.formatters import HtmlFormatter
+            from pygments import highlight
+            from pygments.lexers import get_lexer_by_name, get_lexer_for_filename, TextLexer
+            vs=kwargs.get('presentation')=='vscode_evidence'
+            palette = "dark" if vs or kwargs.get("palette") == "dark" else "light"
+            from .vscode_presentation import DarkModern,explorer_rows,file_kind,indentation,assets
+            formatter = HtmlFormatter(nowrap=True, style=DarkModern if vs else "monokai" if palette == "dark" else "default")
+            try:
+                options={'stripnl':False,'ensurenl':False,'tabsize':0}
+                try:
+                    if filename.lower().endswith('.jsx'):
+                        from ._vendor.pygments_jsx import JsxLexer
+                        lexer=JsxLexer(**options)
+                    else:lexer=get_lexer_for_filename(filename,**options)
+                except Exception:
+                    requested=kwargs.get('language')
+                    requested={'react':'javascript','node':'javascript','flask':'python','java_gui':'java'}.get(requested,requested)
+                    lexer = get_lexer_by_name(requested or {"idle": "python", "notepad": "java", "codeblocks": "cpp", "vscode": "javascript"}.get(theme, "text"),**options)
+            except Exception:
+                lexer = TextLexer(stripnl=False,ensurenl=False,tabsize=0)
+            start=kwargs.get('start_line',1)
+            end=kwargs.get('end_line')
+            lines=source_code.splitlines(keepends=True)
+            ranges=kwargs.get('source_ranges')
+            if ranges is None:ranges=[[start,end if end is not None else len(lines)]] if lines else []
+            if (not isinstance(ranges,list) or len(ranges)>4 or any(not isinstance(r,list) or len(r)!=2 or
+                    any(type(v)is not int for v in r) or not 1<=r[0]<=r[1]<=len(lines) for r in ranges)
+                    or any(a[1]>=b[0] for a,b in zip(ranges,ranges[1:]))):
+                raise ValueError('Source excerpts must be ordered nonoverlapping ranges from the actual file.')
+            rendered_code='';last=0
+            for first,final in ranges:
+                if first>last+1:rendered_code+=f'<span class="omission">… lines {last+1}–{first-1} omitted …</span>'
+                part=highlight(''.join(lines[first-1:final]),lexer,formatter)
+                if kwargs.get('line_numbers',True):
+                    part=''.join(f'<span class="line"><span class="number">{i}</span><span class="line-code">{line}</span></span>' for i,line in enumerate(part.splitlines(),first))
+                rendered_code+=part;last=final
+            if last<len(lines):rendered_code+=f'<span class="omission">… lines {last+1}–{len(lines)} omitted …</span>'
+            template = Environment(loader=FileSystemLoader(self.template_dir), autoescape=True).get_template('vscode_evidence.html' if vs else 'evidence_theme.html')
+            logo=''
+            if vs:
+                with open(os.path.join(os.path.dirname(__file__),'..','public','vscode-logo.png'),'rb') as asset:
+                    logo=base64.b64encode(asset.read()).decode('ascii')
+            names=list((project_files or {filename:source_code}).keys())
+            kind=file_kind(filename)
+            icon_data=assets() if vs else {}
+            return template.render(filename=filename, view_mode=view_mode, palette=palette,
+                                   source_files=names,source_ranges=ranges,total_lines=len(lines),vscode_logo=logo,
+                                   explorer_rows=explorer_rows(names,filename) if vs else [],basename=filename.replace('\\','/').split('/')[-1],
+                                   path_parts=filename.replace('\\','/').split('/'),file_kind=kind,indent_size=indentation(source_code),
+                                   language_label={'react':'JavaScript JSX','javascript':'JavaScript','python':'Python','java':'Java','html':'HTML','css':'CSS'}.get(kind,kind.title()),
+                                   icon_symbols=icon_data.get('symbols',{}),codicon_font=icon_data.get('codicon_font',''),seti_font=icon_data.get('seti_font',''),
+                                   file_symbol=icon_data.get('files',{}).get(kind,icon_data.get('files',{}).get('default',{})),
+                                   foreground="#f4f4f5" if palette == "dark" else "#18181b",
+                                   background="#18181b" if palette == "dark" else "#ffffff",
+                                   bar_background="#27272a" if palette == "dark" else "#f4f4f5",
+                                   error_color="#fca5a5" if palette == "dark" else "#a40000",
+                                   highlight_css=formatter.get_style_defs(), highlighted_code=Markup(rendered_code),
+                                   output_content=output or "", error_content=error or "",
+                                   evidence_kind=kwargs.get("evidence_kind", "terminal"))
         
         # Select template file
         template_file = f"{theme}_theme.html"
@@ -542,9 +598,6 @@ class ScreenshotService:
             else:
                 session_segments = self._idle_session_segments(source_code, output_content, stdin_data, error)
         # Keep the existing formatting path for non-IDLE themes.
-        elif output and ("<span" in output or "<div" in output or "<b" in output):
-            output_content = Markup(output)
-            session_segments = []
         elif kwargs.get("input_echoed"):
             # Output is already interleaved with inputs — do not duplicate
             output_content = self._clean_output(output)
@@ -833,6 +886,7 @@ class ScreenshotService:
                     await context.route("**/*", lambda route: route.abort())
                     page = await context.new_page()
                     await page.set_content(html_content, wait_until="load", timeout=15000)
+                    await page.evaluate('document.fonts.ready')
                     required_height = await page.evaluate(
                         "Math.max(document.body.scrollHeight, document.documentElement.scrollHeight)")
                     if required_height > 16000:

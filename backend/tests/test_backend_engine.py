@@ -19,6 +19,12 @@ from app.services.screenshot_service import screenshot_service
 
 
 class RetryTests(unittest.IsolatedAsyncioTestCase):
+    async def test_minute_quota_cooldown_is_honored_in_bounded_sleep_chunks(self):
+        operation=AsyncMock(side_effect=[httpx.Response(429,headers={'Retry-After':'90'}),httpx.Response(200)])
+        sleep=AsyncMock()
+        result=await retry_request(operation,RetryPolicy(2,0,0),sleep=sleep)
+        self.assertEqual(result.status_code,200)
+        self.assertEqual([call.args[0] for call in sleep.await_args_list],[60,30])
     async def test_503_backoff_recovers_without_dropping_request(self):
         operation = AsyncMock(side_effect=[httpx.Response(503), httpx.Response(503), httpx.Response(200)])
         sleep = AsyncMock()

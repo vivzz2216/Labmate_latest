@@ -299,7 +299,7 @@ Generate code that handles ANY of these topics without errors!
 '''
 
 
-from .lab_question_filter import filter_lab_tasks, programming_lines
+from .lab_question_filter import filter_lab_tasks, programming_lines, is_actionable_lab_question
 
 
 class ParserService:
@@ -491,6 +491,10 @@ class ParserService:
                 continue
 
             lower_line = line.lower()
+            experiment_heading = bool(re.match(r"^experiment\s+\d+\b", lower_line))
+            if experiment_heading:
+                skip_block = False
+                in_theory_section = False
             if any(key in lower_line for key in ["theory & viva", "theory questions", "viva questions", "review questions", "theoretical concepts"]):
                 in_theory_section = True
                 skip_block = True
@@ -529,7 +533,7 @@ class ParserService:
                 in_post_lab_section = False
                 continue
 
-            if self._should_skip_line(lower_line, line):
+            if not experiment_heading and self._should_skip_line(lower_line, line):
                 skip_block = True
                 continue
 
@@ -559,6 +563,16 @@ class ParserService:
             is_separate_question = self._is_separate_numbered_question(line)
 
             if starts_task_block or is_separate_question:
+                # An experiment title and its first problem statement are one
+                # task. Previously the title was discarded and C/HTML prompts
+                # could disappear completely because only Python was recognized.
+                if (current_task and not experiment_heading and not is_separate_question
+                        and re.match(r"^experiment\s+\d+\b", current_task["question_text"], re.I)
+                        and not current_task.get("has_problem_statement")
+                        and not current_task.get("code_lines")):
+                    current_task["question_text"] += "\n" + line
+                    current_task["has_problem_statement"] = True
+                    continue
                 # Finalize previous task if exists
                 if current_task:
                     tasks.append(self._finalize_task(current_task))
@@ -658,9 +672,9 @@ class ParserService:
                     current_task["collecting_code"] = True
                     current_task["code_lines"].append(original_line)  # Use original_line to preserve indentation
                     continue
-                elif is_bullet_point or self._belongs_to_question(line):
+                else:
                     if current_task.get("question_text"):
-                        current_task["question_text"] += " " + line
+                        current_task["question_text"] += "\n" + line
                     else:
                         current_task["question_text"] = line
                 continue
@@ -1023,6 +1037,9 @@ Lab Manual Text:
             "requires_screenshot": True,
             "ai_answer": ai_answer,
             "detected_language": detected_language,
+            "experiment_number": int(re.match(r"^experiment\s+(\d+)\b", question, re.I).group(1)) if re.match(r"^experiment\s+(\d+)\b", question, re.I) else None,
+            "experiment_title": question.splitlines()[0] if question.lower().startswith("experiment") else None,
+            "required_source_files": re.findall(r"\b[\w-]+\.(?:py|java|cpp|c|html|css|jsx|tsx|js|json)\b", question),
         }
 
     @staticmethod
@@ -1032,7 +1049,7 @@ Lab Manual Text:
             (r"\bnode\.js\b|\bexpress(?:\.js)?\b", "node"),
             (r"\breact\b", "react"),
             (r"\b(?:html5?|javascript|css3?|web\s*page)\b", "html"),
-            (r"\bpython\b", "python"),
+            (r"\b(?:python|tkinter|flask)\b", "python"),
             (r"\bc\+\+(?!\w)|\bcpp\b", "cpp"),
             (r"\bjava\b", "java"),
             (r"\bc\s+program\b", "c"),
@@ -1145,6 +1162,8 @@ Lab Manual Text:
         stripped = text.strip()
         if not stripped:
             return False
+        if is_actionable_lab_question(stripped):
+            return True
         lower = stripped.lower()
         if any(keyword in lower for keyword in self.program_keywords):
             return True

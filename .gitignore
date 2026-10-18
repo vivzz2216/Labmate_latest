@@ -237,3 +237,4 @@ reports/
 !frontend/app/reports/**
 !frontend/app/screenshots/**
 backend/local_data/
+backend/audit_artifacts/

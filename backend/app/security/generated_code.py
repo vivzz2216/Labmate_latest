@@ -3,14 +3,23 @@
 import ast
 import re
 
-def validate_generated_code(code: str, language: str):
+def validate_generated_code(code: str, language: str, capability=None, local_modules=()):
     """Restrict generated lab programs before the existing local execution fallback."""
     if len(code) > 50000:
         raise ValueError("Generated code exceeds the supported size.")
     if language == "python":
         tree = ast.parse(code)
         safe_modules = {"math", "random", "statistics", "decimal", "fractions", "collections", "itertools", "functools", "operator", "string", "re", "json", "csv", "datetime", "copy", "heapq", "bisect", "array", "typing", "dataclasses", "enum", "abc"}
+        if capability=='flask':safe_modules.update({'flask','markupsafe',*local_modules})
         for node in ast.walk(tree):
+            if capability=='flask':
+                if isinstance(node,ast.Call) and isinstance(node.func,ast.Attribute) and node.func.attr in {'send_file','send_from_directory','open_resource','open_instance_resource','from_pyfile'}:
+                    raise ValueError('Flask file-serving and configuration file access are not supported in the lab runner.')
+                if isinstance(node,ast.ImportFrom) and node.module=='flask' and any(n.name in {'send_file','send_from_directory'} for n in node.names):
+                    raise ValueError('Flask file-serving helpers are not supported in the lab runner.')
+                if isinstance(node,ast.keyword) and node.arg in {'static_folder','template_folder','root_path','instance_path'} and isinstance(node.value,ast.Constant) and isinstance(node.value.value,str):
+                    if any(char in node.value.value for char in '\\:') or node.value.value.startswith('/') or '..' in node.value.value.split('/'):
+                        raise ValueError('Flask paths must stay inside the temporary project.')
             if isinstance(node, (ast.Import, ast.ImportFrom)):
                 modules = [name.name for name in node.names] if isinstance(node, ast.Import) else [node.module or ""]
                 if any(module.split(".")[0] not in safe_modules for module in modules):

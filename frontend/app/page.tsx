@@ -19,6 +19,7 @@ import {
 import LabMateLogo from "@/components/brand/LabMateLogo";
 import { useAuth } from "@/contexts/BasicAuthContext";
 import styles from "./home.module.css";
+import PricingSection from '@/components/billing/PricingSection';
 
 const LoginModal = dynamic(() => import("@/components/auth/LoginModal"), {
   ssr: false,
@@ -62,6 +63,7 @@ export default function HomePage() {
               <a href="#how-it-works" className={styles.navLink}>How It Works</a>
               <a href="#features" className={styles.navLink}>Features</a>
               <a href="#runtimes" className={styles.navLink}>Supported Languages</a>
+              <a href="#pricing" className={styles.navLink}>Pricing</a>
               <Link href="/workspace" className={styles.navLink}>Workspace</Link>
             </div>
           </div>
@@ -440,6 +442,8 @@ export default function HomePage() {
           </ul>
         </details>
       </section>
+
+      <PricingSection />
 
       {/* ========================================================
           CALL TO ACTION (With Dynamic Gradient DarkVeil Background)

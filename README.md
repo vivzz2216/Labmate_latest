@@ -24,16 +24,24 @@ LabMate is a web app for programming labs. It accepts PDF and DOCX assignments, 
 3. Run `docker compose up --build` from this directory.
 4. Open `http://localhost:3000`. The API is at `http://localhost:8000`, with API documentation at `http://localhost:8000/docs`.
 
-The existing `start_labmate.ps1` is a Windows helper for the Docker setup. If you are running without Docker or PostgreSQL, use the local setup notes in `docs/`; some execution features require installed compilers or a container runtime.
+The existing `start_labmate.ps1` is a Windows helper for the Docker setup. A loopback-only, no-Docker audit launcher is available at `backend/scripts/audit_app.py`; it uses SQLite and emulated Redis and is intended for local testing. See `LABMATE_AUDIT_REPORT.md` for commands and execution-isolation limits.
 
 ## Development
 
-From `frontend/`, run `npm install` and `npm run dev`. Run `npm run build` before shipping changes. The frontend targets Node 18 as specified in `frontend/package.json`.
+From `frontend/`, run `npm ci` and `npm run dev`. Run `npm run build` before shipping changes. The frontend requires Node 22 as specified in `frontend/package.json`.
 
 From `backend/`, install `requirements.txt`, configure environment variables, and run `uvicorn app.main:app --reload --port 8000`. PostgreSQL is the configured database in Docker; it is not a student-facing programming language. The executor contains handlers for Python, Java, C/C++, and web-related work, but availability depends on the local runtime and configured services.
 
 ## Notes
 
+- Free-only OpenRouter and optional OpenCode failover are implemented. OpenRouter needs a backend key; OpenCode currently denies external free-tier calls. See [Free API setup](FREE_API_SETUP.md) for activation, ordering, and actual verification limits.
+
+- Read `FLASK_JAVA_UI_VERIFICATION_2026-10-18.md` for the current Flask and AWT/Swing adapters and Dark Modern source capture checks. JavaFX, Tkinter and database experiments remain unsupported. The controlled runtime is not a per-run security VM; earlier audit snapshots remain relevant before expanding access.
+- Railway execution now requires exact invited accounts in `EXECUTION_ALLOWED_EMAILS`; an empty list closes execution on Railway. This is a controlled-beta admission gate, not per-run isolation. See `RAILWAY.md` for the updated generation, verification, and backup-provider settings.
+
 - The homepage product panel is an illustrative example, not a live assignment or measured product claim.
 - Code execution and generated content should be reviewed before submitting coursework.
 - Older status reports and troubleshooting notes were preserved under `docs/archive/` for reference.
+# Student packs
+
+LabMate includes optional one-time Razorpay experiment packs and a credit balance in the assignment studio. See [payment setup and pricing](PAYMENTS.md) and [payment verification](PAYMENTS_VERIFICATION_2026-10-18.md). Billing is disabled by default; local integration testing uses simulated payments only.

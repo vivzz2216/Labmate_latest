@@ -81,3 +81,68 @@ class WorkflowResumeTests(unittest.IsolatedAsyncioTestCase):
             final = Document(report.file_path)
             self.assertEqual(final.paragraphs[0].text, "Original assignment retained")
             self.assertEqual(len(final.inline_shapes), 3)  # prior capture, then new IDLE editor and shell
+
+    async def test_retry_preserves_completed_later_question_and_replaces_failed_slot(self):
+        from docx import Document
+        root=Path(self.folder.name)
+        source=Document();source.add_paragraph('Original assignment retained')
+        path=root/'source.docx';source.save(path)
+        with self.factory() as db:
+            upload=db.get(Upload,self.upload_id);upload.file_path=str(path)
+            workflow=db.get(AssignmentWorkflow,self.id)
+            completed={**workflow.results[0],'id':2,'question':self.questions[1]['text'],'output':'saved second answer'}
+            workflow.results=[{'id':1,'status':'failed','language':'python','error':'old failure'},completed]
+            db.commit()
+        answer={'answer':'Factorial is 120.','code':'print(120)','language':'python'}
+        with patch('app.services.assignment_workflow.SessionLocal',self.factory),patch('app.services.assignment_workflow.generation_service.generate_json',AsyncMock(return_value=answer)) as generate,\
+             patch('app.services.assignment_workflow.settings.REPORT_DIR',str(root/'reports')),patch('app.services.assignment_workflow.settings.SCREENSHOT_DIR',str(root/'screenshots')),patch('app.services.assignment_workflow.settings.REACT_TEMP_DIR',str(root/'runtime')):
+            await process_assignment(self.id)
+        with self.factory() as db:
+            workflow=db.get(AssignmentWorkflow,self.id)
+            self.assertEqual(workflow.status,'completed',workflow.error)
+            self.assertEqual(generate.await_count,1)
+            self.assertEqual([r['id'] for r in workflow.results],[1,2])
+            self.assertEqual(workflow.results[0]['status'],'completed')
+            self.assertEqual(workflow.results[1],completed)
+
+    async def test_outage_while_retrying_early_failure_keeps_later_checkpoint(self):
+        with self.factory() as db:
+            workflow=db.get(AssignmentWorkflow,self.id)
+            completed={**workflow.results[0],'id':2,'question':self.questions[1]['text']}
+            workflow.results=[{'id':1,'status':'failed','language':'python'},completed]
+            db.commit()
+        with patch('app.services.assignment_workflow.SessionLocal',self.factory),patch('app.services.assignment_workflow.document_text',return_value='Programming lab'),\
+             patch('app.services.assignment_workflow.generation_service.generate_json',AsyncMock(side_effect=GenerationUnavailableError('Outage'))):
+            await process_assignment(self.id)
+        with self.factory() as db:
+            workflow=db.get(AssignmentWorkflow,self.id)
+            self.assertEqual(workflow.status,'paused')
+            self.assertEqual(len(workflow.results),2)
+            self.assertEqual(workflow.results[1],completed)
+
+    async def test_paused_resume_continues_pending_work_without_repeating_exhausted_failure(self):
+        from docx import Document
+        root=Path(self.folder.name)
+        source=Document();source.add_paragraph('Original assignment retained')
+        path=root/'source.docx';source.save(path)
+        with self.factory() as db:
+            db.get(Upload,self.upload_id).file_path=str(path)
+            workflow=db.get(AssignmentWorkflow,self.id)
+            failed={**workflow.results[0],'status':'failed','error':'Original exhausted failure','screenshot_paths':[]}
+            workflow.results=[failed];workflow.status='paused';db.commit()
+            response=await process(self.upload_id,ProcessInput(questions=self.questions,language='auto',output_name='report'),Request({'type':'http','method':'POST'}),BackgroundTasks(),db.get(User,self.user_id),db,True)
+            self.assertEqual(response['status'],'queued')
+            self.assertEqual(response['stage'],'generate')
+            self.assertEqual(workflow.stage,'resume')
+        answer={'answer':'Reverse the string.','code':"print('hello'[::-1])",'language':'python'}
+        with patch('app.services.assignment_workflow.SessionLocal',self.factory),patch('app.services.assignment_workflow.generation_service.generate_json',AsyncMock(return_value=answer)) as generate,\
+             patch('app.services.assignment_workflow.settings.REPORT_DIR',str(root/'reports')),patch('app.services.assignment_workflow.settings.SCREENSHOT_DIR',str(root/'screenshots')),patch('app.services.assignment_workflow.settings.REACT_TEMP_DIR',str(root/'runtime')):
+            await process_assignment(self.id)
+        with self.factory() as db:
+            workflow=db.get(AssignmentWorkflow,self.id)
+            self.assertEqual(generate.await_count,1)
+            self.assertEqual(workflow.status,'failed')
+            self.assertEqual(workflow.results[0],failed)
+            self.assertEqual(workflow.results[1]['status'],'completed')
+            self.assertEqual(workflow.results[1]['output'].strip(),'olleh')
+            self.assertIsNotNone(workflow.report_id)

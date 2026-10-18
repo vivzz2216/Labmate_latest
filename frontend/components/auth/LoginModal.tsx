@@ -9,7 +9,7 @@ import { isValidEmail, validatePasswordStrength } from "@/lib/sanitize";
 interface LoginModalProps {
   isOpen: boolean;
   onClose: () => void;
-  redirectTo?: "/dashboard" | "/code-execution";
+  redirectTo?: "/dashboard" | "/code-execution" | `/checkout?pack=${string}`;
 }
 
 export default function LoginModal({ isOpen, onClose, redirectTo = "/dashboard" }: LoginModalProps) {

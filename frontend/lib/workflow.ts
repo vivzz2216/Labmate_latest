@@ -25,17 +25,33 @@ export interface LabResult {
   error: string;
   status: string;
   screenshots: number;
+  project_type?: "html" | "react" | "node" | "fullstack" | "flask" | "java_awt" | "java_swing";
+  project_file_names?: string[];
+  verification_summary?: { status: "failed" | "verified" | "execution_tested"; checks: Record<string, string>; failures: string[] };
+  execution_stages?: Record<string, string>;
+  evidence_plan?: { version: number; category: string; supported: boolean; uncertainties: string[]; expected_states: string[]; recommended_screenshots: string[] };
   verification?: {
+    kind?: "browser" | "http" | "fullstack" | "render" | "gui";
+    capture_method?: string;
+    display_backend?: string;
     required: boolean;
     status: "not_required" | "passed" | "failed";
     error?: string;
+    scope?: string;
+    coverage?: Record<string, "passed" | "unverified">;
+    source_checks?: Record<string, boolean>;
+    attempts?: { attempt: number; status: "passed" | "failed"; error: string }[];
     tests: {
       name: string;
       status: "not_run" | "passed" | "failed";
       actions?: { action: "fill" | "click"; locator_type: "role" | "label" | "placeholder"; locator: string; role: string; value: string }[];
+      version?: 2;
+      requirement_ids?: string[];
+      steps?: { action: string; locator_type: string; locator: string; role: string; value: string }[];
+      assertions?: { step: number; action: string; expected: string; status: string; observed: unknown; changed: boolean }[];
       executed_steps?: number;
       screenshot_key?: string;
-      expected_text: string[];
+      expected_text?: string[];
       observed_text: string;
       failed_step?: number;
       error?: string;

@@ -11,12 +11,15 @@ import socket
 import subprocess
 import sys
 import tempfile
+import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlparse
 
 import httpx
+from functools import partial
+from http.server import HTTPServer, SimpleHTTPRequestHandler
 from playwright.async_api import async_playwright
 
 try:
@@ -37,6 +40,8 @@ class RuntimeResult:
     files: list = field(default_factory=list)
     screenshots: dict = field(default_factory=dict)
     verification: dict | None = None
+    stages: dict = field(default_factory=dict)
+    timings: dict = field(default_factory=dict)
 
 
 def runtime_environment(directory: Path, extras=None):
@@ -103,9 +108,12 @@ def make_resource_limiter(resource_limits=None):
     return preexec
 
 
-async def start_process(command, directory, extras=None, resource_limits=None):
+async def start_process(command, directory, extras=None, resource_limits=None, desktop=None):
     if os.name == "nt":
         options = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
+        if desktop:
+            startup=subprocess.STARTUPINFO();startup.lpDesktop=desktop
+            options.update(startupinfo=startup,creationflags=subprocess.CREATE_NEW_PROCESS_GROUP|subprocess.CREATE_NO_WINDOW)
     else:
         options = {"preexec_fn": make_resource_limiter(resource_limits)}
     return await asyncio.create_subprocess_exec(*map(str, command), cwd=str(directory), env=runtime_environment(directory, extras),
@@ -126,9 +134,10 @@ async def collect_output(stream, process):
     return data.decode("utf-8", errors="replace"), False
 
 
-async def run_process(command, directory, stdin="", timeout=None, extras=None, resource_limits=None):
+async def run_process(command, directory, stdin="", timeout=None, extras=None, resource_limits=None, desktop=None):
+    started = time.perf_counter()
     try:
-        process = await start_process(command, directory, extras, resource_limits=resource_limits)
+        process = await start_process(command, directory, extras, resource_limits=resource_limits,desktop=desktop)
     except FileNotFoundError:
         return RuntimeResult(False, error=f"Required runtime is not installed: {Path(str(command[0])).name}", exit_code=127)
     out = asyncio.create_task(collect_output(process.stdout, process))
@@ -152,7 +161,8 @@ async def run_process(command, directory, stdin="", timeout=None, extras=None, r
         elif process.returncode in (-11, 139) and not stderr:
             stderr = "Execution error: Segmentation fault (memory limit exceeded or invalid memory access)."
 
-        return RuntimeResult(process.returncode == 0, stdout, stderr, process.returncode)
+        return RuntimeResult(process.returncode == 0, stdout, stderr, process.returncode,
+                             timings={"process_seconds": round(time.perf_counter() - started, 6)})
     except (asyncio.TimeoutError, BrokenPipeError, ConnectionResetError):
         await kill_process_tree(process)
         stdout, _ = await out
@@ -255,13 +265,19 @@ _VISIBLE_PAGE_TEXT = """() => {
 
 def normalize_browser_tests(browser_tests):
     """Accept only small, declarative browser actions; never execute model-authored test code."""
+    if isinstance(browser_tests, list) and any(isinstance(t, dict) and t.get('version') == 2 for t in browser_tests):
+        from .browser_scenarios import normalize_v2
+        try:
+            return normalize_v2(browser_tests), None
+        except (ValueError, TypeError, KeyError) as error:
+            return [], str(error)
     if browser_tests is None:
         return [], None
     if not isinstance(browser_tests, list) or len(browser_tests) > 3:
         return [], "The browser test plan must contain no more than three scenarios."
     normalized = []
     for test_index, test in enumerate(browser_tests, 1):
-        if not isinstance(test, dict) or set(test) != {"name", "actions", "expected_text"}:
+        if not isinstance(test, dict) or not {"name", "actions", "expected_text"}.issubset(test) or set(test) - {"name", "actions", "expected_text", "viewport"}:
             return [], f"Browser test {test_index} has an invalid structure."
         name, actions, expected = test["name"], test["actions"], test["expected_text"]
         if not isinstance(name, str) or not name.strip() or len(name) > 120:
@@ -297,8 +313,12 @@ def normalize_browser_tests(browser_tests):
                 return [], f"Browser test {test_index}, step {step_index} must not include a click value."
             safe_actions.append({"action": action["action"], "locator_type": action["locator_type"],
                                  "locator": locator.strip(), "role": role, "value": value})
+        viewport = test.get("viewport", {"width": 1366, "height": 768})
+        if not isinstance(viewport, dict) or set(viewport) != {"width", "height"} or any(
+                type(viewport[k]) is not int or not 240 <= viewport[k] <= 1920 for k in viewport):
+            return [], f"Browser test {test_index} has an invalid viewport."
         normalized.append({"name": name.strip(), "actions": safe_actions,
-                           "expected_text": [value.strip() for value in expected]})
+                           "expected_text": [value.strip() for value in expected], "viewport": viewport})
     return normalized, None
 
 
@@ -316,27 +336,67 @@ def expected_text_is_visible(body_text, expected):
     return expected in body_text
 
 
+def write_project_files(directory, project_files):
+    if not isinstance(project_files, dict) or len(project_files) > 100 or sum(len(str(value)) for value in project_files.values()) > 1000000:
+        raise ValueError("Project exceeds supported file limits.")
+    for name, content in project_files.items():
+        if not isinstance(name, str) or not name or not isinstance(content, str):
+            raise ValueError("Project files must have string filenames and text contents.")
+        target = (directory / name).resolve()
+        if directory.resolve() not in target.parents or "node_modules" in Path(name).parts or "\\" in name:
+            raise ValueError("Project filenames must stay inside the workspace.")
+        if name in {"package.json", "package-lock.json"} or re.search(r"(?:^|/)vite\.config\.", name):
+            continue
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(str(content), encoding="utf-8")
+
+
 class RuntimeEngine:
     def __init__(self):
         self._package_locks = {}
 
     async def execute(self, code, language="python", filename=None, stdin=None, project_files=None, routes=None,
-                      prepare_files=None, collect_files=None, browser_tests=None, interaction_is_required=False):
+                      prepare_files=None, collect_files=None, browser_tests=None, interaction_is_required=False,
+                      objective="", api_tests=None, project_config=None):
         language = {"c++": "cpp", "javascript": "node", "webdev": "html"}.get(language.lower(), language.lower())
         if language not in {"python", "java", "c", "cpp", "html", "react", "node"}:
             return RuntimeResult(False, error="Unsupported execution language.", exit_code=2)
+        from .evidence_planner import plan_experiment
+        capability = plan_experiment(objective, language, code)
+        if not capability["supported"]:
+            return RuntimeResult(False, error=f"Unsupported capability: {capability['category']} requires an isolated display/server adapter and genuine capture support; it was not executed.",
+                                 exit_code=69, stages={"execution": "not_run", "capability": capability["category"]})
 
         # Universal static security policy check across all supported languages
         from ..security.generated_code import validate_generated_code
         try:
-            validate_generated_code(code, language)
-        except ValueError as val_err:
+            is_flask=(project_config or {}).get('project_type')=='flask'
+            modules={Path(n).stem for n in (project_files or {}) if n.endswith('.py')} if is_flask else set()
+            validate_generated_code(code, language,capability='flask' if is_flask else None,local_modules=modules)
+            for name, content in (project_files or {}).items():
+                if is_flask and name.endswith('.py'):validate_generated_code(content,'python',capability='flask',local_modules=modules)
+                if name.endswith(('.js', '.jsx', '.cjs', '.mjs', '.html')):
+                    backend_entry = (project_config or {}).get('server_entrypoint') or ((project_config or {}).get('entrypoint') if (project_config or {}).get('project_type') == 'node' else None)
+                    validate_generated_code(content, 'node' if name == backend_entry or name.endswith(('.cjs', '.mjs')) else 'html' if name.endswith('.html') else 'react')
+        except (ValueError, SyntaxError) as val_err:
             return RuntimeResult(False, error=f"Security policy violation: {str(val_err)}", exit_code=126)
 
         root = Path(settings.REACT_TEMP_DIR).resolve()
         root.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(prefix="labmate_", dir=root) as folder:
             directory = Path(folder)
+            if capability['category'] in {'java_awt','java_swing'}:
+                from .java_gui_runtime import capture_java_gui
+                config=dict(project_config or {'project_files':{(java_class_name(code) or 'Main')+'.java':code},'entrypoint':(java_class_name(code) or 'Main')+'.java','gui_tests':browser_tests or []})
+                from .web_project import web_requirements
+                config.setdefault('requirements',web_requirements(objective,'java'))
+                return await capture_java_gui(directory,config)
+            if project_config and project_config.get('project_type')=='flask':
+                from .flask_runtime import capture_flask
+                return await capture_flask(self,directory,project_config)
+            if project_config and project_config.get('entrypoint'):
+                from .web_runtime import capture_project
+                return await capture_project(self, directory, project_config)
             if language == "python":
                 name = Path(filename or "solution.py").name
                 if not name.endswith(".py"):
@@ -382,11 +442,15 @@ class RuntimeEngine:
                                              timeout=settings.COMPILATION_TIMEOUT, resource_limits={"max_memory_bytes": 0})
                 if not compiled.success:
                     compiled.error = "Compilation error: " + compiled.error
+                    compiled.stages = {"compile": "failed", "execution": "not_run"}
                     return compiled
                 package = re.search(r"^\s*package\s+([\w.]+)\s*;", code, re.M)
                 qualified = f"{package.group(1)}.{name}" if package else name
                 java_limits = {"max_memory_bytes": 0, "max_cpu_seconds": 20}
-                return await run_process([settings.JAVA_COMMAND, "-Xmx256m", "-Dfile.encoding=UTF-8", "-cp", directory, qualified], directory, java_stdin(code) if stdin is None else stdin, resource_limits=java_limits)
+                result = await run_process([settings.JAVA_COMMAND, "-Xmx256m", "-Dfile.encoding=UTF-8", "-cp", directory, qualified], directory, java_stdin(code) if stdin is None else stdin, resource_limits=java_limits)
+                result.stages = {"compile": "passed", "execution": "passed" if result.success else "failed"}
+                result.timings["compile_seconds"] = compiled.timings.get("process_seconds", 0)
+                return result
             if language in {"c", "cpp"}:
                 cpp = detect_cpp(code, language, filename)
                 source = directory / ("solution.cpp" if cpp else "solution.c")
@@ -400,19 +464,29 @@ class RuntimeEngine:
                 compiled = await run_process(command, directory, timeout=settings.COMPILATION_TIMEOUT)
                 if not compiled.success:
                     compiled.error = "Compilation error: " + compiled.error
+                    compiled.stages = {"compile": "failed", "execution": "not_run"}
                     return compiled
                 c_limits = {"max_memory_bytes": 256 * 1024 * 1024, "max_cpu_seconds": 10}
-                return await run_process([executable], directory, c_stdin(code) if stdin is None else stdin, resource_limits=c_limits)
+                result = await run_process([executable], directory, c_stdin(code) if stdin is None else stdin, resource_limits=c_limits)
+                result.stages = {"compile": "passed", "execution": "passed" if result.success else "failed"}
+                result.timings["compile_seconds"] = compiled.timings.get("process_seconds", 0)
+                return result
+            if language == "node" and not re.search(r"\.listen\s*\(|\bcreateServer\s*\(", code):
+                source = directory / ("solution.mjs" if re.search(r"^\s*(?:import |export )", code, re.M) else "solution.cjs")
+                source.write_text(code, encoding="utf-8")
+                return await run_process([settings.NODE_COMMAND, source], directory, stdin or "", resource_limits={"max_memory_bytes": 0})
             return await self._web(code, language, directory, project_files, routes,
-                                   browser_tests=browser_tests, interaction_is_required=interaction_is_required)
+                                   browser_tests=browser_tests, interaction_is_required=interaction_is_required, api_tests=api_tests)
 
     async def _install_packages(self, language, directory):
-        packages = {"express": "4.21.2"} if language == "node" else {"react": "18.2.0", "react-dom": "18.2.0", "react-router-dom": "6.30.1", "vite": "5.4.21"}
+        packages = {"express": "4.21.2"} if language == "node" else {"react": "18.2.0", "react-dom": "18.2.0", "react-router-dom": "6.30.1", "vite": "5.4.21", "express": "4.21.2"}
         cache = Path(settings.REACT_TEMP_DIR).resolve() / "runtime_packages" / language
         cache.mkdir(parents=True, exist_ok=True)
         lock = self._package_locks.setdefault(language, asyncio.Lock())
         async with lock:
-            if not (cache / ".ready").exists():
+            marker = cache / '.ready'
+            signature = json.dumps(packages, sort_keys=True)
+            if not marker.exists() or marker.read_text() != signature:
                 (cache / "package.json").write_text(json.dumps({"private": True, "dependencies": packages}), encoding="utf-8")
                 node = shutil.which(settings.NODE_COMMAND) or settings.NODE_COMMAND
                 npm = Path(node).resolve().parent / "node_modules" / "npm" / "bin" / "npm-cli.js"
@@ -428,7 +502,7 @@ class RuntimeEngine:
                                               resource_limits={"max_memory_bytes": 0})
                 if not installed.success:
                     return "Runtime dependency installation failed: " + installed.error[-1500:]
-                (cache / ".ready").touch()
+                marker.write_text(signature)
             await asyncio.to_thread(shutil.copytree, cache / "node_modules", directory / "node_modules")
         return None
 
@@ -463,12 +537,19 @@ class RuntimeEngine:
         result.pop("failed_step", None)
         result["status"] = "passed"
 
-    async def _capture_html(self, code, browser_tests, interaction_is_required):
+    async def _capture_html(self, code, browser_tests, interaction_is_required, page_url=None):
+        started = time.perf_counter()
+        metrics = {"browser_start_seconds": 0, "interaction_seconds": 0, "screenshot_seconds": 0}
         tests, plan_error = normalize_browser_tests(browser_tests)
-        required = bool(interaction_is_required or browser_tests or plan_error)
+        v2 = bool(tests and tests[0].get('version') == 2)
+        ui_actions = bool(v2 and any(s['action'] in {'click','click_confirm','fill','select'} for t in tests for s in t['steps']))
+        required = bool(interaction_is_required or plan_error or (ui_actions if v2 else browser_tests))
         verification = {"required": required, "status": "failed" if required else "not_required",
                         "tests": [{**test, "status": "not_run", "executed_steps": 0, "observed_text": ""}
                                   for test in tests]}
+        if v2:
+            for result in verification['tests']:
+                result['expected_text']=[s['locator'] for s in result['steps'] if s['action']=='assert_visible' and s['locator_type']=='text']
         directory = Path(settings.SCREENSHOT_DIR).resolve() / ("web_" + uuid.uuid4().hex)
         directory.mkdir(parents=True, exist_ok=True)
         screenshots, output, errors = {}, [], []
@@ -477,42 +558,106 @@ class RuntimeEngine:
         try:
             async with async_playwright() as playwright:
                 try:
-                    async with asyncio.timeout(_HTML_CAPTURE_SECONDS):
+                    async with asyncio.timeout(120 if v2 else _HTML_CAPTURE_SECONDS):
+                        launched = time.perf_counter()
                         browser = await launch_capture_browser(playwright)
+                        metrics["browser_start_seconds"] = round(time.perf_counter() - launched, 6)
                         context = await browser.new_context(viewport={"width": 1366, "height": 768},
-                                                            accept_downloads=False)
+                                                            accept_downloads=False, service_workers='block' if page_url else 'allow')
                         async def guard(route):
-                            if urlparse(route.request.url).scheme in {"about", "data", "blob"}:
-                                await route.continue_()
+                            target = urlparse(route.request.url)
+                            origin = urlparse(page_url) if page_url else None
+                            if target.scheme in {"about", "data", "blob"} or (origin and target.scheme == origin.scheme and target.hostname == origin.hostname and target.port == origin.port):
+                                if origin and route.request.resource_type == 'document':
+                                    from .web_runtime import BROWSER_CSP
+                                    response=await route.fetch(timeout=5000,max_redirects=0)
+                                    await route.fulfill(response=response,headers={**response.headers,'content-security-policy':BROWSER_CSP})
+                                else:
+                                    await route.continue_()
                             else:
                                 await route.abort()
                         await context.route("**/*", guard)
-                        test_deadline = asyncio.get_running_loop().time() + _HTML_INTERACTION_SECONDS
+                        test_deadline = asyncio.get_running_loop().time() + (90 if v2 else _HTML_INTERACTION_SECONDS)
                         for index, test in enumerate(tests or [None]):
                             # A fresh page resets top-level const/let declarations, listeners and DOM state.
                             if page is not None:
                                 await asyncio.wait_for(page.close(), timeout=2)
                             page = await context.new_page()
+                            if v2:
+                                async def handle_dialog(dialog):
+                                    if not getattr(page,'_labmate_confirm_pending',False):
+                                        await dialog.dismiss()
+                                page.on('dialog', handle_dialog)
+                            observations = []
+                            current_requests = set()
+                            if v2: page.on('request',lambda request: current_requests.add(request))
+                            origin = urlparse(page_url) if page_url else None
+                            def observed_response(response):
+                                parsed = urlparse(response.url)
+                                if origin and parsed.scheme == origin.scheme and parsed.netloc == origin.netloc and (not v2 or response.request in current_requests):
+                                    observations.append({'method': response.request.method, 'path': parsed.path + ('?' + parsed.query if parsed.query else ''), 'status': response.status})
+                            page.on('response', observed_response)
+                            viewport = test.get("viewport") if test else {"width": 1366, "height": 768}
+                            await page.set_viewport_size(viewport)
                             page_errors = []
                             page.on("pageerror", lambda error, target=page_errors: target.append(str(error)[:500]))
+                            console_errors = []
+                            page.on("console", lambda message, target=console_errors: target.append(message.text[:500]) if message.type == "error" else None)
                             result = verification["tests"][index] if test else None
                             try:
                                 remaining = test_deadline - asyncio.get_running_loop().time()
                                 if remaining <= 0:
                                     raise TimeoutError("Browser interaction tests exceeded the 20-second time limit.")
                                 async with asyncio.timeout(remaining):
-                                    await page.set_content(code, wait_until="load", timeout=5000)
-                                    if not required:
-                                        required = await page.locator(
+                                    if page_url:
+                                        response = await page.goto(page_url, wait_until='domcontentloaded' if v2 else "networkidle", timeout=5000)
+                                        if response and response.status >= 400 and response.status not in {401, 403}:
+                                            raise ValueError(f"Route returned HTTP {response.status}.")
+                                    else:
+                                        from .web_runtime import BROWSER_CSP
+                                        meta='<meta http-equiv="Content-Security-Policy" content="'+BROWSER_CSP+'">'
+                                        insertion=re.search(r'<head(?:\s[^>]*)?>|<!doctype[^>]*>',code,re.I)
+                                        rendered=code[:insertion.end()]+meta+code[insertion.end():] if insertion else meta+code
+                                        await page.set_content(rendered, wait_until="load", timeout=5000)
+                                    if not required or v2 and not ui_actions:
+                                        controls = await page.locator(
                                             'button:visible,input:not([type="hidden"]):visible,textarea:visible,'
                                             'select:visible,[role="button"]:visible,[onclick]:visible,'
                                             '[contenteditable="true"]:visible'
                                         ).count() > 0
+                                        required = bool(required or controls)
                                         verification["required"] = required
+                                        if controls and v2 and not ui_actions:
+                                            raise ValueError('Interactive controls were rendered, but the test plan only checked page rendering.')
                                     if required and (plan_error or not tests):
                                         raise ValueError(plan_error or "The task requires interaction, but no valid browser test plan was generated.")
                                     if test:
-                                        await self._run_browser_scenario(page, test, result)
+                                        interaction_started = time.perf_counter()
+                                        if v2:
+                                            from .browser_scenarios import run_v2
+                                            async def capture_step(step_index):
+                                                height = max(viewport['height'], await page.evaluate('document.documentElement.scrollHeight'))
+                                                if height > 16000: raise ValueError('Page exceeds evidence height limit.')
+                                                path = directory / f'test_{index+1}_step_{step_index}.png'
+                                                await page.screenshot(path=str(path), full_page=True, timeout=3000)
+                                                key = f'/test-{index+1}/step-{step_index}'
+                                                screenshots[key] = str(path)
+                                                result.setdefault('screenshot_keys', []).append(key)
+                                                from .storage_service import storage_service
+                                                await asyncio.to_thread(storage_service.sync_file, path)
+                                            local_origin = urlparse(page_url)
+                                            def reset_http():
+                                                observations.clear()
+                                                current_requests.clear()
+                                            await run_v2(page, test, result, f'{local_origin.scheme}://{local_origin.netloc}', observations, capture_step, reset_http)
+                                        else:
+                                            await self._run_browser_scenario(page, test, result)
+                                        metrics["interaction_seconds"] += round(time.perf_counter() - interaction_started, 6)
+                                    if v2:
+                                        try:
+                                            await page.wait_for_function('Array.from(document.images).every(image=>image.complete)',timeout=2500)
+                                        except Exception:
+                                            pass
                                     broken_images = await page.evaluate(
                                         "Array.from(document.images).filter(image => !image.complete || image.naturalWidth === 0).length")
                                     if broken_images:
@@ -522,6 +667,8 @@ class RuntimeEngine:
                             except Exception as error:
                                 detail = ("Browser interaction tests exceeded the 20-second time limit."
                                           if isinstance(error, TimeoutError) else str(error)[:500])
+                                if page_errors:
+                                    detail += " JavaScript errors: " + "; ".join(page_errors[:3])
                                 errors.append(f"Browser interaction test '{test['name']}' failed: {detail}" if test else detail)
                                 if result is not None:
                                     result.update(status="failed", error=detail)
@@ -533,15 +680,23 @@ class RuntimeEngine:
                                 output.append(observed[:8000])
                                 if result is not None:
                                     result["observed_text"] = observed[:2000]
+                                if console_errors:
+                                    verification.setdefault("console_errors", []).extend(console_errors[:10])
+                                if v2 and result is not None:
+                                    result['http_observations'] = observations[-80:]
                             except Exception:
                                 pass
                             try:
                                 async def screenshot():
-                                    height = min(16000, max(768, await page.evaluate("document.documentElement.scrollHeight")))
+                                    height = max(viewport["height"], await page.evaluate("document.documentElement.scrollHeight"))
+                                    if height > 16000:
+                                        raise ValueError("Page exceeds the 16000-pixel evidence limit; partial capture is not accepted.")
                                     path = directory / f"test_{index + 1}.png"
-                                    await page.screenshot(path=str(path), clip={"x": 0, "y": 0, "width": 1366, "height": height}, timeout=3000)
+                                    await page.screenshot(path=str(path), clip={"x": 0, "y": 0, "width": viewport["width"], "height": height}, timeout=3000)
                                     return path
+                                screenshot_started = time.perf_counter()
                                 path = await asyncio.wait_for(screenshot(), timeout=4)
+                                metrics["screenshot_seconds"] += round(time.perf_counter() - screenshot_started, 6)
                                 key = "/" if index == 0 else f"/test-{index + 1}"
                                 screenshots[key] = str(path)
                                 if result is not None:
@@ -569,82 +724,112 @@ class RuntimeEngine:
             errors.append(detail)
             verification["error"] = detail
         verification["status"] = "failed" if errors else "passed" if required else "not_required"
+        if v2: verification['kind']='browser' if required else 'render'
         if required:
             output.append("Browser interaction verification: " + verification["status"].upper())
             for result in verification["tests"]:
-                output.append(f"{result['status'].upper()}: {result['name']}; Expected: {result['expected_text']}; Observed: {result['observed_text']}")
+                output.append(f"{result['status'].upper()}: {result['name']}; Expected: {result.get('expected_text', [s.get('value') or s.get('locator') for s in result.get('steps', []) if s['action'].startswith('assert_')])}; Observed: {result['observed_text']}")
+        metrics["capture_total_seconds"] = round(time.perf_counter() - started, 6)
         return RuntimeResult(not errors, "\n".join(output), "\n".join(errors), 1 if errors else 0,
-                             screenshots=screenshots, verification=verification)
+                             screenshots=screenshots, verification=verification, timings=metrics)
 
     async def _capture(self, url=None, code=None, routes=None, browser_tests=None, interaction_is_required=False):
         if code is not None:
             return await self._capture_html(code, browser_tests, interaction_is_required)
-        directory = Path(settings.SCREENSHOT_DIR).resolve() / ("web_" + uuid.uuid4().hex)
-        directory.mkdir(parents=True, exist_ok=True)
-        screenshots = {}
-        output, errors = [], []
-        async with async_playwright() as playwright:
-            browser = await launch_capture_browser(playwright)
-            try:
-                context = await browser.new_context(viewport={"width": 1366, "height": 768}, accept_downloads=False)
-                async def guard(route):
-                    parsed = urlparse(route.request.url)
-                    origin = urlparse(url) if url else None
-                    if parsed.scheme in {"data", "blob", "about"} or (origin and parsed.hostname == origin.hostname and parsed.port == origin.port):
-                        await route.continue_()
-                    else:
-                        await route.abort()
-                await context.route("**/*", guard)
-                page = await context.new_page()
-                page.on("pageerror", lambda error: errors.append(str(error)))
-                for index, path in enumerate((routes or ["/"])[:10]):
-                    if not path.startswith("/") or path.startswith("//"):
-                        raise ValueError("Browser routes must be local paths.")
-                    if url:
-                        response = await page.goto(url + path, wait_until="networkidle", timeout=30000)
-                        # A protected route correctly returns 401/403 to an
-                        # unauthenticated browser. Capture that response; it is
-                        # not a server or rendering failure.
-                        if response and response.status >= 400 and response.status not in {401, 403}:
-                            errors.append(f"Route {path} returned HTTP {response.status}.")
-                    else:
-                        await page.set_content(code, wait_until="load", timeout=15000)
-                    await page.evaluate("document.fonts.ready")
-                    broken_images = await page.evaluate(
-                        "Array.from(document.images).filter(image => !image.complete || image.naturalWidth === 0).length")
-                    if broken_images:
-                        errors.append(f"Route {path} contains {broken_images} broken image(s); use self-contained assets.")
-                    screenshot = directory / f"route_{index}.png"
-                    height = min(16000, max(768, await page.evaluate("document.documentElement.scrollHeight")))
-                    await page.screenshot(path=str(screenshot), clip={"x": 0, "y": 0, "width": 1366, "height": height}, timeout=15000)
-                    from .storage_service import storage_service
-                    storage_service.sync_file(screenshot)
-                    screenshots[path] = str(screenshot)
-                    output.append(await page.locator("body").inner_text())
-                await context.close()
-            finally:
-                await browser.close()
-        return RuntimeResult(not errors, "\n".join(output), "\n".join(errors), 0 if not errors else 1, screenshots=screenshots)
+        aggregate = RuntimeResult(True, verification={"required": False, "status": "not_required", "tests": []})
+        for index, path in enumerate((routes or ["/"])[:10]):
+            if not isinstance(path, str) or not path.startswith("/") or path.startswith("//") or "\\" in path:
+                raise ValueError("Browser routes must be local paths.")
+            result = await self._capture_html(None, browser_tests if index == 0 else None,
+                                              interaction_is_required if index == 0 else False, page_url=url + path)
+            aggregate.success = aggregate.success and result.success
+            aggregate.output += ("\n" if aggregate.output else "") + result.output
+            aggregate.error += ("\n" if aggregate.error and result.error else "") + result.error
+            aggregate.exit_code = 0 if aggregate.success else 1
+            for key, screenshot in result.screenshots.items():
+                aggregate.screenshots[path if key == "/" else path + key] = screenshot
+            if result.verification:
+                aggregate.verification["required"] |= result.verification["required"]
+                aggregate.verification["tests"].extend(result.verification["tests"])
+                if result.verification.get("error"):
+                    aggregate.verification["error"] = result.verification["error"]
+            for key, value in result.timings.items():
+                aggregate.timings[key] = aggregate.timings.get(key, 0) + value
+        aggregate.verification["status"] = "failed" if not aggregate.success else "passed" if aggregate.verification["required"] else "not_required"
+        return aggregate
+
+    async def _capture_api(self, origin, tests):
+        if not isinstance(tests, list) or not 1 <= len(tests) <= 16:
+            return RuntimeResult(False, error="API tests require one to sixteen declarative requests.", exit_code=2)
+        normalized = []
+        for test in tests:
+            if not isinstance(test, dict) or set(test) - {"name", "path", "method", "json", "expected_status", "expected_json"}:
+                return RuntimeResult(False, error="API tests accept declarative request fields only.", exit_code=2)
+            path, method, status = test.get("path", "/"), test.get("method", "GET"), test.get("expected_status", 200)
+            if not isinstance(path, str) or not path.startswith("/") or path.startswith("//") or len(path) > 500 or "\\" in path:
+                return RuntimeResult(False, error="API request paths must stay on the local test server.", exit_code=2)
+            if not isinstance(method, str) or method not in {"GET", "POST", "PUT", "PATCH", "DELETE"} or type(status) is not int or not 200 <= status <= 599:
+                return RuntimeResult(False, error="Unsupported HTTP method or expected status.", exit_code=2)
+            if len(json.dumps(test)) > 20000:
+                return RuntimeResult(False, error="API test exceeds the request size limit.", exit_code=2)
+            normalized.append({**test, "path": path, "method": method, "expected_status": status})
+        results = []
+        async with httpx.AsyncClient(timeout=3, follow_redirects=False, trust_env=False) as client:
+            for test in normalized:
+                result = {"name": str(test.get("name", test["method"] + " " + test["path"]))[:120],
+                          "status": "failed", "expected_text": [f"HTTP {test['expected_status']}"], "observed_text": ""}
+                try:
+                    response = await client.request(test["method"], origin + test["path"], json=test.get("json"))
+                    result["observed_text"] = f"{test['method']} {test['path']}\nHTTP {response.status_code}\n{response.text[:2000]}"
+                    if response.status_code != test["expected_status"]:
+                        raise ValueError(f"Expected HTTP {test['expected_status']}, observed {response.status_code}.")
+                    if "expected_json" in test:
+                        actual, expected = response.json(), test["expected_json"]
+                        result["expected_text"].append(json.dumps(expected, sort_keys=True))
+                        if (isinstance(expected, dict) and (not isinstance(actual, dict) or any(actual.get(k) != v for k, v in expected.items()))) or (not isinstance(expected, dict) and actual != expected):
+                            raise ValueError("Response JSON did not match the expected data.")
+                    result["status"] = "passed"
+                except Exception as error:
+                    result["error"] = str(error)[:500]
+                results.append(result)
+        success = all(t["status"] == "passed" for t in results)
+        return RuntimeResult(success, "\n\n".join(t["observed_text"] for t in results),
+                             "\n".join(t.get("error", "") for t in results if t["status"] == "failed"),
+                             0 if success else 1, verification={"kind": "http", "required": True,
+                                 "status": "passed" if success else "failed", "tests": results})
 
     async def _web(self, code, language, directory, project_files, routes, browser_tests=None,
-                   interaction_is_required=False):
+                   interaction_is_required=False, api_tests=None):
         if language == "html":
+            if project_files:
+                try:
+                    write_project_files(directory, project_files)
+                except ValueError as error:
+                    return RuntimeResult(False, error=str(error), exit_code=2)
+                if not (directory / "index.html").exists():
+                    (directory / "index.html").write_text(code, encoding="utf-8")
+                class QuietHandler(SimpleHTTPRequestHandler):
+                    def log_message(self, *args):
+                        pass
+                server = HTTPServer(("127.0.0.1", 0), partial(QuietHandler, directory=str(directory)))
+                task = asyncio.create_task(asyncio.to_thread(server.serve_forever, poll_interval=.05))
+                try:
+                    return await self._capture(url=f"http://127.0.0.1:{server.server_port}", routes=routes,
+                                               browser_tests=browser_tests, interaction_is_required=interaction_is_required)
+                finally:
+                    await asyncio.to_thread(server.shutdown)
+                    server.server_close()
+                    await task
             return await self._capture(code=code, browser_tests=browser_tests,
                                        interaction_is_required=interaction_is_required)
         error = await self._install_packages(language, directory)
         if error:
             return RuntimeResult(False, error=error, exit_code=127)
         if project_files:
-            if len(project_files) > 100 or sum(len(str(value)) for value in project_files.values()) > 1000000:
-                return RuntimeResult(False, error="Project exceeds supported file limits.", exit_code=2)
-            for name, content in project_files.items():
-                target = (directory / name).resolve()
-                if directory.resolve() not in target.parents or name.startswith("node_modules/") or "node_modules" in Path(name).parts:
-                    return RuntimeResult(False, error="Project filenames must stay inside the workspace.", exit_code=2)
-                if name in {"package.json", "package-lock.json"} or re.search(r"(?:^|/)vite\.config\.", name):
-                    continue
-                target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_text(str(content), encoding="utf-8")
+            try:
+                write_project_files(directory, project_files)
+            except ValueError as error:
+                return RuntimeResult(False, error=str(error), exit_code=2)
         reservation = socket.socket()
         reservation.bind(("127.0.0.1", 0))
         port = reservation.getsockname()[1]
@@ -659,6 +844,9 @@ class RuntimeEngine:
                 matches = re.findall(r"\bapp\.get\s*\(\s*['\"](/[^'\"]*)", code)
                 routes = [matches[0]] if matches else ["/"]
         else:
+            # Trusted configuration: support modern React JSX without executing user Vite config.
+            (directory / "vite.config.mjs").write_text(
+                'export default {esbuild:{jsx:"automatic"},server:{hmr:false}};', encoding="utf-8")
             if not project_files:
                 src = directory / "src"
                 src.mkdir(exist_ok=True)
@@ -703,7 +891,11 @@ class RuntimeEngine:
                     await asyncio.sleep(.2)
                 else:
                     return RuntimeResult(False, error="Web server did not become ready within 20 seconds.", exit_code=124)
-            return await self._capture(url=f"http://127.0.0.1:{port}", routes=routes)
+            if language == "node" and (api_tests is not None or re.search(r"\.json\s*\(|application/json", code)):
+                return await self._capture_api(f"http://127.0.0.1:{port}", api_tests if api_tests is not None else [
+                    {"path": (routes or ["/"])[0], "expected_status": 200}])
+            return await self._capture(url=f"http://127.0.0.1:{port}", routes=routes,
+                                       browser_tests=browser_tests, interaction_is_required=interaction_is_required)
         finally:
             await kill_process_tree(process)
             await asyncio.gather(out, err, return_exceptions=True)

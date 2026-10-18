@@ -64,7 +64,7 @@ async def retry_request(
             raise RetryExhausted(policy.attempts, status)
         ceiling = min(policy.max_delay, policy.base_delay * 2 ** attempt)
         provider_delay = retry_after(response)
-        if provider_delay > max(60.0, policy.max_delay):
+        if provider_delay > max(120.0, policy.max_delay):
             # Honor a short provider cooldown even when it exceeds the jitter
             # ceiling; a daily quota reset must pause instead of occupying a
             # worker for many minutes or hours.
@@ -72,5 +72,9 @@ async def retry_request(
         delay = max(uniform(0.0, ceiling), provider_delay)
         if on_retry:
             await on_retry(attempt + 1, delay, status)
-        await sleep(delay)
+        remaining=delay
+        while remaining>60:
+            await sleep(60)
+            remaining-=60
+        await sleep(remaining)
     raise RetryExhausted(policy.attempts)

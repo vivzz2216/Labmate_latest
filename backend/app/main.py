@@ -9,7 +9,7 @@ import asyncio
 import logging
 from .config import settings
 from .database import engine, Base
-from .routers import upload, parse, run, compose, download, analyze, tasks, assignments, basic_auth, ai_review, admin, feedback, workflows
+from .routers import upload, parse, run, compose, download, analyze, tasks, assignments, basic_auth, ai_review, admin, feedback, workflows, billing
 from .middleware.rate_limit import RateLimitMiddleware
 from .services.background_tasks import start_background_workers, stop_background_workers
 from .services.workflow_queue import start_workflow_workers, stop_workflow_workers
@@ -57,6 +57,7 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan
 )
+app.include_router(billing.router, prefix='/api')
 
 # Add compression middleware
 app.add_middleware(GZipMiddleware, minimum_size=1000)

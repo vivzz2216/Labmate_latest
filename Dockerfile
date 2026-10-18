@@ -12,7 +12,7 @@ COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
 RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
     && ln -s /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
     && apt-get update \
-    && apt-get install -y --no-install-recommends gcc g++ default-jdk-headless libmagic1 ca-certificates \
+    && apt-get install -y --no-install-recommends gcc g++ default-jdk xvfb xauth fonts-dejavu-core libmagic1 ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 COPY backend/requirements.txt ./requirements.txt

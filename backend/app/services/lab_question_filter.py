@@ -32,7 +32,9 @@ def is_actionable_lab_question(text: str, language: str = "", excluded_section: 
     # A request to explain concepts does not become actionable just because it mentions code.
     if THEORETICAL.search(question):
         return False
-    return bool(ACTION.search(question) and PROGRAM.search(question))
+    # A known lab language supplies context that valid UI task prose may omit.
+    known_language = language.lower() in {"html", "react", "node", "python", "java", "c", "cpp"}
+    return bool(ACTION.search(question) and (PROGRAM.search(question) or known_language))
 
 
 def is_theory_question(text: str, language: str = "") -> bool:

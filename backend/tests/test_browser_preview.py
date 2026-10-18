@@ -25,7 +25,7 @@ class BrowserPreviewTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="labmate-broken-image-") as folder:
             asyncio.run(capture(Path(folder)))
 
-    def test_real_page_capture_is_framed_by_chrome_template(self):
+    def test_real_page_capture_is_preserved_without_artificial_browser_frame(self):
         async def capture(root):
             with patch.object(settings, "SCREENSHOT_DIR", str(root / "screenshots")), \
                  patch.object(settings, "REACT_TEMP_DIR", str(root / "runtime")):
@@ -39,6 +39,7 @@ class BrowserPreviewTests(unittest.TestCase):
                 self.assertTrue(ok, path)
                 self.assertGreaterEqual(width, 1100)
                 self.assertGreater(height, 700)
+                self.assertEqual(path, raw)
                 with Image.open(path) as image:
                     self.assertEqual(image.size, (width, height))
 

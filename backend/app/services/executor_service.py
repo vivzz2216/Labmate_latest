@@ -405,12 +405,15 @@ class ExecutorService:
                 stdin=stdin_data if stdin_data is not None else config.get("stdin"),
                 project_files=config.get("project_files"), routes=config.get("routes"),
                 prepare_files=prepare, collect_files=collect, browser_tests=browser_tests,
-                interaction_is_required=interaction_is_required)
+                interaction_is_required=interaction_is_required, objective=question_text or "",
+                api_tests=config.get("api_tests"), project_config=config)
             files = result.files + [{"filename": Path(path).name, "content": "", "type": "generated",
                                      "path": path, "route": route, "screenshot_url": "/screenshots/" + os.path.relpath(path, settings.SCREENSHOT_DIR).replace("\\", "/")}
                                     for route, path in result.screenshots.items()]
             if result.verification is not None:
                 files.append({"type": "browser_verification", "verification": result.verification})
+            if result.stages:
+                files.append({"type": "execution_stages", "stages": result.stages})
             return result.success, result.output, result.error, result.exit_code, files
         except Exception as error:
             return False, "", f"Runtime error: {error}", 1, []

@@ -128,6 +128,8 @@ class TaskService:
         db.commit()
         
         try:
+            from ..security.execution_access import check_execution_access
+            check_execution_access(job.upload.user)
             # Task type and context are already set from submit_tasks method
             # No need to override with mock data
             

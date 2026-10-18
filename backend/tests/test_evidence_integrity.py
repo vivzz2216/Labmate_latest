@@ -122,8 +122,12 @@ class FailedReportGateTests(unittest.IsolatedAsyncioTestCase):
             with factory() as db:
                 result = db.get(AssignmentWorkflow, workflow_id)
                 self.assertEqual(result.status, "failed")
-                self.assertIsNone(result.report_id)
-                self.assertIn("verified report", result.error)
+                self.assertIsNotNone(result.report_id)
+                self.assertIn("diagnostic report", result.error)
+                report = db.get(Report, result.report_id)
+                text = "\n".join(p.text for p in Document(report.file_path).paragraphs)
+                self.assertIn("Execution rejected", text)
+                self.assertIn("has not passed", text)
             engine.dispose()
 
     async def test_failed_html_interaction_creates_downloadable_diagnostic_report(self):
@@ -165,8 +169,13 @@ class FailedReportGateTests(unittest.IsolatedAsyncioTestCase):
                 db.commit()
                 workflow_id = workflow.id
 
-            generated = {"answer": "Add two numbers.", "code": '<button>Add</button><output>23</output>',
-                         "language": "html", "stdin": "", "browser_tests": []}
+            generated = {"answer": "Add two numbers.", "browser_tests": []}
+            generated.update(project_type='html', entrypoint='index.html', server_entrypoint='',
+                files=[{'path':'index.html','content':'<button>Add</button><output>23</output>'}], api_tests=[],
+                browser_tests=[{'version':2,'name':'Add two numbers','requirement_ids':['calculation'],
+                    'viewport':{'width':1366,'height':768},'steps':[
+                        {'action':'click','locator_type':'role','locator':'Add','role':'button','value':''},
+                        {'action':'assert_visible','locator_type':'text','locator':'5','role':'','value':''}]}])
             verification = {"required": True, "status": "failed", "tests": [{
                 "name": "Add two numbers", "status": "failed", "expected_text": ["5"],
                 "actions": [{"action": "click", "locator_type": "role", "locator": "Add", "role": "button", "value": ""}],
@@ -236,7 +245,7 @@ class WorkflowInterleaveRegressionTests(unittest.IsolatedAsyncioTestCase):
             raw_output = "Enter first number: Enter second number: Sum: 42\r\n"
             generated = {"answer": "Program adds two numbers.", "code": code, "language": "c", "stdin": "25\n17\n"}
             dummy_screenshot = str(root / "shot.png")
-            Image.new("RGB", (100, 100), "white").save(dummy_screenshot)
+            Image.new("RGB", (320, 200), "white").save(dummy_screenshot)
 
             captured_calls = []
             async def mock_generate_screenshot(code_arg, output_arg, theme_arg, *args, **kwargs):
@@ -274,9 +283,8 @@ class WorkflowInterleaveRegressionTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(result.status, "completed")
                 self.assertEqual(len(result.results), 1)
                 res = result.results[0]
-                # Check workflow output has single interleave
-                self.assertIn("Enter first number: 25", res["output"])
-                self.assertIn("Enter second number: 17", res["output"])
+                # Raw stdout is retained; supplied stdin is labelled separately in the presentation.
+                self.assertEqual(res["output"], raw_output)
                 self.assertNotIn("25 25", res["output"])
                 self.assertNotIn("17 17", res["output"])
                 self.assertNotIn("2525", res["output"])
@@ -285,11 +293,16 @@ class WorkflowInterleaveRegressionTests(unittest.IsolatedAsyncioTestCase):
             view_modes = [c["view_mode"] for c in captured_calls]
             self.assertEqual(view_modes, ["editor", "output"])
 
-            # Verify input_echoed was passed as True to prevent double interleaving
-            self.assertTrue(all(c["input_echoed"] is True for c in captured_calls))
+            # Source previews carry only source; stdin/echo handling belongs to
+            # the captured process transcript.
+            self.assertEqual(captured_calls[0]['output'],'')
+            output_calls=[c for c in captured_calls if c['view_mode']=='output']
+            self.assertTrue(all(c["input_echoed"] is True for c in output_calls))
 
             # Verify that screenshot output argument did NOT contain duplicate 25 25
-            for c in captured_calls:
+            for c in output_calls:
+                self.assertIn("Supplied stdin:\n25\n17\n", c["output"])
+                self.assertIn("Captured stdout/stderr:\n" + raw_output, c["output"])
                 self.assertNotIn("25 25", c["output"])
                 self.assertNotIn("17 17", c["output"])
             engine.dispose()

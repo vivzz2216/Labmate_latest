@@ -172,7 +172,8 @@ const loadStoredTokens = () => {
     persistUser(sanitizedUserData)
     
     // Homepage actions can send the user directly to the upload studio after sign-in.
-    router.push(redirectTo === '/code-execution' ? redirectTo : '/dashboard')
+    const destination = redirectTo === '/code-execution' || /^\/checkout\?pack=(quick-lab|lab-pack|semester-pack)$/.test(redirectTo || '') ? redirectTo! : '/dashboard'
+    router.push(destination)
   }
 
   useEffect(() => {

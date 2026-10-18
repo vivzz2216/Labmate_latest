@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     
     # Security
     BETA_KEY: str = os.getenv("BETA_KEY", "")
+    EXECUTION_ALLOWED_EMAILS: str = ''
     _default_secret = os.urandom(32).hex() if not os.getenv("SECRET_KEY") else None
     SECRET_KEY: str = os.getenv("SECRET_KEY", _default_secret or "")
     
@@ -83,12 +84,27 @@ class Settings(BaseSettings):
     GEMINI_RETRY_MAX_DELAY: float = 30.0
     # Explicit provider selection; all credentials stay on the backend.
     LLM_PROVIDER: str = "gemini"
+    LLM_FALLBACK_PROVIDER: str = "gemini"
+    LLM_FALLBACK_COOLDOWN_SECONDS: int = 60
     GROQ_API_KEY: str = ""
     GROQ_MODEL: str = "openai/gpt-oss-120b"
+    GROQ_FALLBACK_MODEL: str = 'openai/gpt-oss-20b'
+    GROQ_MAX_COMPLETION_TOKENS: int = 12000
+    GROQ_REASONING_EFFORT: str = 'low'
     GROQ_REQUEST_TIMEOUT: int = 90
     GROQ_RETRY_ATTEMPTS: int = 8
     GROQ_RETRY_BASE_DELAY: float = 1.0
     GROQ_RETRY_MAX_DELAY: float = 30.0
+    # Optional free-only fallbacks. Credentials are backend-only.
+    FREE_LLM_FALLBACK_ORDER: str = 'openrouter,opencode'
+    OPENROUTER_API_KEY: str = ''
+    OPENROUTER_MODEL: str = 'openrouter/free'
+    OPENROUTER_REASONING_EFFORT: str = 'low'
+    OPENCODE_ENABLED: bool = False
+    OPENCODE_API_KEY: str = ''
+    OPENCODE_MODEL: str = 'big-pickle'
+    FREE_LLM_REQUEST_TIMEOUT: float = 60
+    FREE_LLM_MAX_TOKENS: int = 12000
     DB_POOL_SIZE: int = 5
     DB_POOL_MAX_OVERFLOW: int = 5
     WORKFLOW_WORKERS: int = 2
@@ -103,6 +119,15 @@ class Settings(BaseSettings):
     C_COMPILER: str = "gcc"
     CPP_COMPILER: str = "g++"
     NODE_COMMAND: str = "node"
+    JAVA_GUI_TEST_TIMEOUT: float = 30.0
+    JAVA_GUI_TOTAL_TIMEOUT: float = 90.0
+    # One-time Razorpay packs. Test and live balances are separate.
+    BILLING_ENABLED: bool = False
+    BILLING_TRIAL_CREDITS: int = 3
+    RAZORPAY_MODE: str = 'test'
+    RAZORPAY_KEY_ID: str = ''
+    RAZORPAY_KEY_SECRET: str = ''
+    RAZORPAY_WEBHOOK_SECRET: str = ''
 
     # Claude settings
     CLAUDE_API_KEY: str = os.getenv("CLAUDE_API_KEY", "")

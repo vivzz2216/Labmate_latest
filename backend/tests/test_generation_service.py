@@ -16,6 +16,7 @@ SCHEMA = {"type": "OBJECT", "properties": {"answer": {"type": "STRING"}}, "requi
 class GenerationServiceTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.patches = [patch.object(settings, "LLM_PROVIDER", "groq"), patch.object(settings, "GROQ_API_KEY", "unit-test-key"),
+                        patch.object(settings, 'GROQ_FALLBACK_MODEL',''),
                         patch.object(settings, "GROQ_MODEL", "openai/gpt-oss-120b"), patch.object(settings, "GROQ_RETRY_ATTEMPTS", 2),
                         patch.object(settings, "GROQ_RETRY_BASE_DELAY", 0), patch.object(settings, "GROQ_RETRY_MAX_DELAY", 0)]
         for item in self.patches:

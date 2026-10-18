@@ -436,7 +436,7 @@
           <rect width="24" height="24" rx="2" fill="#111111"/>
           <path d="M4 7L10 12L4 17M12 17H20" stroke="#cccccc" stroke-width="2" stroke-linecap="round"/>
         </svg>
-        <span>C:\Users\{{ username or 'Student' }}\Desktop\LabProject\bin\Debug\{{ filename.rsplit('.', 1)[0] }}.exe</span>
+        <span>Captured program output — {{ filename }}</span>
       </div>
       <div class="cb-win-controls">
         <span class="cb-win-btn"><svg width="10" height="1" viewBox="0 0 10 1"><rect width="10" height="1" fill="#cccccc"/></svg></span>
@@ -447,8 +447,8 @@
     <div class="cb-console-body">{{ output_content|default(output) }}
 
 <div class="cb-console-meta">
-Process returned 0 (0x0)   execution time : 0.042 s
-Press any key to continue.<span class="cb-console-cursor"></span>
+{% if error_content and error_content not in output_content %}{{ error_content }}{% endif %}
+Formatted transcript of captured output. No exit status or duration is inferred.
 </div>
     </div>
   </div>

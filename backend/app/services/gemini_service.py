@@ -2,6 +2,7 @@
 
 import json
 import logging
+from copy import deepcopy
 from typing import Any, Awaitable, Callable, Optional
 
 import httpx
@@ -10,6 +11,22 @@ from ..config import settings
 from .retry import RetryExhausted, RetryPolicy, retry_request
 
 logger = logging.getLogger(__name__)
+
+
+def response_schema(schema):
+    """The legacy responseSchema transport accepts string enums only.
+
+    Keep numeric constraints in the application's strict post-response validator.
+    This conversion must not mutate the shared Groq/validation schema.
+    """
+    result = deepcopy(schema)
+    def visit(node):
+        if not isinstance(node, dict): return
+        if 'enum' in node and node.get('type', '').lower() != 'string': node.pop('enum')
+        for child in node.get('properties', {}).values(): visit(child)
+        visit(node.get('items'))
+    visit(result)
+    return result
 
 
 class GeminiError(RuntimeError):
@@ -31,7 +48,7 @@ class GeminiService:
         payload = {
             "systemInstruction": {"parts": [{"text": instructions}]},
             "contents": [{"role": "user", "parts": [{"text": content}]}],
-            "generationConfig": {"responseMimeType": "application/json", "responseSchema": schema,
+            "generationConfig": {"responseMimeType": "application/json", "responseSchema": response_schema(schema),
                                  "temperature": 0.2, "maxOutputTokens": 16384},
         }
 
@@ -60,6 +77,8 @@ class GeminiService:
             raise GeminiError("Gemini could not accept this request. Check the model and document size.")
         if response.status_code == 404:
             raise GeminiError("The configured Gemini model is unavailable. Update GEMINI_MODEL.")
+        if response.status_code == 402:
+            raise GeminiError("Gemini credits are depleted. Restore provider quota or use an available primary provider.")
         if not response.is_success:
             raise GeminiError(f"Gemini rejected the request (HTTP {response.status_code}).")
         try:

@@ -1,0 +1,1527 @@
+[
+  {
+    "id": "python_io",
+    "language": "python",
+    "category": "console",
+    "expected": "14",
+    "actual_success": true,
+    "actual_output": "7\r\n14\r\n",
+    "error": "",
+    "exit_code": 0,
+    "stages": {},
+    "timings": {
+      "process_seconds": 0.077708
+    },
+    "status": "PASS",
+    "seconds": 0.1324
+  },
+  {
+    "id": "python_conditions",
+    "language": "python",
+    "category": "console",
+    "expected": "positive",
+    "actual_success": true,
+    "actual_output": "positive\r\n",
+    "error": "",
+    "exit_code": 0,
+    "stages": {},
+    "timings": {
+      "process_seconds": 0.066495
+    },
+    "status": "PASS",
+    "seconds": 0.117
+  },
+  {
+    "id": "python_loops",
+    "language": "python",
+    "category": "console",
+    "expected": "15",
+    "actual_success": true,
+    "actual_output": "15\r\n",
+    "error": "",
+    "exit_code": 0,
+    "stages": {},
+    "timings": {
+      "process_seconds": 0.069068
+    },
+    "status": "PASS",
+    "seconds": 0.1196
+  },
+  {
+    "id": "python_functions",
+    "language": "python",
+    "category": "console",
+    "expected": "36",
+    "actual_success": true,
+    "actual_output": "36\r\n",
+    "error": "",
+    "exit_code": 0,
+    "stages": {},
+    "timings": {
+      "process_seconds": 0.077048
+    },
+    "status": "PASS",
+    "seconds": 0.1264
+  },
+  {
+    "id": "python_collections",
+    "language": "python",
+    "category": "console",
+    "expected": "8",
+    "actual_success": true,
+    "actual_output": "8\r\n",
+    "error": "",
+    "exit_code": 0,
+    "stages": {},
+    "timings": {
+      "process_seconds": 0.062202
+    },
+    "status": "PASS",
+    "seconds": 0.11
+  },
+  {
+    "id": "python_classes",
+    "language": "python",
+    "category": "console",
+    "expected": "9",
+    "actual_success": true,
+    "actual_output": "9\r\n",
+    "error": "",
+    "exit_code": 0,
+    "stages": {},
+    "timings": {
+      "process_seconds": 0.062117
+    },
+    "status": "PASS",
+    "seconds": 0.1089
+  },
+  {
+    "id": "python_exceptions",
+    "language": "python",
+    "category": "console",
+    "expected": "handled",
+    "actual_success": true,
+    "actual_output": "handled\r\n",
+    "error": "",
+    "exit_code": 0,
+    "stages": {},
+    "timings": {
+      "process_seconds": 0.06465
+    },
+    "status": "PASS",
+    "seconds": 0.1143
+  },
+  {
+    "id": "python_file",
+    "language": "python",
+    "category": "console",
+    "expected": "42",
+    "actual_success": true,
+    "actual_output": "42\r\n",
+    "error": "",
+    "exit_code": 0,
+    "stages": {},
+    "timings": {
+      "process_seconds": 0.061242
+    },
+    "status": "PASS",
+    "seconds": 0.1092
+  },
+  {
+    "id": "c_hello",
+    "language": "c",
+    "category": "console",
+    "expected": "hello",
+    "actual_success": true,
+    "actual_output": "hello",
+    "error": "",
+    "exit_code": 0,
+    "stages": {
+      "compile": "passed",
+      "execution": "passed"
+    },
+    "timings": {
+      "process_seconds": 0.06978,
+      "compile_seconds": 0.154283
+    },
+    "status": "PASS",
+    "seconds": 1.0559
+  },
+  {
+    "id": "c_io",
+    "language": "c",
+    "category": "console",
+    "expected": "14",
+    "actual_success": true,
+    "actual_output": "14",
+    "error": "",
+    "exit_code": 0,
+    "stages": {
+      "compile": "passed",
+      "execution": "passed"
+    },
+    "timings": {
+      "process_seconds": 0.072451,
+      "compile_seconds": 0.147959
+    },
+    "status": "PASS",
+    "seconds": 0.2221
+  },
+  {
+    "id": "c_conditions",
+    "language": "c",
+    "category": "console",
+    "expected": "positive",
+    "actual_success": true,
+    "actual_output": "positive",
+    "error": "",
+    "exit_code": 0,
+    "stages": {
+      "compile": "passed",
+      "execution": "passed"
+    },
+    "timings": {
+      "process_seconds": 0.090848,
+      "compile_seconds": 0.138017
+    },
+    "status": "PASS",
+    "seconds": 0.2306
+  },
+  {
+    "id": "c_loops",
+    "language": "c",
+    "category": "console",
+    "expected": "15",
+    "actual_success": true,
+    "actual_output": "15",
+    "error": "",
+    "exit_code": 0,
+    "stages": {
+      "compile": "passed",
+      "execution": "passed"
+    },
+    "timings": {
+      "process_seconds": 0.086723,
+      "compile_seconds": 0.150555
+    },
+    "status": "PASS",
+    "seconds": 0.2394
+  },
+  {
+    "id": "c_arrays",
+    "language": "c",
+    "category": "console",
+    "expected": "12",
+    "actual_success": true,
+    "actual_output": "12",
+    "error": "",
+    "exit_code": 0,
+    "stages": {
+      "compile": "passed",
+      "execution": "passed"
+    },
+    "timings": {
+      "process_seconds": 0.111471,
+      "compile_seconds": 0.155675
+    },
+    "status": "PASS",
+    "seconds": 0.2692
+  },
+  {
+    "id": "c_strings",
+    "language": "c",
+    "category": "console",
+    "expected": "3",
+    "actual_success": true,
+    "actual_output": "3",
+    "error": "",
+    "exit_code": 0,
+    "stages": {
+      "compile": "passed",
+      "execution": "passed"
+    },
+    "timings": {
+      "process_seconds": 0.080706,
+      "compile_seconds": 0.148671
+    },
+    "status": "PASS",
+    "seconds": 0.2313
+  },
+  {
+    "id": "c_pointers",
+    "language": "c",
+    "category": "console",
+    "expected": "10",
+    "actual_success": true,
+    "actual_output": "10",
+    "error": "",
+    "exit_code": 0,
+    "stages": {
+      "compile": "passed",
+      "execution": "passed"
+    },
+    "timings": {
+      "process_seconds": 0.088344,
+      "compile_seconds": 0.15721
+    },
+    "status": "PASS",
+    "seconds": 0.2476
+  },
+  {
+    "id": "c_structures",
+    "language": "c",
+    "category": "console",
+    "expected": "9",
+    "actual_success": true,
+    "actual_output": "9",
+    "error": "",
+    "exit_code": 0,
+    "stages": {
+      "compile": "passed",
+      "execution": "passed"
+    },
+    "timings": {
+      "process_seconds": 0.085967,
+      "compile_seconds": 0.154655
+    },
+    "status": "PASS",
+    "seconds": 0.2427
+  },
+  {
+    "id": "c_functions",
+    "language": "c",
+    "category": "console",
+    "expected": "36",
+    "actual_success": true,
+    "actual_output": "36",
+    "error": "",
+    "exit_code": 0,
+    "stages": {
+      "compile": "passed",
+      "execution": "passed"
+    },
+    "timings": {
+      "process_seconds": 0.086446,
+      "compile_seconds": 0.159783
+    },
+    "status": "PASS",
+    "seconds": 0.2498
+  },
+  {
+    "id": "c_compile_error",
+    "language": "c",
+    "category": "console",
+    "expected": "compile",
+    "actual_success": false,
+    "actual_output": "",
+    "error": "Compilation error: <workspace>\\backend\\audit_artifacts\\final-capabilities\\workspaces\\labmate_p68i4b2f\\solution.c: In function 'main':\n<workspace>\\backend\\audit_artifacts\\final-capabilities\\workspaces\\labmate_p68i4b2f\\solution.c:1:13: error: unknown type name 'invalid'\n    1 | int main(){ invalid syntax }\n      |             ^~~~~~~\n<workspace>\\backend\\audit_artifacts\\final-capabilities\\workspaces\\labmate_p68i4b2f\\solution.c:1:28: error: expected '=', ',', ';', 'asm' or '__attribute__' before '}' token\n    1 | int main(){ invalid syntax }\n      |                            ^\n<workspace>\\backend\\audit_artifacts\\final-capabilities\\workspaces\\labmate_p68i4b2f\\solution.c:1:28: error: expected declaration or statement at end of input\n",
+    "exit_code": 1,
+    "stages": {
+      "compile": "failed",
+      "execution": "not_run"
+    },
+    "timings": {
+      "process_seconds": 0.04511
+    },
+    "status": "PASS",
+    "seconds": 0.7912
+  },
+  {
+    "id": "c_runtime_error",
+    "language": "c",
+    "category": "console",
+    "expected": "runtime",
+    "actual_success": false,
+    "actual_output": "",
+    "error": "",
+    "exit_code": 3,
+    "stages": {
+      "compile": "passed",
+      "execution": "failed"
+    },
+    "timings": {
+      "process_seconds": 0.092825,
+      "compile_seconds": 0.132432
+    },
+    "status": "PASS",
+    "seconds": 0.9815
+  },
+  {
+    "id": "cpp_hello",
+    "language": "cpp",
+    "category": "console",
+    "expected": "hello",
+    "actual_success": true,
+    "actual_output": "hello",
+    "error": "",
+    "exit_code": 0,
+    "stages": {
+      "compile": "passed",
+      "execution": "passed"
+    },
+    "timings": {
+      "process_seconds": 0.082301,
+      "compile_seconds": 0.187944
+    },
+    "status": "PASS",
+    "seconds": 1.0498
+  },
+  {
+    "id": "cpp_io",
+    "language": "cpp",
+    "category": "console",
+    "expected": "14",
+    "actual_success": true,
+    "actual_output": "14",
+    "error": "",
+    "exit_code": 0,
+    "stages": {
+      "compile": "passed",
+      "execution": "passed"
+    },
+    "timings": {
+      "process_seconds": 0.092146,
+      "compile_seconds": 0.158591
+    },
+    "status": "PASS",
+    "seconds": 0.2526
+  },
+  {
+    "id": "cpp_conditions",
+    "language": "cpp",
+    "category": "console",
+    "expected": "positive",
+    "actual_success": true,
+    "actual_output": "positive",
+    "error": "",
+    "exit_code": 0,
+    "stages": {
+      "compile": "passed",
+      "execution": "passed"
+    },
+    "timings": {
+      "process_seconds": 0.117185,
+      "compile_seconds": 0.15831
+    },
+    "status": "PASS",
+    "seconds": 0.2805
+  },
+  {
+    "id": "cpp_loops",
+    "language": "cpp",
+    "category": "console",
+    "expected": "15",
+    "actual_success": true,
+    "actual_output": "15",
+    "error": "",
+    "exit_code": 0,
+    "stages": {
+      "compile": "passed",
+      "execution": "passed"
+    },
+    "timings": {
+      "process_seconds": 0.105507,
+      "compile_seconds": 0.166387
+    },
+    "status": "PASS",
+    "seconds": 0.2754
+  },
+  {
+    "id": "cpp_arrays",
+    "language": "cpp",
+    "category": "console",
+    "expected": "12",
+    "actual_success": true,
+    "actual_output": "12",
+    "error": "",
+    "exit_code": 0,
+    "stages": {
+      "compile": "passed",
+      "execution": "passed"
+    },
+    "timings": {
+      "process_seconds": 0.073352,
+      "compile_seconds": 0.165088
+    },
+    "status": "PASS",
+    "seconds": 0.2407
+  },
+  {
+    "id": "cpp_strings",
+    "language": "cpp",
+    "category": "console",
+    "expected": "3",
+    "actual_success": true,
+    "actual_output": "3",
+    "error": "",
+    "exit_code": 0,
+    "stages": {
+      "compile": "passed",
+      "execution": "passed"
+    },
+    "timings": {
+      "process_seconds": 0.085765,
+      "compile_seconds": 0.193788
+    },
+    "status": "PASS",
+    "seconds": 0.282
+  },
+  {
+    "id": "cpp_pointers",
+    "language": "cpp",
+    "category": "console",
+    "expected": "10",
+    "actual_success": true,
+    "actual_output": "10",
+    "error": "",
+    "exit_code": 0,
+    "stages": {
+      "compile": "passed",
+      "execution": "passed"
+    },
+    "timings": {
+      "process_seconds": 0.072891,
+      "compile_seconds": 0.165001
+    },
+    "status": "PASS",
+    "seconds": 0.2401
+  },
+  {
+    "id": "cpp_structures",
+    "language": "cpp",
+    "category": "console",
+    "expected": "9",
+    "actual_success": true,
+    "actual_output": "9",
+    "error": "",
+    "exit_code": 0,
+    "stages": {
+      "compile": "passed",
+      "execution": "passed"
+    },
+    "timings": {
+      "process_seconds": 0.09467,
+      "compile_seconds": 0.175211
+    },
+    "status": "PASS",
+    "seconds": 0.2721
+  },
+  {
+    "id": "cpp_functions",
+    "language": "cpp",
+    "category": "console",
+    "expected": "36",
+    "actual_success": true,
+    "actual_output": "36",
+    "error": "",
+    "exit_code": 0,
+    "stages": {
+      "compile": "passed",
+      "execution": "passed"
+    },
+    "timings": {
+      "process_seconds": 0.07306,
+      "compile_seconds": 0.16464
+    },
+    "status": "PASS",
+    "seconds": 0.2405
+  },
+  {
+    "id": "cpp_compile_error",
+    "language": "cpp",
+    "category": "console",
+    "expected": "compile",
+    "actual_success": false,
+    "actual_output": "",
+    "error": "Compilation error: <workspace>\\backend\\audit_artifacts\\final-capabilities\\workspaces\\labmate_388vpn2m\\solution.cpp: In function 'int main()':\n<workspace>\\backend\\audit_artifacts\\final-capabilities\\workspaces\\labmate_388vpn2m\\solution.cpp:1:13: error: 'invalid' was not declared in this scope\n    1 | int main(){ invalid syntax }\n      |             ^~~~~~~\n",
+    "exit_code": 1,
+    "stages": {
+      "compile": "failed",
+      "execution": "not_run"
+    },
+    "timings": {
+      "process_seconds": 0.037526
+    },
+    "status": "PASS",
+    "seconds": 0.7978
+  },
+  {
+    "id": "cpp_runtime_error",
+    "language": "cpp",
+    "category": "console",
+    "expected": "runtime",
+    "actual_success": false,
+    "actual_output": "",
+    "error": "",
+    "exit_code": 3,
+    "stages": {
+      "compile": "passed",
+      "execution": "failed"
+    },
+    "timings": {
+      "process_seconds": 0.058293,
+      "compile_seconds": 0.137706
+    },
+    "status": "PASS",
+    "seconds": 0.9215
+  },
+  {
+    "id": "cpp_inheritance",
+    "language": "cpp",
+    "category": "console",
+    "expected": "11",
+    "actual_success": true,
+    "actual_output": "11",
+    "error": "",
+    "exit_code": 0,
+    "stages": {
+      "compile": "passed",
+      "execution": "passed"
+    },
+    "timings": {
+      "process_seconds": 0.083456,
+      "compile_seconds": 0.332859
+    },
+    "status": "PASS",
+    "seconds": 0.4179
+  },
+  {
+    "id": "java_hello",
+    "language": "java",
+    "category": "console",
+    "expected": "hello",
+    "actual_success": true,
+    "actual_output": "hello",
+    "error": "",
+    "exit_code": 0,
+    "stages": {
+      "compile": "passed",
+      "execution": "passed"
+    },
+    "timings": {
+      "process_seconds": 0.076579,
+      "compile_seconds": 0.331803
+    },
+    "status": "PASS",
+    "seconds": 1.1635
+  },
+  {
+    "id": "java_operators",
+    "language": "java",
+    "category": "console",
+    "expected": "14",
+    "actual_success": true,
+    "actual_output": "14",
+    "error": "",
+    "exit_code": 0,
+    "stages": {
+      "compile": "passed",
+      "execution": "passed"
+    },
+    "timings": {
+      "process_seconds": 0.059837,
+      "compile_seconds": 0.340659
+    },
+    "status": "PASS",
+    "seconds": 0.4027
+  },
+  {
+    "id": "java_conditions",
+    "language": "java",
+    "category": "console",
+    "expected": "positive",
+    "actual_success": true,
+    "actual_output": "positive",
+    "error": "",
+    "exit_code": 0,
+    "stages": {
+      "compile": "passed",
+      "execution": "passed"
+    },
+    "timings": {
+      "process_seconds": 0.062724,
+      "compile_seconds": 0.344533
+    },
+    "status": "PASS",
+    "seconds": 0.4109
+  },
+  {
+    "id": "java_loops",
+    "language": "java",
+    "category": "console",
+    "expected": "15",
+    "actual_success": true,
+    "actual_output": "15",
+    "error": "",
+    "exit_code": 0,
+    "stages": {
+      "compile": "passed",
+      "execution": "passed"
+    },
+    "timings": {
+      "process_seconds": 0.059647,
+      "compile_seconds": 0.376572
+    },
+    "status": "PASS",
+    "seconds": 0.4386
+  },
+  {
+    "id": "java_arrays",
+    "language": "java",
+    "category": "console",
+    "expected": "12",
+    "actual_success": true,
+    "actual_output": "12",
+    "error": "",
+    "exit_code": 0,
+    "stages": {
+      "compile": "passed",
+      "execution": "passed"
+    },
+    "timings": {
+      "process_seconds": 0.061309,
+      "compile_seconds": 0.330367
+    },
+    "status": "PASS",
+    "seconds": 0.3936
+  },
+  {
+    "id": "java_methods",
+    "language": "java",
+    "category": "console",
+    "expected": "36",
+    "actual_success": true,
+    "actual_output": "36",
+    "error": "",
+    "exit_code": 0,
+    "stages": {
+      "compile": "passed",
+      "execution": "passed"
+    },
+    "timings": {
+      "process_seconds": 0.074024,
+      "compile_seconds": 0.346306
+    },
+    "status": "PASS",
+    "seconds": 0.4232
+  },
+  {
+    "id": "java_oop",
+    "language": "java",
+    "category": "console",
+    "expected": "11",
+    "actual_success": true,
+    "actual_output": "11",
+    "error": "",
+    "exit_code": 0,
+    "stages": {
+      "compile": "passed",
+      "execution": "passed"
+    },
+    "timings": {
+      "process_seconds": 0.079489,
+      "compile_seconds": 0.340752
+    },
+    "status": "PASS",
+    "seconds": 0.4287
+  },
+  {
+    "id": "java_exception",
+    "language": "java",
+    "category": "console",
+    "expected": "handled",
+    "actual_success": true,
+    "actual_output": "handled",
+    "error": "",
+    "exit_code": 0,
+    "stages": {
+      "compile": "passed",
+      "execution": "passed"
+    },
+    "timings": {
+      "process_seconds": 0.060458,
+      "compile_seconds": 0.360769
+    },
+    "status": "PASS",
+    "seconds": 0.4253
+  },
+  {
+    "id": "java_file",
+    "language": "java",
+    "category": "console",
+    "expected": "42",
+    "actual_success": true,
+    "actual_output": "42",
+    "error": "",
+    "exit_code": 0,
+    "stages": {
+      "compile": "passed",
+      "execution": "passed"
+    },
+    "timings": {
+      "process_seconds": 0.085243,
+      "compile_seconds": 0.396608
+    },
+    "status": "PASS",
+    "seconds": 0.4856
+  },
+  {
+    "id": "java_io",
+    "language": "java",
+    "category": "console",
+    "expected": "14",
+    "actual_success": true,
+    "actual_output": "14",
+    "error": "",
+    "exit_code": 0,
+    "stages": {
+      "compile": "passed",
+      "execution": "passed"
+    },
+    "timings": {
+      "process_seconds": 0.094114,
+      "compile_seconds": 0.355066
+    },
+    "status": "PASS",
+    "seconds": 0.4517
+  },
+  {
+    "id": "node_console",
+    "language": "node",
+    "category": "console",
+    "expected": "hello",
+    "actual_success": true,
+    "actual_output": "hello\n",
+    "error": "",
+    "exit_code": 0,
+    "stages": {},
+    "timings": {
+      "process_seconds": 0.071483
+    },
+    "status": "PASS",
+    "seconds": 0.8291
+  },
+  {
+    "id": "node_file",
+    "language": "node",
+    "category": "console",
+    "expected": "42",
+    "actual_success": true,
+    "actual_output": "42\n",
+    "error": "",
+    "exit_code": 0,
+    "stages": {},
+    "timings": {
+      "process_seconds": 0.038005
+    },
+    "status": "PASS",
+    "seconds": 0.0396
+  },
+  {
+    "id": "node_error",
+    "language": "node",
+    "category": "console",
+    "expected": "handled",
+    "actual_success": true,
+    "actual_output": "handled\n",
+    "error": "",
+    "exit_code": 0,
+    "stages": {},
+    "timings": {
+      "process_seconds": 0.04398
+    },
+    "status": "PASS",
+    "seconds": 0.0465
+  },
+  {
+    "id": "python_runtime_error",
+    "language": "python",
+    "category": "console",
+    "expected": "runtime",
+    "actual_success": false,
+    "actual_output": "",
+    "error": "Traceback (most recent call last):\r\n  File \"<string>\", line 8, in <module>\r\n  File \"<frozen runpy>\", line 287, in run_path\r\n  File \"<frozen runpy>\", line 98, in _run_module_code\r\n  File \"<frozen runpy>\", line 88, in _run_code\r\n  File \"<workspace>\\backend\\audit_artifacts\\final-capabilities\\workspaces\\labmate_qmv6izgj\\solution.py\", line 1, in <module>\r\n    print(1/0)\r\n          ~^~\r\nZeroDivisionError: division by zero\r\n",
+    "exit_code": 1,
+    "stages": {},
+    "timings": {
+      "process_seconds": 0.067579
+    },
+    "status": "PASS",
+    "seconds": 0.8845
+  },
+  {
+    "id": "node_runtime_error",
+    "language": "node",
+    "category": "console",
+    "expected": "runtime",
+    "actual_success": false,
+    "actual_output": "",
+    "error": "<workspace>\\backend\\audit_artifacts\\final-capabilities\\workspaces\\labmate_o80a02ur\\solution.cjs:1\r\nthrow new Error('intentional')\r\n^\r\n\r\nError: intentional\r\n    at Object.<anonymous> (<workspace>\\backend\\audit_artifacts\\final-capabilities\\workspaces\\labmate_o80a02ur\\solution.cjs:1:7)\r\n    at Module._compile (node:internal/modules/cjs/loader:1929:14)\r\n    at Object..js (node:internal/modules/cjs/loader:2060:10)\r\n    at Module.load (node:internal/modules/cjs/loader:1651:32)\r\n    at Module._load (node:internal/modules/cjs/loader:1443:12)\r\n    at wrapModuleLoad (node:internal/modules/cjs/loader:261:19)\r\n    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)\r\n    at node:internal/main/run_main_module:33:47\r\n\r\nNode.js v24.21.0\r\n",
+    "exit_code": 1,
+    "stages": {},
+    "timings": {
+      "process_seconds": 0.044238
+    },
+    "status": "PASS",
+    "seconds": 0.8261
+  },
+  {
+    "id": "python_timeout",
+    "language": "python",
+    "category": "console",
+    "expected": "timeout",
+    "actual_success": false,
+    "actual_output": "",
+    "error": "\nExecution timeout or closed input stream.",
+    "exit_code": 124,
+    "stages": {},
+    "timings": {},
+    "status": "PASS",
+    "seconds": 0.8507
+  },
+  {
+    "id": "swing_button",
+    "language": "java",
+    "category": "java_swing",
+    "expected": "java_swing",
+    "actual_success": false,
+    "actual_output": "",
+    "error": "Unsupported capability: java_swing requires an isolated display/server adapter and genuine capture support; it was not executed.",
+    "exit_code": 69,
+    "stages": {
+      "execution": "not_run",
+      "capability": "java_swing"
+    },
+    "timings": {},
+    "status": "BLOCKED",
+    "seconds": 0.0001
+  },
+  {
+    "id": "tkinter_button",
+    "language": "python",
+    "category": "tkinter",
+    "expected": "tkinter",
+    "actual_success": false,
+    "actual_output": "",
+    "error": "Unsupported capability: tkinter requires an isolated display/server adapter and genuine capture support; it was not executed.",
+    "exit_code": 69,
+    "stages": {
+      "execution": "not_run",
+      "capability": "tkinter"
+    },
+    "timings": {},
+    "status": "BLOCKED",
+    "seconds": 0.0001
+  },
+  {
+    "id": "swing_label_change",
+    "language": "java",
+    "category": "java_swing",
+    "expected": "java_swing",
+    "actual_success": false,
+    "actual_output": "",
+    "error": "Unsupported capability: java_swing requires an isolated display/server adapter and genuine capture support; it was not executed.",
+    "exit_code": 69,
+    "stages": {
+      "execution": "not_run",
+      "capability": "java_swing"
+    },
+    "timings": {},
+    "status": "BLOCKED",
+    "seconds": 0.0001
+  },
+  {
+    "id": "tkinter_label_change",
+    "language": "python",
+    "category": "tkinter",
+    "expected": "tkinter",
+    "actual_success": false,
+    "actual_output": "",
+    "error": "Unsupported capability: tkinter requires an isolated display/server adapter and genuine capture support; it was not executed.",
+    "exit_code": 69,
+    "stages": {
+      "execution": "not_run",
+      "capability": "tkinter"
+    },
+    "timings": {},
+    "status": "BLOCKED",
+    "seconds": 0.0001
+  },
+  {
+    "id": "swing_form",
+    "language": "java",
+    "category": "java_swing",
+    "expected": "java_swing",
+    "actual_success": false,
+    "actual_output": "",
+    "error": "Unsupported capability: java_swing requires an isolated display/server adapter and genuine capture support; it was not executed.",
+    "exit_code": 69,
+    "stages": {
+      "execution": "not_run",
+      "capability": "java_swing"
+    },
+    "timings": {},
+    "status": "BLOCKED",
+    "seconds": 0.0001
+  },
+  {
+    "id": "tkinter_form",
+    "language": "python",
+    "category": "tkinter",
+    "expected": "tkinter",
+    "actual_success": false,
+    "actual_output": "",
+    "error": "Unsupported capability: tkinter requires an isolated display/server adapter and genuine capture support; it was not executed.",
+    "exit_code": 69,
+    "stages": {
+      "execution": "not_run",
+      "capability": "tkinter"
+    },
+    "timings": {},
+    "status": "BLOCKED",
+    "seconds": 0.0
+  },
+  {
+    "id": "swing_login_validation",
+    "language": "java",
+    "category": "java_swing",
+    "expected": "java_swing",
+    "actual_success": false,
+    "actual_output": "",
+    "error": "Unsupported capability: java_swing requires an isolated display/server adapter and genuine capture support; it was not executed.",
+    "exit_code": 69,
+    "stages": {
+      "execution": "not_run",
+      "capability": "java_swing"
+    },
+    "timings": {},
+    "status": "BLOCKED",
+    "seconds": 0.0001
+  },
+  {
+    "id": "tkinter_login_validation",
+    "language": "python",
+    "category": "tkinter",
+    "expected": "tkinter",
+    "actual_success": false,
+    "actual_output": "",
+    "error": "Unsupported capability: tkinter requires an isolated display/server adapter and genuine capture support; it was not executed.",
+    "exit_code": 69,
+    "stages": {
+      "execution": "not_run",
+      "capability": "tkinter"
+    },
+    "timings": {},
+    "status": "BLOCKED",
+    "seconds": 0.0001
+  },
+  {
+    "id": "swing_calculator",
+    "language": "java",
+    "category": "java_swing",
+    "expected": "java_swing",
+    "actual_success": false,
+    "actual_output": "",
+    "error": "Unsupported capability: java_swing requires an isolated display/server adapter and genuine capture support; it was not executed.",
+    "exit_code": 69,
+    "stages": {
+      "execution": "not_run",
+      "capability": "java_swing"
+    },
+    "timings": {},
+    "status": "BLOCKED",
+    "seconds": 0.0001
+  },
+  {
+    "id": "tkinter_calculator",
+    "language": "python",
+    "category": "tkinter",
+    "expected": "tkinter",
+    "actual_success": false,
+    "actual_output": "",
+    "error": "Unsupported capability: tkinter requires an isolated display/server adapter and genuine capture support; it was not executed.",
+    "exit_code": 69,
+    "stages": {
+      "execution": "not_run",
+      "capability": "tkinter"
+    },
+    "timings": {},
+    "status": "BLOCKED",
+    "seconds": 0.0
+  },
+  {
+    "id": "awt_button",
+    "language": "java",
+    "category": "java_awt",
+    "expected": "java_awt",
+    "actual_success": false,
+    "actual_output": "",
+    "error": "Unsupported capability: java_awt requires an isolated display/server adapter and genuine capture support; it was not executed.",
+    "exit_code": 69,
+    "stages": {
+      "execution": "not_run",
+      "capability": "java_awt"
+    },
+    "timings": {},
+    "status": "BLOCKED",
+    "seconds": 0.0001
+  },
+  {
+    "id": "javafx_window",
+    "language": "java",
+    "category": "javafx",
+    "expected": "javafx",
+    "actual_success": false,
+    "actual_output": "",
+    "error": "Unsupported capability: javafx requires an isolated display/server adapter and genuine capture support; it was not executed.",
+    "exit_code": 69,
+    "stages": {
+      "execution": "not_run",
+      "capability": "javafx"
+    },
+    "timings": {},
+    "status": "BLOCKED",
+    "seconds": 0.0
+  },
+  {
+    "id": "flask_homepage",
+    "language": "python",
+    "category": "flask",
+    "expected": "flask",
+    "actual_success": false,
+    "actual_output": "",
+    "error": "Unsupported capability: flask requires an isolated display/server adapter and genuine capture support; it was not executed.",
+    "exit_code": 69,
+    "stages": {
+      "execution": "not_run",
+      "capability": "flask"
+    },
+    "timings": {},
+    "status": "BLOCKED",
+    "seconds": 0.0
+  },
+  {
+    "id": "flask_template",
+    "language": "python",
+    "category": "flask",
+    "expected": "flask",
+    "actual_success": false,
+    "actual_output": "",
+    "error": "Unsupported capability: flask requires an isolated display/server adapter and genuine capture support; it was not executed.",
+    "exit_code": 69,
+    "stages": {
+      "execution": "not_run",
+      "capability": "flask"
+    },
+    "timings": {},
+    "status": "BLOCKED",
+    "seconds": 0.0
+  },
+  {
+    "id": "flask_form",
+    "language": "python",
+    "category": "flask",
+    "expected": "flask",
+    "actual_success": false,
+    "actual_output": "",
+    "error": "Unsupported capability: flask requires an isolated display/server adapter and genuine capture support; it was not executed.",
+    "exit_code": 69,
+    "stages": {
+      "execution": "not_run",
+      "capability": "flask"
+    },
+    "timings": {},
+    "status": "BLOCKED",
+    "seconds": 0.0
+  },
+  {
+    "id": "flask_server_validation",
+    "language": "python",
+    "category": "flask",
+    "expected": "flask",
+    "actual_success": false,
+    "actual_output": "",
+    "error": "Unsupported capability: flask requires an isolated display/server adapter and genuine capture support; it was not executed.",
+    "exit_code": 69,
+    "stages": {
+      "execution": "not_run",
+      "capability": "flask"
+    },
+    "timings": {},
+    "status": "BLOCKED",
+    "seconds": 0.0
+  },
+  {
+    "id": "flask_routes",
+    "language": "python",
+    "category": "flask",
+    "expected": "flask",
+    "actual_success": false,
+    "actual_output": "",
+    "error": "Unsupported capability: flask requires an isolated display/server adapter and genuine capture support; it was not executed.",
+    "exit_code": 69,
+    "stages": {
+      "execution": "not_run",
+      "capability": "flask"
+    },
+    "timings": {},
+    "status": "BLOCKED",
+    "seconds": 0.0001
+  },
+  {
+    "id": "html_registration",
+    "language": "html",
+    "category": "browser",
+    "expected": "Welcome Student",
+    "actual_success": true,
+    "actual_output": "Name Register Welcome Student\nBrowser interaction verification: PASSED\nPASSED: registration; Expected: ['Welcome Student']; Observed: Name Register Welcome Student",
+    "error": "",
+    "exit_code": 0,
+    "stages": {},
+    "timings": {
+      "browser_start_seconds": 0.236705,
+      "interaction_seconds": 0.075671,
+      "screenshot_seconds": 0.071379,
+      "capture_total_seconds": 0.837936
+    },
+    "status": "PASS",
+    "seconds": 0.839
+  },
+  {
+    "id": "html_validation",
+    "language": "html",
+    "category": "browser",
+    "expected": "Invalid email",
+    "actual_success": true,
+    "actual_output": "Email Submit Invalid email\nBrowser interaction verification: PASSED\nPASSED: validation; Expected: ['Invalid email']; Observed: Email Submit Invalid email",
+    "error": "",
+    "exit_code": 0,
+    "stages": {},
+    "timings": {
+      "browser_start_seconds": 0.239606,
+      "interaction_seconds": 0.087457,
+      "screenshot_seconds": 0.081999,
+      "capture_total_seconds": 0.863561
+    },
+    "status": "PASS",
+    "seconds": 0.8646
+  },
+  {
+    "id": "html_navigation",
+    "language": "html",
+    "category": "browser",
+    "expected": "Courses",
+    "actual_success": true,
+    "actual_output": "Menu Courses\nBrowser interaction verification: PASSED\nPASSED: navigation; Expected: ['Courses']; Observed: Menu Courses",
+    "error": "",
+    "exit_code": 0,
+    "stages": {},
+    "timings": {
+      "browser_start_seconds": 0.237632,
+      "interaction_seconds": 0.068117,
+      "screenshot_seconds": 0.071355,
+      "capture_total_seconds": 0.818226
+    },
+    "status": "PASS",
+    "seconds": 0.8193
+  },
+  {
+    "id": "html_modal",
+    "language": "html",
+    "category": "browser",
+    "expected": "Dialog content",
+    "actual_success": true,
+    "actual_output": "Open Dialog content\nBrowser interaction verification: PASSED\nPASSED: modal; Expected: ['Dialog content']; Observed: Open Dialog content",
+    "error": "",
+    "exit_code": 0,
+    "stages": {},
+    "timings": {
+      "browser_start_seconds": 0.21679,
+      "interaction_seconds": 0.057209,
+      "screenshot_seconds": 0.079817,
+      "capture_total_seconds": 0.807822
+    },
+    "status": "PASS",
+    "seconds": 0.8118
+  },
+  {
+    "id": "html_tabs",
+    "language": "html",
+    "category": "browser",
+    "expected": "Tab two content",
+    "actual_success": true,
+    "actual_output": "Second tab Tab two content\nBrowser interaction verification: PASSED\nPASSED: tabs; Expected: ['Tab two content']; Observed: Second tab Tab two content",
+    "error": "",
+    "exit_code": 0,
+    "stages": {},
+    "timings": {
+      "browser_start_seconds": 0.235184,
+      "interaction_seconds": 0.057725,
+      "screenshot_seconds": 0.071898,
+      "capture_total_seconds": 0.823095
+    },
+    "status": "PASS",
+    "seconds": 0.824
+  },
+  {
+    "id": "html_todo",
+    "language": "html",
+    "category": "browser",
+    "expected": "Review evidence",
+    "actual_success": true,
+    "actual_output": "Task Add task Review evidence\nBrowser interaction verification: PASSED\nPASSED: todo; Expected: ['Review evidence']; Observed: Task Add task Review evidence",
+    "error": "",
+    "exit_code": 0,
+    "stages": {},
+    "timings": {
+      "browser_start_seconds": 0.229866,
+      "interaction_seconds": 0.080686,
+      "screenshot_seconds": 0.073405,
+      "capture_total_seconds": 0.841515
+    },
+    "status": "PASS",
+    "seconds": 0.8424
+  },
+  {
+    "id": "html_filter",
+    "language": "html",
+    "category": "browser",
+    "expected": "Python found",
+    "actual_success": true,
+    "actual_output": "Query Search Python found\nBrowser interaction verification: PASSED\nPASSED: filter; Expected: ['Python found']; Observed: Query Search Python found",
+    "error": "",
+    "exit_code": 0,
+    "stages": {},
+    "timings": {
+      "browser_start_seconds": 0.234493,
+      "interaction_seconds": 0.081551,
+      "screenshot_seconds": 0.067855,
+      "capture_total_seconds": 0.871129
+    },
+    "status": "PASS",
+    "seconds": 0.8721
+  },
+  {
+    "id": "html_dom",
+    "language": "html",
+    "category": "browser",
+    "expected": "Updated",
+    "actual_success": true,
+    "actual_output": "Change Updated\nBrowser interaction verification: PASSED\nPASSED: dom; Expected: ['Updated']; Observed: Change Updated",
+    "error": "",
+    "exit_code": 0,
+    "stages": {},
+    "timings": {
+      "browser_start_seconds": 0.230743,
+      "interaction_seconds": 0.071565,
+      "screenshot_seconds": 0.075791,
+      "capture_total_seconds": 0.814482
+    },
+    "status": "PASS",
+    "seconds": 0.8155
+  },
+  {
+    "id": "html_responsive",
+    "language": "html",
+    "category": "browser",
+    "expected": "Required browser/API checks pass",
+    "actual_success": true,
+    "actual_output": "Desktop layout Inspect Desktop confirmed\nMobile layout Inspect Mobile confirmed\nBrowser interaction verification: PASSED\nPASSED: desktop; Expected: ['Desktop confirmed']; Observed: Desktop layout Inspect Desktop confirmed\nPASSED: mobile; Expected: ['Mobile confirmed']; Observed: Mobile layout Inspect Mobile confirmed",
+    "error": "",
+    "exit_code": 0,
+    "stages": {},
+    "timings": {
+      "browser_start_seconds": 0.236503,
+      "interaction_seconds": 0.136803,
+      "screenshot_seconds": 0.119534,
+      "capture_total_seconds": 1.040537
+    },
+    "status": "PASS",
+    "seconds": 1.0416
+  },
+  {
+    "id": "html_fetch_multifile",
+    "language": "html",
+    "category": "browser",
+    "expected": "Required browser/API checks pass",
+    "actual_success": true,
+    "actual_output": "Run Controlled response\nBrowser interaction verification: PASSED\nPASSED: fetch; Expected: ['Controlled response']; Observed: Run Controlled response",
+    "error": "",
+    "exit_code": 0,
+    "stages": {},
+    "timings": {
+      "browser_start_seconds": 0.291318,
+      "interaction_seconds": 0.177742,
+      "screenshot_seconds": 0.139028,
+      "capture_total_seconds": 1.694685
+    },
+    "status": "PASS",
+    "seconds": 1.7752
+  },
+  {
+    "id": "html_multi_page",
+    "language": "html",
+    "category": "browser",
+    "expected": "Required browser/API checks pass",
+    "actual_success": true,
+    "actual_output": "Home\nAbout this lab",
+    "error": "",
+    "exit_code": 0,
+    "stages": {},
+    "timings": {
+      "browser_start_seconds": 0.522801,
+      "interaction_seconds": 0,
+      "screenshot_seconds": 0.16567700000000002,
+      "capture_total_seconds": 2.7374340000000004
+    },
+    "status": "PASS",
+    "seconds": 2.7501
+  },
+  {
+    "id": "react_counter",
+    "language": "react",
+    "category": "react",
+    "expected": "Count 1",
+    "actual_success": true,
+    "actual_output": "Run Count 1\nBrowser interaction verification: PASSED\nPASSED: counter; Expected: ['Count 1']; Observed: Run Count 1",
+    "error": "",
+    "exit_code": 0,
+    "stages": {},
+    "timings": {
+      "browser_start_seconds": 0.246681,
+      "interaction_seconds": 0.088664,
+      "screenshot_seconds": 0.070439,
+      "capture_total_seconds": 1.407748
+    },
+    "status": "PASS",
+    "seconds": 18.0988
+  },
+  {
+    "id": "react_todo",
+    "language": "react",
+    "category": "react",
+    "expected": "Task added",
+    "actual_success": true,
+    "actual_output": "Run Task added\nBrowser interaction verification: PASSED\nPASSED: todo; Expected: ['Task added']; Observed: Run Task added",
+    "error": "",
+    "exit_code": 0,
+    "stages": {},
+    "timings": {
+      "browser_start_seconds": 0.264934,
+      "interaction_seconds": 0.058724,
+      "screenshot_seconds": 0.064085,
+      "capture_total_seconds": 1.442704
+    },
+    "status": "PASS",
+    "seconds": 3.7695
+  },
+  {
+    "id": "react_form",
+    "language": "react",
+    "category": "react",
+    "expected": "Validation error",
+    "actual_success": true,
+    "actual_output": "Run Validation error\nBrowser interaction verification: PASSED\nPASSED: form; Expected: ['Validation error']; Observed: Run Validation error",
+    "error": "",
+    "exit_code": 0,
+    "stages": {},
+    "timings": {
+      "browser_start_seconds": 0.258729,
+      "interaction_seconds": 0.070865,
+      "screenshot_seconds": 0.064186,
+      "capture_total_seconds": 1.436202
+    },
+    "status": "PASS",
+    "seconds": 3.7596
+  },
+  {
+    "id": "react_search",
+    "language": "react",
+    "category": "react",
+    "expected": "Python match",
+    "actual_success": true,
+    "actual_output": "Run Python match\nBrowser interaction verification: PASSED\nPASSED: search; Expected: ['Python match']; Observed: Run Python match",
+    "error": "",
+    "exit_code": 0,
+    "stages": {},
+    "timings": {
+      "browser_start_seconds": 0.254297,
+      "interaction_seconds": 0.063207,
+      "screenshot_seconds": 0.061278,
+      "capture_total_seconds": 1.411914
+    },
+    "status": "PASS",
+    "seconds": 3.6427
+  },
+  {
+    "id": "react_dashboard",
+    "language": "react",
+    "category": "react",
+    "expected": "Dashboard updated",
+    "actual_success": true,
+    "actual_output": "Summary card Run Dashboard updated\nBrowser interaction verification: PASSED\nPASSED: dashboard; Expected: ['Dashboard updated']; Observed: Summary card Run Dashboard updated",
+    "error": "",
+    "exit_code": 0,
+    "stages": {},
+    "timings": {
+      "browser_start_seconds": 0.280132,
+      "interaction_seconds": 0.061896,
+      "screenshot_seconds": 0.063042,
+      "capture_total_seconds": 1.459301
+    },
+    "status": "PASS",
+    "seconds": 3.7951
+  },
+  {
+    "id": "react_navigation",
+    "language": "react",
+    "category": "react",
+    "expected": "Page two",
+    "actual_success": true,
+    "actual_output": "Local component Run Page two\nBrowser interaction verification: PASSED\nPASSED: navigation; Expected: ['Page two']; Observed: Local component Run Page two",
+    "error": "",
+    "exit_code": 0,
+    "stages": {},
+    "timings": {
+      "browser_start_seconds": 0.285372,
+      "interaction_seconds": 0.05032,
+      "screenshot_seconds": 0.066122,
+      "capture_total_seconds": 1.423015
+    },
+    "status": "PASS",
+    "seconds": 3.6477
+  },
+  {
+    "id": "node_rest_validation",
+    "language": "node",
+    "category": "api",
+    "expected": "Required browser/API checks pass",
+    "actual_success": true,
+    "actual_output": "GET /health\nHTTP 200\n{\"ok\":true}\n\nPOST /sum\nHTTP 200\n{\"result\":5}\n\nPOST /sum\nHTTP 400\n{\"error\":\"numbers required\"}\n\nGET /broken\nHTTP 500\n{\"error\":\"intentional\"}\n\nGET /missing\nHTTP 404\n<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<title>Error</title>\n</head>\n<body>\n<pre>Cannot GET /missing</pre>\n</body>\n</html>\n",
+    "error": "",
+    "exit_code": 0,
+    "stages": {},
+    "timings": {},
+    "status": "PASS",
+    "seconds": 5.6512
+  },
+  {
+    "id": "node_http",
+    "language": "node",
+    "category": "browser",
+    "expected": "Actual HTTP result",
+    "actual_success": true,
+    "actual_output": "Actual HTTP result",
+    "error": "",
+    "exit_code": 0,
+    "stages": {},
+    "timings": {
+      "browser_start_seconds": 0.420318,
+      "interaction_seconds": 0,
+      "screenshot_seconds": 0.115161,
+      "capture_total_seconds": 2.036366
+    },
+    "status": "PASS",
+    "seconds": 4.1437
+  }
+]

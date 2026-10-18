@@ -1,0 +1,95 @@
+{
+  "date": "2026-10-16 to 2026-10-17 (Asia/Calcutta)",
+  "readiness": "PARTIALLY READY",
+  "baseline_commit": "679354c",
+  "deployed": false,
+  "backend_tests": {
+    "tests": "293",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "243.070"
+  },
+  "capabilities": {
+    "total": 83,
+    "pass": 66,
+    "blocked": 17,
+    "defect": 0
+  },
+  "frontend": {
+    "typescript": "passed",
+    "production_build": "passed",
+    "standalone_lint": "blocked: no ESLint configuration",
+    "ui_interaction": "blocked: local browser control disabled"
+  },
+  "word": {
+    "package_open": "passed",
+    "embedded_image_validation": "passed",
+    "aspect_ratios": "passed",
+    "physical_page_render": "blocked: bundled soffice.exe unavailable"
+  },
+  "security": {
+    "sibling_canary_read": {
+      "accessible": true,
+      "scope": "Audit-owned temporary canary only; no user or service files accessed."
+    },
+    "process_network_access": {
+      "allowed": true,
+      "scope": "Audit-owned local HTTP endpoint only"
+    },
+    "private_workspaces_cleaned": true
+  },
+  "railway": {
+    "services_online": 4,
+    "pending_work": 0,
+    "scope": "Existing deployed version; this audit patch remains local"
+  },
+  "local_app": "http://127.0.0.1:3016",
+  "http_gate_followup": {
+    "tests": 26,
+    "failures": 0,
+    "warnings": 1,
+    "seconds": 15.09,
+    "scope": "Final guard added after 293-test full run"
+  },
+  "end_to_end": [
+    {
+      "manual": "manual_mixed.pdf",
+      "status": "completed",
+      "total_seconds": 16.9005,
+      "download_status": 200,
+      "embedded_images": 9,
+      "aspect_ratios_preserved": true
+    },
+    {
+      "manual": "manual_gui.pdf",
+      "status": "failed",
+      "total_seconds": 16.7925,
+      "download_status": 200,
+      "embedded_images": 7,
+      "aspect_ratios_preserved": true
+    },
+    {
+      "manual": "malformed.pdf",
+      "total_seconds": 1.0962
+    },
+    {
+      "manual": "manual_scanned.pdf",
+      "total_seconds": 1.0917
+    }
+  ],
+  "artifact_validation": {
+    "valid_png_files": 93,
+    "invalid": [],
+    "download_integrity": [
+      {
+        "report": "manual_mixed_audit.docx",
+        "download_matches_stored_bytes": true
+      },
+      {
+        "report": "manual_gui_audit.docx",
+        "download_matches_stored_bytes": true
+      }
+    ]
+  }
+}

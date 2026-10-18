@@ -16,10 +16,12 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..middleware.auth import get_current_user
+from ..security.execution_access import execution_user
 from ..middleware.csrf import require_csrf_token
 from ..models import AssignmentWorkflow, Report, Upload, User, WorkflowBatch, WorkflowBatchItem
 from ..config import settings
 from ..services.lab_question_filter import filter_lab_tasks
+from ..services.billing_service import reserve_workflow_credits, settle_workflow_credits
 from ..services.workflow_batch import archive_chunks, create_batch_archive, stage_batch_file
 
 router = APIRouter(prefix="/workflows")
@@ -50,7 +52,10 @@ def owned_upload(upload_id, user, db):
 
 def workflow_response(workflow, db):
     report = db.query(Report).get(workflow.report_id) if workflow.report_id else None
-    results = [{key: value for key, value in result.items() if key != "screenshot_paths"} | {"screenshots": len(result.get("screenshot_paths", []))} for result in (workflow.results or [])]
+    results = [{key: value for key, value in result.items() if key not in {"screenshot_paths", "project_files"}}
+               | {"screenshots": len(result.get("screenshot_paths", [])),
+                  **({"project_file_names": list(result['project_files'])} if result.get('project_files') else {})}
+               for result in (workflow.results or [])]
     queue_position = None
     if workflow.status == "queued":
         queue_position = db.query(AssignmentWorkflow.id).filter(
@@ -59,7 +64,7 @@ def workflow_response(workflow, db):
         ).count()
     return {
         "id": workflow.id, "upload_id": workflow.upload_id, "status": workflow.status,
-        "stage": workflow.stage, "progress": workflow.progress, "questions": workflow.questions,
+        "stage": 'generate' if workflow.stage=='resume' else workflow.stage, "progress": workflow.progress, "questions": workflow.questions,
         "results": results, "logs": workflow.logs, "error": workflow.error,
         "language": workflow.language, "instructions": workflow.instructions, "output_name": workflow.output_name,
         "mode": workflow.mode, "screenshot_style": workflow.screenshot_style, "batch_id": workflow.batch_id,
@@ -111,7 +116,7 @@ def batch_status(batch_id, user, db):
         "batch_id": batch_id, "total": len(states),
         "completed": sum(row["status"] == "completed" for row in states),
         "failed": sum(row["status"] == "failed" for row in states),
-        "ready_to_download": terminal and any(row["status"] == "completed" for row in states),
+        "ready_to_download": terminal and any(row["report_id"] for row in states),
         "files": states,
     }
 
@@ -121,7 +126,7 @@ async def batch_upload(
     files: list[UploadFile] = File(...),
     mode: str = Form("code_only"),
     screenshot_style: str = Form("style_1"),
-    user: User = Depends(get_current_user),
+    user: User = Depends(execution_user),
     db: Session = Depends(get_db),
     csrf: bool = Depends(require_csrf_token),
 ):
@@ -186,7 +191,7 @@ async def download_batch_zip(batch_id: str, user: User = Depends(get_current_use
     archive_items = []
     for row in state["files"]:
         item = {"position": row["position"], "original_filename": row["filename"], "error": row["error"]}
-        if row["status"] == "completed" and row["report_id"]:
+        if row["status"] in {"completed", "failed"} and row["report_id"]:
             report = db.query(Report).filter_by(id=row["report_id"], upload_id=row["upload_id"]).first()
             if report is None:
                 item["error"] = "The completed report is missing."
@@ -239,7 +244,7 @@ async def get_workflow(upload_id: int, user: User = Depends(get_current_user), d
 
 
 @router.post("/{upload_id}/process")
-async def process(upload_id: int, data: ProcessInput, request: Request, background: BackgroundTasks, user: User = Depends(get_current_user), db: Session = Depends(get_db), csrf: bool = Depends(require_csrf_token)):
+async def process(upload_id: int, data: ProcessInput, request: Request, background: BackgroundTasks, user: User = Depends(execution_user), db: Session = Depends(get_db), csrf: bool = Depends(require_csrf_token)):
     owned_upload(upload_id, user, db)
     workflow = db.query(AssignmentWorkflow).filter_by(upload_id=upload_id).first()
     if not workflow or workflow.status == "extracting" or (workflow.status == "queued" and workflow.stage == "extract"):
@@ -249,7 +254,9 @@ async def process(upload_id: int, data: ProcessInput, request: Request, backgrou
     if workflow.status == "processing":
         raise HTTPException(409, "This assignment is already being processed.")
     check_queue_capacity(db, user.id)
-    questions = [{"id": index + 1, "text": q.text.strip(), "language": "python" if q.language == "auto" else q.language} for index, q in enumerate(data.questions)]
+    if len({q.id for q in data.questions}) != len(data.questions):
+        raise HTTPException(400, 'Question IDs must be unique; original experiment numbers are preserved.')
+    questions = [{"id": q.id, "text": q.text.strip(), "language": "python" if q.language == "auto" else q.language} for q in data.questions]
     filtered = filter_lab_tasks(questions, mode=data.mode)
     if len(filtered) != len(questions):
         raise HTTPException(400, "Only valid laboratory questions can be processed. Handwritten exercises are excluded.")
@@ -262,12 +269,21 @@ async def process(upload_id: int, data: ProcessInput, request: Request, backgrou
     resume = (workflow.status in {"paused", "failed"} and workflow.questions == questions
               and workflow.language == data.language and previous_instructions == data.instructions
               and workflow.mode == data.mode and workflow.screenshot_style == data.screenshot_style)
+    unchanged = (workflow.questions == questions and workflow.language == data.language
+                 and previous_instructions == data.instructions and workflow.mode == data.mode
+                 and workflow.screenshot_style == data.screenshot_style)
+    if workflow.status == 'completed' and unchanged and workflow.report_id:
+        return workflow_response(workflow, db)
+    if settings.BILLING_ENABLED:
+        settle_workflow_credits(db, workflow)
+    continue_pending=resume and workflow.status=='paused'
     workflow.questions = questions
     workflow.language, workflow.instructions, workflow.output_name = data.language, data.instructions, data.output_name
     workflow.mode, workflow.screenshot_style = data.mode, data.screenshot_style
     workflow.results = workflow.results if resume else []
+    reserve_workflow_credits(db, workflow, user.id)
     workflow.error, workflow.report_id = None, None
-    workflow.status, workflow.stage = "queued", "generate"
+    workflow.status, workflow.stage = "queued", 'resume' if continue_pending else 'generate'
     workflow.progress = 20 + int(65 * len(workflow.results) / len(questions))
     workflow.updated_at = datetime.now(timezone.utc)
     db.commit()

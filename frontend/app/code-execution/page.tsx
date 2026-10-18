@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import CreditStatus from '@/components/billing/CreditStatus';
 import { useRouter } from "next/navigation";
 
 const DotGrid = dynamic<any>(() => import("@/components/visual/DotGrid"), {
@@ -551,7 +552,7 @@ export default function AssignmentPage() {
           return lastLog;
         }
         if (workflow?.stage === "extract") return "Extracting questions & aims...";
-        if (workflow?.stage === "generate") return "Synthesizing verified code in 5 languages...";
+        if (workflow?.stage === "generate") return "Generating code for the selected language...";
         if (workflow?.stage === "execute") return "Executing in 512MB POSIX sandbox...";
         if (workflow?.stage === "capture") return "Capturing terminal output & proofs...";
         if (workflow?.stage === "report") return "Compiling accredited Word report...";
@@ -591,8 +592,9 @@ export default function AssignmentPage() {
         <main className={styles.layout}>
         <aside className={styles.setupPanel}>
           <h2 className={styles.panelTitle}>Build your lab report</h2>
+          <CreditStatus refreshKey={`${workflow?.status}-${workflow?.progress}`} />
           <p className={styles.setupIntro}>
-            Configure the source, review the extracted questions, then run the verified pipeline.
+            Configure the source, review the extracted questions, then run the execution and evidence checks.
           </p>
           <div className={styles.step}>
             <span className={styles.stepNumber}>1</span>
@@ -918,6 +920,7 @@ export default function AssignmentPage() {
           {error && (
             <div className={styles.errorBox} role="alert">
               {error}
+              {error.toLowerCase().includes('credit')&&<Link href="/#pricing"> View student packs →</Link>}
             </div>
           )}
           <button

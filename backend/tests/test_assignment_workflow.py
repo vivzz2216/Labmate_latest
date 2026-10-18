@@ -14,6 +14,22 @@ from app.services.assignment_workflow import build_word_report, document_text, v
 
 
 class AssignmentReportTests(unittest.TestCase):
+    def test_diagnostic_word_handles_ansi_logs_and_xml_controls_without_mutating_results(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);original=Document();original.add_paragraph('Original manual');source=root/'manual.docx';original.save(source)
+            result={'id':1,'question':'Build a React calculator.','language':'react','status':'failed','code':'const value="\x00";',
+                'output':'','error':'\x1b[31mGenuine Vite failure\x1b[0m\x00','screenshot_paths':[],
+                'verification':{'required':True,'status':'failed','tests':[{'name':'Click Add','status':'failed','expected_text':['5'],'observed_text':'23\x00','error':'No expected result'}]}}
+            workflow=SimpleNamespace(id=3,output_name='diagnostic',instructions='',results=[result])
+            upload=SimpleNamespace(file_type='docx',file_path=str(source),original_filename='manual.docx')
+            with patch('app.services.assignment_workflow.settings.REPORT_DIR',str(root/'reports')):
+                path,_=build_word_report(upload,workflow)
+            text='\n'.join(p.text for p in Document(path).paragraphs)
+            self.assertIn('Genuine Vite failure',text)
+            self.assertIn('Observed page text: 23',text)
+            self.assertNotIn('\x1b',text)
+            self.assertIn('\x1b',result['error'])
+
     def test_original_word_tables_headers_and_images_survive_composition(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)

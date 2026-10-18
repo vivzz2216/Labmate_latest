@@ -73,6 +73,27 @@ class BatchWorkflowTests(unittest.TestCase):
         self.engine.dispose()
         self.folder.cleanup()
 
+    def test_diagnostic_only_batch_stays_failed_and_is_downloadable(self):
+        response = self.client.post("/api/workflows/batch-upload", files=[
+            ("files", ("manual.docx", self.docx, "application/vnd.openxmlformats-officedocument.wordprocessingml.document"))])
+        state = response.json()
+        with self.factory() as db:
+            workflow = db.get(AssignmentWorkflow, state["files"][0]["workflow_id"])
+            report_path = self.root / "reports" / "diagnostic.docx"
+            report_path.parent.mkdir(parents=True)
+            report_path.write_bytes(self.docx)
+            report = Report(upload_id=workflow.upload_id, filename="diagnostic.docx", file_path=str(report_path), file_size=report_path.stat().st_size)
+            db.add(report); db.flush()
+            workflow.report_id, workflow.status, workflow.error = report.id, "failed", "Required interaction failed."
+            db.commit()
+        status = self.client.get(f"/api/workflows/batch/{state['batch_id']}").json()
+        self.assertEqual((status["completed"], status["failed"], status["ready_to_download"]), (0, 1, True))
+        response = self.client.get(f"/api/workflows/batch/{state['batch_id']}/download-zip")
+        self.assertEqual(response.status_code, 200)
+        with ZipFile(io.BytesIO(response.content)) as archive:
+            self.assertTrue(any(name.endswith("diagnostic.docx") for name in archive.namelist()))
+            self.assertIn("Required interaction failed", archive.read("errors.json").decode())
+
     def test_batch_status_file_failure_isolation_and_zip(self):
         response = self.client.post("/api/workflows/batch-upload", files=[
             ("files", ("first.docx", self.docx, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")),

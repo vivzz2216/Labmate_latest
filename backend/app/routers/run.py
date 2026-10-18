@@ -7,6 +7,7 @@ from ..services.parser_service import parser_service
 from ..services.executor_service import executor_service
 from ..services.screenshot_service import screenshot_service
 from ..middleware.auth import get_current_user, verify_upload_ownership
+from ..security.execution_access import legacy_execution_user as execution_user
 from ..middleware.csrf import require_csrf_token
 from ..config import settings
 from ..security.signed_assets import screenshot_url as signed_screenshot_url
@@ -21,7 +22,7 @@ async def run_tasks(
     http_request: Request,
     request: RunRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(execution_user),
     csrf_valid: bool = Depends(require_csrf_token)
 ):
     """
