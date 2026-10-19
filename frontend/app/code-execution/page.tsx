@@ -970,7 +970,7 @@ export default function AssignmentPage() {
                 status={complete ? "done" : failed ? "error" : "working"}
                 label={getActionLabel()}
                 doneLabel="Completed in"
-                errorLabel="Paused after"
+                errorLabel={workflow?.status === "paused" ? "Processing paused" : "Processing failed"}
                 pattern="orbit"
                 grid={3}
                 shape="round"

@@ -1,6 +1,106 @@
 from unittest.mock import patch
 
+import pytest
+
 from app.services.parser_service import ParserService
+from app.services.manual_sections import ManualStructureError, numbered_experiments
+
+
+@pytest.mark.parametrize('index_heading', ['CONTENTS', 'Table of Contents:', 'INDEX'])
+def test_explicit_experiment_entries_in_contents_are_not_duplicate_sections(index_heading):
+    text = f'''2 Experiments
+{index_heading}
+Experiment 1: Portfolio ........ 3
+Experiment 2
+Records API ........ 4
+GENERAL INSTRUCTIONS
+Test each application before submission.
+EXPERIMENTS
+EXPERIMENT 1
+Portfolio using HTML and CSS
+Aim
+Create a responsive portfolio.
+Requirements
+Include education and contact sections.
+EXPERIMENT 2
+Records API using Node.js and Express
+Requirements
+Implement GET and POST endpoints.
+Handle missing fields and invalid IDs.'''
+    result = numbered_experiments(text)
+    assert [row['experiment_number'] for row in result] == [1, 2]
+    assert [row['language'] for row in result] == ['html', 'node']
+    assert 'contact sections' in result[0]['text']
+    assert 'invalid IDs' in result[1]['text']
+    assert all('Test each application before submission.' in row['text'] for row in result)
+    assert all('........' not in row['text'] for row in result)
+
+
+def test_contents_without_a_separator_stops_at_real_experiment_requirements():
+    text = '''CONTENTS
+Experiment 1: Add ........ 2
+Experiment 1: Add
+Aim
+Build a JavaScript calculator.
+Requirements
+Click Add and display 5 for inputs 2 and 3.'''
+    result = numbered_experiments(text)
+    assert len(result) == 1
+    assert 'Click Add and display 5' in result[0]['text']
+
+
+def test_real_duplicate_sections_are_still_rejected_after_contents():
+    text = '''CONTENTS
+Experiment 1: Form ........ 2
+EXPERIMENTS
+Experiment 1: First form
+Requirements
+Create a form with email validation.
+Experiment 1: Second form
+Requirements
+Create a separate password form.'''
+    with pytest.raises(ManualStructureError, match='same number: 1'):
+        numbered_experiments(text)
+
+
+def test_ambiguous_prose_in_contents_is_not_silently_discarded():
+    text = '''CONTENTS
+Experiment 1: Calculate
+Build a page that displays 5
+Experiment 1: Another calculator
+Requirements
+Build a different calculator.'''
+    with pytest.raises(ManualStructureError):
+        numbered_experiments(text)
+
+
+def test_index_inside_actual_exercise_cannot_hide_later_duplicates():
+    text = '''Experiment 1: Portfolio
+Requirements
+Build an HTML portfolio.
+Index
+Experiment 1: API
+Requirements
+Build a Node.js API.'''
+    with pytest.raises(ManualStructureError):
+        numbered_experiments(text)
+
+
+def test_contents_only_upload_does_not_fabricate_experiments():
+    with pytest.raises(ManualStructureError, match='Only contents/index entries'):
+        numbered_experiments('CONTENTS\nExperiment 1: Portfolio ........ 3\nExperiment 2: API ........ 4')
+
+
+def test_declared_count_is_checked_after_excluding_index_entries():
+    text = '''2 Experiments
+CONTENTS
+Experiment 1: Portfolio ........ 3
+EXPERIMENTS
+Experiment 1: Portfolio
+Requirements
+Build an HTML portfolio.'''
+    with pytest.raises(ManualStructureError, match='2 experiments, but 1'):
+        numbered_experiments(text)
 
 
 def test_framework_titles_win_over_generic_registration_and_form_keywords():

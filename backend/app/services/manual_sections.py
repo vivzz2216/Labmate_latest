@@ -7,10 +7,45 @@ from .lab_question_filter import is_handwritten_question
 HEADING = re.compile(r"^\s*(?:#+\s*)?experiment\s+(\d{1,3})\s*(?:[:.)–—-]\s*|\s+|$)(.*)$", re.I)
 END = re.compile(r"^(?:research basis|references|bibliography|appendix)\b", re.I)
 SECTION = re.compile(r"^(?:aim|problem statement|tasks|evidence to submit|verification checklist|result|difficulty)(?:\s*:.*)?$", re.I)
+CONTENTS = re.compile(r"^(?:table\s+of\s+contents|contents|index)\s*:?\s*$", re.I)
+FRONT_MATTER_END = re.compile(r"^(?:general\s+(?:requirements|instructions)|experiments)\s*:?\s*$", re.I)
+REQUIREMENTS = re.compile(r"^(?:aim|problem statement|experiment question|requirements|tasks|expected output)\s*(?::.*)?$", re.I)
+PAGE_REFERENCE = re.compile(r"(?:\.{2,}\s*|\s{2,}|\|\s*|\s+page\s+)\d+\s*$", re.I)
 
 
 class ManualStructureError(ValueError):
     """Explicit boundaries are ambiguous; never silently fall back and lose tasks."""
+
+
+def _body_boundaries(lines, boundaries):
+    """Ignore compact entries only inside an explicitly labelled contents/index.
+
+    Never deduplicate by experiment number: two actual problem statements with
+    the same number must still fail rather than silently discard requirements.
+    """
+    in_contents = False
+    previous = 0
+    for position, (start, match) in enumerate(boundaries):
+        for line in lines[previous:start]:
+            if CONTENTS.fullmatch(line.strip()):
+                in_contents = True
+            elif FRONT_MATTER_END.fullmatch(line.strip()):
+                in_contents = False
+        end = boundaries[position + 1][0] if position + 1 < len(boundaries) else len(lines)
+        entry = []
+        for line in lines[start + 1:end]:
+            if FRONT_MATTER_END.fullmatch(line.strip()):
+                break
+            if line.strip():
+                entry.append(line.strip())
+        has_requirements = any(REQUIREMENTS.fullmatch(line) for line in entry)
+        compact_entry = not entry or all(PAGE_REFERENCE.search(line) for line in entry)
+        if not (in_contents and not has_requirements and compact_entry):
+            # Once the actual manual starts, a later 'Index' inside an exercise
+            # must not make subsequent real sections disappear.
+            return boundaries[position:]
+        previous = start + 1
+    return []
 
 
 def section_language(title, content, default="python"):
@@ -37,14 +72,21 @@ def numbered_experiments(text):
     handwritten experiments are excluded deliberately, with no renumbering.
     """
     lines = text.splitlines()
-    boundaries = [(i, HEADING.match(line)) for i, line in enumerate(lines) if HEADING.match(line)]
-    if not boundaries: return []
+    raw_boundaries = [(i, HEADING.match(line)) for i, line in enumerate(lines) if HEADING.match(line)]
+    if not raw_boundaries: return []
+    boundaries = _body_boundaries(lines, raw_boundaries)
+    if not boundaries:
+        raise ManualStructureError("Only contents/index entries were found. Upload the experiment pages as well.")
     numbers = [int(match.group(1)) for _, match in boundaries]
     declared = re.search(r'\b(\d{1,3})\s+experiments\b', '\n'.join(lines[:boundaries[0][0]]), re.I)
     if declared and int(declared.group(1)) != len(boundaries):
         raise ManualStructureError(f"The manual declares {declared.group(1)} experiments, but {len(boundaries)} explicit experiment sections were found.")
     if len(numbers) != len(set(numbers)):
-        raise ManualStructureError("Repeated experiment numbers were found. Remove duplicate/index headings before processing.")
+        repeated = sorted({number for number in numbers if numbers.count(number) > 1})
+        raise ManualStructureError(
+            "Multiple experiment sections use the same number: " + ", ".join(map(str, repeated))
+            + ". Give distinct experiments unique numbers, or upload the original manual instead of a combined report."
+        )
     if len(boundaries) > 100: raise ManualStructureError("Assignments are limited to 100 experiments.")
     global_lines = []
     collecting = False
