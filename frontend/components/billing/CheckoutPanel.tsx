@@ -111,7 +111,15 @@ export default function CheckoutPanel({packId}:{packId:string}) {
           <div className={styles.total}><span>One-time total</span><strong>{rupees(pack.amount)}</strong></div>
           <p className={styles.totalNote}>The price shown is the total. No recurring charge.</p>
           {user&&<p className={styles.account}>Buying for <strong>{user.email}</strong>{balance&&<span>{balance.available} available · {balance.reserved} reserved{balance.mode==='test'?' · test credits':''}</span>}</p>}
-          {catalogue.mode==='test'&&<p className={styles.checkoutTest}>This is a simulated payment. No real money will be charged, and test credits stay separate from live credits.</p>}
+          {catalogue.mode==='test'&&<div className={styles.checkoutTest}>
+            <p>This is a simulated test payment. No real money will be charged.</p>
+            <div style={{marginTop:'8px',fontSize:'11.5px',lineHeight:'1.6',background:'#e4eae1',padding:'10px',borderRadius:'6px',color:'#273c31',border:'1px solid #c9d5c5'}}>
+              <strong>Test Mode Credentials (India):</strong><br/>
+              • <strong>1-Click:</strong> Click <em>&ldquo;Complete test payment&rdquo;</em> below (instant, no card needed)<br/>
+              • <strong>UPI ID:</strong> <code>success@razorpay</code><br/>
+              • <strong>Domestic Card:</strong> <code>5123 4500 0000 0008</code> (Exp: 12/30, CVV: 123)
+            </div>
+          </div>}
           {message&&<p role="status" aria-live="polite" className={`${styles.message} ${paid?styles.success:''}`}>{paid&&<Check size={18}/>}<span>{message}</span></p>}
           {paid?<Link href="/code-execution" className={styles.payButton}>Start your lab<ArrowRight size={18}/></Link>:refunded?<button className={styles.payButton} onClick={newPurchase}>Start a new purchase<ArrowRight size={18}/></button>:catalogue.mode==='test'?<><button className={styles.payButton} onClick={testPay} disabled={loading||busy||!catalogue.checkout_available}>{busy?<><Loader2 size={18} className={styles.spinner}/>Please wait…</>:!user?'Sign in to continue':`Complete test payment (${rupees(pack.amount)})`}</button><button className={styles.statusButton} onClick={pay} disabled={busy||!catalogue.checkout_available}>Open Razorpay window</button></>:<button className={styles.payButton} onClick={pay} disabled={loading||busy||!catalogue.checkout_available}>{busy?<><Loader2 size={18} className={styles.spinner}/>Please wait…</>:!user?'Sign in to continue':`Pay ${rupees(pack.amount)}`}</button>}
           {paid&&<button className={styles.statusButton} onClick={newPurchase}>Buy another pack</button>}
