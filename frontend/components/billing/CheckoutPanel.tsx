@@ -53,6 +53,19 @@ export default function CheckoutPanel({packId}:{packId:string}) {
     if(!order||busy)return;setBusy(true);setMessage('Checking with Razorpay…');
     try{accept(await billingApi.reconcile(order.id));}catch(e){setMessage(paymentError(e));}finally{if(active.current)setBusy(false);}
   };
+  const testPay=async()=>{
+    if(!user){setLoginOpen(true);return;}
+    if(!pack||busy)return;setBusy(true);setMessage('Processing simulated test payment…');confirming.current=false;
+    try{
+      if(!requestKey.current){requestKey.current=sessionStorage.getItem(requestStorageKey)||crypto.randomUUID();sessionStorage.setItem(requestStorageKey,requestKey.current);}
+      const saved=order?.status==='created'?order:await billingApi.order(pack.id,requestKey.current);
+      setOrder(saved);sessionStorage.setItem(storageKey,saved.id);
+      if(saved.status==='paid'){accept(saved);setBusy(false);return;}
+      const confirmed=await billingApi.testPay(saved.id);
+      accept(confirmed);
+    }catch(e){if(active.current)setMessage(paymentError(e));}
+    finally{if(active.current)setBusy(false);}
+  };
   const pay=async()=>{
     if(!user){setLoginOpen(true);return;}
     if(!pack||busy)return;setBusy(true);setMessage('Preparing secure checkout…');confirming.current=false;
@@ -100,7 +113,7 @@ export default function CheckoutPanel({packId}:{packId:string}) {
           {user&&<p className={styles.account}>Buying for <strong>{user.email}</strong>{balance&&<span>{balance.available} available · {balance.reserved} reserved{balance.mode==='test'?' · test credits':''}</span>}</p>}
           {catalogue.mode==='test'&&<p className={styles.checkoutTest}>This is a simulated payment. No real money will be charged, and test credits stay separate from live credits.</p>}
           {message&&<p role="status" aria-live="polite" className={`${styles.message} ${paid?styles.success:''}`}>{paid&&<Check size={18}/>}<span>{message}</span></p>}
-          {paid?<Link href="/code-execution" className={styles.payButton}>Start your lab<ArrowRight size={18}/></Link>:refunded?<button className={styles.payButton} onClick={newPurchase}>Start a new purchase<ArrowRight size={18}/></button>:<button className={styles.payButton} onClick={pay} disabled={loading||busy||!catalogue.checkout_available}>{busy?<><Loader2 size={18} className={styles.spinner}/>Please wait…</>:!user?'Sign in to continue':`Pay ${rupees(pack.amount)}${catalogue.mode==='test'?' · Test payment':''}`}</button>}
+          {paid?<Link href="/code-execution" className={styles.payButton}>Start your lab<ArrowRight size={18}/></Link>:refunded?<button className={styles.payButton} onClick={newPurchase}>Start a new purchase<ArrowRight size={18}/></button>:catalogue.mode==='test'?<><button className={styles.payButton} onClick={testPay} disabled={loading||busy||!catalogue.checkout_available}>{busy?<><Loader2 size={18} className={styles.spinner}/>Please wait…</>:!user?'Sign in to continue':`Complete test payment (${rupees(pack.amount)})`}</button><button className={styles.statusButton} onClick={pay} disabled={busy||!catalogue.checkout_available}>Open Razorpay window</button></>:<button className={styles.payButton} onClick={pay} disabled={loading||busy||!catalogue.checkout_available}>{busy?<><Loader2 size={18} className={styles.spinner}/>Please wait…</>:!user?'Sign in to continue':`Pay ${rupees(pack.amount)}`}</button>}
           {paid&&<button className={styles.statusButton} onClick={newPurchase}>Buy another pack</button>}
           {order&&!paid&&<button className={styles.statusButton} onClick={checkStatus} disabled={busy}>Check payment status</button>}
           {!catalogue.checkout_available&&<p className={styles.rule}>Checkout is temporarily unavailable. Your existing reports are still accessible.</p>}

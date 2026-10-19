@@ -274,3 +274,27 @@ def test_gateway_transport_errors_are_recoverable_without_exposing_credentials(m
         asyncio.run(billing.gateway_request('GET','/orders'))
     assert failure.value.status_code==503
     assert 'private-fixture-secret' not in failure.value.detail
+
+
+def test_simulate_test_payment_succeeds_and_adds_credits(env):
+    pid = purchase(env)
+    r = env.client.post(f'/api/billing/orders/{pid}/test-pay')
+    assert r.status_code == 200
+    data = r.json()
+    assert data['status'] == 'paid'
+    assert data['credits'] == 10
+    assert data['payment_id'].startswith('pay_test')
+    assert credits(env)['available'] == 13
+    with env.factory() as db:
+        assert db.query(CreditLedger).filter_by(kind='pack_purchase').count() == 1
+
+
+def test_simulate_test_payment_blocked_in_live_mode(env, monkeypatch):
+    pid = purchase(env)
+    monkeypatch.setattr(settings, 'RAZORPAY_MODE', 'live')
+    r = env.client.post(f'/api/billing/orders/{pid}/test-pay')
+    assert r.status_code == 403
+    assert 'test' in r.json()['detail'].lower()
+    assert credits(env)['available'] == 3
+
+

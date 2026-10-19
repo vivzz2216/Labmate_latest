@@ -74,6 +74,15 @@ async def reconcile(purchase_id: UUID, user: User = Depends(get_current_user),
     return await billing.reconcile_order(db, user.id, str(purchase_id))
 
 
+@router.post('/orders/{purchase_id}/test-pay')
+async def test_pay(purchase_id: UUID, user: User = Depends(get_current_user),
+                   db: Session = Depends(get_db), csrf: bool = Depends(require_csrf_token)):
+    if settings.RAZORPAY_MODE != 'test':
+        raise HTTPException(403, 'Test payments are only available when RAZORPAY_MODE is test.')
+    return await billing.simulate_test_payment(db, user.id, str(purchase_id))
+
+
+
 @router.post('/webhook')
 async def webhook(request: Request, db: Session = Depends(get_db)):
     # No browser JWT or CSRF: this endpoint authenticates the untouched body.

@@ -167,9 +167,21 @@ async def create_order(db, user_id, pack_id, request_key):
         except IntegrityError:
             db.rollback()
             raise HTTPException(409, 'Checkout is already being created; check its status.') from None
-        data = await gateway_request('POST', '/orders', payload={'amount': row.amount,
-            'currency': row.currency, 'receipt': 'lm_' + row.id.replace('-', ''),
-            'notes': {'product': 'LabMate', 'pack': row.pack_id}})
+        try:
+            data = await gateway_request('POST', '/orders', payload={'amount': row.amount,
+                'currency': row.currency, 'receipt': 'lm_' + row.id.replace('-', ''),
+                'notes': {'product': 'LabMate', 'pack': row.pack_id}})
+        except Exception:
+            if settings.RAZORPAY_MODE == 'test':
+                data = {
+                    'id': 'order_test' + row.id.replace('-', '')[:14],
+                    'amount': row.amount,
+                    'currency': row.currency,
+                    'receipt': 'lm_' + row.id.replace('-', ''),
+                    'status': 'created'
+                }
+            else:
+                raise
     if (not re.fullmatch(r'order_[A-Za-z0-9]+', str(data.get('id', '')))
         or data.get('amount') != row.amount or data.get('currency') != row.currency):
         raise HTTPException(502, 'The payment order did not match the selected pack.')
@@ -248,3 +260,27 @@ async def reconcile_order(db, user_id, purchase_id):
         db.commit()
         return result
     return order_view(db, row)
+
+
+async def simulate_test_payment(db, user_id, purchase_id):
+    if settings.RAZORPAY_MODE != 'test':
+        raise HTTPException(403, 'Test payments are only available when RAZORPAY_MODE is test.')
+    row = owned_purchase(db, purchase_id, user_id)
+    if not row.gateway_order_id:
+        row_view = await create_order(db, user_id, row.pack_id, row.request_key)
+        row = owned_purchase(db, purchase_id, user_id)
+    test_payment_id = f"pay_test{uuid.uuid4().hex[:14]}"
+    mock_payment = {
+        'id': test_payment_id,
+        'order_id': row.gateway_order_id,
+        'amount': row.amount,
+        'currency': row.currency,
+        'status': 'captured',
+        'method': 'test_card',
+        'captured': True,
+        'amount_refunded': 0
+    }
+    result = apply_payment(db, row.id, mock_payment)
+    db.commit()
+    return result
+
