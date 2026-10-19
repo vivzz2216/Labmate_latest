@@ -531,6 +531,7 @@ export default function AssignmentPage() {
   const getActionLabel = () => {
     if (complete) return "Word report ready";
     if (failed) return workflow?.error || "Processing failed";
+    if (workflow?.status === "ready") return `${total} questions ready to review`;
     if (isBatchMode && batchProcessing) {
       const activeItem = batchItems.find(
         (b) => b.status === "uploading" || b.status === "processing" || b.status === "extracting"
