@@ -276,25 +276,37 @@ def test_gateway_transport_errors_are_recoverable_without_exposing_credentials(m
     assert 'private-fixture-secret' not in failure.value.detail
 
 
-def test_simulate_test_payment_succeeds_and_adds_credits(env):
+@pytest.mark.parametrize('mode', ['test', 'live'])
+def test_retired_payment_shortcut_never_creates_captured_payments(env, monkeypatch, mode):
     pid = purchase(env)
-    r = env.client.post(f'/api/billing/orders/{pid}/test-pay')
-    assert r.status_code == 200
-    data = r.json()
-    assert data['status'] == 'paid'
-    assert data['credits'] == 10
-    assert data['payment_id'].startswith('pay_test')
-    assert credits(env)['available'] == 13
     with env.factory() as db:
-        assert db.query(CreditLedger).filter_by(kind='pack_purchase').count() == 1
+        db.get(PackPurchase, pid).mode = mode
+        db.commit()
+    monkeypatch.setattr(settings, 'RAZORPAY_MODE', mode)
+    response = env.client.post(f'/api/billing/orders/{pid}/test-pay')
+    assert response.status_code == 410
+    assert credits(env)['available'] == 3
+    env.gateway.assert_not_called()
+    with env.factory() as db:
+        assert db.get(PackPurchase, pid).status == 'created'
+        assert db.query(CreditLedger).filter_by(kind='pack_purchase').count() == 0
 
 
-def test_simulate_test_payment_blocked_in_live_mode(env, monkeypatch):
-    pid = purchase(env)
-    monkeypatch.setattr(settings, 'RAZORPAY_MODE', 'live')
-    r = env.client.post(f'/api/billing/orders/{pid}/test-pay')
-    assert r.status_code == 403
-    assert 'test' in r.json()['detail'].lower()
+def test_gateway_failure_never_fabricates_a_test_order(env):
+    env.gateway.side_effect = HTTPException(503, 'Gateway unavailable')
+    key = str(uuid.uuid4())
+    response = env.client.post('/api/billing/orders', json={'pack_id':'quick-lab','request_key':key})
+    assert response.status_code == 503
+    assert credits(env)['available'] == 3
+    with env.factory() as db:
+        row = db.query(PackPurchase).filter_by(request_key=key).one()
+        assert row.status == 'creating' and row.gateway_order_id is None
+        receipt = 'lm_' + row.id.replace('-', '')
+    env.gateway.side_effect = None
+    env.gateway.return_value = {'items':[{'id':'order_recovered','receipt':receipt,'amount':2900,'currency':'INR'}]}
+    recovered = env.client.post('/api/billing/orders', json={'pack_id':'quick-lab','request_key':key})
+    assert recovered.status_code == 200
+    assert recovered.json()['gateway_order_id'] == 'order_recovered'
     assert credits(env)['available'] == 3
 
 

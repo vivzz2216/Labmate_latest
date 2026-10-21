@@ -77,9 +77,9 @@ async def reconcile(purchase_id: UUID, user: User = Depends(get_current_user),
 @router.post('/orders/{purchase_id}/test-pay')
 async def test_pay(purchase_id: UUID, user: User = Depends(get_current_user),
                    db: Session = Depends(get_db), csrf: bool = Depends(require_csrf_token)):
-    if settings.RAZORPAY_MODE != 'test':
-        raise HTTPException(403, 'Test payments are only available when RAZORPAY_MODE is test.')
-    return await billing.simulate_test_payment(db, user.id, str(purchase_id))
+    # Retired shortcut: even test credits require a real Razorpay test payment.
+    billing.owned_purchase(db, str(purchase_id), user.id)
+    raise HTTPException(410, 'Open Razorpay checkout and complete a test card or mock-bank payment. Direct payment simulation is no longer available.')
 
 
 

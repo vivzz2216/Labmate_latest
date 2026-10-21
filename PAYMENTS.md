@@ -50,3 +50,10 @@ Public comparison pages checked on 18 October 2026 advertised [BlackBook](https:
 ## Verification
 
 See `PAYMENTS_VERIFICATION_2026-10-18.md` for the exact tested environment, test results, and remaining activation work. The gateway integration follows [Razorpay Standard Checkout](https://razorpay.com/docs/payments/payment-gateway/web-integration/standard/integration-steps/) and [webhook validation](https://razorpay.com/docs/webhooks/validate-test/).
+
+
+## Test checkout recovery (21 October 2026)
+
+Test checkout limits Razorpay to cards and netbanking. UPI QR/intent must not be scanned with a real payment app when using test keys. Use Razorpay's documented domestic Visa test card `4100 2800 0000 1007`, a future expiry, and any three-digit CVV. For a mock bank authentication page choose Success. A declined mock-bank attempt is not proof that another method or the backend is broken; its provider error is shown in the checkout message after dismissal. See the linked official test guide in checkout for current credentials.
+
+Orders and captured payment IDs must come from Razorpay in both modes. Gateway outages propagate as recoverable errors and retain the unique receipt for reconciliation; they never invent an order. The former `/orders/{id}/test-pay` local simulation shortcut returns 410 and cannot grant credits. Test mode still requires server verification of a genuine Razorpay test payment. Real-money collection requires merchant activation and live credentials.

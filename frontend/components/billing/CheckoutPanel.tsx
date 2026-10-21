@@ -7,6 +7,7 @@ import LoginModal from '@/components/auth/LoginModal';
 import LabMateLogo from '@/components/brand/LabMateLogo';
 import {useAuth} from '@/contexts/BasicAuthContext';
 import {billingApi,Catalogue,loadRazorpay,Pack,Purchase,paymentError,rupees,Wallet} from '@/lib/billing';
+import {checkoutFailure,checkoutMethods} from '@/lib/razorpay-checkout';
 import styles from './billing.module.css';
 
 export default function CheckoutPanel({packId}:{packId:string}) {
@@ -19,6 +20,7 @@ export default function CheckoutPanel({packId}:{packId:string}) {
   const [loginOpen,setLoginOpen]=useState(false);
   const [retry,setRetry]=useState(0);
   const confirming=useRef(false);
+  const lastFailure=useRef('');
   const active=useRef(true);
   const requestKey=useRef('');
   const storageKey=user?`labmate_checkout_${user.id}`:'';
@@ -45,7 +47,7 @@ export default function CheckoutPanel({packId}:{packId:string}) {
   const accept=(saved:Purchase)=>{
     if(!active.current)return;
     setOrder(saved);setBalance(saved.wallet);
-    if(saved.status==='paid')setMessage(`Payment verified. ${saved.credits} experiment credits have been added to your account.`);
+    if(saved.status==='paid')setMessage(`${saved.mode==='test'?'Razorpay test payment verified':'Payment verified'}. ${saved.credits} ${saved.mode==='test'?'test ':''}experiment credits have been added to your account.`);
     else if(saved.status.includes('refunded'))setMessage('This payment has a refund adjustment. Your balance has been updated.');
     else setMessage('Payment is not confirmed yet. Check status before trying another payment.');
   };
@@ -53,22 +55,9 @@ export default function CheckoutPanel({packId}:{packId:string}) {
     if(!order||busy)return;setBusy(true);setMessage('Checking with Razorpay…');
     try{accept(await billingApi.reconcile(order.id));}catch(e){setMessage(paymentError(e));}finally{if(active.current)setBusy(false);}
   };
-  const testPay=async()=>{
-    if(!user){setLoginOpen(true);return;}
-    if(!pack||busy)return;setBusy(true);setMessage('Processing simulated test payment…');confirming.current=false;
-    try{
-      if(!requestKey.current){requestKey.current=sessionStorage.getItem(requestStorageKey)||crypto.randomUUID();sessionStorage.setItem(requestStorageKey,requestKey.current);}
-      const saved=order?.status==='created'?order:await billingApi.order(pack.id,requestKey.current);
-      setOrder(saved);sessionStorage.setItem(storageKey,saved.id);
-      if(saved.status==='paid'){accept(saved);setBusy(false);return;}
-      const confirmed=await billingApi.testPay(saved.id);
-      accept(confirmed);
-    }catch(e){if(active.current)setMessage(paymentError(e));}
-    finally{if(active.current)setBusy(false);}
-  };
   const pay=async()=>{
     if(!user){setLoginOpen(true);return;}
-    if(!pack||busy)return;setBusy(true);setMessage('Preparing secure checkout…');confirming.current=false;
+    if(!pack||busy)return;setBusy(true);setMessage('Preparing secure checkout…');confirming.current=false;lastFailure.current='';
     try{
       await loadRazorpay();
       if(!requestKey.current){requestKey.current=sessionStorage.getItem(requestStorageKey)||crypto.randomUUID();sessionStorage.setItem(requestStorageKey,requestKey.current);}
@@ -79,15 +68,16 @@ export default function CheckoutPanel({packId}:{packId:string}) {
       const checkout=new window.Razorpay({key:saved.key_id, amount:saved.amount,currency:saved.currency,
         name:'LabMate',description:`${saved.pack_name} · ${saved.credits} experiment credits`,order_id:saved.gateway_order_id,
         prefill:{name:user.name,email:user.email},theme:{color:'#192526'},
+        ...checkoutMethods(saved.mode),
         handler:async(response)=>{
           confirming.current=true;if(active.current)setMessage('Confirming your payment securely…');
           try{accept(await billingApi.verify(saved.id,response));}
           catch(e){if(active.current)setMessage(paymentError(e));}
           finally{if(active.current)setBusy(false);}
         },modal:{ondismiss:()=>{
-          if(!confirming.current&&active.current){setBusy(false);setMessage('Checkout closed. No credits have been added. If you completed payment, check its status.');}
+          if(!confirming.current&&active.current){setBusy(false);setMessage(lastFailure.current||'Checkout closed. If you completed payment, check its status before paying again.');}
         }}});
-      checkout.on('payment.failed',()=>{if(active.current)setMessage('Payment did not complete. You can retry inside Razorpay or close checkout. No credits have been added.');});
+      checkout.on('payment.failed',(response)=>{lastFailure.current=checkoutFailure(response,saved.mode);if(active.current)setMessage(lastFailure.current);});
       checkout.open();setMessage('Complete payment in the Razorpay window.');
     }catch(e){if(active.current){setMessage(paymentError(e));setBusy(false);}}
   };
@@ -104,7 +94,7 @@ export default function CheckoutPanel({packId}:{packId:string}) {
         <p className={styles.rule}>A credit is used only when an experiment completes. Failed and unfinished experiments return their reserved credits.</p>
       </section>
       <section className={styles.summary} aria-labelledby="order-heading">
-        <div className={styles.summaryTop}><h2 id="order-heading">{paid?'Payment confirmed':'Your pack'}</h2>{catalogue?.mode==='test'&&<span className={styles.testBadge}>TEST MODE</span>}</div>
+        <div className={styles.summaryTop}><h2 id="order-heading">{paid?(order.mode==='test'?'Test payment confirmed':'Payment confirmed'):'Your pack'}</h2>{catalogue?.mode==='test'&&<span className={styles.testBadge}>TEST MODE</span>}</div>
         {!catalogue&&<p role="status">Loading your pack…</p>}
         {catalogue&&!pack&&<p role="alert">This pack could not be found. <Link href="/#pricing">Choose a pack</Link>.</p>}
         {pack&&catalogue&&<><h3 className={styles.selectedPack}>{pack.name}</h3><p className={styles.selectedCredits}>{pack.credits} experiment credits</p>
@@ -112,16 +102,16 @@ export default function CheckoutPanel({packId}:{packId:string}) {
           <p className={styles.totalNote}>The price shown is the total. No recurring charge.</p>
           {user&&<p className={styles.account}>Buying for <strong>{user.email}</strong>{balance&&<span>{balance.available} available · {balance.reserved} reserved{balance.mode==='test'?' · test credits':''}</span>}</p>}
           {catalogue.mode==='test'&&<div className={styles.checkoutTest}>
-            <p>This is a simulated test payment. No real money will be charged.</p>
-            <div style={{marginTop:'8px',fontSize:'11.5px',lineHeight:'1.6',background:'#e4eae1',padding:'10px',borderRadius:'6px',color:'#273c31',border:'1px solid #c9d5c5'}}>
-              <strong>Test Mode Credentials (India):</strong><br/>
-              • <strong>1-Click:</strong> Click <em>&ldquo;Complete test payment&rdquo;</em> below (instant, no card needed)<br/>
-              • <strong>UPI ID:</strong> <code>success@razorpay</code><br/>
-              • <strong>Domestic Card:</strong> <code>5123 4500 0000 0008</code> (Exp: 12/30, CVV: 123)
-            </div>
+            <h4>Try a payment without spending money</h4>
+            <p>Choose <strong>Cards</strong> in Razorpay. Use this domestic test card:</p>
+            <code className={styles.testCard}>4100 2800 0000 1007</code>
+            <p>Expiry: any future date · CVV: any 3 digits. If Razorpay opens an authentication simulator, choose <strong>Success</strong>.</p>
+            <p><strong>Netbanking:</strong> choose a bank, then <strong>Success</strong> on its mock payment page. If that bank declines, use the test card.</p>
+            <p>Test QR codes cannot be paid with Google Pay, PhonePe, or a real bank account. Test credits stay separate from live credits.</p>
+            <a href="https://razorpay.com/docs/payments/payment-gateway/web-integration/standard/integration-steps/#2-test-integration" target="_blank" rel="noreferrer">Razorpay test payment guide</a>
           </div>}
           {message&&<p role="status" aria-live="polite" className={`${styles.message} ${paid?styles.success:''}`}>{paid&&<Check size={18}/>}<span>{message}</span></p>}
-          {paid?<Link href="/code-execution" className={styles.payButton}>Start your lab<ArrowRight size={18}/></Link>:refunded?<button className={styles.payButton} onClick={newPurchase}>Start a new purchase<ArrowRight size={18}/></button>:catalogue.mode==='test'?<><button className={styles.payButton} onClick={testPay} disabled={loading||busy||!catalogue.checkout_available}>{busy?<><Loader2 size={18} className={styles.spinner}/>Please wait…</>:!user?'Sign in to continue':`Complete test payment (${rupees(pack.amount)})`}</button><button className={styles.statusButton} onClick={pay} disabled={busy||!catalogue.checkout_available}>Open Razorpay window</button></>:<button className={styles.payButton} onClick={pay} disabled={loading||busy||!catalogue.checkout_available}>{busy?<><Loader2 size={18} className={styles.spinner}/>Please wait…</>:!user?'Sign in to continue':`Pay ${rupees(pack.amount)}`}</button>}
+          {paid?<Link href="/code-execution" className={styles.payButton}>Start your lab<ArrowRight size={18}/></Link>:refunded?<button className={styles.payButton} onClick={newPurchase}>Start a new purchase<ArrowRight size={18}/></button>:<button className={styles.payButton} onClick={pay} disabled={loading||busy||!catalogue.checkout_available}>{busy?<><Loader2 size={18} className={styles.spinner}/>Please wait…</>:!user?'Sign in to continue':catalogue.mode==='test'?`Open test checkout · ${rupees(pack.amount)}`:`Pay ${rupees(pack.amount)}`}</button>}
           {paid&&<button className={styles.statusButton} onClick={newPurchase}>Buy another pack</button>}
           {order&&!paid&&<button className={styles.statusButton} onClick={checkStatus} disabled={busy}>Check payment status</button>}
           {!catalogue.checkout_available&&<p className={styles.rule}>Checkout is temporarily unavailable. Your existing reports are still accessible.</p>}

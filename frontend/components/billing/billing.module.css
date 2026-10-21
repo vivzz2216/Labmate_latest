@@ -57,6 +57,10 @@
 .account{font-size:12px;line-height:1.7;color:#4d6054;margin:22px 0;overflow-wrap:anywhere}
 .account strong{font-weight:550;color:#253f31}.account span{display:block;margin-top:3px}
 .checkoutTest{font-size:12px;line-height:1.7;padding:12px 0;border-top:1px solid #c9d1c8;color:#52624f;margin:20px 0}
+.checkoutTest h4{font-size:14px;font-weight:600;color:#273c31;margin:0 0 12px}
+.checkoutTest p{margin:10px 0}
+.checkoutTest a{color:#273c31;text-decoration:underline;text-underline-offset:3px}
+.testCard{display:block;background:#e4eae1;padding:12px 14px;border-radius:8px;color:#273c31;font-size:16px;letter-spacing:.04em;white-space:nowrap;font-variant-numeric:tabular-nums}
 .payButton{background:#1a3428;border-color:#1a3428;width:100%;min-height:48px;margin-top:22px}
 .payButton:hover{background:#2e5140}.payButton:disabled{opacity:.6;cursor:wait}
 .message{display:flex;align-items:flex-start;gap:8px;color:#71421e;font-size:13px;line-height:1.7;margin:18px 0;overflow-wrap:anywhere}

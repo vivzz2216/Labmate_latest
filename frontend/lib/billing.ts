@@ -1,4 +1,5 @@
 import api from './api';
+import type {RazorpayFailure, checkoutMethods} from './razorpay-checkout';
 
 export interface Pack { id: string; name: string; amount: number; currency: string; credits: number; description: string; featured: boolean }
 export interface Wallet { available: number; reserved: number; mode: string; billing_enabled: boolean }
@@ -12,15 +13,14 @@ export const billingApi = {
   status: (id: string) => api.get<Purchase>(`/api/billing/orders/${id}`, {timeout:20000}).then(r=>r.data),
   reconcile: (id: string) => api.post<Purchase>(`/api/billing/orders/${id}/reconcile`, {}, {timeout:30000}).then(r=>r.data),
   verify: (id: string, response: RazorpayResponse) => api.post<Purchase>(`/api/billing/orders/${id}/verify`, response, {timeout:60000}).then(r=>r.data),
-  testPay: (id: string) => api.post<Purchase>(`/api/billing/orders/${id}/test-pay`, {}, {timeout:30000}).then(r=>r.data),
 };
 export interface RazorpayResponse { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }
-interface RazorpayOptions {
+type RazorpayOptions = ReturnType<typeof checkoutMethods> & {
   key: string; amount: number; currency: string; name: string; description: string; order_id: string;
   prefill: {name: string; email: string}; theme: {color: string};
   handler: (response: RazorpayResponse) => void; modal: {ondismiss: () => void};
 }
-interface RazorpayInstance {open: () => void; on: (event: 'payment.failed', handler: () => void) => void}
+interface RazorpayInstance {open: () => void; on: (event: 'payment.failed', handler: (response: RazorpayFailure) => void) => void}
 declare global { interface Window { Razorpay?: new (options: RazorpayOptions) => RazorpayInstance } }
 let scriptPromise: Promise<void> | null = null;
 export function loadRazorpay(): Promise<void> {
