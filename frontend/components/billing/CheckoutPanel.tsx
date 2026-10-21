@@ -100,7 +100,7 @@ export default function CheckoutPanel({packId}:{packId:string}) {
         {pack&&catalogue&&<><h3 className={styles.selectedPack}>{pack.name}</h3><p className={styles.selectedCredits}>{pack.credits} experiment credits</p>
           <div className={styles.total}><span>One-time total</span><strong>{rupees(pack.amount)}</strong></div>
           <p className={styles.totalNote}>The price shown is the total. No recurring charge.</p>
-          {user&&<p className={styles.account}>Buying for <strong>{user.email}</strong>{balance&&<span>{balance.available} available · {balance.reserved} reserved{balance.mode==='test'?' · test credits':''}</span>}</p>}
+          {user&&<p className={styles.account}>Buying for <strong>{user.email}</strong>{balance&&<span>{balance.unlimited?'Unlimited experiment credits':`${balance.available} available · ${balance.reserved} reserved${balance.mode==='test'?' · test credits':''}`}</span>}</p>}
           {catalogue.mode==='test'&&<div className={styles.checkoutTest}>
             <h4>Try a payment without spending money</h4>
             <p>Choose <strong>Cards</strong> in Razorpay. Use this domestic test card:</p>

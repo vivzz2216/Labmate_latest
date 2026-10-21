@@ -12,7 +12,8 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 
 from ..config import settings
-from ..models import (CreditWallet, CreditLedger, PackPurchase, WorkflowCreditHold)
+from ..models import (CreditWallet, CreditLedger, PackPurchase, WorkflowCreditHold, User)
+from ..security.operator_access import is_user_credit_exempt
 
 PACKS = (
     {'id': 'quick-lab', 'name': 'Quick Lab', 'amount': 2900, 'credits': 10,
@@ -38,6 +39,13 @@ def require_gateway():
         raise HTTPException(503, 'Checkout is temporarily unavailable. Please try again later.')
 
 
+def is_credit_exempt(db, user_id):
+    if not user_id:
+        return False
+    user = db.get(User, user_id)
+    return is_user_credit_exempt(user)
+
+
 def wallet(db, user_id, mode=None):
     mode = mode or settings.RAZORPAY_MODE
     # Both supported database dialects offer conflict-safe first-use provisioning.
@@ -53,8 +61,12 @@ def wallet(db, user_id, mode=None):
         reference=f'trial:{mode}:{user_id}', kind='trial', delta=trial)
         .on_conflict_do_nothing(index_elements=['reference']))
     row = db.get(CreditWallet, (user_id, mode), populate_existing=True)
-    return {'available': row.balance, 'reserved': row.reserved, 'mode': mode,
-            'billing_enabled': settings.BILLING_ENABLED}
+    exempt = is_credit_exempt(db, user_id)
+    return {'available': row.balance,
+            'reserved': row.reserved,
+            'mode': mode,
+            'billing_enabled': False if exempt else settings.BILLING_ENABLED,
+            'unlimited': exempt}
 
 
 def ledger(db, user_id, mode, reference, kind, delta):
@@ -80,7 +92,7 @@ def settle_workflow_credits(db, workflow):
 
 
 def reserve_workflow_credits(db, workflow, user_id):
-    if not settings.BILLING_ENABLED:
+    if not settings.BILLING_ENABLED or is_credit_exempt(db, user_id):
         return
     existing = db.get(WorkflowCreditHold, workflow.id, populate_existing=True)
     if existing and existing.state == 'held':

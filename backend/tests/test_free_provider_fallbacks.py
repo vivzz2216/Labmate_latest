@@ -40,6 +40,22 @@ class FreeProviderTests(unittest.IsolatedAsyncioTestCase):
     async def generate(self):
         return await self.service.generate_json('Return JSON.','Question',SCHEMA)
 
+    async def test_named_free_model_without_endpoints_uses_free_router(self):
+        def handler(request):
+            model=json.loads(request.content)['model']
+            return httpx.Response(404,json={'error':{'code':404}}) if model!='openrouter/free' else answer('recovered')
+        with patch.object(settings,'OPENROUTER_MODEL','fixture/unavailable:free'),self.transport(handler):
+            self.assertEqual(await self.generate(),{'answer':'recovered'})
+        self.assertEqual([json.loads(r.content)['model'] for r in self.calls],['fixture/unavailable:free','openrouter/free'])
+        self.assertTrue(all(json.loads(r.content)['provider']['max_price']['completion']==0 for r in self.calls))
+
+    async def test_pause_reports_provider_causes_and_preserves_checkpoints(self):
+        with patch.object(settings,'OPENCODE_ENABLED',False),self.transport(lambda request:httpx.Response(429)):
+            with self.assertRaises(GenerationUnavailableError) as caught:await self.generate()
+        self.assertIn('old quota',str(caught.exception))
+        self.assertIn('HTTP 429',str(caught.exception))
+        self.assertIn('Completed results are saved',str(caught.exception))
+
     async def test_groq_failure_routes_to_openrouter_with_zero_price_ceiling(self):
         with self.transport(lambda request:answer()):
             self.assertEqual(await self.generate(),{'answer':'ready'})

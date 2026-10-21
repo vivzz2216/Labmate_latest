@@ -2,7 +2,7 @@ import api from './api';
 import type {RazorpayFailure, checkoutMethods} from './razorpay-checkout';
 
 export interface Pack { id: string; name: string; amount: number; currency: string; credits: number; description: string; featured: boolean }
-export interface Wallet { available: number; reserved: number; mode: string; billing_enabled: boolean }
+export interface Wallet { available: number; reserved: number; mode: string; billing_enabled: boolean; unlimited?: boolean }
 export interface Catalogue { packs: Pack[]; trial_credits: number; mode: string; checkout_available: boolean; billing_enabled: boolean }
 export interface Purchase { id: string; pack_id: string; pack_name: string; amount: number; currency: string; credits: number; status: string; gateway_order_id: string | null; key_id: string; mode: string; wallet: Wallet }
 export const rupees = (paise: number) => new Intl.NumberFormat('en-IN', {style:'currency', currency:'INR', maximumFractionDigits:0}).format(paise / 100);

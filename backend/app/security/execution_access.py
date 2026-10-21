@@ -8,9 +8,12 @@ from fastapi import Depends, HTTPException
 
 from ..config import settings
 from ..middleware.auth import get_current_user
+from .operator_access import is_admin_user, is_user_credit_exempt
 
 
 def check_execution_access(user):
+    if is_admin_user(user):
+        return
     allowed={email.strip().casefold() for email in settings.EXECUTION_ALLOWED_EMAILS.split(',') if email.strip()}
     if not allowed and not os.getenv('RAILWAY_ENVIRONMENT_ID'):
         return
@@ -29,6 +32,6 @@ async def execution_user(user=Depends(get_current_user)):
 
 
 async def legacy_execution_user(user=Depends(execution_user)):
-    if settings.BILLING_ENABLED:
+    if settings.BILLING_ENABLED and not is_user_credit_exempt(user):
         raise HTTPException(402, 'Use Code execution (/code-execution) to run an assignment with experiment credits.')
     return user

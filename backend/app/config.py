@@ -183,6 +183,7 @@ class Settings(BaseSettings):
     # No default admin account: explicitly provision both credentials.
     ADMIN_USERID: str = ""
     ADMIN_PASSWORD: str = ""
+    CREDIT_EXEMPT_EMAILS: str = ""
 
     # Frontend URL (used for redirects when frontend is deployed separately)
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "")

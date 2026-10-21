@@ -18,11 +18,52 @@ from .workflow_schema import ensure_workflow_columns
 
 logger = logging.getLogger(__name__)
 
+def ensure_owner_account(target_engine=None):
+    eng = target_engine or engine
+    if eng is None:
+        return
+    from sqlalchemy import func
+    from sqlalchemy.orm import Session
+    from .models import User
+    from .routers.basic_auth import hash_password, verify_password
+    from .security.operator_access import admin_email
+
+    owner_email = admin_email()
+    owner_password = settings.ADMIN_PASSWORD
+    if not owner_email:
+        return
+
+    with Session(eng) as session:
+        try:
+            user = session.query(User).filter(func.lower(User.email) == owner_email.lower()).first()
+            if not user:
+                user = User(
+                    email=owner_email,
+                    name="LabMate Owner",
+                    password_hash=hash_password(owner_password),
+                    is_active=True,
+                    failed_login_attempts=0,
+                )
+                session.add(user)
+                session.commit()
+            else:
+                if not user.password_hash or not verify_password(owner_password, user.password_hash):
+                    user.password_hash = hash_password(owner_password)
+                user.is_active = True
+                user.failed_login_attempts = 0
+                user.locked_until = None
+                session.commit()
+        except Exception as e:
+            session.rollback()
+            logger.warning("ensure_owner_account failed: %s", e)
+
+
 def initialize_database():
     if engine is None:
         raise RuntimeError("DATABASE_URL is required to initialize the database.")
     Base.metadata.create_all(bind=engine)
     ensure_workflow_columns(engine)
+    ensure_owner_account(engine)
 
 
 @asynccontextmanager

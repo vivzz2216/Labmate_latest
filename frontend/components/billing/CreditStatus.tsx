@@ -13,6 +13,7 @@ export default function CreditStatus({refreshKey}:{refreshKey?:string}) {
     billingApi.wallet(controller.signal).then(setBalance).catch(()=>{/* Execution API still enforces credits if balance cannot load. */});
     return()=>controller.abort();
   },[user?.id,refreshKey]);
+  if(balance?.unlimited)return <p className={styles.creditStatus} aria-live="polite">Unlimited experiment credits</p>;
   if(!balance?.billing_enabled)return null;
   return <p className={styles.creditStatus} aria-live="polite"><span>{balance.available} credits available{balance.reserved?` · ${balance.reserved} reserved`:''}{balance.mode==='test'?' · test mode':''}</span><Link href="/#pricing">Top up credits</Link></p>;
 }

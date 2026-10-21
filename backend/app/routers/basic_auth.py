@@ -15,6 +15,7 @@ from ..models import User, UserProfile
 from ..security.jwt import create_access_token, create_refresh_token, verify_token
 from ..middleware.auth import get_current_user
 from ..middleware.csrf import generate_csrf_token, store_csrf_token
+from ..security.operator_access import admin_email, is_admin_user
 
 # Set up logging for debugging
 logger = logging.getLogger(__name__)
@@ -141,6 +142,8 @@ async def signup(request: UserSignup, db: Session = Depends(get_db)):
     Uses database transaction to prevent race conditions.
     """
     logger.debug(f"Signup request received for email: {request.email}")
+    if str(request.email).strip().casefold() == admin_email():
+        raise HTTPException(400, 'This account is provisioned by the operator. Sign in instead.')
     
     user = None
 
@@ -492,7 +495,8 @@ async def get_user_profile(
             "institution": None,
             "course": None,
             "profile_metadata": None,
-            "is_complete": False
+            "is_complete": is_admin_user(current_user),
+            "onboarding_required": not is_admin_user(current_user),
         }
     
     # Check if profile is complete
@@ -509,5 +513,6 @@ async def get_user_profile(
         "institution": profile.institution,
         "course": profile.course,
         "profile_metadata": profile.profile_metadata,
-        "is_complete": is_complete
+        "is_complete": is_complete or is_admin_user(current_user),
+        "onboarding_required": not (is_complete or is_admin_user(current_user)),
     }

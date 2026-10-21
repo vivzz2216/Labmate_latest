@@ -33,11 +33,11 @@ OPENCODE_FREE_MODELS=frozenset({
 })
 
 
-async def generate_free_json(provider,instructions,content,schema):
+async def generate_free_json(provider,instructions,content,schema,model_override=None):
     converted=strict_json_schema(schema)
     headers={'Content-Type':'application/json'}
     if provider=='openrouter':
-        model=settings.OPENROUTER_MODEL
+        model=model_override or settings.OPENROUTER_MODEL
         if not settings.OPENROUTER_API_KEY:
             raise GenerationError('OpenRouter requires OPENROUTER_API_KEY on the backend.')
         if not re.fullmatch(r'[A-Za-z0-9_./:-]{1,160}',model) or not (model=='openrouter/free' or model.endswith(':free')):

@@ -17,6 +17,9 @@ from app.services.generation_service import GenerationUnavailableError
 
 class WorkflowResumeTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
+        admission = patch("app.services.assignment_workflow.settings.EXECUTION_ALLOWED_EMAILS", "resume@example.com")
+        admission.start()
+        self.addCleanup(admission.stop)
         self.folder = tempfile.TemporaryDirectory()
         previous_capture = Path(self.folder.name) / "previous_capture.png"
         Image.new("RGB", (120, 60), "white").save(previous_capture)

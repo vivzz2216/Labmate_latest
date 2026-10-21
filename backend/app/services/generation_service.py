@@ -119,7 +119,8 @@ class GenerationService:
             # for the existing bounded code/test repair workflow.
             raise repairable[-1]
         if any(isinstance(e,GenerationUnavailableError) for e in errors):
-            raise GenerationUnavailableError('All configured AI routes are unavailable, rate-limited, or cooling down. Completed results are saved; retry to resume.') from None
+            reasons='; '.join(dict.fromkeys(str(error)[:220] for error in errors))
+            raise GenerationUnavailableError('AI generation is paused. '+reasons+' Completed results are saved; retry to resume when provider access is available.') from None
         if errors:
             # Authentication/model access requires an operator fix, not a toy
             # local answer. Preserve the job for retry, including non-web jobs.
@@ -141,7 +142,16 @@ class GenerationService:
 
     async def _free_generation(self,provider,instructions,content,schema):
         from .free_provider_service import generate_free_json
-        return await generate_free_json(provider,instructions,content,schema)
+        try:
+            return await generate_free_json(provider,instructions,content,schema)
+        except GenerationError as error:
+            if provider!='openrouter' or settings.OPENROUTER_MODEL=='openrouter/free' or getattr(error,'status_code',None)!=404:
+                raise
+            # A named free model can remain in the catalogue while all of its
+            # serving endpoints are gone. The router selects another free model
+            # with the same strict schema and zero-price constraints.
+            logger.warning('Named OpenRouter free model has no endpoint; trying the free router.')
+            return await generate_free_json(provider,instructions,content,schema,model_override='openrouter/free')
 
     async def _configured_generation(self, instructions, content, schema, on_retry=None):
         fallback = settings.LLM_FALLBACK_PROVIDER.lower()

@@ -16,17 +16,20 @@ SCHEMA = {"type": "OBJECT", "properties": {"answer": {"type": "STRING"}}, "requi
 class GenerationServiceTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.patches = [patch.object(settings, "LLM_PROVIDER", "groq"), patch.object(settings, "GROQ_API_KEY", "unit-test-key"),
+                        patch.object(settings, 'GEMINI_API_KEY',''), patch.object(settings, 'OPENROUTER_API_KEY',''),
+                        patch.object(settings, 'OPENCODE_ENABLED',False),
                         patch.object(settings, 'GROQ_FALLBACK_MODEL',''),
                         patch.object(settings, "GROQ_MODEL", "openai/gpt-oss-120b"), patch.object(settings, "GROQ_RETRY_ATTEMPTS", 2),
                         patch.object(settings, "GROQ_RETRY_BASE_DELAY", 0), patch.object(settings, "GROQ_RETRY_MAX_DELAY", 0)]
         for item in self.patches:
             item.start()
             self.addCleanup(item.stop)
+        self.service = GenerationService()
 
     async def request(self, handler, callback=None):
         client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
         with patch("app.services.generation_service.httpx.AsyncClient", return_value=client):
-            return await generation_service.generate_json("Return JSON.", "Question", SCHEMA, on_retry=callback)
+            return await self.service.generate_json("Return JSON.", "Question", SCHEMA, on_retry=callback)
 
     def test_strict_schema_conversion_does_not_modify_input(self):
         source = {"type": "OBJECT", "properties": {"questions": {"type": "ARRAY", "items": SCHEMA}}}
