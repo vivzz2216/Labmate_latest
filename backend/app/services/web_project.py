@@ -216,10 +216,22 @@ async def generate_web_project(question, language, on_retry=None, previous=None,
         prior_files=previous.get('files')
         prior_files=[f for f in prior_files if isinstance(f,dict)] if isinstance(prior_files,list) else []
         names=[f['path'] for f in prior_files if isinstance(f.get('path'),str)]
-        prompt += "\nRegenerate the complete files AND tests together from the original requirements. Previous file names: " + json.dumps(names[:20])[:2000]
+        prompt += "\nRepair the existing complete files AND tests together. Preserve working behavior; change only what the failure requires, without redesigning the project. Return all files, not a patch. Previous file names: " + json.dumps(names[:20])[:2000]
         important={value for value in (previous.get('entrypoint'),previous.get('server_entrypoint')) if isinstance(value,str)}
+        recommended=previous.get('source_capture_files')
+        if isinstance(recommended,list):important.update(n for n in recommended[:3] if isinstance(n,str))
+        # A React mounting module does not contain the component being tested.
+        functional=[f for f in prior_files if isinstance(f.get('path'),str) and isinstance(f.get('content'),str)
+                    and f['path'].endswith(('.jsx','.js','.html','.py')) and re.search(r'\bfunction\b|\buseState\b|<button\b|@app\.',f['content'])]
+        important.update(f['path'] for f in sorted(functional,key=lambda f:-len(f['content']))[:3])
         snippets=[f['path']+'\n'+f['content'][:6000] for f in prior_files if isinstance(f.get('path'),str) and f['path'] in important and isinstance(f.get('content'),str)]
-        prompt+='\nPrevious primary source excerpts (correct the actual code/test mismatch, regenerate complete files):\n'+'\n'.join(snippets)[:8000]
+        complete_files=json.dumps(prior_files,ensure_ascii=False)
+        if len(complete_files)<=32000:
+            prompt+='\nPrevious complete project files (preserve working files and correct the mismatch):\n'+complete_files
+        else:
+            prompt+='\nPrevious functional source excerpts (correct the actual code/test mismatch, regenerate complete files):\n'+'\n'.join(snippets)[:18000]
+        if isinstance(previous.get('browser_tests'),list):
+            prompt+='\nPrevious declarative browser scenarios (keep expected behavior, fix incorrect bindings):\n'+json.dumps(previous['browser_tests'])[:10000]
     schema=deepcopy(WEB_SCHEMA)
     objective=re.split(r'\ngeneral requirements\n',question,maxsplit=1,flags=re.I)[0]
     # A report preference mentioning React screenshots must not turn an

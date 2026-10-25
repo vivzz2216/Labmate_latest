@@ -14,7 +14,7 @@ from sqlalchemy.orm import sessionmaker
 from app.database import Base
 from app.models import User, Upload, AssignmentWorkflow
 from app.services.brain_agent import make_plan, fingerprint, TOOLS, topic_choices
-from app.services.generation_service import GenerationError
+from app.services.generation_service import GenerationError, GenerationUnavailableError, invalid_answer
 from app.services.source_evidence import capture_source_evidence, source_capture_plan
 from app.services.evidence_planner import select_evidence
 from app.services.assignment_workflow import build_word_report, process_assignment
@@ -40,6 +40,39 @@ class BrainTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(task['include_description'])
         self.assertTrue(set(task['tools']).issubset(TOOLS))
         self.assertEqual(task['language'],'react')
+
+    async def test_schema_constrains_original_experiment_number_and_feature_count(self):
+        with patch('app.services.brain_agent.generation_service.generate_json',AsyncMock(return_value=DECISION)) as model:
+            await make_plan([QUESTION])
+        prompt,content,schema=model.call_args.args
+        row=schema['properties']['decisions']['items']['properties']
+        self.assertEqual(row['id']['enum'],[9])
+        self.assertEqual((row['features']['minItems'],row['features']['maxItems']),(1,4))
+        self.assertIn('never renumber',prompt)
+
+    async def test_wrong_id_and_excess_features_are_corrected_without_silent_remapping(self):
+        cases=[{'decisions':[{**DECISION['decisions'][0],'id':1}]},
+               {'decisions':[{**DECISION['decisions'][0],'features':['a','b','c','d','e']}]},
+               {'decisions':[]},
+               invalid_answer('Provider returned invalid structured JSON.')]
+        for bad in cases:
+            with self.subTest(bad=type(bad).__name__),patch('app.services.brain_agent.generation_service.generate_json',AsyncMock(side_effect=[bad,DECISION])) as model:
+                plan=await make_plan([QUESTION])
+            self.assertEqual(model.await_count,2)
+            self.assertEqual(plan['tasks'][0]['id'],9)
+            self.assertEqual(plan['tasks'][0]['features'],DECISION['decisions'][0]['features'])
+            self.assertIn('CORRECT THE PREVIOUS RESPONSE',model.call_args.args[0])
+            self.assertEqual(model.call_args_list[0].args[1],model.call_args_list[1].args[1])
+
+    async def test_invalid_plan_stops_after_one_correction_and_outages_do_not_retry(self):
+        bad={'decisions':[{**DECISION['decisions'][0],'id':1}]}
+        with patch('app.services.brain_agent.generation_service.generate_json',AsyncMock(return_value=bad)) as model:
+            with self.assertRaisesRegex(GenerationError,'after two attempts.*experiment ID'):
+                await make_plan([QUESTION])
+        self.assertEqual(model.await_count,2)
+        with patch('app.services.brain_agent.generation_service.generate_json',AsyncMock(side_effect=GenerationUnavailableError('Provider cooling down.'))) as model:
+            with self.assertRaises(GenerationUnavailableError):await make_plan([QUESTION])
+        self.assertEqual(model.await_count,1)
 
     async def test_simple_task_requires_no_extra_provider_call(self):
         with patch('app.services.brain_agent.generation_service.generate_json',AsyncMock()) as model:

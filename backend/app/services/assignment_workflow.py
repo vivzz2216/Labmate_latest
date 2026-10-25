@@ -293,13 +293,37 @@ async def execute_solution(code, language, question, group_id, username, stdin_d
     return SolutionExecution(success, output, errors, screenshots, verification, stages)
 
 
-async def execute_web_assignment(question, language, group, username, on_retry, on_attempt, additional_instructions=""):
+def saved_frontend_draft(result):
+    """Resume a failed frontend from its exact saved code and declarative tests."""
+    if not result or result.get('status')!='failed' or result.get('language') not in {'html','react'}:
+        return None
+    files=result.get('project_files') or {}
+    if not result.get('code') or not isinstance(files,dict):return None
+    entries=[name for name,content in files.items() if content==result['code']]
+    if len(entries)!=1:return None
+    selected=source_capture_plan(files,result['code'],entries[0],result['language'])
+    tests=[]
+    for test in (result.get('verification') or {}).get('tests',[]):
+        if test.get('version')!=2:return None
+        steps=[{k:s.get(k,'') for k in ['action','locator_type','locator','value']} for s in test.get('steps',[])]
+        for source,target in zip(test.get('steps',[]),steps):
+            if source.get('locator_type')=='role':target['locator_type']='role:'+source.get('role','')
+        tests.append({k:test[k] for k in ['name','requirement_ids','viewport']}|{'steps':steps})
+    if not tests:return None
+    return {'answer':result.get('answer',''),'entrypoint':entries[0],
+        'files':[{'path':name,'content':content} for name,content in files.items() if name!='README.md'],
+        'source_capture_files':[name for name,_ in selected['files']],
+        'readme':files.get('README.md',''),'browser_tests':tests}
+
+
+async def execute_web_assignment(question, language, group, username, on_retry, on_attempt, additional_instructions="", previous_result=None):
     """Repair the entire file/test contract together, preserving failed diagnostics."""
     from .web_project import generate_web_project, web_requirements
     if language=='java':
         from .gui_project import generate_gui_project as generate_project
     else:generate_project=generate_web_project
-    previous, config, failure, attempts = None, None, '', []
+    previous = saved_frontend_draft(previous_result)
+    config, failure, attempts = None, (previous_result.get('error','') if previous else ''), []
     execution = SolutionExecution(False, '', 'No valid web project was generated.', [], None, {})
     for attempt in range(3):
         on_attempt(attempt)
@@ -450,7 +474,8 @@ async def process_assignment(workflow_id: int):
                                f"{'Generating' if not attempt else 'Repairing files and tests for'} question {index+1} (attempt {attempt+1}/3).")
                     solution, project_config, web_execution = await execute_web_assignment(
                         question['text'], language, group, username, retry_status, web_attempt,
-                        additional_instructions=(workflow.instructions or '')+'\n'+planned.get('brief',''))
+                        additional_instructions=(workflow.instructions or '')+'\n'+planned.get('brief',''),
+                        previous_result=workflow.results[index] if index<len(workflow.results or []) else None)
                     answer = str(solution.get('answer', 'Generation could not produce a verifiable project.')).strip()
                     actual_language = language
                     code = (project_config.get('project_files') or {}).get(project_config.get('entrypoint'), '') or '// No valid executable web project was generated.'

@@ -6,6 +6,10 @@ Implemented locally, with an end-to-end Experiment 9 check on 25 October 2026. T
 
 The planner preserves the extracted assignment and selects one suitable topic from the manual's alternatives. An explicit student topic takes precedence. For mini-projects it proposes two to four locally testable features and uses the framework already required by the assignment. Clear ordinary exercises and theory questions need no additional planning API call.
 
+The response schema restricts decision IDs to the original experiment numbers and feature groups to one through four. A malformed response receives one correction attempt with precise validation feedback. The host never renumbers experiments or silently truncates a feature list to make it pass. Repeated invalid responses stop safely; provider outages retain the normal paused checkpoint without an additional planning request.
+
+Retrying an unchanged failed HTML/React task seeds the generator with its saved source and browser tests when the entrypoint can be identified unambiguously from the executed code. Repair context includes the complete small project, or bounded functional component excerpts for larger projects, plus existing scenarios and actual failure feedback. Working behavior is preserved and all required checks run again; a wrong container count, attribute target or input-value assertion is never automatically accepted as a pass.
+
 Missing essential facts can produce up to three focused questions, grounded in literal source excerpts. Unsupported frameworks prompt a supported-runtime or manual-review choice. Unsupported external-service requirements must be reviewed or revised; the planner cannot silently replace database/payment evidence with a mock. Questions never request credentials. A maximum of two clarification rounds prevents an endless interview.
 
 The single-assignment page shows the project plan or pending questions above its processing controls. A batch item that needs clarification links to that assignment. Other uploaded files continue independently; questions within one assignment share its planning checkpoint.
