@@ -4,7 +4,7 @@ import re
 from .lab_question_filter import is_handwritten_question
 
 
-HEADING = re.compile(r"^\s*(?:#+\s*)?experiment\s+(\d{1,3})\s*(?:[:.)–—-]\s*|\s+|$)(.*)$", re.I)
+HEADING = re.compile(r"^\s*(?:#+\s*)?experiment(?:\s*[-–—]\s*|\s+)(\d{1,3})\s*(?:[:.)–—-]\s*|\s+|$)(.*)$", re.I)
 END = re.compile(r"^(?:research basis|references|bibliography|appendix)\b", re.I)
 SECTION = re.compile(r"^(?:aim|problem statement|tasks|evidence to submit|verification checklist|result|difficulty)(?:\s*:.*)?$", re.I)
 CONTENTS = re.compile(r"^(?:table\s+of\s+contents|contents|index)\s*:?\s*$", re.I)

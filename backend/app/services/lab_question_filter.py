@@ -55,10 +55,14 @@ def programming_lines(lines, mode: str = "code_only"):
         stripped = line.strip()
         if mode == "code_only":
             heading = re.sub(r"^section\s+[a-z0-9]+\s*[:.)-]\s*", "", stripped, flags=re.I)
+            # Academic manuals number section headings independently of their
+            # programming questions (7. Laboratory Exercise, B. Program Code).
+            # Normalize headings only; keep the original source lines intact.
+            heading = re.sub(r"^(?:\d+[.)]|[a-z][.)])\s*", "", heading, flags=re.I)
             if re.match(r"^(?:theory|viva(?:\s+voce)?|objectives?|concepts?|review\s+questions)\b", heading, re.I) or SECTION.match(heading):
                 excluded = True
                 continue
-            if re.match(r"^(?:lab(?:oratory)?\s+(?:programming\s+)?(?:exercises?|assignments?|tasks?|questions?)|programming\s+(?:tasks?|questions?)|practical\s+exercises?|exercises?|programs?|experiment\s*\d+|task\s*\d+)\b", heading, re.I):
+            if re.match(r"^(?:lab(?:oratory)?\s+(?:programming\s+)?(?:exercises?|assignments?|tasks?|questions?)|programming\s+(?:tasks?|questions?)|practical\s+exercises?|exercises?|programs?|experiment\s*[-–—]?\s*\d+|task\s*\d+)\b", heading, re.I):
                 excluded = False
             elif excluded and re.match(r"^\s*\d+[.)]\s*(?:write|develop|implement|create|build)\b", stripped, re.I):
                 continue

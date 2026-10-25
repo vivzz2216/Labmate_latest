@@ -183,8 +183,10 @@ async def extract_assignment(workflow_id: int):
                 text, QUESTION_SCHEMA, on_retry=retry_status,
             )
             questions = filter_lab_tasks(extracted.get("questions", []), mode=mode)
-            if not questions or len(questions) > 100:
-                raise ValueError("No questions were found, or the assignment exceeds 100 questions. Review the document and try a smaller file.")
+            if not questions:
+                raise ValueError("No programming tasks could be identified. Check that the document includes the lab exercise or program statement, then retry extraction.")
+            if len(questions) > 100:
+                raise ValueError("This assignment contains more than 100 questions. Split it into smaller documents and retry extraction.")
             clean = []
             for index, question in enumerate(questions):
                 question_text = str(question.get("text", "")).strip()

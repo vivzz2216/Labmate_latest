@@ -36,6 +36,9 @@ class TheoryFilterTests(unittest.TestCase):
 
 class TheoryProcessingTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
+        admission = patch('app.services.assignment_workflow.settings.EXECUTION_ALLOWED_EMAILS', 'actual@example.test')
+        admission.start()
+        self.addCleanup(admission.stop)
         self.folder = tempfile.TemporaryDirectory()
         self.root = Path(self.folder.name)
         source = Document()
