@@ -79,37 +79,40 @@ class GenerationService:
 
     @property
     def provider_name(self):
-        if self._free_providers(): return 'AI providers'
-        return {"groq": "Groq", "gemini": "Gemini", "openrouter":"OpenRouter", "opencode":"OpenCode"}.get(settings.LLM_PROVIDER.lower(), "AI provider")
+        if self._backup_routes(): return 'AI providers'
+        return {"groq": "Groq", "gemini": "Gemini", "openrouter":"OpenRouter", "opencode":"OpenCode", "deepseek":"DeepSeek"}.get(settings.LLM_PROVIDER.lower(), "AI provider")
 
     async def generate_json(self, instructions, content, schema, on_retry=None):
         primary=settings.LLM_PROVIDER.lower()
-        if primary not in {'groq','gemini','openrouter','opencode'}:
-            raise GenerationError('Unsupported LLM_PROVIDER. Use groq, gemini, openrouter, or opencode.')
-        routes=self._free_providers()
+        if primary not in {'groq','gemini','openrouter','opencode','deepseek'}:
+            raise GenerationError('Unsupported LLM_PROVIDER. Use groq, gemini, openrouter, opencode, or deepseek.')
+        routes=self._backup_routes()
         errors=[]
-        if primary not in {'openrouter','opencode'}:
+        if primary not in {'openrouter','opencode','deepseek'}:
             try:
                 return await self._configured_generation(instructions,content,schema,on_retry)
             except GenerationError as error:
                 if not routes: raise
                 errors.append(error)
-                logger.warning('Configured AI route failed; trying free-only backups (%s).',type(error).__name__)
+                logger.warning('Configured AI route failed; trying enabled backups (%s).',type(error).__name__)
         else:
             routes=[primary]+[p for p in routes if p!=primary]
         for provider in routes:
-            identity=self._free_identity(provider)
+            identity=self._route_identity(provider)
             if time.monotonic()<self._free_unavailable_until.get(identity,0):
                 errors.append(GenerationUnavailableError(provider+' is cooling down.'))
                 continue
             try:
-                logger.info('Trying free-only provider %s.',provider)
+                logger.info('Trying AI provider %s.',provider)
+                if provider == 'deepseek':
+                    from .deepseek_service import generate_deepseek_json
+                    return await generate_deepseek_json(instructions,content,schema)
                 return await self._free_generation(provider,instructions,content,schema)
             except GenerationError as error:
                 errors.append(error)
                 delay=getattr(error,'cooldown',settings.LLM_FALLBACK_COOLDOWN_SECONDS)
                 if delay>0: self._free_unavailable_until[identity]=time.monotonic()+min(delay,3600)
-                logger.warning('Free-only provider %s failed (%s); continuing fallback chain.',provider,type(error).__name__)
+                logger.warning('AI provider %s failed (%s); continuing fallback chain.',provider,type(error).__name__)
                 if on_retry: await on_retry(len(errors),0,getattr(error,'status_code',None))
         # Keep transient outages checkpoint-compatible; never silently replace a
         # failed generation with fabricated lab code when every route is down.
@@ -134,10 +137,19 @@ class GenerationService:
             raise GenerationError('FREE_LLM_FALLBACK_ORDER must list openrouter and/or opencode once each.')
         return [p for p in order if enabled[p]]
 
-    def _free_identity(self,provider):
+    def _backup_routes(self):
+        routes = self._free_providers()
+        if settings.DEEPSEEK_ENABLED and settings.DEEPSEEK_API_KEY:
+            routes.append('deepseek')
+        return routes
+
+    def _route_identity(self,provider):
         import hashlib
-        key=settings.OPENROUTER_API_KEY if provider=='openrouter' else settings.OPENCODE_API_KEY
-        model=settings.OPENROUTER_MODEL if provider=='openrouter' else settings.OPENCODE_MODEL
+        if provider == 'deepseek':
+            key, model = settings.DEEPSEEK_API_KEY, settings.DEEPSEEK_MODEL
+        else:
+            key=settings.OPENROUTER_API_KEY if provider=='openrouter' else settings.OPENCODE_API_KEY
+            model=settings.OPENROUTER_MODEL if provider=='openrouter' else settings.OPENCODE_MODEL
         return provider,model,hashlib.sha256(key.encode()).digest()
 
     async def _free_generation(self,provider,instructions,content,schema):
@@ -170,7 +182,7 @@ class GenerationService:
             if model_backup:
                 logger.warning('Trying configured Groq backup model %s.',settings.GROQ_FALLBACK_MODEL)
                 try:
-                    return await self._primary(instructions, content, schema, on_retry, bool(self._free_providers()), model_override=settings.GROQ_FALLBACK_MODEL)
+                    return await self._primary(instructions, content, schema, on_retry, bool(self._backup_routes()), model_override=settings.GROQ_FALLBACK_MODEL)
                 except GenerationError as error:
                     if previous_error and getattr(previous_error, 'repairable', False) and not getattr(error, 'repairable', False):
                         raise previous_error
@@ -181,12 +193,12 @@ class GenerationService:
                 # With no separate Groq backup, retain the original bounded
                 # primary retry after a depleted Gemini account.
                 self._groq_unavailable_until = 0
-                return await self._primary(instructions, content, schema, on_retry, bool(self._free_providers()))
+                return await self._primary(instructions, content, schema, on_retry, bool(self._backup_routes()))
             raise GenerationUnavailableError('Configured backup providers are unavailable.')
         if (available or model_backup) and time.monotonic() < self._groq_unavailable_until:
             return await recover()
         try:
-            return await self._primary(instructions, content, schema, on_retry, available or model_backup or bool(self._free_providers()))
+            return await self._primary(instructions, content, schema, on_retry, available or model_backup or bool(self._backup_routes()))
         except GenerationError as primary_error:
             if not isinstance(primary_error, GenerationUnavailableError) and not getattr(primary_error, 'repairable', False):
                 raise  # Credentials/model configuration is not a malformed answer.

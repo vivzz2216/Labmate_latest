@@ -246,8 +246,14 @@ async def generate_web_project(question, language, on_retry=None, previous=None,
             'type':'OBJECT','properties':{
                 'action':deepcopy(STEP_SCHEMA['properties']['action']),
                 'locator_type':{'type':'STRING','enum':['label','placeholder','text','testid','page',*['role:'+role for role in sorted(ROLES)]]},
-                'locator':{'type':'STRING'},'value':{'type':'STRING'}},
+                'locator':deepcopy(STEP_SCHEMA['properties']['locator']),
+                'value':deepcopy(STEP_SCHEMA['properties']['value'])},
             'required':['action','locator_type','locator','value']}
+        if kind == 'html' and not any(r['id'] in {'routes','dynamic_route','not_found','navigation'} for r in requirements):
+            # Standalone pages are already loaded; invented navigation cannot
+            # help verify their controls and can invalidate an otherwise valid plan.
+            action = provider_schema['properties']['browser_tests']['items']['properties']['steps']['items']['properties']['action']
+            action['enum'] = [name for name in action['enum'] if name not in {'goto','assert_url'}]
     try:
         instructions=INSTRUCTIONS
         if kind=='flask':

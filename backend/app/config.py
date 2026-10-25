@@ -105,6 +105,12 @@ class Settings(BaseSettings):
     OPENCODE_MODEL: str = 'big-pickle'
     FREE_LLM_REQUEST_TIMEOUT: float = 60
     FREE_LLM_MAX_TOKENS: int = 12000
+    # Optional metered provider, explicitly enabled by the operator.
+    DEEPSEEK_ENABLED: bool = False
+    DEEPSEEK_API_KEY: str = ''
+    DEEPSEEK_MODEL: str = 'deepseek-flash'
+    DEEPSEEK_REQUEST_TIMEOUT: float = 90
+    DEEPSEEK_MAX_TOKENS: int = 12000
     DB_POOL_SIZE: int = 5
     DB_POOL_MAX_OVERFLOW: int = 5
     WORKFLOW_WORKERS: int = 2

@@ -24,7 +24,7 @@ class FreeProviderTests(unittest.IsolatedAsyncioTestCase):
         self.stack=ExitStack();self.addCleanup(self.stack.close)
         for key,value in {'LLM_PROVIDER':'groq','OPENROUTER_API_KEY':'private-router-key','OPENROUTER_MODEL':'openrouter/free',
                 'OPENCODE_ENABLED':True,'OPENCODE_API_KEY':'','OPENCODE_MODEL':'big-pickle',
-                'FREE_LLM_FALLBACK_ORDER':'openrouter,opencode','LLM_FALLBACK_COOLDOWN_SECONDS':60}.items():
+                'FREE_LLM_FALLBACK_ORDER':'openrouter,opencode','LLM_FALLBACK_COOLDOWN_SECONDS':60,'DEEPSEEK_ENABLED':False}.items():
             self.stack.enter_context(patch.object(settings,key,value))
         self.service=GenerationService()
         self.configured=self.stack.enter_context(patch.object(self.service,'_configured_generation',AsyncMock(side_effect=GenerationUnavailableError('old quota'))))
