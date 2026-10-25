@@ -59,7 +59,7 @@ def section_language(title, content, default="python"):
     if re.search(r"\bc\+\+|\bcpp\b", text, re.I): return "cpp"
     if re.search(r"\bjava\b", text, re.I): return "java"
     if re.search(r"\bpython\b|\btkinter\b|\bflask\b", text, re.I): return "python"
-    if re.search(r"\bc\s+(?:input|program|language)\b", text, re.I): return "c"
+    if re.search(r"\bc(?:89|90|99|11|17|18|23)?\s+(?:input|program(?:ming)?|language)\b", text, re.I): return "c"
     if re.search(r"\breact\b", text, re.I): return "react"
     if re.search(r"\b(?:html|css|javascript|browser)\b", text, re.I): return "html"
     return default
@@ -103,7 +103,8 @@ def numbered_experiments(text):
             if line.strip(): block.append(line.strip())
         body = "\n".join(block)
         if is_handwritten_question(body): continue
-        objective_lines = [line for line in block[1:] if not SECTION.match(line)]
+        objective_lines = [line for line in block[1:] if not SECTION.match(line) or re.match(
+            r'^(?:aim|problem statement)\s*:\s*(?:to\s+)?(?:write|build|create|implement|design|develop)\b',line,re.I)]
         if not objective_lines:
             raise ManualStructureError(f"Experiment {match.group(1)} has no problem statement or requirements.")
         title=match.group(2).strip() or (block[1] if len(block)>1 else '')

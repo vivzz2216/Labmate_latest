@@ -514,6 +514,8 @@ async def process_assignment(workflow_id: int):
                             )
                         else:
                             code_instruction += "\n8. Return browser_tests as an empty array for non-browser assignments."
+                        if language == 'python':
+                            code_instruction += '\nPYTHON RUNTIME: Read standard input using input(), collecting lines or tokens as needed. Do not import sys, os, subprocess or pathlib; these modules are unavailable in the restricted runner. Algorithm helpers such as heapq, collections, itertools, functools, bisect and math are supported. Preserve the required input/output format.'
                         solution = await generation_service.generate_json(
                             code_instruction,
                             f"Language: {language}\n{personalization_prompt}\nAdditional requirements: {workflow.instructions}\nProject brief: {planned.get('brief','')}\nQuestion:\n{question['text']}",

@@ -105,7 +105,7 @@ def validate_coverage_plan(requirements, tests):
         ok = bool(matching) and any(x.startswith('assert_') for x in ops)
         expectations = {
             'edit': {'fill', 'click', 'assert_absent', 'assert_visible'},
-            'delete': {'click', 'assert_absent'}, 'persistence': {'reload', 'assert_visible'},
+            'delete': {'click', 'assert_absent'}, 'persistence': {'reload'},
             'sort': {'assert_order'}, 'search': {'fill'},
             'theme': {'click', 'assert_attribute'}, 'toggle': {'click', 'assert_absent'},
             'routes': {'goto', 'assert_visible'}, 'dynamic_route': {'goto', 'assert_visible'},
@@ -126,7 +126,8 @@ def validate_coverage_plan(requirements, tests):
         if feature in {'filter', 'search'}:
             ok = ok and bool(ops & {'assert_count', 'assert_absent'})
         if feature == 'persistence':
-            ok = ok and 'fill' in ops and 'click' in ops
+            ok = (ok and bool(ops & {'fill', 'click', 'select'})
+                  and bool(ops & {'assert_visible','assert_count','assert_value','assert_checked','assert_attribute','assert_order'}))
         if feature == 'edit':
             controls = ' '.join(s['locator'].lower() for s in steps if s['action'] == 'click')
             ok = ok and 'edit' in controls and any(x in controls for x in ('save', 'update'))
@@ -260,6 +261,25 @@ async def run_v2(page, test, result, origin, observations, capture, reset_http=l
     result['status'] = 'passed'
 
 
+def persisted_state_observed(test):
+    """Require the same changed, scoped state assertion on both sides of reload."""
+    steps=test.get('steps',[])
+    def target(assertion):
+        index=assertion.get('step',0)-1
+        if not 0<=index<len(steps):return None
+        step=steps[index]
+        return tuple(step.get(key,'') for key in ('action','locator_type','locator','role','value'))
+    assertions=test.get('assertions',[])
+    for reload in (m for m in test.get('mutations',[]) if m['action']=='reload'):
+        for before in assertions:
+            if (not before.get('changed') or before['step']>=reload['step']
+                    or before['action'] not in {'assert_visible','assert_count','assert_value','assert_checked','assert_attribute','assert_order'}):continue
+            binding=target(before)
+            if binding and any(after['step']>reload['step'] and target(after)==binding
+                               and after.get('expected')==before.get('expected') for after in assertions):return True
+    return False
+
+
 def validate_run_coverage(requirements, verification):
     failures = []
     for r in requirements:
@@ -274,9 +294,6 @@ def validate_run_coverage(requirements, verification):
         }
         if feature in required_changes and not any(a.get('changed') and a['action'] in required_changes[feature] for a in assertions):
             failures.append(feature + ': no asserted state change after an action')
-        if feature == 'persistence' and not any(
-            any(a['action']=='assert_visible' and a.get('changed') and a['step'] < m['step'] for a in t.get('assertions', []))
-            and any(a['action']=='assert_visible' and a['step'] > m['step'] for a in t.get('assertions', []))
-            for t in tests for m in t.get('mutations', []) if m['action']=='reload'):
+        if feature == 'persistence' and not any(persisted_state_observed(t) for t in tests):
             failures.append('persistence: saved content was not asserted before and after reload')
     if failures: raise ValueError('Requirement verification failed: ' + '; '.join(failures))
