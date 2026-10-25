@@ -80,15 +80,15 @@ class GenerationService:
     @property
     def provider_name(self):
         if self._backup_routes(): return 'AI providers'
-        return {"groq": "Groq", "gemini": "Gemini", "openrouter":"OpenRouter", "opencode":"OpenCode", "deepseek":"DeepSeek"}.get(settings.LLM_PROVIDER.lower(), "AI provider")
+        return {"groq": "Groq", "gemini": "Gemini", "openrouter":"OpenRouter", "opencode":"OpenCode", "deepseek":"DeepSeek", "glm":"GLM"}.get(settings.LLM_PROVIDER.lower(), "AI provider")
 
     async def generate_json(self, instructions, content, schema, on_retry=None):
         primary=settings.LLM_PROVIDER.lower()
-        if primary not in {'groq','gemini','openrouter','opencode','deepseek'}:
-            raise GenerationError('Unsupported LLM_PROVIDER. Use groq, gemini, openrouter, opencode, or deepseek.')
+        if primary not in {'groq','gemini','openrouter','opencode','deepseek','glm'}:
+            raise GenerationError('Unsupported LLM_PROVIDER. Use groq, gemini, openrouter, opencode, deepseek, or glm.')
         routes=self._backup_routes()
         errors=[]
-        if primary not in {'openrouter','opencode','deepseek'}:
+        if primary not in {'openrouter','opencode','deepseek','glm'}:
             try:
                 return await self._configured_generation(instructions,content,schema,on_retry)
             except GenerationError as error:
@@ -107,6 +107,9 @@ class GenerationService:
                 if provider == 'deepseek':
                     from .deepseek_service import generate_deepseek_json
                     return await generate_deepseek_json(instructions,content,schema)
+                if provider == 'glm':
+                    from .glm_service import generate_glm_json
+                    return await generate_glm_json(instructions,content,schema)
                 return await self._free_generation(provider,instructions,content,schema)
             except GenerationError as error:
                 errors.append(error)
@@ -141,12 +144,16 @@ class GenerationService:
         routes = self._free_providers()
         if settings.DEEPSEEK_ENABLED and settings.DEEPSEEK_API_KEY:
             routes.append('deepseek')
+        if settings.GLM_ENABLED and settings.GLM_API_KEY:
+            routes.append('glm')
         return routes
 
     def _route_identity(self,provider):
         import hashlib
         if provider == 'deepseek':
             key, model = settings.DEEPSEEK_API_KEY, settings.DEEPSEEK_MODEL
+        elif provider == 'glm':
+            key, model = settings.GLM_API_KEY, settings.GLM_MODEL
         else:
             key=settings.OPENROUTER_API_KEY if provider=='openrouter' else settings.OPENCODE_API_KEY
             model=settings.OPENROUTER_MODEL if provider=='openrouter' else settings.OPENCODE_MODEL

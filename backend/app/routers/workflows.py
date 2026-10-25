@@ -11,7 +11,7 @@ import mammoth
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import text
+from sqlalchemy import text, update
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -68,6 +68,7 @@ def workflow_response(workflow, db):
         "results": results, "logs": workflow.logs, "error": workflow.error,
         "language": workflow.language, "instructions": workflow.instructions, "output_name": workflow.output_name,
         "mode": workflow.mode, "screenshot_style": workflow.screenshot_style, "batch_id": workflow.batch_id,
+        "agent_plan": workflow.agent_plan or {},
         "queue_position": queue_position,
         "report": {"id": report.id, "filename": report.filename, "size": report.file_size, "download_url": f"/api/download/{report.id}"} if report else None,
     }
@@ -281,12 +282,50 @@ async def process(upload_id: int, data: ProcessInput, request: Request, backgrou
     workflow.language, workflow.instructions, workflow.output_name = data.language, data.instructions, data.output_name
     workflow.mode, workflow.screenshot_style = data.mode, data.screenshot_style
     workflow.results = workflow.results if resume else []
-    reserve_workflow_credits(db, workflow, user.id)
+    from ..services.brain_agent import needs_planning
+    if not needs_planning(questions, data.instructions):
+        reserve_workflow_credits(db, workflow, user.id)
     workflow.error, workflow.report_id = None, None
     workflow.status, workflow.stage = "queued", 'resume' if continue_pending else 'generate'
     workflow.progress = 20 + int(65 * len(workflow.results) / len(questions))
     workflow.updated_at = datetime.now(timezone.utc)
     db.commit()
+    return workflow_response(workflow, db)
+
+
+class ClarificationInput(BaseModel):
+    revision: int = Field(ge=1)
+    answers: dict[str, str]
+
+
+@router.post('/{upload_id}/clarify')
+async def clarify(upload_id: int, data: ClarificationInput, user: User = Depends(execution_user),
+                  db: Session = Depends(get_db), csrf: bool = Depends(require_csrf_token)):
+    owned_upload(upload_id, user, db)
+    workflow = db.query(AssignmentWorkflow).filter_by(upload_id=upload_id).with_for_update().first()
+    if not workflow or workflow.status != 'awaiting_clarification':
+        raise HTTPException(409, 'This assignment is not waiting for clarification.')
+    plan = dict(workflow.agent_plan or {})
+    if plan.get('revision') != data.revision:
+        raise HTTPException(409, 'These questions changed. Refresh the assignment before answering.')
+    expected = {q['id']: q for q in plan.get('questions', [])}
+    if not expected or set(data.answers) != set(expected) or len(data.answers)>3:
+        raise HTTPException(422, 'Answer each pending question exactly once.')
+    for key, answer in data.answers.items():
+        if not answer.strip() or len(answer)>1000:
+            raise HTTPException(422, 'Answers must contain between 1 and 1000 characters.')
+        if expected[key].get('options') and not key.startswith('topic-') and answer not in expected[key]['options']:
+            raise HTTPException(422, 'Choose one of the listed supported options.')
+    check_queue_capacity(db, user.id)
+    plan['answers'] = {**plan.get('answers', {}), **{k:v.strip() for k,v in data.answers.items()}}
+    changed=db.execute(update(AssignmentWorkflow).where(AssignmentWorkflow.id==workflow.id,
+        AssignmentWorkflow.status=='awaiting_clarification',AssignmentWorkflow.agent_plan['revision'].as_integer()==data.revision)
+        .values(agent_plan=plan,status='queued',stage='generate',error=None,updated_at=datetime.now(timezone.utc)),
+        execution_options={'synchronize_session':False})
+    if changed.rowcount!=1:
+        raise HTTPException(409,'Another response already changed this assignment. Refresh before continuing.')
+    db.commit()
+    db.refresh(workflow)
     return workflow_response(workflow, db)
 
 

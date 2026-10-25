@@ -107,6 +107,14 @@ def select_evidence(plan, candidates):
                if sum(item["kind"] == requirement["evidence"] for item in selected) < requirement.get("minimum_count", 1)]
     captured_source_files={item.get('source_file') for item in selected if item['kind']=='source_preview'}
     missing += ['source:'+name for name in plan.get('required_source_files',[]) if name not in captured_source_files]
+    for name,count in plan.get('complete_source_lines',{}).items():
+        spans=sorted((a,b) for item in selected if item['kind']=='source_preview' and item.get('source_file')==name
+                     for a,b in item.get('source_ranges',[]))
+        cursor=1
+        for start,end in spans:
+            if start>cursor:break
+            cursor=max(cursor,end+1)
+        if cursor<=count:missing.append('source_lines:'+name)
     return {"selected": selected, "redundant": redundant, "invalid": invalid, "missing_requirements": missing}
 
 

@@ -155,6 +155,7 @@ async def extract_assignment(workflow_id: int):
         upload = db.get(Upload, workflow.upload_id)
         try:
             mode = workflow.mode or "code_only"
+            workflow.agent_plan = {}
             original_text = await asyncio.to_thread(document_text, document_snapshot(upload))
             sections = numbered_experiments(original_text) if mode == "code_only" else []
             if sections:
@@ -353,6 +354,15 @@ async def process_assignment(workflow_id: int):
         try:
             from ..security.execution_access import check_execution_access
             check_execution_access(upload.user)
+            continuing_resume = workflow.stage == 'resume'
+            from .brain_agent import make_plan, task_plan
+            record(workflow, db, 'plan', workflow.progress, 'Planning the runtime, project decisions and required evidence.')
+            workflow.agent_plan = await make_plan(workflow.questions, workflow.instructions or '', workflow.language, workflow.agent_plan)
+            db.commit()
+            if workflow.agent_plan['status'] == 'awaiting_clarification':
+                workflow.status = 'awaiting_clarification'
+                record(workflow, db, 'clarify', workflow.progress, 'A few assignment decisions need your answer before execution.')
+                return
             from .billing_service import reserve_workflow_credits
             reserve_workflow_credits(db, workflow, upload.user_id)
             db.commit()
@@ -373,7 +383,7 @@ async def process_assignment(workflow_id: int):
             personalization_prompt = student_personalization_prompt(student_name, roll_no, department, institution)
             username = student_name.split()[0] if student_name else "Student"
             questions = workflow.questions
-            continue_pending=workflow.stage=='resume'
+            continue_pending=continuing_resume
             async def retry_status(attempt, delay, status):
                 record(workflow, db, workflow.stage, workflow.progress, f"{generation_service.provider_name} is busy. Retry {attempt} in {delay:.1f}s; completed questions are saved.")
             for index, question in enumerate(questions):
@@ -397,7 +407,8 @@ async def process_assignment(workflow_id: int):
                         continue
                     # A failed or missing screenshot is not a completed checkpoint.
                     record(workflow, db, "generate", workflow.progress, f"Retrying question {index + 1}; earlier evidence was incomplete.")
-                language = question["language"] if workflow.language == "auto" else workflow.language
+                planned = task_plan(workflow.agent_plan, question['id'])
+                language = planned.get('language') or (question["language"] if workflow.language == "auto" else workflow.language)
                 progress = 20 + int(65 * index / len(questions))
                 record(workflow, db, "generate", progress, f"Generating answer {index + 1} of {len(questions)}.")
                 if question.get("is_theory") or question.get("language") == "theory":
@@ -438,7 +449,8 @@ async def process_assignment(workflow_id: int):
                         record(workflow, db, 'generate' if not attempt else 'execute', progress,
                                f"{'Generating' if not attempt else 'Repairing files and tests for'} question {index+1} (attempt {attempt+1}/3).")
                     solution, project_config, web_execution = await execute_web_assignment(
-                        question['text'], language, group, username, retry_status, web_attempt, additional_instructions=workflow.instructions or '')
+                        question['text'], language, group, username, retry_status, web_attempt,
+                        additional_instructions=(workflow.instructions or '')+'\n'+planned.get('brief',''))
                     answer = str(solution.get('answer', 'Generation could not produce a verifiable project.')).strip()
                     actual_language = language
                     code = (project_config.get('project_files') or {}).get(project_config.get('entrypoint'), '') or '// No valid executable web project was generated.'
@@ -479,7 +491,7 @@ async def process_assignment(workflow_id: int):
                             code_instruction += "\n8. Return browser_tests as an empty array for non-browser assignments."
                         solution = await generation_service.generate_json(
                             code_instruction,
-                            f"Language: {language}\n{personalization_prompt}\nAdditional requirements: {workflow.instructions}\nQuestion:\n{question['text']}",
+                            f"Language: {language}\n{personalization_prompt}\nAdditional requirements: {workflow.instructions}\nProject brief: {planned.get('brief','')}\nQuestion:\n{question['text']}",
                             ANSWER_SCHEMA, on_retry=retry_status,
                         )
                         answer = str(solution.get("answer", "")).strip()
@@ -561,10 +573,10 @@ async def process_assignment(workflow_id: int):
                             except GenerationUnavailableError:
                                 raise
                             except (GenerationError, ValueError) as repair_error:
-                                error = str(repair_error)
+                                error = (error + '\nRepair failed: ' + str(repair_error)).strip()
                                 break
                             except Exception as repair_error:
-                                error = str(repair_error)
+                                error = (error + '\nRepair failed: ' + str(repair_error)).strip()
                     # Capture exactly what the runtime returned, including failures.
                     record(workflow, db, "capture", progress, f"Capturing output for question {index + 1}.")
                     theme = {
@@ -597,10 +609,12 @@ async def process_assignment(workflow_id: int):
                     sources,source_errors=await capture_source_evidence(
                         project_files,code,src_filename,theme=theme,group=group,username=username,
                         language=source_language,screenshot_style=screenshot_style,
-                        requested_files=(project_config or {}).get('source_capture_files'))
+                        requested_files=(project_config or {}).get('source_capture_files'), policy=planned.get('source_policy','selected'))
                     candidates.extend(sources)
-                    source_plan=source_capture_plan(project_files,code,src_filename,source_language,(project_config or {}).get('source_capture_files'))
+                    source_plan=source_capture_plan(project_files,code,src_filename,source_language,(project_config or {}).get('source_capture_files'),policy=planned.get('source_policy','selected'))
                     evidence_plan['required_source_files']=[name for name,_ in source_plan['files']]
+                    if planned.get('source_policy') == 'complete':
+                        evidence_plan['complete_source_lines']={name:len(text.splitlines()) for name,text in source_plan['files']}
                     evidence_plan['source_selection']={k:v for k,v in source_plan.items() if k!='files'}
                     if source_errors:
                         success=False
@@ -655,6 +669,7 @@ async def process_assignment(workflow_id: int):
                           "answer": answer, "code": code, "output": output, "error": error,
                           "status": "completed" if success else "failed", "screenshot_paths": screenshots,
                           "evidence_plan": evidence_plan, "verification_summary": summary,
+                          "agent_decision": planned,
                           "execution_stages": execution_stages,
                           **({'project_files': project_config.get('project_files', {}), 'project_type': project_config.get('project_type')} if project_config else {}),
                           **({"screenshot_captions": screenshot_captions} if screenshot_captions is not None else {}),
@@ -753,6 +768,21 @@ def build_word_report(upload, workflow):
     apply_student_metadata(document, student_name, roll_no, department, institution, getattr(workflow, "output_name", "Lab Report"))
 
     for idx, result in enumerate(workflow.results):
+        decision = result.get('agent_decision') or {}
+        if decision.get('report_policy') == 'images_only':
+            if idx>0: document.add_page_break()
+            document.add_heading(f"Program {result['id']}"+((' — '+decision['topic']) if decision.get('topic') else ''),2)
+            if decision.get('include_description') and result.get('answer'):
+                document.add_paragraph(result['answer'])
+            if result.get('status')=='failed':
+                document.add_paragraph('Diagnostic report: verification failed. '+(result.get('error') or 'Required evidence is missing.'))
+            captions=result.get('screenshot_captions') or []
+            for index,path in enumerate(result.get('screenshot_paths',[])):
+                if os.path.isfile(path):
+                    embed_screenshot(document,path,caption=captions[index] if index<len(captions) else 'Execution evidence')
+                else:
+                    document.add_paragraph('Required evidence image is missing; this report is incomplete.')
+            continue
         is_theory = result.get("is_theory") or result.get("language") == "theory"
         if is_theory:
             embed_theory_block(document, result["question"], result.get("answer", ""), result.get("id", 1))

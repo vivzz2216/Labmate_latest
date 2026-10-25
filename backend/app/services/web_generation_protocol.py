@@ -21,12 +21,27 @@ Keep complete files AND tests synchronized when repairing. Preserve required nam
 FINAL BROWSER CHECK: the host has ALREADY loaded the local page before every scenario. Do not emit goto for the initial page, a filename, an empty URL, or a localhost/full URL. Only requested route tests navigate, using /paths. For a displayed calculation or error in output, div, span, p, heading, status or alert, use assert_visible with locator_type=text, the complete visible result in locator, and value empty. NEVER use assert_value for those elements: it reads only the value of input, select or textarea. Example after clicking Add: {"action":"assert_visible","locator_type":"text","locator":"Result: 5","value":""}. Keep this exact result consistent with the generated DOM. Return JSON only.'''
 
 
-def canonical_web_data(raw, schema, requirements):
+def canonical_web_data(raw, schema, requirements, project_type=None):
     """Supply transport defaults; never invent code, actions or assertions."""
     from .browser_scenarios import ROLES
     data = deepcopy(raw)
     if not isinstance(data, dict):
         raise ValueError('Web generation must return an object.')
+    if project_type in {'react','fullstack'} and data.get('entrypoint')=='index.html':
+        # Resolve a common manifest naming ambiguity from the supplied HTML.
+        # No file or executable source is invented or changed.
+        from html.parser import HTMLParser
+        files={item.get('path'):item.get('content') for item in data.get('files',[]) if isinstance(item,dict)} if isinstance(data.get('files'),list) else {}
+        class Modules(HTMLParser):
+            def __init__(self):super().__init__();self.paths=[]
+            def handle_starttag(self, tag, attrs):
+                attributes=dict(attrs)
+                src=attributes.get('src','')
+                if tag=='script' and attributes.get('type')=='module' and isinstance(src,str) and not src.startswith(('//','http:','https:')):
+                    candidate=src.removeprefix('/').removeprefix('./')
+                    if candidate in files and candidate.endswith(('.jsx','.js')):self.paths.append(candidate)
+        parser=Modules();parser.feed(files.get('index.html','') or '')
+        if len(set(parser.paths))==1:data['entrypoint']=parser.paths[0]
     if 'source_capture_files' in schema['properties']:
         data.setdefault('source_capture_files',[])
     for key in {'language', 'project_type', 'server_entrypoint', 'api_tests', 'browser_tests'} - set(schema['properties']):

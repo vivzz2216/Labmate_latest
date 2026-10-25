@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import CreditStatus from '@/components/billing/CreditStatus';
+import AgentPlanPanel from '@/components/workflow/AgentPlanPanel';
 import { useRouter } from "next/navigation";
 
 const DotGrid = dynamic<any>(() => import("@/components/visual/DotGrid"), {
@@ -133,6 +134,7 @@ export default function AssignmentPage() {
 
   const applyWorkflow = (data: LabWorkflow, restoreFields = false) => {
     setWorkflow(data);
+    if(!['queued','extracting','processing'].includes(data.status))setProcessingTriggered(false);
     if (data.status === "ready" || restoreFields) setQuestions(data.questions);
     if (restoreFields) {
       setLanguage(data.language);
@@ -373,7 +375,9 @@ export default function AssignmentPage() {
               );
             }
 
-            if (runWf.status === "completed" && runWf.report) {
+            if(runWf.status==='awaiting_clarification') {
+              setBatchItems(prev=>prev.map((it,idx)=>idx===i?{...it,status:'awaiting_clarification',stage:'Needs your answers',workflow:runWf}:it));
+            } else if (runWf.status === "completed" && runWf.report) {
               setBatchItems((prev) =>
                 prev.map((it, idx) =>
                   idx === i
@@ -529,6 +533,7 @@ export default function AssignmentPage() {
             : "Ready for your assignment";
 
   const getActionLabel = () => {
+    if(workflow?.status==='awaiting_clarification')return 'A few decisions need your answer';
     if (complete) return "Word report ready";
     if (failed) return workflow?.error || "Processing failed";
     if (workflow?.status === "ready") return `${total} questions ready to review`;
@@ -597,6 +602,13 @@ export default function AssignmentPage() {
           <p className={styles.setupIntro}>
             Configure the source, review the extracted questions, then run the execution and evidence checks.
           </p>
+          {workflow&&<AgentPlanPanel key={`${workflow.id}:${workflow.agent_plan?.revision||0}`} workflow={workflow} busy={busy} onAnswer={async answers=>{
+            if(!upload||!workflow.agent_plan?.revision)return;
+            setBusy(true);setError('');
+            try{applyWorkflow(await workflowApi.clarify(upload.id,workflow.agent_plan.revision,answers));}
+            catch(error){setError(errorMessage(error));}
+            finally{setBusy(false);}
+          }}/>}
           <div className={styles.step}>
             <span className={styles.stepNumber}>1</span>
             <div>
@@ -691,6 +703,7 @@ export default function AssignmentPage() {
                       >
                         {item.status}
                       </span>
+                      {item.status==='awaiting_clarification'&&item.uploadId&&<Link href={`/code-execution?assignment=${item.uploadId}`}>Answer questions</Link>}
                       {item.reportId && (
                         <button
                           onClick={() => saveReport(item.reportId!, item.reportFilename || "lab_manual.docx")}
@@ -926,7 +939,7 @@ export default function AssignmentPage() {
           )}
           <button
             className={styles.startButton}
-            disabled={!questions.length || running || busy || complete}
+            disabled={!questions.length || running || busy || complete || workflow?.status==='awaiting_clarification'}
             onClick={process}
           >
             {running || busy ? (

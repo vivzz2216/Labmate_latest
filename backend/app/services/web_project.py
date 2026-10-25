@@ -236,6 +236,8 @@ async def generate_web_project(question, language, on_retry=None, previous=None,
     if behavior_ids and 'browser_tests' in schema['properties']:
         schema['properties']['browser_tests']['items']['properties']['requirement_ids']['items']['enum']=behavior_ids
     provider_schema=deepcopy(schema)
+    if kind in {'react','fullstack'}:
+        provider_schema['properties']['entrypoint']['description']='The supplied JavaScript/JSX module referenced by index.html, normally src/main.jsx. Never index.html. Supply index.html with a local script type=module pointing to this module, plus every imported file.'
     provider_schema['properties']['readme']={'type':'STRING','description':'Required startup instructions in Markdown. HTML: open the supplied entry HTML file in a browser. React: npm install react@18.2.0 react-dom@18.2.0 react-router-dom@6.30.1 vite@5.4.21 then npx vite. Explain any required API/mock service; fullstack needs separate Node and Vite startup with matching local API proxy. No package.json is supplied. Do not claim verification.'}
     if kind=='flask':
         provider_schema['properties']['readme']['description']='Required Flask startup instructions in Markdown: python -m pip install Flask==3.1.3, then flask --app app run. List the supplied Python entrypoint, templates and static assets. No Node, Vite or npm setup is required. Do not claim verification.'
@@ -264,7 +266,7 @@ async def generate_web_project(question, language, on_retry=None, previous=None,
         raw=getattr(error,'draft',None)
         if not isinstance(raw,dict): raise
     try:
-        data=canonical_web_data(raw,schema,requirements)
+        data=canonical_web_data(raw,schema,requirements,project_type=kind)
     except (ValueError, KeyError, TypeError) as error:
         failure=GenerationError(str(error))
         if isinstance(raw,dict): failure.project_data=raw
@@ -274,6 +276,8 @@ async def generate_web_project(question, language, on_retry=None, previous=None,
     except ValidationError as error:
         path='.'.join(str(p) for p in error.absolute_path) or 'root'
         detail=error.validator
+        if error.validator=='additionalProperties' and isinstance(error.instance,dict):
+            detail='unexpected fields '+', '.join(sorted(set(error.instance)-set(error.schema.get('properties',{}))))+'; use only '+', '.join(sorted(error.schema.get('properties',{})))
         if error.validator=='required' and isinstance(error.instance,dict):
             detail='missing required fields '+', '.join(name for name in error.validator_value if name not in error.instance)
         failure=GenerationError(f'Invalid web project response at {path}: {detail}. Keep complete files and browser tests in the required schema.')

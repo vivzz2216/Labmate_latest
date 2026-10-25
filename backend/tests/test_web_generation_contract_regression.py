@@ -5,6 +5,19 @@ from jsonschema import ValidationError, validate
 
 from app.services.generation_service import strict_json_schema
 from app.services.web_project import generate_web_project
+from app.services.web_generation_protocol import canonical_web_data
+
+
+def test_react_html_shell_resolves_only_an_existing_unambiguous_module():
+    schema={'properties':{'entrypoint':{},'files':{}}}
+    raw={'entrypoint':'index.html','files':[{'path':'index.html','content':'<div id="root"></div><script type="module" src="/src/main.jsx"></script>'},
+        {'path':'src/main.jsx','content':'import App from "./App.jsx";'},{'path':'src/App.jsx','content':'export default function App(){return <main/>}'}]}
+    canonical=canonical_web_data(raw,schema,[],project_type='react')
+    assert canonical['entrypoint']=='src/main.jsx'
+    assert raw['entrypoint']=='index.html'
+    assert canonical['files']==raw['files']
+    missing={**raw,'files':raw['files'][:1]}
+    assert canonical_web_data(missing,schema,[],project_type='react')['entrypoint']=='index.html'
 
 
 @pytest.mark.asyncio

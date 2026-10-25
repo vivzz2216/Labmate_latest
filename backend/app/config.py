@@ -111,6 +111,14 @@ class Settings(BaseSettings):
     DEEPSEEK_MODEL: str = 'deepseek-flash'
     DEEPSEEK_REQUEST_TIMEOUT: float = 90
     DEEPSEEK_MAX_TOKENS: int = 12000
+    # Optional GLM provider through the international Z.ai API.
+    GLM_ENABLED: bool = False
+    GLM_API_KEY: str = ''
+    GLM_MODEL: str = 'glm-5.3-flash'
+    GLM_REASONING_EFFORT: str = 'low'
+    GLM_ENDPOINT: str = 'https://api.z.ai/api/paas/v4/chat/completions'
+    GLM_REQUEST_TIMEOUT: float = 90
+    GLM_MAX_TOKENS: int = 12000
     DB_POOL_SIZE: int = 5
     DB_POOL_MAX_OVERFLOW: int = 5
     WORKFLOW_WORKERS: int = 2

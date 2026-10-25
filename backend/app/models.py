@@ -113,6 +113,7 @@ class AssignmentWorkflow(Base):
     batch_id = Column(String(36), ForeignKey("workflow_batches.id"), nullable=True, index=True)
     mode = Column(String(24), nullable=False, default="code_only")
     screenshot_style = Column(String(40), nullable=False, default="style_1")
+    agent_plan = Column(JSON, nullable=False, default=dict)
     questions = Column(JSON, nullable=False, default=list)
     results = Column(JSON, nullable=False, default=list)
     logs = Column(JSON, nullable=False, default=list)

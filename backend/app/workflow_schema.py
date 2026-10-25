@@ -11,6 +11,7 @@ def ensure_workflow_columns(engine):
         "batch_id": "VARCHAR(36)",
         "mode": "VARCHAR(24) NOT NULL DEFAULT 'code_only'",
         "screenshot_style": "VARCHAR(40) NOT NULL DEFAULT 'style_1'",
+        "agent_plan": "JSON NOT NULL DEFAULT '{}'",
     }
     with engine.begin() as connection:
         if dialect == "postgresql":

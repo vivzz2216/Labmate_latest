@@ -5,7 +5,7 @@ from pathlib import PurePosixPath
 
 from .screenshot_service import screenshot_service
 
-SOURCE_SUFFIXES={'.html','.css','.js','.jsx','.cjs','.mjs','.json','.svg','.py','.java'}
+SOURCE_SUFFIXES={'.html','.css','.js','.jsx','.ts','.tsx','.cjs','.mjs','.json','.svg','.py','.java'}
 
 
 def source_files(project_files,code,filename,language=None):
@@ -25,8 +25,13 @@ def source_files(project_files,code,filename,language=None):
     return [(filename,code)]
 
 
-def source_capture_plan(project_files,code,filename,language,requested_files=None):
+def source_capture_plan(project_files,code,filename,language,requested_files=None,*,policy='selected'):
     files=source_files(project_files,code,filename,language)
+    if policy not in {'selected','complete'}:
+        raise ValueError('Unknown source evidence policy.')
+    if policy=='complete':
+        return {'files':files,'omitted':[],'selection':'complete authored project source',
+                'policy':'Every line of every authored source file, including CSS and React mounting files, across readable pages.'}
     if language not in {'html','react','node','flask','java_gui'}:
         return {'files':files,'omitted':[],'selection':'complete console source'}
     available=dict(files)
@@ -62,28 +67,36 @@ def excerpt_ranges(text):
     return [[1,20],[count-19,count]] if count>48 else [[1,count]] if count else []
 
 
-async def capture_source_evidence(project_files,code,filename,*,theme,group,username,language,screenshot_style,requested_files=None):
-    plan=source_capture_plan(project_files,code,filename,language,requested_files)
+async def capture_source_evidence(project_files,code,filename,*,theme,group,username,language,screenshot_style,requested_files=None,policy='selected'):
+    plan=source_capture_plan(project_files,code,filename,language,requested_files,policy=policy)
     files=plan['files']
     candidates,failures=[],[]
     if not files:return [],['No executable source files were available for capture.']
+    if policy=='complete' and sum(max(1,(len(text.splitlines())+31)//32) for _,text in files)>80:
+        return [],['Complete source exceeds 80 readable capture pages. Split the project; no source was silently omitted.']
     for name,text in files:
         digest=hashlib.sha256(text.encode('utf-8')).hexdigest()
         web=language in {'html','react','node','flask','java_gui'}
-        ranges=excerpt_ranges(text) if web else []
-        excerpt=''.join(''.join(text.splitlines(keepends=True)[start-1:end]) for start,end in ranges) if ranges else text
-        ok,path,width,height=await screenshot_service.generate_screenshot(
-            text,'',theme,group,username,name,view_mode='editor',presentation='vscode_evidence' if web else 'evidence',
-            language=language,screenshot_style=screenshot_style,
-            palette='dark' if web or screenshot_style=='style_2' else 'light',
-            source_ranges=ranges if web else None,project_files=project_files)
-        if not ok:
-            failures.append(f'Source screenshot could not be captured completely: {name}')
-            continue
-        label='VS Code-style source excerpt' if web and len(ranges)>1 else 'VS Code-style source preview' if web else 'Rendered source preview'
-        candidates.append({'path':path,'kind':'source_preview','caption':label+' — '+name,
-                           'source_file':name,'source_sha256':digest,'source_line_count':len(text.splitlines()),
-                           'source_ranges':ranges,'excerpt_sha256':hashlib.sha256(excerpt.encode()).hexdigest(),
-                           'omitted_line_count':len(text.splitlines())-sum(b-a+1 for a,b in ranges) if web else 0,
-                           'selection':plan['selection'],'width':width,'height':height})
+        count=len(text.splitlines())
+        pages=[[[start,min(start+31,count)]] for start in range(1,count+1,32)] if policy=='complete' and count else [excerpt_ranges(text) if web else []]
+        for page_index,ranges in enumerate(pages,1):
+            excerpt=''.join(''.join(text.splitlines(keepends=True)[start-1:end]) for start,end in ranges) if ranges else text
+            ok,path,width,height=await screenshot_service.generate_screenshot(
+                text,'',theme,group,username,name,view_mode='editor',presentation='vscode_evidence' if web else 'evidence',
+                language=language,screenshot_style=screenshot_style,
+                palette='dark' if web or screenshot_style=='style_2' else 'light',
+                source_ranges=ranges if web or policy=='complete' else None,project_files=project_files)
+            if not ok:
+                failures.append(f'Source screenshot could not be captured completely: {name}'+(f', page {page_index}' if policy=='complete' else ''))
+                continue
+            label='VS Code-style source excerpt' if web and len(ranges)>1 else 'VS Code-style source preview' if web else 'Rendered source preview'
+            if policy=='complete':
+                label=f'Complete source — {name} — lines {ranges[0][0]}–{ranges[-1][1]}, part {page_index}/{len(pages)}' if ranges else 'Complete source — '+name+' (empty file)'
+            else:
+                label+=' — '+name
+            candidates.append({'path':path,'kind':'source_preview','caption':label,
+                               'source_file':name,'source_sha256':digest,'source_line_count':count,
+                               'source_ranges':ranges,'excerpt_sha256':hashlib.sha256(excerpt.encode()).hexdigest(),
+                               'omitted_line_count':count-sum(b-a+1 for a,b in ranges) if web else 0,
+                               'complete_source':policy=='complete','selection':plan['selection'],'width':width,'height':height})
     return candidates,failures
