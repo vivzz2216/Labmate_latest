@@ -19,7 +19,7 @@ from urllib.parse import urlparse
 
 import httpx
 from functools import partial
-from http.server import HTTPServer, SimpleHTTPRequestHandler
+from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from playwright.async_api import async_playwright
 
 try:
@@ -28,7 +28,8 @@ except ImportError:
     resource = None
 
 from ..config import settings
-from .browser_capture import launch_capture_browser
+from .browser_capture import acquire_capture_context, launch_capture_browser
+from .resource_budget import heavy_execution_budget
 
 
 @dataclass
@@ -51,6 +52,7 @@ def runtime_environment(directory: Path, extras=None):
     tool_directories = [str(Path(value).parent) for value in (settings.JAVA_COMMAND, settings.JAVAC_COMMAND, settings.C_COMPILER, settings.CPP_COMPILER) if Path(value).is_absolute()]
     environment["PATH"] = os.pathsep.join(tool_directories + [environment.get("PATH", "")])
     environment.update({"TMP": str(directory), "TEMP": str(directory), "TMPDIR": str(directory), "PYTHONIOENCODING": "utf-8"})
+    environment['HOME'] = str(directory)
     environment.update(extras or {})
     return environment
 
@@ -109,6 +111,8 @@ def make_resource_limiter(resource_limits=None):
 
 
 async def start_process(command, directory, extras=None, resource_limits=None, desktop=None):
+    from .isolated_runtime import require_worker
+    require_worker()
     if os.name == "nt":
         options = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
         if desktop:
@@ -135,6 +139,8 @@ async def collect_output(stream, process):
 
 
 async def run_process(command, directory, stdin="", timeout=None, extras=None, resource_limits=None, desktop=None):
+    from .isolated_runtime import require_worker
+    require_worker()
     started = time.perf_counter()
     try:
         process = await start_process(command, directory, extras, resource_limits=resource_limits,desktop=desktop)
@@ -215,10 +221,13 @@ def c_stdin(code):
 
 
 def python_stdin(code):
-    tree = ast.parse(code)
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return ""
     calls = sorted((node for node in ast.walk(tree) if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "input"), key=lambda node: (node.lineno, node.col_offset))
     lines = code.splitlines()
-    values = ["5" if re.search(r"\b(?:int|float)\s*\(", lines[node.lineno - 1]) else "sample" for node in calls]
+    values = ["5" if 0 <= node.lineno - 1 < len(lines) and re.search(r"\b(?:int|float)\s*\(", lines[node.lineno - 1]) else "sample" for node in calls]
     return "\n".join(values * 16) + ("\n" if values else "")
 
 
@@ -324,10 +333,10 @@ def normalize_browser_tests(browser_tests):
 
 def browser_test_locator(page, action):
     if action["locator_type"] == "role":
-        return page.get_by_role(action["role"], name=action["locator"], exact=True)
+        return page.get_by_role(action["role"], name=action["locator"], exact=False)
     if action["locator_type"] == "label":
-        return page.get_by_label(action["locator"], exact=True)
-    return page.get_by_placeholder(action["locator"], exact=True)
+        return page.get_by_label(action["locator"], exact=False)
+    return page.get_by_placeholder(action["locator"], exact=False)
 
 
 def expected_text_is_visible(body_text, expected):
@@ -358,14 +367,50 @@ class RuntimeEngine:
     async def execute(self, code, language="python", filename=None, stdin=None, project_files=None, routes=None,
                       prepare_files=None, collect_files=None, browser_tests=None, interaction_is_required=False,
                       objective="", api_tests=None, project_config=None):
-        language = {"c++": "cpp", "javascript": "node", "webdev": "html"}.get(language.lower(), language.lower())
-        if language not in {"python", "java", "c", "cpp", "html", "react", "node"}:
+        language = {'c++':'cpp', 'javascript':'node', 'webdev':'html', 'mysql':'sql', 'ipynb':'colab'}.get(language.lower(), language.lower())
+        if language not in {'python', 'java', 'c', 'cpp', 'html', 'react', 'node', 'sql', 'colab'}:
+            return RuntimeResult(False, error='Unsupported execution language.', exit_code=2)
+        async with heavy_execution_budget.slot():
+            from .isolated_runtime import isolation_required, execute_isolated
+            from .evidence_planner import plan_experiment
+            # SQL uses a disposable database/schema and restricted per-run account.
+            category = plan_experiment(objective, language, code).get('category')
+            if isolation_required() and category != 'database':
+                return await execute_isolated(code=code, language=language, filename=filename, stdin=stdin,
+                    project_files=project_files, routes=routes, browser_tests=browser_tests,
+                    interaction_is_required=interaction_is_required, objective=objective, api_tests=api_tests,
+                    project_config=project_config, file_mode=bool(prepare_files or collect_files))
+            return await self._execute_direct(
+                code, language=language, filename=filename, stdin=stdin, project_files=project_files, routes=routes,
+                prepare_files=prepare_files, collect_files=collect_files, browser_tests=browser_tests,
+                interaction_is_required=interaction_is_required, objective=objective, api_tests=api_tests,
+                project_config=project_config
+            )
+
+    async def _execute_direct(self, code, language="python", filename=None, stdin=None, project_files=None, routes=None,
+                             prepare_files=None, collect_files=None, browser_tests=None, interaction_is_required=False,
+                             objective="", api_tests=None, project_config=None):
+        language = {"c++": "cpp", "javascript": "node", "webdev": "html", "mysql":"sql", "ipynb":"colab"}.get(language.lower(), language.lower())
+        if language not in {"python", "java", "c", "cpp", "html", "react", "node", "sql", "colab"}:
             return RuntimeResult(False, error="Unsupported execution language.", exit_code=2)
         from .evidence_planner import plan_experiment
         capability = plan_experiment(objective, language, code)
+        if capability['category']=='database':
+            from .lab_capture import capture_sql
+            return await capture_sql(code, filename=filename, objective=objective)
+        if capability['category']=='notebook':
+            # Native process restrictions are defense in depth, not an OS sandbox.
+            if not settings.EXECUTION_ALLOWED_EMAILS.strip():
+                return RuntimeResult(False,error='Notebook execution requires an explicit beta execution allowlist.',exit_code=126)
+            from .lab_capture import capture_notebook
+            cfg = project_config or {}
+            return await capture_notebook(code, datasets=cfg.get('datasets'), exp_no=cfg.get('exp_no', '01'), student_name=cfg.get('student_name', 'Student'), subject=cfg.get('subject', 'DSLab'), notebook_title=cfg.get('notebook_title'),theme=cfg.get('colab_theme','dark'),source_filename=filename or 'notebook.py')
         if not capability["supported"]:
             return RuntimeResult(False, error=f"Unsupported capability: {capability['category']} requires an isolated display/server adapter and genuine capture support; it was not executed.",
                                  exit_code=69, stages={"execution": "not_run", "capability": capability["category"]})
+
+        from .isolated_runtime import require_worker
+        require_worker()
 
         # Universal static security policy check across all supported languages
         from ..security.generated_code import validate_generated_code
@@ -439,7 +484,7 @@ class RuntimeEngine:
                 # JVMs reserve large virtual address ranges; RLIMIT_AS can stop
                 # them before startup. Bound their heap explicitly instead.
                 compiled = await run_process([settings.JAVAC_COMMAND, "-J-Xmx256m", "-encoding", "UTF-8", "-d", directory, source], directory,
-                                             timeout=settings.COMPILATION_TIMEOUT, resource_limits={"max_memory_bytes": 0})
+                                             timeout=settings.COMPILATION_TIMEOUT, resource_limits={"max_memory_bytes": 0, "max_cpu_seconds": min(45, settings.COMPILATION_TIMEOUT)})
                 if not compiled.success:
                     compiled.error = "Compilation error: " + compiled.error
                     compiled.stages = {"compile": "failed", "execution": "not_run"}
@@ -479,8 +524,26 @@ class RuntimeEngine:
                                    browser_tests=browser_tests, interaction_is_required=interaction_is_required, api_tests=api_tests)
 
     async def _install_packages(self, language, directory):
-        packages = {"express": "4.21.2"} if language == "node" else {"react": "18.2.0", "react-dom": "18.2.0", "react-router-dom": "6.30.1", "vite": "5.4.21", "express": "4.21.2"}
+        common_node_packages = {
+            "express": "4.21.2",
+            "joi": "^17.13.3",
+            "cors": "^2.8.5",
+            "cookie-parser": "^1.4.7",
+            "express-session": "^1.18.1",
+        }
+        packages = common_node_packages if language == "node" else {
+            "react": "18.2.0",
+            "react-dom": "18.2.0",
+            "react-router-dom": "6.30.1",
+            "vite": "5.4.21",
+            **common_node_packages,
+        }
         cache = Path(settings.REACT_TEMP_DIR).resolve() / "runtime_packages" / language
+        if settings.NODE_RUNTIME_CACHE:
+            source = Path(settings.NODE_RUNTIME_CACHE) / language / 'node_modules'
+            if not source.is_dir(): return 'Preinstalled offline Node runtime dependencies are unavailable.'
+            await asyncio.to_thread(shutil.copytree, source, directory / 'node_modules')
+            return None
         cache.mkdir(parents=True, exist_ok=True)
         lock = self._package_locks.setdefault(language, asyncio.Lock())
         async with lock:
@@ -538,6 +601,8 @@ class RuntimeEngine:
         result["status"] = "passed"
 
     async def _capture_html(self, code, browser_tests, interaction_is_required, page_url=None):
+        from .isolated_runtime import require_worker
+        require_worker()
         started = time.perf_counter()
         metrics = {"browser_start_seconds": 0, "interaction_seconds": 0, "screenshot_seconds": 0}
         tests, plan_error = normalize_browser_tests(browser_tests)
@@ -553,17 +618,11 @@ class RuntimeEngine:
         directory = Path(settings.SCREENSHOT_DIR).resolve() / ("web_" + uuid.uuid4().hex)
         directory.mkdir(parents=True, exist_ok=True)
         screenshots, output, errors = {}, [], []
-        browser = None
         page = None
         try:
-            async with async_playwright() as playwright:
-                try:
-                    async with asyncio.timeout(120 if v2 else _HTML_CAPTURE_SECONDS):
-                        launched = time.perf_counter()
-                        browser = await launch_capture_browser(playwright)
-                        metrics["browser_start_seconds"] = round(time.perf_counter() - launched, 6)
-                        context = await browser.new_context(viewport={"width": 1366, "height": 768},
-                                                            accept_downloads=False, service_workers='block' if page_url else 'allow')
+            async with acquire_capture_context(viewport={"width": 1366, "height": 768},
+                                              accept_downloads=False, service_workers='block' if page_url else 'allow') as context:
+                async with asyncio.timeout(120 if v2 else _HTML_CAPTURE_SECONDS):
                         async def guard(route):
                             target = urlparse(route.request.url)
                             origin = urlparse(page_url) if page_url else None
@@ -712,12 +771,6 @@ class RuntimeEngine:
                                     verification["error"] = detail + " " + verification.get("error", "")
                             if errors:
                                 break
-                finally:
-                    if browser is not None:
-                        try:
-                            await asyncio.wait_for(browser.close(), timeout=5)
-                        except Exception:
-                            pass
         except Exception as error:
             detail = ("HTML browser capture exceeded its 40-second time limit."
                       if isinstance(error, TimeoutError) else f"Browser verification could not run: {str(error)[:400]}")
@@ -811,7 +864,9 @@ class RuntimeEngine:
                 class QuietHandler(SimpleHTTPRequestHandler):
                     def log_message(self, *args):
                         pass
-                server = HTTPServer(("127.0.0.1", 0), partial(QuietHandler, directory=str(directory)))
+                # Chromium can preconnect before route.fetch makes the CSP request.
+                # A single connection server then waits forever on that idle socket.
+                server = ThreadingHTTPServer(("127.0.0.1", 0), partial(QuietHandler, directory=str(directory)))
                 task = asyncio.create_task(asyncio.to_thread(server.serve_forever, poll_interval=.05))
                 try:
                     return await self._capture(url=f"http://127.0.0.1:{server.server_port}", routes=routes,

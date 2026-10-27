@@ -62,7 +62,7 @@ def blockers(text, ident):
     if re.search(r'\b(?:must|only|required|using|use)\b.{0,25}\b(?:Vue|Angular)\b',text,re.I):
         questions.append({'id':f'framework-{ident}','prompt':'This assignment mentions a framework without a configured runner. Should I use the supported React runtime, or keep this task for manual review?',
             'options':['Use React','Keep for manual review'],'source_excerpt':text[:500]})
-    if re.search(r'\b(?:real|live)\s+(?:payments?|transactions?)\b|\b(?:must|requires?)\b.{0,30}\b(?:MySQL|MongoDB|external API)\b',text,re.I):
+    if re.search(r'\b(?:real|live)\s+(?:payments?|transactions?)\b|\b(?:must|requires?)\b.{0,30}\b(?:MongoDB|external API)\b',text,re.I):
         questions.append({'id':f'service-{ident}','prompt':'This task requires an external-service adapter that is not configured. Keep it for manual review, or revise the assignment before execution?',
             'options':['Keep for manual review','Revise the assignment'],'source_excerpt':text[:500]})
     if re.search(r'\bask\s+(?:me|the user)\b.{0,35}\btopic\b|\bconfirm\s+(?:the\s+)?topic\b',text,re.I):

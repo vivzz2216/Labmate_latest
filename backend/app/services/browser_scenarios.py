@@ -69,18 +69,20 @@ def normalize_v2(tests):
             if action=='click_confirm' and not value.strip(): raise ValueError('Confirmed clicks require the exact expected confirmation message.')
             if action == 'assert_count' and (not value.isdigit() or not 0 <= int(value) <= 100):
                 raise ValueError('Count assertions require an integer from 0 to 100.')
-            if action == 'assert_attribute':
-                spec = json.loads(value)
-                if not isinstance(spec, dict) or set(spec) != {'name', 'equals'} or spec['name'] not in ATTRIBUTES or not isinstance(spec['equals'], str):
-                    raise ValueError('Unsupported attribute assertion.')
-            if action == 'assert_order':
-                spec = json.loads(value)
-                if not isinstance(spec, list) or not 2 <= len(spec) <= 20 or any(not isinstance(x, str) or not x for x in spec):
-                    raise ValueError('Order assertions require 2–20 nonempty expected fragments.')
-            if action == 'assert_http':
-                spec = json.loads(value)
-                if not isinstance(spec, dict) or set(spec) != {'method', 'path', 'status'} or not local_path(spec['path']) or spec['method'] not in {'GET', 'POST', 'PUT', 'PATCH', 'DELETE'} or type(spec['status']) is not int or not 200 <= spec['status'] <= 599:
-                    raise ValueError('Invalid HTTP observation assertion.')
+            if action in {'assert_attribute', 'assert_order', 'assert_http'}:
+                try:
+                    spec = json.loads(value)
+                except (json.JSONDecodeError, TypeError, ValueError):
+                    raise ValueError(f"Invalid JSON format for {action} step.")
+                if action == 'assert_attribute':
+                    if not isinstance(spec, dict) or set(spec) != {'name', 'equals'} or spec['name'] not in ATTRIBUTES or not isinstance(spec['equals'], str):
+                        raise ValueError('Unsupported attribute assertion.')
+                elif action == 'assert_order':
+                    if not isinstance(spec, list) or not 2 <= len(spec) <= 20 or any(not isinstance(x, str) or not x for x in spec):
+                        raise ValueError('Order assertions require 2–20 nonempty expected fragments.')
+                elif action == 'assert_http':
+                    if not isinstance(spec, dict) or set(spec) != {'method', 'path', 'status'} or not local_path(spec['path']) or spec['method'] not in {'GET', 'POST', 'PUT', 'PATCH', 'DELETE'} or type(spec['status']) is not int or not 200 <= spec['status'] <= 599:
+                        raise ValueError('Invalid HTTP observation assertion.')
             assertions += action.startswith('assert_')
             canonical.append(s)
         if not assertions:
@@ -143,11 +145,14 @@ def validate_coverage_plan(requirements, tests):
 
 def locator_for(page, step):
     kind, value = step['locator_type'], step['locator']
-    if kind == 'role': return page.get_by_role(step['role'], name=value, exact=True)
-    if kind == 'label': return page.get_by_label(value, exact=True)
-    if kind == 'placeholder': return page.get_by_placeholder(value, exact=True)
+    if kind == 'role':
+        if step.get('role') == 'alert':
+            return page.get_by_role('alert', name=value, exact=False).or_(page.get_by_text(value, exact=False).and_(page.locator(':visible:not(option)')))
+        return page.get_by_role(step['role'], name=value, exact=False)
+    if kind == 'label': return page.get_by_label(value, exact=False)
+    if kind == 'placeholder': return page.get_by_placeholder(value, exact=False)
     if kind == 'testid': return page.get_by_test_id(value)
-    return page.get_by_text(value, exact=True).and_(page.locator(':visible:not(option)'))
+    return page.get_by_text(value, exact=False).and_(page.locator(':visible:not(option)'))
 
 
 async def run_v2(page, test, result, origin, observations, capture, reset_http=lambda:None):

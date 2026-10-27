@@ -1,0 +1,102 @@
+St. Francis Institute of Technology, Mumbai-400 103
+Department of Information Technology
+A.Y. 2024-2025
+Class: TE-ITA/B, Semester: VI
+Subject: Data Science Lab
+Experiment – 6: To implement Classification.
+1. Aim: To implement classification modeling and evaluate performance of classifiers.
+2. Objectives: After study of this experiment, the student will be able to
+● Understand classification.
+3. Outcomes: After study of this experiment, the student will be able to
+● Understand concepts of classification in data science.
+4. Prerequisite: Fundamentals of Python Programming and Database Management System.
+5. Requirements: Python Installation, Personal Computer, Windows operating system,
+Internet Connection, Microsoft Word.
+6. Pre-Experiment Exercise:
+Brief Theory:
+● Concept of classification in machine learning. (Naive Byes, ID3, KNN,
+Random Forest)
+Laboratory Exercise
+A. Procedure: (Home _Loan Dataset)
+import sklearn
+import pandas as pd
+from sklearn.preprocessing import LabelEncoder
+from sklearn.model_selection import train_test_split
+from sklearn.naive_bayes import GaussianNB
+loan_data = pd.read_csv('home_loan_train.csv')
+#print(loan_data.columns.values)
+#print(loan_data['Gender'])
+loan_data['Gender'] =
+LabelEncoder().fit_transform(loan_data['Gender'].astype(str))
+#print(loan_data['Gender'])
+loan_data['Married'] =
+LabelEncoder().fit_transform(loan_data['Married'].astype(str))
+#print(loan_data['Married'])
+loan_data['Education'] =
+LabelEncoder().fit_transform(loan_data['Education'].astype(str))
+#print(loan_data['Education'])
+loan_data['Self_Employed'] =
+LabelEncoder().fit_transform(loan_data['Self_Employed'].astype(str))
+#print(loan_data['Self_Employed'])
+loan_data['Property_Area'] =
+LabelEncoder().fit_transform(loan_data['Property_Area'].astype(str))
+#print(loan_data['Property_Area'])
+loan_data = loan_data.drop('Loan_ID',axis=1)
+loan_data = loan_data.fillna(loan_data.mean())
+X = loan_data.drop('Loan_Status',axis=1)
+Y = loan_data['Loan_Status']
+Y = LabelEncoder().fit_transform(loan_data['Loan_Status'].astype(str))
+X_train, X_test, y_train, y_test = train_test_split(X,Y,test_size=0.3,
+random_state=1)
+Naivebayes = GaussianNB()
+b = Naivebayes.fit(X_train,y_train)
+c = Naivebayes.predict(X_test)
+print(c)
+acc = sklearn.metrics.accuracy_score(y_test, c)
+print(acc)
+B. Paste Screenshots of above commands.
+8. Post-Experiments Exercise
+A. Extended Theory: (Soft Copy)
+● Types of classification.
+Classification is a supervised learning technique used to categorize data into predefined
+classes or labels. Based on the type of output or method, classification can be categorized into
+the following types:
+1. Binary Classification
+● Involves two classes or categories (Yes/No, 0/1, True/False).
+● Example: Loan Approved (Yes/No), Email (Spam/Not Spam).
+2. Multi-Class Classification
+● Involves more than two classes.
+● Example: Classifying types of fruits (Apple, Banana, Orange), Handwritten digit
+recognition (0–9).
+3. Multi-Label Classification
+● Each instance can belong to multiple classes at the same time.
+● Example: A movie can be tagged with multiple genres like Action, Comedy, and
+Drama.
+4. Imbalanced Classification
+● One class has significantly more instances than the other.
+● Example: Fraud detection where 99% of the transactions are genuine, and only 1% are
+fraudulent.
+5. Ordinal Classification
+● The classes have a meaningful order or ranking.
+● Example: Customer satisfaction (Low, Medium, High), Star ratings (1 to 5 stars).
+Common Classification Algorithms
+● Naive Bayes: Based on Bayes' theorem, works well with text data.
+● K-Nearest Neighbors (KNN): Instance-based learner using distance metrics.
+● Support Vector Machine (SVM): Finds optimal hyperplane for class separation.
+● Decision Trees & Random Forest: Tree-based models, good for interpretability.
+● Logistic Regression: Statistical model for binary classification
+B. Questions:
+■ Compare same dataset with other classifiers SVM and KNN.
+KNN vs SVM
+C. Conclusion:
+Write the significance of the topic studied in the experiment.
+D. References:
+1. Machine Learning Classification Strategy In Python (quantinsti.com)
+2.https://blog.quantinsti.com/machine-learning-k-nearest-neighbors-knn-algorithm-py
+thon/
+3. Discrete vs. Continuous Data: All You Need to Know (yummysoftware.com)
+4. How Naive Bayes Algorithm Works? (with example and full code) | ML+
+(machinelearningplus.com)
+Dataset:
+https://www.kaggle.com/gavincanacam/home-loan-predictions?select=Train_Loan_Home.cs
+CODE

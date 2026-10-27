@@ -19,7 +19,132 @@ const api = axios.create({
   headers: DEFAULT_HEADERS,
 });
 
-// Credentials and uploaded documents must never be logged by request interceptors.
+// Ensure latest stored tokens are attached before every request
+api.interceptors.request.use((config) => {
+  // Metadata/session checks fail promptly; large report downloads keep their longer budget.
+  const download = config.responseType === 'blob' || config.responseType === 'arraybuffer';
+  if ((config.method?.toLowerCase() === 'get' && !download) || config.url?.includes('/basic-auth/')) {
+    config.timeout = 15000;
+  }
+  if (typeof window !== "undefined") {
+    const accessToken = localStorage.getItem("labmate_access_token");
+    const csrfToken = localStorage.getItem("labmate_csrf_token");
+    if (accessToken && !config.headers?.["Authorization"]) {
+      config.headers.set("Authorization", `Bearer ${accessToken}`);
+    }
+    if (csrfToken && !config.headers?.["X-CSRF-Token"]) {
+      config.headers.set("X-CSRF-Token", csrfToken);
+    }
+  }
+  return config;
+});
+
+// Automatically refresh access & CSRF tokens on 401 Unauthorized or 403 Invalid/Missing CSRF token
+let isRefreshing = false;
+let failedQueue: Array<{
+  resolve: (value?: any) => void;
+  reject: (reason?: any) => void;
+}> = [];
+
+const processQueue = (error: any, tokens: { accessToken: string; csrfToken?: string } | null = null) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(tokens);
+    }
+  });
+  failedQueue = [];
+};
+
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+    const status = error.response?.status;
+    const detail = String(error.response?.data?.detail || "");
+    const isCsrfError =
+      status === 403 && detail.toLowerCase().includes("csrf token");
+
+    if (
+      (status === 401 || isCsrfError) &&
+      originalRequest &&
+      !originalRequest._retry &&
+      !originalRequest.url?.includes("/basic-auth/login") &&
+      !originalRequest.url?.includes("/basic-auth/refresh")
+    ) {
+      originalRequest._retry = true;
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        })
+          .then((tokens: any) => {
+            if (tokens?.accessToken) {
+              originalRequest.headers["Authorization"] = `Bearer ${tokens.accessToken}`;
+            }
+            if (tokens?.csrfToken) {
+              originalRequest.headers["X-CSRF-Token"] = tokens.csrfToken;
+            }
+            return api(originalRequest);
+          })
+          .catch((err) => Promise.reject(err));
+      }
+
+      isRefreshing = true;
+
+      const refreshToken =
+        typeof window !== "undefined"
+          ? localStorage.getItem("labmate_refresh_token")
+          : null;
+
+      if (refreshToken) {
+        try {
+          const res = await axios.post("/api/basic-auth/refresh", {
+            refresh_token: refreshToken,
+          }, { timeout: 15000 });
+          const newAccessToken = res.data.access_token;
+          const newRefreshToken = res.data.refresh_token;
+          const newCsrfToken = res.data.csrf_token;
+          if (!newAccessToken || !newCsrfToken) {
+            throw new Error('Session refresh returned incomplete credentials. Please retry.');
+          }
+          if (newAccessToken) {
+            localStorage.setItem("labmate_access_token", newAccessToken);
+            api.defaults.headers.common["Authorization"] = `Bearer ${newAccessToken}`;
+            originalRequest.headers["Authorization"] = `Bearer ${newAccessToken}`;
+          }
+          if (newRefreshToken) {
+            localStorage.setItem("labmate_refresh_token", newRefreshToken);
+          }
+          if (newCsrfToken) {
+            localStorage.setItem("labmate_csrf_token", newCsrfToken);
+            api.defaults.headers.common["X-CSRF-Token"] = newCsrfToken;
+            originalRequest.headers["X-CSRF-Token"] = newCsrfToken;
+          }
+          if (newAccessToken) {
+            processQueue(null, { accessToken: newAccessToken, csrfToken: newCsrfToken });
+            return api(originalRequest);
+          }
+        } catch (refreshErr) {
+          const refreshStatus = axios.isAxiosError(refreshErr) ? refreshErr.response?.status : undefined;
+          if (typeof window !== "undefined" && (refreshStatus === 401 || refreshStatus === 403)) {
+            localStorage.removeItem("labmate_access_token");
+            localStorage.removeItem("labmate_refresh_token");
+            localStorage.removeItem("labmate_csrf_token");
+          }
+          processQueue(refreshErr, null);
+          return Promise.reject(refreshErr);
+        } finally {
+          isRefreshing = false;
+        }
+      } else {
+        processQueue(error, null);
+        isRefreshing = false;
+      }
+    }
+    return Promise.reject(error);
+  }
+);
 
 // Types
 export interface UploadResponse {
@@ -68,6 +193,8 @@ export interface ComposeResponse {
 }
 
 export type ThemeOption =
+  | "sql"
+  | "colab"
   | "idle"
   | "notepad"
   | "codeblocks"
@@ -247,10 +374,25 @@ export const apiService = {
 
   // Download report
   async downloadReport(docId: number): Promise<Blob> {
-    const response = await api.get(`/api/download/${docId}`, {
-      responseType: "blob",
-    });
-    return response.data;
+    try {
+      const response = await api.get(`/api/download/${docId}`, {
+        responseType: "blob",
+      });
+      return response.data;
+    } catch (error: any) {
+      if (error?.response?.data instanceof Blob) {
+        try {
+          const text = await error.response.data.text();
+          const json = JSON.parse(text);
+          if (json?.detail) {
+            error.response.data = json;
+          }
+        } catch {
+          // ignore parsing error
+        }
+      }
+      throw error;
+    }
   },
 
   // Health check
@@ -326,6 +468,13 @@ export const apiService = {
     const response = await api.post("/api/basic-auth/login", {
       email,
       password,
+    });
+    return response.data;
+  },
+
+  async refreshToken(refreshToken: string): Promise<TokenResponse> {
+    const response = await api.post("/api/basic-auth/refresh", {
+      refresh_token: refreshToken,
     });
     return response.data;
   },

@@ -1,0 +1,1242 @@
+/* MySQL Workbench 8.0 Pixel-Perfect 1:1 Clone Stylesheet */
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body.workbench-window {
+  font-family: 'Segoe UI', Tahoma, -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+  font-size: 11.5px;
+  color: #1e1e1e;
+  background-color: #f0f0f0;
+  height: 100vh;
+  width: 100vw;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* =========================================================
+   1. OS TITLEBAR (Windows 10/11 Native)
+   ========================================================= */
+.wb-titlebar {
+  height: 28px;
+  min-height: 28px;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 0 0 8px;
+}
+
+.wb-title-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.wb-dolphin-logo {
+  display: block;
+}
+
+.wb-app-title {
+  font-size: 12px;
+  font-weight: 400;
+  color: #222222;
+}
+
+.wb-window-controls {
+  display: flex;
+  height: 100%;
+}
+
+.wb-win-btn {
+  width: 45px;
+  height: 100%;
+  border: none;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.wb-win-btn:hover {
+  background: #e5e5e5;
+}
+
+.wb-win-btn.close:hover {
+  background: #e81123;
+}
+
+.wb-win-btn.close:hover svg path {
+  stroke: #ffffff;
+}
+
+/* =========================================================
+   2. CONNECTION TAB BAR (Matching top_header.png)
+   ========================================================= */
+.wb-connection-bar {
+  height: 26px;
+  min-height: 26px;
+  background: #ffffff;
+  display: flex;
+  align-items: flex-end;
+  padding: 0 4px;
+  gap: 2px;
+  border-bottom: 1px solid #d9d9d9;
+}
+
+.wb-home-btn {
+  width: 32px;
+  height: 24px;
+  background: #eff0f1;
+  border: none;
+  border-radius: 2px 2px 0 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wb-home-btn:hover {
+  background: #e4e6e8;
+}
+
+.wb-conn-tab {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #e8eaed;
+  border-radius: 3px 10px 0 0;
+  padding: 3px 14px 3px 12px;
+  height: 24px;
+  font-size: 11.5px;
+  color: #333333;
+}
+
+.conn-close {
+  font-size: 9.5px;
+  color: #666;
+  cursor: pointer;
+}
+
+.conn-close:hover {
+  color: #d93025;
+}
+
+/* =========================================================
+   3. MAIN MENU BAR
+   ========================================================= */
+.wb-menubar {
+  height: 22px;
+  min-height: 22px;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+  border-bottom: 1px solid #e5e5e5;
+  gap: 2px;
+}
+
+.menu-item {
+  position: relative;
+  padding: 2px 7px;
+  font-size: 11.5px;
+  color: #222;
+  cursor: pointer;
+}
+
+.menu-item:hover,
+.menu-item.active {
+  background: #e5f3ff;
+  color: #000;
+}
+
+.menu-dropdown {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background: #f2f2f2;
+  border: 1px solid #cccccc;
+  box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.22);
+  min-width: 230px;
+  padding: 3px 0;
+  z-index: 2000;
+  color: #222;
+}
+
+.menu-item.active .menu-dropdown {
+  display: block;
+}
+
+.menu-drop-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 16px 4px 14px;
+  font-size: 11.5px;
+  color: #222;
+  cursor: pointer;
+}
+
+.menu-drop-item:hover {
+  background: #91c9f7;
+  color: #000;
+}
+
+.menu-shortcut {
+  font-size: 11px;
+  color: #666;
+  margin-left: 20px;
+}
+
+.menu-drop-sep {
+  height: 1px;
+  background: #d9d9d9;
+  margin: 3px 6px;
+}
+
+/* =========================================================
+   4. GLOBAL ACTION TOOLBAR (Matching top_header.png)
+   ========================================================= */
+.wb-global-toolbar {
+  height: 30px;
+  min-height: 30px;
+  background: #f7f7f7;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 6px 0 4px;
+  border-bottom: 1px solid #dcdcdc;
+}
+
+.tb-group {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.tb-grip-dots {
+  color: #b0b0b0;
+  font-size: 13px;
+  margin-right: 2px;
+}
+
+.tb-btn {
+  width: 25px;
+  height: 24px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.tb-btn:hover {
+  background: #e5f1fb;
+  border-color: #0078d7;
+}
+
+.tb-sep-dotted {
+  width: 1px;
+  height: 18px;
+  border-left: 1px dotted #b8b8b8;
+  margin: 0 4px;
+}
+
+.view-toggle {
+  width: 24px;
+  height: 22px;
+  padding: 1px;
+}
+
+.view-toggle.active {
+  background: #e5f1fb;
+  border-color: #99d1ff;
+}
+
+/* =========================================================
+   5. MAIN 3-COLUMN WORKSPACE
+   ========================================================= */
+.wb-workspace {
+  flex: 1;
+  display: flex;
+  height: calc(100vh - 106px);
+  overflow: hidden;
+  background: #ffffff;
+}
+
+/* Shared Panel Header with Dotted Grip */
+.panel-section-header {
+  height: 21px;
+  min-height: 21px;
+  background: #ececec;
+  border-bottom: 1px solid #d9d9d9;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 6px;
+  font-size: 11px;
+  color: #555555;
+  overflow: hidden;
+}
+
+.header-title {
+  font-size: 11px;
+  color: #555555;
+  margin-right: 4px;
+  flex-shrink: 0;
+}
+
+.splitter-grip-dots {
+  font-size: 8px;
+  letter-spacing: 1px;
+  color: #b8b8b8;
+  font-family: monospace;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* =========================================================
+   COLUMN 1: LEFT NAVIGATOR PANE (Matching left_navigator.png)
+   ========================================================= */
+.wb-sidebar {
+  width: 196px;
+  min-width: 196px;
+  max-width: 196px;
+  background: #ffffff;
+  border-left: 2px solid #2b579a;
+  border-right: 1px solid #d4d4d4;
+  display: flex;
+  flex-direction: column;
+}
+
+.nav-scroll-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 2px;
+}
+
+.nav-category {
+  margin-bottom: 8px;
+}
+
+.category-header {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #4f6b82;
+  padding: 2px 6px;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.category-collapse-icon {
+  font-size: 10px;
+  color: #777;
+  cursor: pointer;
+}
+
+.instance-wrench-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 13px;
+  height: 13px;
+  background: #444;
+  color: #fff;
+  border-radius: 2px;
+  font-size: 8px;
+}
+
+.nav-list {
+  list-style: none;
+}
+
+.nav-list li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px 2px 14px;
+  font-size: 11px;
+  color: #111;
+  cursor: pointer;
+}
+
+.nav-list li:hover {
+  background: #e5f3ff;
+}
+
+.nav-list li.disabled-nav-item {
+  color: #a0a0a0;
+  cursor: default;
+}
+
+.nav-list li.disabled-nav-item:hover {
+  background: transparent;
+}
+
+.nav-icon-wrap {
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* SCHEMAS Section */
+.schema-tools {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.schema-tool-icon {
+  cursor: pointer;
+  font-size: 10px;
+  color: #666;
+}
+
+.schema-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+}
+
+.schema-search-input {
+  flex: 1;
+  height: 20px;
+  border: 1px solid #999;
+  padding: 1px 5px;
+  font-size: 11px;
+  font-family: inherit;
+  outline: none;
+}
+
+.schema-search-input:focus {
+  border-color: #0078d7;
+}
+
+.schema-tree {
+  list-style: none;
+  padding: 2px 4px;
+}
+
+.schema-tree-node {
+  margin-bottom: 1px;
+}
+
+.tree-item-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px;
+  border-radius: 2px;
+  cursor: pointer;
+  font-size: 11px;
+  color: #111;
+}
+
+.tree-item-row:hover {
+  background: #e5f3ff;
+}
+
+.schema-leaf-node.active-leaf .tree-item-row {
+  background: #cce8ff;
+}
+
+.schema-title.bold-schema {
+  font-weight: 700;
+}
+
+.schema-branch {
+  list-style: none;
+  padding-left: 12px;
+  display: none;
+}
+
+.schema-tree-node.expanded > .schema-branch {
+  display: block;
+}
+
+.schema-leaf-list {
+  list-style: none;
+  padding-left: 14px;
+  display: none;
+}
+
+.schema-folder-node.expanded > .schema-leaf-list {
+  display: block;
+}
+
+.tree-arrow {
+  font-size: 8px;
+  color: #555;
+  width: 10px;
+  text-align: center;
+}
+
+.leaf-name {
+  flex: 1;
+}
+
+.leaf-quick-actions {
+  display: none;
+  gap: 2px;
+}
+
+.schema-leaf-node:hover .leaf-quick-actions {
+  display: flex;
+}
+
+.leaf-act-btn {
+  background: #fff;
+  border: 1px solid #aaa;
+  border-radius: 2px;
+  font-size: 9px;
+  padding: 0 3px;
+  cursor: pointer;
+}
+
+/* Information Pane at bottom of Navigator */
+.nav-info-pane {
+  height: 115px;
+  border-top: 1px solid #d4d4d4;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+}
+
+.info-header {
+  height: 20px;
+  background: #ececec;
+  border-bottom: 1px solid #d9d9d9;
+  font-size: 11px;
+  color: #555;
+  padding: 0 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.info-content {
+  flex: 1;
+  padding: 6px 8px;
+  font-size: 11px;
+  color: #444;
+  overflow-y: auto;
+}
+
+.info-line {
+  margin-bottom: 3px;
+}
+
+.info-tabs {
+  display: flex;
+  height: 21px;
+  background: #ececec;
+  border-top: 1px solid #d9d9d9;
+}
+
+.info-tab {
+  padding: 0 10px;
+  font-size: 11px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: #333;
+  font-family: inherit;
+}
+
+.info-tab.active {
+  background: #ffffff;
+  color: #0066cc;
+}
+
+/* =========================================================
+   COLUMN 2: CENTER MAIN WORKSPACE
+   ========================================================= */
+.wb-center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+/* Editor Tab Strip Header */
+.wb-editor-tabs-bar {
+  height: 21px;
+  min-height: 21px;
+  background: #ececec;
+  display: flex;
+  align-items: stretch;
+  border-bottom: 2px solid #0078d7;
+}
+
+.editor-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #dcdcdc;
+  padding: 0 10px;
+  font-size: 11px;
+  color: #333;
+  cursor: pointer;
+}
+
+.editor-tab.active {
+  background: #0078d7;
+  color: #ffffff;
+}
+
+.editor-tab .tab-close {
+  font-size: 9.5px;
+  opacity: 0.85;
+}
+
+.new-tab-btn {
+  background: none;
+  border: none;
+  font-size: 13px;
+  color: #555;
+  cursor: pointer;
+  padding: 0 8px;
+}
+
+/* Query Toolbar (Matching query_toolbar.png 1:1) */
+.wb-query-toolbar {
+  height: 26px;
+  min-height: 26px;
+  background: #f5f5f5;
+  border-bottom: 1px solid #d9d9d9;
+  display: flex;
+  align-items: center;
+  padding: 0 6px;
+}
+
+.qt-group {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.qt-btn {
+  width: 22px;
+  height: 21px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.qt-btn:hover {
+  background: #e5f1fb;
+  border-color: #0078d7;
+}
+
+.qt-btn.disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.qt-sep {
+  width: 1px;
+  height: 16px;
+  background: #bdbdbd;
+  margin: 0 3px;
+}
+
+.limit-dropdown select {
+  height: 20px;
+  font-size: 11px;
+  padding: 0 4px;
+  border: 1px solid #c4c4c4;
+  background: #ffffff;
+  color: #222;
+  font-family: inherit;
+  outline: none;
+}
+
+/* SQL Editor Section */
+.wb-code-section {
+  flex: 1 1 320px;
+  min-height: 200px;
+  display: flex;
+  align-items: flex-start;
+  background: #ffffff;
+  border-bottom: 1px solid #c8ced6;
+  overflow-y: auto;
+  overflow-x: hidden;
+  position: relative;
+}
+
+.code-gutter {
+  width: 44px;
+  min-height: 100%;
+  background: #efefef;
+  border-right: 1px solid #d9d9d9;
+  padding: 4px 0;
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 11.5px;
+  color: #777777;
+  flex-shrink: 0;
+}
+
+.gutter-item {
+  height: 17px;
+  line-height: 17px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 5px 0 8px;
+}
+
+.exec-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.exec-dot.active {
+  background: #0066cc;
+}
+
+.code-editor-wrap {
+  flex: 1;
+  min-height: 100%;
+  position: relative;
+  overflow-x: auto;
+  overflow-y: hidden;
+  background: #ffffff;
+}
+
+.sql-highlight-layer,
+.sql-textarea {
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 17px;
+  padding: 4px 10px;
+  margin: 0;
+  width: 100%;
+  min-height: 100%;
+  white-space: pre;
+  tab-size: 4;
+}
+
+.sql-highlight-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  color: #1e1e1e;
+}
+
+.sql-textarea {
+  position: relative;
+  background: transparent;
+  color: transparent;
+  caret-color: #000000;
+  border: none;
+  outline: none;
+  resize: none;
+  overflow: hidden;
+  user-select: text;
+}
+
+/* MySQL Workbench SQL Syntax Highlighting Colors */
+.sql-com { color: #808080; font-style: italic; }
+.sql-kw { color: #0066cc; font-weight: 700; }
+.sql-str { color: #a31515; }
+.sql-num { color: #098658; }
+.sql-ident { color: #1e1e1e; }
+
+.sql-active-stmt-line {
+  display: inline-block;
+  min-width: 100%;
+  background-color: #eaf4ff;
+}
+
+.gutter-item.active-stmt-gutter {
+  background-color: #dbeaff;
+  color: #005a9e;
+  font-weight: 700;
+}
+
+.ao-row-current td {
+  background-color: #eef6ff;
+  font-weight: 600;
+}
+
+/* =========================================================
+   LIVE RESULT GRID SECTION
+   ========================================================= */
+.wb-result-pane {
+  height: 185px;
+  flex: 0 0 185px;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border-bottom: 1px solid #c8ced6;
+  overflow: hidden;
+}
+
+.rg-toolbar {
+  height: 25px;
+  background: #eeeeee;
+  border-bottom: 1px solid #d4d4d4;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 6px;
+  font-size: 11px;
+}
+
+.rg-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rg-title {
+  font-weight: 600;
+  color: #222;
+}
+
+.rg-btn,
+.rg-tool-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  padding: 1px 3px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.rg-btn:hover,
+.rg-tool-btn:hover {
+  background: #dce6f2;
+  border-color: #8ab4f8;
+}
+
+.rg-filter,
+.rg-edit-tools,
+.rg-export-tools {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.rg-filter-input {
+  height: 19px;
+  width: 120px;
+  border: 1px solid #b8b8b8;
+  padding: 1px 5px;
+  font-size: 11px;
+  background: #ffffff;
+  outline: none;
+}
+
+.rg-wrap-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.rg-body-wrapper {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.rg-table-container {
+  flex: 1;
+  overflow: auto;
+  background: #ffffff;
+}
+
+.rg-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+}
+
+.rg-table th {
+  background: #f3f4f6;
+  border-right: 1px solid #d4d8de;
+  border-bottom: 1px solid #c4c9d0;
+  padding: 2px 8px;
+  text-align: left;
+  font-weight: 600;
+  color: #222;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.rg-table th.col-num {
+  width: 26px;
+  text-align: center;
+}
+
+.rg-table td {
+  border-right: 1px solid #e4e7ec;
+  border-bottom: 1px solid #e4e7ec;
+  padding: 2px 8px;
+  color: #111;
+  outline: none;
+}
+
+.rg-table td.row-selector {
+  width: 26px;
+  text-align: center;
+  background: #f3f4f6;
+  font-size: 9px;
+  color: #333;
+}
+
+.rg-row.selected-row td.cell-data {
+  background: #0078d7;
+  color: #ffffff;
+}
+
+.null-val {
+  color: #888 !important;
+  font-style: italic;
+}
+
+/* Right Vertical Tabs of Result Grid */
+.rg-side-tabs {
+  width: 72px;
+  background: #ececec;
+  border-left: 1px solid #d4d4d4;
+  display: flex;
+  flex-direction: column;
+}
+
+.side-tab {
+  flex: 1;
+  border: none;
+  border-bottom: 1px solid #dcdcdc;
+  background: #ececec;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  font-size: 9.5px;
+  color: #333;
+  cursor: pointer;
+  padding: 2px;
+}
+
+.side-tab.active {
+  background: #0078d7;
+  color: #ffffff;
+}
+
+/* Result Grid Sub-Footer */
+.rg-sub-footer {
+  height: 23px;
+  background: #eaecef;
+  border-top: 1px solid #d0d5dd;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px 0 4px;
+}
+
+.rg-sub-tabs {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 100%;
+}
+
+.sub-tab {
+  height: 20px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  background: transparent;
+  font-size: 11px;
+  color: #005a9e;
+  cursor: pointer;
+  border-radius: 2px 2px 0 0;
+}
+
+.sub-tab.active {
+  background: #ffffff;
+  border-color: #c4c9d0;
+  border-bottom-color: #ffffff;
+  color: #111;
+  font-weight: 500;
+}
+
+.rg-sub-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rg-action-btn {
+  padding: 1px 12px;
+  font-size: 11px;
+  border: 1px solid #c4c4c4;
+  background: #f4f4f4;
+  color: #888;
+  border-radius: 2px;
+}
+
+/* =========================================================
+   LIVE ACTION OUTPUT SECTION
+   ========================================================= */
+.wb-action-output {
+  height: 155px;
+  flex: 0 0 155px;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.ao-header {
+  height: 22px;
+  background: #ececec;
+  border-bottom: 1px solid #d4d4d4;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 6px;
+}
+
+.ao-header-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  flex: 1;
+}
+
+.ao-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #333;
+}
+
+.ao-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ao-view-select {
+  height: 18px;
+  font-size: 11px;
+  border: 1px solid #b8b8b8;
+  background: #ffffff;
+}
+
+.ao-tool-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+}
+
+.ao-table-container {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.ao-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.ao-table th {
+  background: #f5f6f8;
+  border-right: 1px solid #e0e0e0;
+  border-bottom: 1px solid #d0d0d0;
+  padding: 2px 6px;
+  text-align: left;
+  font-weight: 600;
+  color: #333;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.ao-col-status { width: 24px; }
+.ao-col-num { width: 32px; }
+.ao-col-time { width: 68px; }
+.ao-col-action { width: 42%; }
+.ao-col-msg { width: 32%; }
+
+.ao-table td {
+  border-right: 1px solid #efefef;
+  border-bottom: 1px solid #efefef;
+  padding: 2px 6px;
+  color: #222;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ao-table td.status-cell {
+  text-align: center;
+}
+
+/* =========================================================
+   COLUMN 3: RIGHT SIDEBAR - SQL ADDITIONS (Matching right_additions.png)
+   ========================================================= */
+.wb-right-sidebar {
+  width: 200px;
+  min-width: 200px;
+  max-width: 200px;
+  background: #ffffff;
+  border-left: 1px solid #d4d4d4;
+  border-right: 2px solid #2b579a;
+  display: flex;
+  flex-direction: column;
+}
+
+.additions-toolbar {
+  height: 26px;
+  padding: 0 4px;
+  background: #ffffff;
+  border-bottom: 1px solid #e5e5e5;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.snippets-cat-select {
+  flex: 1;
+  height: 20px;
+  border: 1px solid #d0d0d0;
+  font-size: 11px;
+  font-family: inherit;
+  padding: 0 4px;
+  color: #222;
+}
+
+.snippets-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-left: 1px solid #cccccc;
+  padding-left: 4px;
+}
+
+.snip-act-btn {
+  width: 20px;
+  height: 20px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.snip-act-btn:hover {
+  background: #e5f1fb;
+  border-color: #99d1ff;
+}
+
+.snippets-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.snippet-card {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #f2f2f2;
+  border: 1px solid #e5e5e5;
+  padding: 4px 6px;
+  cursor: pointer;
+}
+
+.snippet-card:hover,
+.snippet-card.selected {
+  background: #e5f3ff;
+  border-color: #99d1ff;
+}
+
+.snippet-icon-badge {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.snippet-text-col {
+  flex: 1;
+  overflow: hidden;
+}
+
+.snippet-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #1e1e1e;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.snippet-preview {
+  font-size: 10px;
+  color: #888888;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.additions-bottom-tabs {
+  height: 22px;
+  background: #ececec;
+  border-top: 1px solid #d9d9d9;
+  display: flex;
+  align-items: stretch;
+}
+
+.add-tab {
+  padding: 0 10px;
+  font-size: 11px;
+  border: none;
+  border-right: 1px solid #d9d9d9;
+  background: #e4e4e4;
+  color: #222;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.add-tab.active {
+  background: #ffffff;
+  color: #0066cc;
+}

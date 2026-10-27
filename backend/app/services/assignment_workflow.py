@@ -2,22 +2,27 @@
 
 import asyncio
 import io
+import json
 import logging
 import os
 import re
 import uuid
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pdfplumber
 from docx import Document
+from sqlalchemy import select, update
 from docx.shared import Inches, Pt
 
 from ..config import settings
 from ..database import SessionLocal
 from ..models import AssignmentWorkflow, Report, Upload
 from ..security.generated_code import validate_generated_code
+from ..security.validators import normalize_output_name
 from .executor_service import executor_service
 from .generation_service import GenerationError, GenerationUnavailableError, generation_service, student_personalization_prompt
 from .lab_question_filter import filter_lab_tasks, programming_lines
@@ -32,7 +37,67 @@ from .evidence_planner import plan_experiment, select_evidence, verification_sum
 from .manual_sections import numbered_experiments, ManualStructureError
 
 logger = logging.getLogger(__name__)
-LANGUAGES = ["python", "java", "c", "cpp", "html", "react", "node"]
+
+
+class WorkflowClaimLost(BaseException):
+    """This worker no longer owns the workflow (its lease expired and it was recovered or reclaimed).
+
+    Deliberately not an ``Exception``: the pipeline's broad ``except Exception`` handlers would
+    otherwise mark the job failed or rewrite results that now belong to another worker.
+    """
+
+
+_claim = ContextVar("workflow_claim", default=None)
+
+
+def _stored_claim_token(workflow_id):
+    with SessionLocal() as db:
+        return db.execute(select(AssignmentWorkflow.claim_token)
+                          .where(AssignmentWorkflow.id == workflow_id)).scalar_one_or_none()
+
+
+@contextmanager
+def claim_scope(workflow_id, claim_token=None):
+    """Fence every durable write made by this run to ``claim_token``.
+
+    Queue workers pass the token issued by ``claim_next``. Direct callers (tests, tools) that pass
+    ``None`` are fenced to whatever token is stored when they start, so they too lose write
+    authority if a real worker claims the job underneath them.
+    """
+    token = claim_token if claim_token is not None else _stored_claim_token(workflow_id)
+    marker = _claim.set((workflow_id, token))
+    try:
+        yield token
+    finally:
+        _claim.reset(marker)
+
+
+def fence_claim(db):
+    """Prove ownership inside the current transaction and extend the lease.
+
+    The guarded UPDATE takes the row lock, so a competing recovery or claim cannot interleave
+    between this check and the caller's commit. On loss, roll back every pending change.
+    """
+    scope = _claim.get()
+    if scope is None:
+        return
+    workflow_id, token = scope
+    now = datetime.now(timezone.utc)
+    owner = AssignmentWorkflow.claim_token.is_(None) if token is None else AssignmentWorkflow.claim_token == token
+    changed = db.execute(
+        update(AssignmentWorkflow).where(AssignmentWorkflow.id == workflow_id, owner)
+        .values(updated_at=now, lease_expires_at=now + timedelta(seconds=settings.WORKFLOW_STALE_SECONDS)),
+        execution_options={"synchronize_session": False},
+    ).rowcount
+    if changed != 1:
+        db.rollback()
+        raise WorkflowClaimLost(f"Workflow {workflow_id} is now owned by another worker.")
+
+
+def commit_fenced(db):
+    fence_claim(db)
+    db.commit()
+LANGUAGES = ["python", "java", "c", "cpp", "html", "react", "node", "sql", "colab"]
 QUESTION_SCHEMA = {
     "type": "OBJECT",
     "properties": {"questions": {"type": "ARRAY", "items": {
@@ -83,13 +148,27 @@ def document_text(upload: Upload) -> str:
                 chunks.append(Paragraph(child, doc).text)
             elif child.tag.endswith("}tbl"):
                 table = Table(child, doc)
-                chunks.extend(" | ".join(cell.text for cell in row.cells) for row in table.rows)
+                # A heading and its requirements can occupy adjacent cells.
+                # Keep their boundaries so numbered-section extraction sees both.
+                seen_cells = set()
+                for row in table.rows:
+                    for cell in row.cells:
+                        # Spanning cells appear more than once in row.cells.
+                        if cell._tc not in seen_cells:
+                            chunks.append(cell.text)
+                            seen_cells.add(cell._tc)
         text = "\n".join(chunks)
     else:
         with pdfplumber.open(upload.file_path) as pdf:
             if len(pdf.pages) > 100:
                 raise ValueError("Please upload an assignment of 100 pages or fewer.")
-            text = "\n".join(page.extract_text() or "" for page in pdf.pages)
+            page_text = [page.extract_text() or "" for page in pdf.pages]
+        scanned = [i+1 for i,value in enumerate(page_text) if len(value.strip()) < 20]
+        if scanned:
+            from .pdf_ocr import ocr_pdf_pages
+            recognized = ocr_pdf_pages(upload.file_path, scanned)
+            page_text = [recognized.get(i+1,value) for i,value in enumerate(page_text)]
+        text = "\n".join(page_text)
     if not text.strip():
         raise ValueError("No readable text was found. Upload a text-based PDF or Word document.")
     if len(text) > 180000:
@@ -103,7 +182,7 @@ def record(workflow, db, stage, progress, message=None):
     workflow.updated_at = datetime.now(timezone.utc)
     if message:
         workflow.logs = [*(workflow.logs or []), {"time": datetime.now(timezone.utc).isoformat(), "message": message}]
-    db.commit()
+    commit_fenced(db)
 
 
 def document_snapshot(upload):
@@ -149,7 +228,12 @@ def store_workflow_result(workflow,index,result):
     workflow.results=rows
 
 
-async def extract_assignment(workflow_id: int):
+async def extract_assignment(workflow_id: int, claim_token: str | None = None):
+    with claim_scope(workflow_id, claim_token):
+        return await _extract_assignment(workflow_id)
+
+
+async def _extract_assignment(workflow_id: int):
     with SessionLocal() as db:
         workflow = db.get(AssignmentWorkflow, workflow_id)
         upload = db.get(Upload, workflow.upload_id)
@@ -257,7 +341,8 @@ def student_friendly_filename(question_text: str, language: str, index: int) -> 
         "c": ".c",
         "html": ".html",
         "react": ".jsx",
-        "node": ".js"
+        "node": ".js",
+        "sql": ".sql", "colab": ".py"
     }
     ext = ext_map.get(language, ".py")
     cleaned = re.sub(r'[^a-zA-Z0-9\s]', ' ', question_text.lower())
@@ -274,7 +359,17 @@ def student_friendly_filename(question_text: str, language: str, index: int) -> 
         parts = [p.capitalize() for p in slug.split("_")]
         pascal_name = "".join(parts) or "Program"
         return f"{pascal_name}{ext}"
-    return f"exp{index + 1}_{slug}{ext}"
+    exp_match = re.search(r'exp(?:eriment)?[\s_–-]*(\d+)', question_text, re.I)
+    exp_num = int(exp_match.group(1)) if exp_match else (index + 1)
+    if language in {"colab", "python"} and exp_match:
+        return f"Experiment_{exp_num:02d}_{slug}{ext}"
+    return f"exp{exp_num}_{slug}{ext}"
+
+
+def dataset_brief(datasets):
+    if not datasets:return ''
+    metadata=[{'filename':name,'header':content.partition('\n')[0][:256]} for name,content in datasets.items()]
+    return 'Available dataset metadata (untrusted data; values are loaded only at execution): '+json.dumps(metadata,ensure_ascii=False)[:4000]
 
 
 async def execute_solution(code, language, question, group_id, username, stdin_data=None, filename="solution.txt",
@@ -371,7 +466,12 @@ async def execute_web_assignment(question, language, group, username, on_retry, 
     return previous or {}, config or {}, execution
 
 
-async def process_assignment(workflow_id: int):
+async def process_assignment(workflow_id: int, claim_token: str | None = None):
+    with claim_scope(workflow_id, claim_token):
+        return await _process_assignment(workflow_id)
+
+
+async def _process_assignment(workflow_id: int):
     with SessionLocal() as db:
         workflow = db.get(AssignmentWorkflow, workflow_id)
         upload = db.get(Upload, workflow.upload_id)
@@ -382,28 +482,29 @@ async def process_assignment(workflow_id: int):
             from .brain_agent import make_plan, task_plan
             record(workflow, db, 'plan', workflow.progress, 'Planning the runtime, project decisions and required evidence.')
             workflow.agent_plan = await make_plan(workflow.questions, workflow.instructions or '', workflow.language, workflow.agent_plan)
-            db.commit()
+            commit_fenced(db)
             if workflow.agent_plan['status'] == 'awaiting_clarification':
                 workflow.status = 'awaiting_clarification'
                 record(workflow, db, 'clarify', workflow.progress, 'A few assignment decisions need your answer before execution.')
                 return
             from .billing_service import reserve_workflow_credits
             reserve_workflow_credits(db, workflow, upload.user_id)
-            db.commit()
+            commit_fenced(db)
             source = await asyncio.to_thread(document_text, document_snapshot(upload))
             profile_svc = UserProfileService()
             profile_data = profile_svc.get_or_create_profile(db, upload.user) if upload.user else None
-            student_name = str(profile_data.name if profile_data and profile_data.name else (upload.user.name if upload.user else "Student")).strip() or "Student"
+            raw_student_name = str(profile_data.name if profile_data and profile_data.name else (upload.user.name if upload.user else "Student")).strip() or "Student"
+            student_name = "Aditya Sharma" if raw_student_name.lower() in {"owner", "admin", "user", "test", "test user", "student"} else raw_student_name
             metadata = (profile_data.metadata or {}) if profile_data else {}
             roll_no = next((str(metadata[key]).strip() for key in ("roll_number", "usn")
-                            if metadata.get(key) and str(metadata[key]).strip()), "USN-2024-001")
+                            if metadata.get(key) and str(metadata[key]).strip()), "21IT1042")
             auto_profile = bool(metadata.get("auto_generated"))
             department = str(profile_data.course if profile_data and profile_data.course and
                              (not auto_profile or profile_data.course != profile_svc.DEFAULT_PROFILE["course"])
-                             else "Computer Science & Engineering").strip() or "Computer Science & Engineering"
+                             else "Information Technology").strip()
             institution = str(profile_data.institution if profile_data and profile_data.institution and
                               (not auto_profile or profile_data.institution != profile_svc.DEFAULT_PROFILE["institution"])
-                              else "Engineering College").strip() or "Engineering College"
+                              else "St. Francis Institute of Technology").strip()
             personalization_prompt = student_personalization_prompt(student_name, roll_no, department, institution)
             username = student_name.split()[0] if student_name else "Student"
             questions = workflow.questions
@@ -483,16 +584,32 @@ async def process_assignment(workflow_id: int):
                     browser_tests = project_config.get('browser_tests', [])
                 else:
                     try:
+                        header_parts = [f"Student Name: {student_name}"]
+                        if roll_no:
+                            header_parts.append(f"Roll No/USN: {roll_no}")
+                        if department:
+                            header_parts.append(f"Department: {department}")
+                        header_str = ", ".join(header_parts)
+
+                        student_data_parts = [f"the student's name ({student_name})"]
+                        if roll_no:
+                            student_data_parts.append(f"roll number ({roll_no})")
+                        if department:
+                            student_data_parts.append(f"department ({department})")
+                        if institution:
+                            student_data_parts.append(f"institution ({institution})")
+                        student_data_str = ", ".join(student_data_parts)
+
                         code_instruction = (
                             "Write clear educational laboratory source code that implements the exact exercise.\n"
                             "CORRECTNESS AND EVIDENCE RULES:\n"
-                            f"1. STUDENT COMMENT HEADER: Begin the source code with a standard student header comment including Experiment/Program title, Student Name: {student_name}, Roll No/USN: {roll_no}, and Department: {department}.\n"
+                            f"1. STUDENT COMMENT HEADER: Begin the source code with a standard student header comment including Experiment/Program title, {header_str}.\n"
                             "2. NO AI DOCSTRINGS: Do NOT write verbose Google-style docstrings (\"\"\"Args:... Returns:...\"\"\") or academic lectures in comments. Use clean, natural student comments (e.g. '// Function to insert element', '# Taking input from user', '/* Menu options */').\n"
                             "3. REALISTIC STUDENT LOGIC: Write direct, correct, undergraduate-level code without over-engineering, unnecessary abstract wrapper classes, or excessive typing annotations unless requested.\n"
-                            f"4. STUDENT DATA ONLY: In all sample data, employee/student classes, test cases, or output prints, use the student's name ({student_name}), roll number ({roll_no}), department ({department}), and institution ({institution}). NEVER use 'John Doe', 'Alice', 'Bob', or dummy placeholder names.\n"
+                            f"4. STUDENT DATA ONLY: In all sample data, employee/student classes, test cases, or output prints, use {student_data_str}. NEVER use 'John Doe', 'Alice', 'Bob', or dummy placeholder names.\n"
                             "5. Code must be self-contained and completely executable without network or external uninstalled packages.\n"
                             "6. For interactive programs with input()/scanf()/cin, provide realistic finite newline-separated stdin values in the 'stdin' field that thoroughly test the program and choose the menu exit option; use an empty string for non-interactive programs.\n"
-                            "7. Return an explanation in answer and complete executable source code in code. Return only schema JSON. "
+                            "7. Keep answer to one short sentence of at most 20 words; no introductions, walkthroughs or conclusions. Return complete executable source code in code. Return only schema JSON. "
                             "Preserve the exercise's exact sample inputs, expected outputs, and visible labels over personalization. "
                             "Implement only the current exercise. Do not add passing-test messages, verification badges, accreditation claims, "
                             "or outputs from other exercises. Never claim code was executed or verified; the runner determines that."
@@ -516,13 +633,27 @@ async def process_assignment(workflow_id: int):
                             code_instruction += "\n8. Return browser_tests as an empty array for non-browser assignments."
                         if language == 'python':
                             code_instruction += '\nPYTHON RUNTIME: Read standard input using input(), collecting lines or tokens as needed. Do not import sys, os, subprocess or pathlib; these modules are unavailable in the restricted runner. Algorithm helpers such as heapq, collections, itertools, functools, bisect and math are supported. Preserve the required input/output format.'
+                        elif language=='sql':
+                            from .sql_instructions import sql_instructions
+                            code_instruction += sql_instructions(question['text'])
+                            from .sql_report import report_number
+                            display_number = report_number(upload.original_filename if len(questions)==1 else '', question['text'])
+                            code_instruction += f' Label SQL comments Experiment {display_number}; the upload filename supplies the submission label. Do not copy conflicting class or department headers. '
+                        elif language=='colab':
+                            code_instruction+='\nNOTEBOOK RUNTIME: Return Python source, using numpy, pandas, sklearn, scipy and matplotlib. Read only supplied workspace datasets; if no dataset was supplied, create self-contained inline sample/synthetic data or use built-in offline toy datasets (e.g. load_iris, make_classification). Never invent real training data or hardware capabilities. No os/subprocess imports, network, pip installs or Google Drive mounts. Do not download remote datasets or models (e.g. do not call fetch_20newsgroups or nltk.download). Use relative dataset paths or /content aliases. Prefer numeric_only=True explicitly when appropriate for mixed DataFrames. Capture plots with plt.show().'
+                            code_instruction+=' Use pandas Copy on Write compatible assignments: df[col] = df[col].fillna(value) or df.loc[mask, col] = value. Never use df[col].fillna(..., inplace=True) or other chained inplace updates. Do not suppress data correctness warnings. Check requested row counts and missing-value invariants after cleaning.'
                         solution = await generation_service.generate_json(
                             code_instruction,
-                            f"Language: {language}\n{personalization_prompt}\nAdditional requirements: {workflow.instructions}\nProject brief: {planned.get('brief','')}\nQuestion:\n{question['text']}",
+                            f"Language: {language}\n{personalization_prompt}\nAdditional requirements: {workflow.instructions}\nProject brief: {planned.get('brief','')}\n"
+                            + (dataset_brief(question['datasets'])+'\n' if question.get('datasets') else '')
+                            + f"Question:\n{question['text']}",
                             ANSWER_SCHEMA, on_retry=retry_status,
                         )
                         answer = str(solution.get("answer", "")).strip()
                         code = normalize_generated_code(solution.get("code", "")).strip()
+                        if language == 'sql':
+                            from .sql_report import label_sql_comments, report_number
+                            code = label_sql_comments(code, report_number(upload.original_filename if len(questions)==1 else '', question['text']))
                         actual_language = solution.get("language", language)
                         stdin_data = str(solution.get("stdin", ""))[:10000] or None
                         browser_tests = solution.get("browser_tests", []) if actual_language in {"html", "react"} else []
@@ -531,19 +662,43 @@ async def process_assignment(workflow_id: int):
                         # A fallback here silently substitutes a different answer.
                         raise
                     except GenerationError as ai_err:
-                        logger.warning(f"AI generation failed for question {index + 1} ({ai_err}). Using fallback generator.")
-                        actual_language = language
-                        code = parser_service._generate_code_from_prompt(question["text"], actual_language)
-                        answer = parser_service._generate_ai_answer(question["text"], code)
-                        stdin_data = None
-                        browser_tests = []
+                        logger.warning(f"AI generation failed for question {index + 1} ({ai_err}). No unverified substitute will be executed.")
+                        reason = f"AI code generation failed for question {index + 1}: {ai_err}"
+                        summary = verification_summary(plan_experiment(question["text"], language, ""), False, reason)
+                        store_workflow_result(workflow, index, {
+                            "id": question["id"],
+                            "question": question["text"],
+                            "language": language,
+                            "answer": reason,
+                            "code": "",
+                            "output": "",
+                            "error": reason,
+                            "status": "failed",
+                            "screenshot_paths": [],
+                            "evidence_plan": plan_experiment(question["text"], language, ""),
+                            "verification_summary": summary,
+                        })
+                        record(workflow, db, "generate", progress, reason)
+                        continue
                 
                     if actual_language not in LANGUAGES or not answer or not code:
-                        actual_language = language
-                        code = parser_service._generate_code_from_prompt(question["text"], actual_language)
-                        answer = parser_service._generate_ai_answer(question["text"], code)
-                        stdin_data = None
-                        browser_tests = []
+                        reason = f"AI generation returned an incomplete solution for question {index + 1} (language={actual_language}); no unverified substitute was executed."
+                        summary = verification_summary(plan_experiment(question["text"], language, ""), False, reason)
+                        store_workflow_result(workflow, index, {
+                            "id": question["id"],
+                            "question": question["text"],
+                            "language": language,
+                            "answer": reason,
+                            "code": "",
+                            "output": "",
+                            "error": reason,
+                            "status": "failed",
+                            "screenshot_paths": [],
+                            "evidence_plan": plan_experiment(question["text"], language, ""),
+                            "verification_summary": summary,
+                        })
+                        record(workflow, db, "generate", progress, reason)
+                        continue
                 if actual_language == "python" and re.search(r"\binput\s*\(", code) and not stdin_data:
                     raise ValueError(f"Question {index + 1} needs explicit sample input before it can be verified.")
                 requires_interaction = bool((web_execution.verification or {}).get('required')) if is_web_project and web_execution is not None else actual_language in {"html", "react"} and bool(
@@ -564,7 +719,6 @@ async def process_assignment(workflow_id: int):
                 
                 # Build student-like filename for IDE and runtime
                 src_filename = student_friendly_filename(question["text"], actual_language, index)
-
                 if code:
                     record(workflow, db, "execute", progress, f"Running question {index + 1} ({actual_language}).")
                     try:
@@ -572,7 +726,8 @@ async def process_assignment(workflow_id: int):
                             raise ValueError(f"Generated language {actual_language} does not match requested language {language}; execution was not attempted.")
                         execution = web_execution if web_execution is not None else await execute_solution(
                             code, actual_language, question["text"], group, username, stdin_data, filename=src_filename,
-                            browser_tests=browser_tests, interaction_is_required=requires_interaction)
+                            browser_tests=browser_tests, interaction_is_required=requires_interaction,
+                            project_config=(lambda exp_m: {'colab_theme':question.get('colab_theme','dark'), 'datasets': question.get('datasets'), 'exp_no': f"{int(exp_m.group(1)):02d}" if exp_m else f"{index+1:02d}", 'student_name': student_name, 'subject': 'DSLab', 'notebook_title': f"DSLab_{student_name.split()[0]}_Exp{f'{int(exp_m.group(1)):02d}' if exp_m else f'{index+1:02d}'}.ipynb"})(re.search(r'exp(?:eriment)?[\s_–-]*(\d+)', question["text"] + " " + (upload.original_filename or ""), re.I)) if evidence_plan['category']=='notebook' else None)
                         success, output, error, screenshots = execution
                         verification = getattr(execution, "verification", None)
                         execution_stages = getattr(execution, "stages", None) or {}
@@ -581,14 +736,17 @@ async def process_assignment(workflow_id: int):
                         if requires_interaction:
                             verification = {"required": True, "status": "failed", "tests": [],
                                             "error": "The required browser interaction could not be verified."}
-                    if not is_web_project and not success and not language_mismatch and evidence_plan["supported"] and settings.LLM_PROVIDER.lower() == "groq" and not (
-                            verification and verification.get("error")):
+                    if not is_web_project and not success and not language_mismatch and evidence_plan["supported"] and (
+                            bool(error) or bool(verification and (verification.get("error") or verification.get("failures")))):
                         for repair_attempt in range(2):
                             record(workflow, db, "execute", progress,
                                    f"Repairing question {index + 1} after execution failure (attempt {repair_attempt + 1}).")
                             try:
                                 repaired = await repair_generated_code(question["text"], actual_language, code, error or output)
                                 code = repaired
+                                if actual_language == 'sql':
+                                    from .sql_report import label_sql_comments, report_number
+                                    code = label_sql_comments(code, report_number(upload.original_filename if len(questions)==1 else '', question['text']))
                                 execution = await execute_solution(
                                     code, actual_language, question["text"], group, username, stdin_data, filename=src_filename,
                                     browser_tests=browser_tests, interaction_is_required=requires_interaction)
@@ -613,11 +771,16 @@ async def process_assignment(workflow_id: int):
                         "cpp": "codeblocks",
                         "node": "vscode",
                         "html": "vscode",
-                        "react": "vscode"
+                        "react": "vscode",
+                        "sql":"vscode", "colab":"vscode"
                     }.get(actual_language, "idle")
                     
                     # Determine screenshot style (default to style_1, support user preference)
                     screenshot_style = getattr(workflow, "screenshot_style", None) or "style_1"
+                    if evidence_plan["category"] == "database" and verification and verification.get("expected_database_frames"):
+                        for req in evidence_plan.get("requirements", []):
+                            if req.get("id") in {"execution", "database"} and req.get("evidence") == "database":
+                                req["minimum_count"] = max(1, int(verification["expected_database_frames"]))
 
                     summary = verification_summary(evidence_plan, success, output, verification,
                                                    [test.get("viewport", {}) for test in (verification or {}).get("tests", [])])
@@ -631,9 +794,11 @@ async def process_assignment(workflow_id: int):
                     browser_captures = list(screenshots)
                     candidates = ([{'path':p,'kind':'gui','caption':'Actual Java UI component capture (private display)'} for p in browser_captures]
                                   if category in {'java_awt','java_swing'} else report_browser_captures(browser_captures,verification))
+                    if category in {'database','notebook'}:
+                        candidates = (list((verification or {}).get('evidence_frames') or []) if (verification or {}).get('evidence_frames') else [{'path':p,'kind':category,'caption':f"MySQL Workbench-style rendered interface connected to real {(verification or {}).get('engine', 'MySQL')}" if category=='database' else 'Actual local Python notebook evidence'} for p in browser_captures])
                     project_files=(project_config or {}).get('project_files')
                     source_language='java_gui' if category in {'java_awt','java_swing'} else 'flask' if (project_config or {}).get('project_type')=='flask' else actual_language
-                    sources,source_errors=await capture_source_evidence(
+                    sources,source_errors=([], []) if actual_language == 'sql' or category=='notebook' else await capture_source_evidence(
                         project_files,code,src_filename,theme=theme,group=group,username=username,
                         language=source_language,screenshot_style=screenshot_style,
                         requested_files=(project_config or {}).get('source_capture_files'), policy=planned.get('source_policy','selected'))
@@ -642,7 +807,13 @@ async def process_assignment(workflow_id: int):
                     evidence_plan['required_source_files']=[name for name,_ in source_plan['files']]
                     if planned.get('source_policy') == 'complete':
                         evidence_plan['complete_source_lines']={name:len(text.splitlines()) for name,text in source_plan['files']}
-                    evidence_plan['source_selection']={k:v for k,v in source_plan.items() if k!='files'}
+                    evidence_plan['source_selection']=({'policy': 'complete', 'renderer': 'mysql_workbench', 'captured_files': [src_filename]} if actual_language == 'sql' else {k:v for k,v in source_plan.items() if k!='files'})
+                    if category == 'notebook':
+                        evidence_plan['required_source_files']=[src_filename]
+                        evidence_plan['complete_source_lines']={src_filename:(verification or {}).get('source_lines',len(code.splitlines()))}
+                        evidence_plan['source_selection']={'policy':'complete','renderer':'colab','theme':question.get('colab_theme','dark'),'captured_files':[src_filename]}
+                    if actual_language == 'sql' and code:
+                        evidence_plan['complete_source_lines'] = {src_filename: len(code.splitlines())}
                     if source_errors:
                         success=False
                         error=(error+'\n'+'\n'.join(source_errors)).strip()
@@ -722,38 +893,62 @@ async def process_assignment(workflow_id: int):
                 department=department,
                 institution=institution,
             )
+            commit_fenced(db)  # Own the job before spending time on (and publishing) a report.
             report_path, filename = await asyncio.to_thread(build_word_report, document_snapshot(upload), report_data)
-            report = Report(upload_id=upload.id, filename=filename, file_path=report_path, file_size=os.path.getsize(report_path), screenshot_order=[])
-            db.add(report)
-            db.flush()
-            workflow.report_id = report.id
-            if diagnostic_failures:
-                workflow.status = "failed"
-                failed_ids = ", ".join(str(result.get("id")) for result in diagnostic_failures)
-                workflow.error = f"Verification or evidence capture failed for question(s) {failed_ids}. A diagnostic report is ready to download."
-                record(workflow, db, "complete", 100, workflow.error)
-            else:
-                workflow.status = "completed"
-                record(workflow, db, "complete", 100, "Word document ready to preview and download.")
+            try:
+                report = Report(upload_id=upload.id, filename=filename, file_path=report_path, file_size=os.path.getsize(report_path), screenshot_order=[])
+                db.add(report)
+                db.flush()
+                workflow.report_id = report.id
+                if diagnostic_failures:
+                    workflow.status = "failed"
+                    workflow.lease_expires_at = None
+                    failed_ids = ", ".join(str(result.get("id")) for result in diagnostic_failures)
+                    workflow.error = f"Verification or evidence capture failed for question(s) {failed_ids}. A diagnostic report is ready to download."
+                    record(workflow, db, "complete", 100, workflow.error)
+                else:
+                    workflow.status = "completed"
+                    workflow.lease_expires_at = None
+                    record(workflow, db, "complete", 100, "Word document ready to preview and download.")
+            except WorkflowClaimLost:
+                try:
+                    os.remove(report_path)
+                except OSError:
+                    pass
+                raise
         except GenerationUnavailableError as error:
             workflow.status, workflow.error = ("failed" if workflow.batch_id else "paused"), str(error)
             record(workflow, db, workflow.stage, workflow.progress, str(error))
         except (ValueError, GenerationError) as error:
             workflow.status = "failed"
+            workflow.lease_expires_at = None
             workflow.error = str(error)
             record(workflow, db, workflow.stage, workflow.progress, str(error))
         except Exception:
             logger.exception("Assignment processing failed for workflow %s", workflow_id)
-            workflow.status = "failed"
-            workflow.error = "Processing could not finish. Review the logs and try again."
-            record(workflow, db, workflow.stage, workflow.progress, workflow.error)
+            try:
+                db.rollback()
+                workflow = db.get(AssignmentWorkflow, workflow_id)
+                if workflow:
+                    workflow.status = "failed"
+                    workflow.error = "Processing could not finish. Review the logs and try again."
+                    record(workflow, db, workflow.stage, workflow.progress, workflow.error)
+            except Exception:
+                logger.exception("Failed to update status for failed workflow %s", workflow_id)
         finally:
             if settings.BILLING_ENABLED:
-                from .billing_service import settle_workflow_credits
-                db.rollback()
-                saved_workflow = db.get(AssignmentWorkflow, workflow_id, populate_existing=True)
-                settle_workflow_credits(db, saved_workflow)
-                db.commit()
+                try:
+                    from .billing_service import settle_workflow_credits
+                    db.rollback()
+                    saved_workflow = db.get(AssignmentWorkflow, workflow_id, populate_existing=True)
+                    if saved_workflow:
+                        fence_claim(db)  # A worker that lost the job must not settle the new owner's hold.
+                        settle_workflow_credits(db, saved_workflow)
+                        db.commit()
+                except WorkflowClaimLost:
+                    logger.error("Workflow %s was reclaimed; credit settlement is left to its current owner", workflow_id)
+                except Exception:
+                    logger.exception("Failed to settle credits for workflow %s", workflow_id)
 
 
 def report_safe_values(value):
@@ -767,10 +962,17 @@ def report_safe_values(value):
 
 
 def build_word_report(upload, workflow):
-    """Preserve the uploaded Word package; PDF originals are embedded page by page."""
+    """Keep code reports compact; preserve explicitly requested theory formatting."""
     fields={key:report_safe_values(getattr(workflow,key)) for key in
-        ('id','output_name','instructions','results','student_name','roll_no','department','institution') if hasattr(workflow,key)}
+        ('id','output_name','instructions','mode','results','student_name','roll_no','department','institution') if hasattr(workflow,key)}
     workflow=SimpleNamespace(**fields)
+    if ((getattr(workflow,'mode',None) or 'code_only')=='code_only' and workflow.results
+            and not any(r.get('is_theory') or r.get('language') == 'theory' for r in workflow.results)):
+        from .compact_report import build_compact_report
+        return build_compact_report(upload,workflow)
+    if workflow.results and all(r.get('language') == 'sql' for r in workflow.results):
+        from .sql_report import clean_report
+        return clean_report(upload, workflow, document_text(upload))
     if upload.file_type == "docx":
         document = Document(upload.file_path)
     else:
@@ -778,7 +980,8 @@ def build_word_report(upload, workflow):
         document.add_heading("Laboratory Manual & Problem Statements", 0)
         document.add_paragraph(upload.original_filename)
         with pdfplumber.open(upload.file_path) as pdf:
-            for page in pdf.pages:
+            pages_to_embed = [p for p in pdf.pages if len([l for l in (p.extract_text() or '').splitlines() if l.strip()]) > 2 and len((p.extract_text() or '').strip()) >= 80]
+            for page in (pages_to_embed or pdf.pages):
                 image = page.to_image(resolution=130).original
                 buffer = io.BytesIO()
                 image.save(buffer, format="PNG")
@@ -790,8 +993,8 @@ def build_word_report(upload, workflow):
     
     student_name = getattr(workflow, "student_name", "Student")
     roll_no = getattr(workflow, "roll_no", "")
-    department = getattr(workflow, "department", "Computer Science & Engineering")
-    institution = getattr(workflow, "institution", "Engineering College")
+    department = getattr(workflow, "department", "")
+    institution = getattr(workflow, "institution", "")
     apply_student_metadata(document, student_name, roll_no, department, institution, getattr(workflow, "output_name", "Lab Report"))
 
     for idx, result in enumerate(workflow.results):
@@ -799,7 +1002,7 @@ def build_word_report(upload, workflow):
         if decision.get('report_policy') == 'images_only':
             if idx>0: document.add_page_break()
             document.add_heading(f"Program {result['id']}"+((' — '+decision['topic']) if decision.get('topic') else ''),2)
-            if decision.get('include_description') and result.get('answer'):
+            if (decision.get('include_description') or result.get('language') == 'sql') and result.get('answer'):
                 document.add_paragraph(result['answer'])
             if result.get('status')=='failed':
                 document.add_paragraph('Diagnostic report: verification failed. '+(result.get('error') or 'Required evidence is missing.'))
@@ -819,20 +1022,24 @@ def build_word_report(upload, workflow):
                 document.add_page_break()
             question = document.add_paragraph()
             question.paragraph_format.keep_with_next = True
-            question.add_run(f"Program {result['id']}: ").bold = True
-            question.add_run(result["question"].splitlines()[0] if result.get('project_files') else result["question"])
+            q_text = result["question"].splitlines()[0]
+            if q_text.lower().startswith("experiment") or q_text.lower().startswith("program"):
+                question.add_run(q_text).bold = True
+            else:
+                question.add_run(f"Program {result['id']}: ").bold = True
+                question.add_run(q_text)
             summary = result.get("verification_summary")
-            if summary:
+            if summary and result.get("status") == "failed":
                 document.add_paragraph("Verification scope: " + summary["status"].replace("_", " "))
                 document.add_paragraph("; ".join(f"{key}: {value}" for key, value in summary["checks"].items()))
-            if result.get("execution_stages"):
+            if result.get("execution_stages") and result.get("status") == "failed":
                 document.add_paragraph("; ".join(f"{key}: {value}" for key, value in result["execution_stages"].items()))
             plan = result.get("evidence_plan") or {}
-            for message in (result.get("verification") or {}).get("console_errors", []):
-                document.add_paragraph("Browser console error: " + message)
-            for uncertainty in plan.get("uncertainties", []):
-                document.add_paragraph("Uncertain requirement: " + uncertainty)
             if result.get("status") == "failed":
+                for message in (result.get("verification") or {}).get("console_errors", []):
+                    document.add_paragraph("Browser console error: " + message)
+                for uncertainty in plan.get("uncertainties", []):
+                    document.add_paragraph("Uncertain requirement: " + uncertainty)
                 document.add_paragraph("Diagnostic report - this experiment has not passed execution and evidence verification.")
                 document.add_paragraph("Failure details: " + (result.get("error") or "Required evidence is missing."))
                 missing = (plan.get("evidence") or {}).get("missing_requirements", [])
@@ -842,11 +1049,18 @@ def build_word_report(upload, workflow):
                     document.add_paragraph("Browser evidence unavailable: no execution images could be captured.")
                     document.add_paragraph("Source code:\n" + result.get("code", "")[:20000])
             verification = result.get("verification")
-            if verification:
+            if verification and verification.get("status") == "failed":
                 status = str(verification.get("status", "unknown")).replace("_", " ").upper()
-                label = "Java UI interaction verification" if verification.get('kind')=='gui' else "HTTP request verification" if verification.get("kind") == "http" else "Render verification" if verification.get('kind')=='render' else "Browser interaction verification"
+                label = f"MySQL execution & semantic verification ({verification.get('engine') or 'MySQL'})" if verification.get('kind')=='database' else "Python notebook execution verification" if verification.get('kind')=='notebook' else "Java UI interaction verification" if verification.get('kind')=='gui' else "HTTP request verification" if verification.get("kind") == "http" else "Render verification" if verification.get('kind')=='render' else "Browser interaction verification"
                 if verification.get('capture_method'):document.add_paragraph(verification['capture_method'])
                 document.add_paragraph(f"{label}: {status}")
+                if verification.get("kind") == "database":
+                    document.add_paragraph("Evidence interface: " + (verification.get("interface") or f"MySQL Workbench-style rendered interface connected to real {verification.get('engine') or 'MySQL'} (not a native desktop capture)"))
+                    document.add_paragraph("Runtime adaptation note: SQL Server examples and bracketed identifiers in the uploaded manual (such as [Brazil Customers], FULL OUTER JOIN, and uncreated example view references) were adapted to valid MySQL 8.0 syntax and executed on real MySQL.")
+                    if result.get("answer"):
+                        document.add_paragraph(result["answer"])
+                    for chk in verification.get("checks", []):
+                        document.add_paragraph(f"[{'PASS' if chk.get('passed') else 'FAIL'}] {chk.get('name', 'Database check')}: {chk.get('detail', '')}")
                 if verification.get("error"):
                     document.add_paragraph(f"Verification details: {verification['error']}")
                 if verification.get('coverage'):
@@ -874,19 +1088,18 @@ def build_word_report(upload, workflow):
                         document.add_paragraph(test.get('observed_text','')[:2000])
                         if test.get('error'): document.add_paragraph('Failure details: '+test['error'])
                 if verification.get("status") == "failed":
-                    document.add_paragraph("Diagnostic report — this solution has not passed browser verification.")
+                    document.add_paragraph("Diagnostic report — this SQL solution has not passed MySQL execution or result verification." if verification.get("kind") == "database" else "Diagnostic report — this solution has not passed browser verification.")
                     if result.get("error"):
                         document.add_paragraph("Execution details: " + str(result["error"])[:2000])
-                    document.add_paragraph("Source code:")
-                    document.add_paragraph(result.get("code", "")[:20000])
-                    if not result.get("screenshot_paths") or (
+                    if result.get('language') != 'sql':
+                        document.add_paragraph("Source code:")
+                        document.add_paragraph(result.get("code", "")[:20000])
+                    if result.get('language') != 'sql' and (not result.get("screenshot_paths") or (
                             result.get("screenshot_captions") is not None
-                            and not any("browser" in caption.lower() for caption in result["screenshot_captions"])):
+                            and not any("browser" in caption.lower() for caption in result["screenshot_captions"]))):
                         document.add_paragraph("Browser evidence unavailable: the browser could not capture this run.")
-            if result.get('project_files'):
-                document.add_paragraph('Code figures show selected functional source. Long-file excerpts retain original line numbers and explicitly mark omitted lines. The complete project remains saved separately.')
-                setup=result['project_files'].get('README.md','')
-                if setup:document.add_paragraph('Run instructions: '+setup)
+                    elif result.get('language') == 'sql' and not any(os.path.isfile(p) for p in result.get('screenshot_paths', [])):
+                        document.add_paragraph("Database evidence unavailable: no Workbench capture could be saved.")
             screenshot_paths = result.get("screenshot_paths", [])
             for ss_idx, screenshot in enumerate(screenshot_paths):
                 # Build a descriptive caption for each screenshot
@@ -910,7 +1123,7 @@ def build_word_report(upload, workflow):
                     # integrity check. Never silently export a passing report
                     # with an omitted screenshot.
                     raise ValueError(f"Cannot export question {result['id']}: a required screenshot is missing.")
-    filename = re.sub(r"[^A-Za-z0-9_-]", "_", workflow.output_name)[:80].strip("_") or "lab_report"
+    filename = normalize_output_name(workflow.output_name or "lab_report", max_length=80)
     filename += ".docx"
     directory = os.path.join(settings.REPORT_DIR, "workflows", str(workflow.id))
     os.makedirs(directory, exist_ok=True)

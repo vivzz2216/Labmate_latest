@@ -1,0 +1,664 @@
+[
+  {
+    "version": 2,
+    "name": "Validation blocks blank input",
+    "requirement_ids": [
+      "validation",
+      "count"
+    ],
+    "viewport": {
+      "width": 1366,
+      "height": 768
+    },
+    "steps": [
+      {
+        "action": "click",
+        "locator_type": "testid",
+        "locator": "add-task",
+        "value": "",
+        "role": ""
+      },
+      {
+        "action": "assert_visible",
+        "locator_type": "text",
+        "locator": "Task title required",
+        "value": "",
+        "role": ""
+      },
+      {
+        "action": "assert_visible",
+        "locator_type": "text",
+        "locator": "Tasks: 0",
+        "value": "",
+        "role": ""
+      }
+    ]
+  },
+  {
+    "version": 2,
+    "name": "Add edit search delete with confirmation",
+    "requirement_ids": [
+      "create",
+      "edit",
+      "search",
+      "delete",
+      "count"
+    ],
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "steps": [
+      {
+        "action": "fill",
+        "locator_type": "testid",
+        "locator": "task-title",
+        "value": "Buy milk",
+        "role": ""
+      },
+      {
+        "action": "click",
+        "locator_type": "testid",
+        "locator": "add-task",
+        "value": "",
+        "role": ""
+      },
+      {
+        "action": "fill",
+        "locator_type": "testid",
+        "locator": "task-title",
+        "value": "Walk dog",
+        "role": ""
+      },
+      {
+        "action": "click",
+        "locator_type": "testid",
+        "locator": "add-task",
+        "value": "",
+        "role": ""
+      },
+      {
+        "action": "assert_visible",
+        "locator_type": "text",
+        "locator": "Tasks: 2",
+        "value": "",
+        "role": ""
+      },
+      {
+        "action": "click",
+        "locator_type": "testid",
+        "locator": "edit-0",
+        "value": "",
+        "role": ""
+      },
+      {
+        "action": "fill",
+        "locator_type": "testid",
+        "locator": "edit-input-0",
+        "value": "Buy oat milk",
+        "role": ""
+      },
+      {
+        "action": "click",
+        "locator_type": "testid",
+        "locator": "save-0",
+        "value": "",
+        "role": ""
+      },
+      {
+        "action": "assert_visible",
+        "locator_type": "text",
+        "locator": "Buy oat milk",
+        "value": "",
+        "role": ""
+      },
+      {
+        "action": "assert_absent",
+        "locator_type": "text",
+        "locator": "Buy milk",
+        "value": "",
+        "role": ""
+      },
+      {
+        "action": "fill",
+        "locator_type": "testid",
+        "locator": "search",
+        "value": "dog",
+        "role": ""
+      },
+      {
+        "action": "assert_absent",
+        "locator_type": "text",
+        "locator": "Buy oat milk",
+        "value": "",
+        "role": ""
+      },
+      {
+        "action": "assert_visible",
+        "locator_type": "text",
+        "locator": "Walk dog",
+        "value": "",
+        "role": ""
+      },
+      {
+        "action": "fill",
+        "locator_type": "testid",
+        "locator": "search",
+        "value": "zzz",
+        "role": ""
+      },
+      {
+        "action": "assert_visible",
+        "locator_type": "text",
+        "locator": "No tasks match",
+        "value": "",
+        "role": ""
+      },
+      {
+        "action": "fill",
+        "locator_type": "testid",
+        "locator": "search",
+        "value": "",
+        "role": ""
+      },
+      {
+        "action": "click_confirm",
+        "locator_type": "testid",
+        "locator": "delete-1",
+        "value": "Delete this task?",
+        "role": ""
+      },
+      {
+        "action": "assert_absent",
+        "locator_type": "text",
+        "locator": "Walk dog",
+        "value": "",
+        "role": ""
+      },
+      {
+        "action": "assert_visible",
+        "locator_type": "text",
+        "locator": "Tasks: 1",
+        "value": "",
+        "role": ""
+      }
+    ]
+  },
+  {
+    "version": 2,
+    "name": "Persistence after reload",
+    "requirement_ids": [
+      "persistence",
+      "responsive"
+    ],
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "steps": [
+      {
+        "action": "reset_storage",
+        "locator_type": "page",
+        "locator": "",
+        "value": "",
+        "role": ""
+      },
+      {
+        "action": "fill",
+        "locator_type": "testid",
+        "locator": "task-title",
+        "value": "Persisted task",
+        "role": ""
+      },
+      {
+        "action": "click",
+        "locator_type": "testid",
+        "locator": "add-task",
+        "value": "",
+        "role": ""
+      },
+      {
+        "action": "assert_visible",
+        "locator_type": "text",
+        "locator": "Persisted task",
+        "value": "",
+        "role": ""
+      },
+      {
+        "action": "reload",
+        "locator_type": "page",
+        "locator": "",
+        "value": "",
+        "role": ""
+      },
+      {
+        "action": "assert_visible",
+        "locator_type": "text",
+        "locator": "Persisted task",
+        "value": "",
+        "role": ""
+      },
+      {
+        "action": "assert_no_overflow",
+        "locator_type": "page",
+        "locator": "",
+        "value": "",
+        "role": ""
+      },
+      {
+        "action": "screenshot",
+        "locator_type": "page",
+        "locator": "",
+        "value": "",
+        "role": ""
+      }
+    ]
+  },
+  {
+    "version": 2,
+    "name": "Desktop no overflow",
+    "requirement_ids": [
+      "responsive"
+    ],
+    "viewport": {
+      "width": 1366,
+      "height": 768
+    },
+    "steps": [
+      {
+        "action": "assert_no_overflow",
+        "locator_type": "page",
+        "locator": "",
+        "value": "",
+        "role": ""
+      },
+      {
+        "action": "screenshot",
+        "locator_type": "page",
+        "locator": "",
+        "value": "",
+        "role": ""
+      }
+    ]
+  },
+  {
+    "version": 2,
+    "name": "Mobile no overflow",
+    "requirement_ids": [
+      "responsive"
+    ],
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "steps": [
+      {
+        "action": "assert_no_overflow",
+        "locator_type": "page",
+        "locator": "",
+        "value": "",
+        "role": ""
+      },
+      {
+        "action": "screenshot",
+        "locator_type": "page",
+        "locator": "",
+        "value": "",
+        "role": ""
+      }
+    ]
+  },
+  {
+    "version": 2,
+    "name": "Duplicate titles keep distinct edit targets",
+    "requirement_ids": [
+      "audit"
+    ],
+    "viewport": {
+      "width": 1366,
+      "height": 768
+    },
+    "steps": [
+      {
+        "action": "reset_storage",
+        "locator_type": "page",
+        "locator": "",
+        "role": "",
+        "value": ""
+      },
+      {
+        "action": "fill",
+        "locator_type": "testid",
+        "locator": "task-title",
+        "role": "",
+        "value": "Same task"
+      },
+      {
+        "action": "click",
+        "locator_type": "testid",
+        "locator": "add-task",
+        "role": "",
+        "value": ""
+      },
+      {
+        "action": "fill",
+        "locator_type": "testid",
+        "locator": "task-title",
+        "role": "",
+        "value": "Same task"
+      },
+      {
+        "action": "click",
+        "locator_type": "testid",
+        "locator": "add-task",
+        "role": "",
+        "value": ""
+      },
+      {
+        "action": "click",
+        "locator_type": "testid",
+        "locator": "edit-1",
+        "role": "",
+        "value": ""
+      },
+      {
+        "action": "fill",
+        "locator_type": "testid",
+        "locator": "edit-input-1",
+        "role": "",
+        "value": "Second row changed"
+      },
+      {
+        "action": "click",
+        "locator_type": "testid",
+        "locator": "save-1",
+        "role": "",
+        "value": ""
+      },
+      {
+        "action": "assert_visible",
+        "locator_type": "text",
+        "locator": "Same task",
+        "role": "",
+        "value": ""
+      },
+      {
+        "action": "assert_visible",
+        "locator_type": "text",
+        "locator": "Second row changed",
+        "role": "",
+        "value": ""
+      },
+      {
+        "action": "reload",
+        "locator_type": "page",
+        "locator": "",
+        "role": "",
+        "value": ""
+      },
+      {
+        "action": "assert_visible",
+        "locator_type": "text",
+        "locator": "Second row changed",
+        "role": "",
+        "value": ""
+      }
+    ]
+  },
+  {
+    "version": 2,
+    "name": "Cancel deletion preserves data and confirmed deletion persists",
+    "requirement_ids": [
+      "audit"
+    ],
+    "viewport": {
+      "width": 1366,
+      "height": 768
+    },
+    "steps": [
+      {
+        "action": "reset_storage",
+        "locator_type": "page",
+        "locator": "",
+        "role": "",
+        "value": ""
+      },
+      {
+        "action": "fill",
+        "locator_type": "testid",
+        "locator": "task-title",
+        "role": "",
+        "value": "Keep until confirmed"
+      },
+      {
+        "action": "click",
+        "locator_type": "testid",
+        "locator": "add-task",
+        "role": "",
+        "value": ""
+      },
+      {
+        "action": "click",
+        "locator_type": "testid",
+        "locator": "delete-0",
+        "role": "",
+        "value": ""
+      },
+      {
+        "action": "assert_visible",
+        "locator_type": "text",
+        "locator": "Keep until confirmed",
+        "role": "",
+        "value": ""
+      },
+      {
+        "action": "reload",
+        "locator_type": "page",
+        "locator": "",
+        "role": "",
+        "value": ""
+      },
+      {
+        "action": "assert_visible",
+        "locator_type": "text",
+        "locator": "Keep until confirmed",
+        "role": "",
+        "value": ""
+      },
+      {
+        "action": "click_confirm",
+        "locator_type": "testid",
+        "locator": "delete-0",
+        "role": "",
+        "value": "Delete this task?"
+      },
+      {
+        "action": "assert_visible",
+        "locator_type": "text",
+        "locator": "Tasks: 0",
+        "role": "",
+        "value": ""
+      },
+      {
+        "action": "reload",
+        "locator_type": "page",
+        "locator": "",
+        "role": "",
+        "value": ""
+      },
+      {
+        "action": "assert_absent",
+        "locator_type": "text",
+        "locator": "Keep until confirmed",
+        "role": "",
+        "value": ""
+      }
+    ]
+  },
+  {
+    "version": 2,
+    "name": "Long title during editing fits 320px",
+    "requirement_ids": [
+      "audit"
+    ],
+    "viewport": {
+      "width": 320,
+      "height": 768
+    },
+    "steps": [
+      {
+        "action": "reset_storage",
+        "locator_type": "page",
+        "locator": "",
+        "role": "",
+        "value": ""
+      },
+      {
+        "action": "fill",
+        "locator_type": "testid",
+        "locator": "task-title",
+        "role": "",
+        "value": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+      },
+      {
+        "action": "click",
+        "locator_type": "testid",
+        "locator": "add-task",
+        "role": "",
+        "value": ""
+      },
+      {
+        "action": "click",
+        "locator_type": "testid",
+        "locator": "edit-0",
+        "role": "",
+        "value": ""
+      },
+      {
+        "action": "assert_visible",
+        "locator_type": "testid",
+        "locator": "edit-input-0",
+        "role": "",
+        "value": ""
+      },
+      {
+        "action": "assert_no_overflow",
+        "locator_type": "page",
+        "locator": "",
+        "role": "",
+        "value": ""
+      },
+      {
+        "action": "fill",
+        "locator_type": "testid",
+        "locator": "edit-input-0",
+        "role": "",
+        "value": "Updated long task"
+      },
+      {
+        "action": "click",
+        "locator_type": "testid",
+        "locator": "save-0",
+        "role": "",
+        "value": ""
+      },
+      {
+        "action": "assert_visible",
+        "locator_type": "text",
+        "locator": "Updated long task",
+        "role": "",
+        "value": ""
+      },
+      {
+        "action": "assert_no_overflow",
+        "locator_type": "page",
+        "locator": "",
+        "role": "",
+        "value": ""
+      }
+    ]
+  },
+  {
+    "version": 2,
+    "name": "Long title during editing fits 1366px",
+    "requirement_ids": [
+      "audit"
+    ],
+    "viewport": {
+      "width": 1366,
+      "height": 768
+    },
+    "steps": [
+      {
+        "action": "reset_storage",
+        "locator_type": "page",
+        "locator": "",
+        "role": "",
+        "value": ""
+      },
+      {
+        "action": "fill",
+        "locator_type": "testid",
+        "locator": "task-title",
+        "role": "",
+        "value": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+      },
+      {
+        "action": "click",
+        "locator_type": "testid",
+        "locator": "add-task",
+        "role": "",
+        "value": ""
+      },
+      {
+        "action": "click",
+        "locator_type": "testid",
+        "locator": "edit-0",
+        "role": "",
+        "value": ""
+      },
+      {
+        "action": "assert_visible",
+        "locator_type": "testid",
+        "locator": "edit-input-0",
+        "role": "",
+        "value": ""
+      },
+      {
+        "action": "assert_no_overflow",
+        "locator_type": "page",
+        "locator": "",
+        "role": "",
+        "value": ""
+      },
+      {
+        "action": "fill",
+        "locator_type": "testid",
+        "locator": "edit-input-0",
+        "role": "",
+        "value": "Updated long task"
+      },
+      {
+        "action": "click",
+        "locator_type": "testid",
+        "locator": "save-0",
+        "role": "",
+        "value": ""
+      },
+      {
+        "action": "assert_visible",
+        "locator_type": "text",
+        "locator": "Updated long task",
+        "role": "",
+        "value": ""
+      },
+      {
+        "action": "assert_no_overflow",
+        "locator_type": "page",
+        "locator": "",
+        "role": "",
+        "value": ""
+      }
+    ]
+  }
+]

@@ -7,7 +7,18 @@ from zipfile import ZipFile
 
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.shared import Inches, Pt, RGBColor
+from docx.shared import Inches, Length, Pt, RGBColor, Twips
+import docx.oxml.simpletypes as _docx_simpletypes
+
+# Robustly handle decimal twips stored in Word/WPS XML margins (e.g. w:left="1441.9200134277344")
+_orig_twips_convert = getattr(_docx_simpletypes.ST_TwipsMeasure, "convert_from_xml", None)
+if _orig_twips_convert:
+    def _safe_twips_convert(cls, str_value: str) -> Length:
+        if "i" in str_value or "m" in str_value or "p" in str_value:
+            return _docx_simpletypes.ST_UniversalMeasure.convert_from_xml(str_value)
+        return Twips(int(round(float(str_value))))
+
+    _docx_simpletypes.ST_TwipsMeasure.convert_from_xml = classmethod(_safe_twips_convert)
 
 
 def apply_student_metadata(document, student_name: str, roll_no: str = "", department: str = "", institution: str = "", title: str = ""):
@@ -88,10 +99,10 @@ def embed_screenshot(document, image_path, caption=None):
         if pixels_w < 1 or pixels_h < 1:
             raise ValueError("Screenshot dimensions are invalid.")
         section = document.sections[-1]
-        page_width = section.page_width - section.left_margin - section.right_margin
-        page_height = section.page_height - section.top_margin - section.bottom_margin - Inches(.8)
+        page_width = max(Inches(1), section.page_width - section.left_margin - section.right_margin)
+        page_height = max(Inches(1), section.page_height - section.top_margin - section.bottom_margin - Inches(.8))
         natural_w = Inches(pixels_w / (dpi_x or 96))
-        display_w = min(natural_w, page_width)
+        display_w = max(Inches(1), min(natural_w, page_width))
         max_slice_h = max(1, int(pixels_w * page_height / display_w))
 
         # If the screenshot is only slightly taller than page_height (within 25%),
@@ -122,11 +133,13 @@ def embed_screenshot(document, image_path, caption=None):
                 sample_left = min(60, pixels_w - 1)
                 sample_right = max(sample_left + 1, pixels_w - 60)
                 search_floor = max(top + max_slice_h - 200, top + 1)
-                for candidate in range(bottom, search_floor, -1):
+                for candidate in range(min(bottom, pixels_h - 1), search_floor, -1):
                     sample = image.crop((sample_left, candidate, sample_right, candidate + 1)).convert("L")
                     if brightness_check(sample):
                         bottom = candidate
                         break
+            if pixels_h - bottom < 160:
+                bottom = pixels_h
             slices.append((top, bottom))
             top = bottom
 

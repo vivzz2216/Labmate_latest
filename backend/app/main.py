@@ -11,6 +11,7 @@ from .config import settings
 from .database import engine, Base
 from .routers import upload, parse, run, compose, download, analyze, tasks, assignments, basic_auth, ai_review, admin, feedback, workflows, billing
 from .middleware.rate_limit import RateLimitMiddleware
+from .middleware.body_limit import RequestBodyLimitMiddleware
 from .services.background_tasks import start_background_workers, stop_background_workers
 from .services.workflow_queue import start_workflow_workers, stop_workflow_workers
 from .security.signed_assets import verified_screenshot
@@ -82,12 +83,15 @@ async def lifespan(app: FastAPI):
                 await asyncio.sleep(2)
     # Startup
     logger.info("Starting background workers...")
+    from .monitoring import performance_monitor
+    await performance_monitor.start_monitoring()
     start_background_workers(num_workers=3)
     start_workflow_workers()
     try:
         yield
     finally:
         logger.info("Stopping background workers...")
+        await performance_monitor.stop_monitoring()
         stop_background_workers()
         await stop_workflow_workers()
 
@@ -106,6 +110,7 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 # Add rate limiting middleware (only if enabled via env var)
 if settings.RATE_LIMIT_ENABLED:
     app.add_middleware(RateLimitMiddleware)
+app.add_middleware(RequestBodyLimitMiddleware)
 
 # Configure CORS with security best practices
 # In production, set ALLOWED_ORIGINS environment variable to your frontend domain
@@ -149,6 +154,11 @@ async def liveness_check():
 @app.get("/health/ready")
 @app.get("/health")
 async def health_check(response: Response):
+    # Database and Redis clients are synchronous; probes must not stall login/polling.
+    return await asyncio.to_thread(_health_check_sync, response)
+
+
+def _health_check_sync(response: Response):
     """
     Readiness & health check endpoint.
     Returns HTTP 200 when all core services (database) are healthy.
@@ -247,7 +257,9 @@ async def health_check(response: Response):
         "metrics": {
             "total_requests": metrics.get("requests_total", 0),
             "avg_response_time": f"{metrics.get('avg_response_time', 0.0):.3f}s",
-            "error_rate": f"{metrics.get('error_rate', 0.0)*100:.2f}%"
+            "error_rate": f"{metrics.get('error_rate', 0.0)*100:.2f}%",
+            "event_loop_lag_ms": metrics.get("event_loop_lag_ms", 0.0),
+            "db_pool": metrics.get("db_pool", {}),
         }
     }
     

@@ -213,11 +213,26 @@ const loadStoredTokens = () => {
         }
 
         // Validate session with backend to ensure tokens are still valid
-        const profile = await apiService.getUserProfile()
-        setProfileComplete(profile?.is_complete || false)
-        setUser(parsedUser)
-      } catch (error) {
-        console.error('Failed to validate stored session:', error)
+        try {
+          const profile = await apiService.getUserProfile()
+          setProfileComplete(profile?.is_complete || false)
+          setUser(parsedUser)
+        } catch (profileError: any) {
+          // The API interceptor already refreshes once. Do not sign users out on a
+          // temporary network/502/503 failure or repeat the refresh request here.
+          const status = profileError?.response?.status
+          if (status !== 401 && status !== 403) {
+            setUser(parsedUser)
+            // A failed fetch does not establish that university details are missing.
+            // Keep the previous completion state until a profile check succeeds.
+            return
+          }
+          // Stored session has expired or is invalid; silently clear state without triggering an error overlay
+          clearStoredSession()
+          setUser(null)
+          setProfileComplete(false)
+        }
+      } catch {
         clearStoredSession()
         setUser(null)
         setProfileComplete(false)

@@ -1,8 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
+import fs from "fs";
+import path from "path";
 
 function backendUrl() {
-  const raw = (process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000")
-    .trim().replace(/\/+$/, "");
+  let raw = process.env.BACKEND_URL;
+  try {
+    const envLocalPath = path.resolve(process.cwd(), ".env.local");
+    if (process.env.NODE_ENV !== 'production' && fs.existsSync(envLocalPath)) {
+      const content = fs.readFileSync(envLocalPath, "utf-8");
+      const match = content.match(/^BACKEND_URL=(.*)$/m);
+      if (match && match[1].trim()) {
+        raw = match[1].trim();
+      }
+    }
+  } catch {
+    // fallback
+  }
+  if (!raw) {
+    raw = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  }
+  raw = raw.trim().replace(/\/+$/, "");
   const value = /^https?:\/\//.test(raw) ? raw : `https://${raw}`;
   const parsed = new URL(value);
   if (!["http:", "https:"].includes(parsed.protocol)) throw new Error("Invalid BACKEND_URL");
@@ -17,6 +34,15 @@ export async function proxyBackend(req: NextRequest) {
     if (value) headers.set(name, value);
   }
   if (!headers.has("x-beta-key") && process.env.BETA_KEY) headers.set("x-beta-key", process.env.BETA_KEY);
+  // Railway's edge sets X-Real-IP. Authenticate our relay so backend callers
+  // cannot spoof it and every student does not share the proxy's rate bucket.
+  if (process.env.TRUSTED_PROXY_KEY && process.env.RAILWAY_ENVIRONMENT_ID) {
+    const clientIp = req.headers.get('x-real-ip');
+    if (clientIp) {
+      headers.set('x-labmate-client-ip', clientIp);
+      headers.set('x-labmate-proxy-key', process.env.TRUSTED_PROXY_KEY);
+    }
+  }
   const init: RequestInit & { duplex?: "half" } = {
     method: req.method, headers, redirect: "manual", cache: "no-store", signal: req.signal,
   };

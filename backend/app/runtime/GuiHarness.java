@@ -166,8 +166,11 @@ public final class GuiHarness {
         Thread app=new Thread(()->{try{java.lang.reflect.Method entry=Class.forName(args[0]).getDeclaredMethod("main",String[].class);entry.setAccessible(true);entry.invoke(null,(Object)new String[0]);}catch(Throwable e){fatal.compareAndSet(null,e);}},"student-main");app.setDaemon(true);app.start();
         boolean passed=true;int current=0;
         try{
-            long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(5);
-            while(System.nanoTime()<deadline){if(edt(()->!components().isEmpty()))break;if(fatal.get()!=null)throw new IllegalStateException("Application startup failed",fatal.get());Thread.sleep(50);}
+            long startupMillis=Math.max(1000,Math.min(20000,Long.getLong("labmate.gui.startupMillis",15000)));
+            long deadline=System.nanoTime()+TimeUnit.MILLISECONDS.toNanos(startupMillis);
+            boolean ready=false;
+            while(System.nanoTime()<deadline){if(edt(()->!components().isEmpty())){ready=true;break;}if(fatal.get()!=null)throw new IllegalStateException("Application startup failed",fatal.get());Thread.sleep(50);}
+            if(!ready)throw new IllegalStateException("Application window did not become visible within "+startupMillis+"ms.",fatal.get());
             settle();screenshot(-1);
             List<String> initial=new ArrayList<>();for(String[] step:steps)initial.add(edt(()->observation(step)));
             for(int i=0;i<steps.size();i++){

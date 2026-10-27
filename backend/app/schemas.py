@@ -34,7 +34,7 @@ class ParseResponse(BaseModel):
 class RunRequest(BaseModel):
     upload_id: int
     task_ids: List[int]
-    theme: str = Field(default="idle", pattern="^(idle|vscode|notepad|codeblocks|html|react|node)$")
+    theme: str = Field(default="idle", pattern="^(idle|vscode|notepad|codeblocks|html|react|node|sql|colab)$")
     screenshot_task_ids: Optional[List[int]] = None
     stdin_data: Optional[str] = Field(default=None, max_length=65536)
 
@@ -136,7 +136,7 @@ class TaskSubmission(BaseModel):
 class TasksSubmitRequest(BaseModel):
     file_id: int
     tasks: List[TaskSubmission]
-    theme: str = Field(default="idle", pattern="^(idle|vscode|notepad|codeblocks|html|react|node)$")
+    theme: str = Field(default="idle", pattern="^(idle|vscode|notepad|codeblocks|html|react|node|sql|colab)$")
     insertion_preference: str = Field(default="below_question")
 
 

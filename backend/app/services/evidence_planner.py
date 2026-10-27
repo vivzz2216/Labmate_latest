@@ -11,6 +11,8 @@ from PIL import Image
 
 
 TEMPLATE_CATEGORIES = {
+    "database": {"source":"source_preview","result":"database","available":True},
+    "notebook": {"source":"source_preview","result":"notebook","available":True},
     "console": {"source": "source_preview", "result": "terminal", "available": True},
     "browser": {"source": "source_preview", "result": "browser", "available": True},
     "react": {"source": "source_preview", "result": "browser", "available": True},
@@ -26,12 +28,19 @@ TEMPLATE_CATEGORIES = {
 def experiment_category(language, objective="", code=""):
     language = {"c++": "cpp", "webdev": "html", "javascript": "node"}.get(language, language)
     text = objective + "\n" + code
+    if language=='sql':return 'database'
+    if language=='colab' or language=='python' and re.search(r'\bcolab\b|\bjupyter\b|\.ipynb\b',objective,re.I):return 'notebook'
     if language == "java":
+        gui_terms=r'(?:graphical user interface|Java UI|GUI|JavaFX|Swing|AWT)'
+        negated=r'\b(?:no|without|avoid|do\s+not\s+(?:use|create|build))\s+(?:an?\s+)?'+gui_terms+r'\b(?:\s*(?:,|or|and)\s*'+gui_terms+r'\b)*'
+        requested=re.sub(negated,'',objective,flags=re.I)
+        requested=re.sub(r'\b'+gui_terms+r'\s+(?:(?:is|are)\s+)?not\s+(?:required|needed)\b','',requested,flags=re.I)
+        text=requested+'\n'+code
         for name, pattern in (("javafx", r"\bjavafx\b"), ("java_swing", r"\bswing\b|\bJ(?:Frame|Button|TextField)\b"),
                               ("java_awt", r"\bAWT\b|java\.awt")):
             if re.search(pattern, text, re.I):
                 return name
-        if re.search(r'\bGUI\b|graphical user interface|\bJava UI\b',text,re.I):return 'java_swing'
+        if re.search(r'\bGUI\b|graphical user interface|\bJava UI\b',requested,re.I):return 'java_swing'
     if language == "python":
         if re.search(r"\btkinter\b|\bTk\s*\(", text, re.I):
             return "tkinter"
@@ -48,6 +57,18 @@ def experiment_category(language, objective="", code=""):
     return "console"
 
 
+def intermediate_states_required(objective):
+    # Timing instructions in different sentences ("test before marking
+    # verified ... capture after interaction") do not request two UI states.
+    clauses=re.split(r'[.!?;\n]+',objective)
+    if re.search(r'\binvalid\b.*\b(?:valid|successful)\b',objective,re.I|re.S):return True
+    pair=r'\binvalid\b.*\b(?:valid|successful)\b|\bbefore\b.*\bafter\b'
+    if any(re.search(pair,clause,re.I) for clause in clauses):return True
+    def asks_for(state):
+        return any(re.search(r'\b(?:capture|show|display|screenshots?|states?)\b.{0,80}\b'+state+r'\b|\b'+state+r'\b.{0,80}\b(?:states?|screenshots?|images?)\b',clause,re.I) for clause in clauses)
+    return asks_for('before') and asks_for('after')
+
+
 def plan_experiment(objective, language, code=""):
     category = experiment_category(language, objective, code)
     config = TEMPLATE_CATEGORIES[category]
@@ -62,7 +83,7 @@ def plan_experiment(objective, language, code=""):
     responsive = bool(re.search(r"\bresponsive\b|\bmobile\b.*\bdesktop\b", objective, re.I))
     if responsive:
         requirements.append({"id": "responsive", "description": "Both mobile and desktop layout evidence", "evidence": "browser"})
-    intermediate = bool(re.search(r"\binvalid\b.*\b(?:valid|successful)\b|\bbefore\b.*\bafter\b", objective, re.I | re.S))
+    intermediate = intermediate_states_required(objective)
     if intermediate and category in {"browser", "react", "flask", "java_awt", "java_swing", "javafx", "tkinter"}:
         requirements.append({"id": "intermediate", "description": "Distinct required intermediate and final states", "evidence": config["result"], "minimum_count": 2})
     database = bool(re.search(r"\bdatabase\b|\bSQL\b", objective, re.I))
@@ -73,7 +94,7 @@ def plan_experiment(objective, language, code=""):
     uncertainty = []
     if not expected and category == "console":
         uncertainty.append("The manual provides no explicit expected output; successful execution does not establish correctness.")
-    if database:
+    if database and category!='database':
         uncertainty.append("No database experiment adapter is configured; database evidence must not be invented.")
     return {"version": 1, "objective": objective[:15000], "language": language, "category": category,
             "supported": config["available"], "requirements": requirements, "expected_output": expected,
@@ -154,7 +175,11 @@ def verification_summary(plan, success, output, browser_verification=None, viewp
         if checks["responsive"] != "passed":
             failures.append("Mobile and desktop states have not both been captured.")
     if any(r["id"] == "database" for r in plan["requirements"]):
-        checks["database"] = "unverified"
-        failures.append("Required database behavior has not been verified.")
+        checks["database"] = 'passed' if (browser_verification or {}).get('kind')=='database' and browser_verification.get('status')=='passed' else 'unverified'
+        if checks['database']!='passed':
+            failures.append("Required database behavior has not been verified.")
+            for db_fail in (browser_verification or {}).get("failures") or []:
+                if db_fail not in failures:
+                    failures.append(db_fail)
     return {"checks": checks, "failures": failures,
-            "status": "failed" if failures or not success else "verified" if checks["output"] == "passed" or checks["interaction"] == "passed" else "execution_tested"}
+            "status": "failed" if failures or not success else "verified" if checks["output"] == "passed" or checks["interaction"] == "passed" or checks.get("database") == "passed" else "execution_tested"}

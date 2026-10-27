@@ -9,6 +9,7 @@ from ..security.validators import sanitize_filename, validate_file_path
 from ..middleware.auth import get_current_user
 from ..middleware.csrf import require_csrf_token
 from ..models import User
+import asyncio
 import os
 import uuid
 from datetime import datetime
@@ -100,13 +101,20 @@ async def upload_file(
                     raise HTTPException(status_code=400, detail=f"File too large. Maximum size is {settings.MAX_FILE_SIZE / (1024*1024):.1f}MB")
                 if len(header) < 2048:
                     header += chunk[:2048 - len(header)]
-                destination.write(chunk)
+                await asyncio.to_thread(destination.write, chunk)
         logger.debug(f"File size: {file_size} bytes ({file_size / (1024*1024):.2f} MB)")
         
         # Validate file is not empty
         if file_size == 0:
             logger.warning("File upload rejected: File is empty")
             raise HTTPException(status_code=400, detail="File is empty")
+
+        if file_extension == 'docx':
+            from ..security.docx_archive import validate_docx_archive
+            try:
+                await asyncio.to_thread(validate_docx_archive, file_path)
+            except ValueError as error:
+                raise HTTPException(400, detail=str(error)) from None
         
         # Validate MIME type using python-magic (more reliable than extension)
         # FIXED: Properly handle MIME validation errors as 400, not 500
@@ -252,6 +260,53 @@ async def set_custom_filename(
         raise HTTPException(status_code=500, detail=f"Failed to set filename: {str(e)}")
 
 
+def _render_pdf_preview(file_path: str) -> str:
+    pages_out = []
+    with pdfplumber.open(file_path) as pdf:
+        max_pages = min(len(pdf.pages), 5)
+        for i in range(max_pages):
+            text = (pdf.pages[i].extract_text() or "").strip()
+            if not text:
+                continue
+            escaped = (
+                text.replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+            )
+            pages_out.append(f"<h3>Page {i+1}</h3><pre>{escaped}</pre>")
+    return "".join(pages_out)
+
+
+def _render_docx_preview(file_path: str) -> str:
+    try:
+        with open(file_path, "rb") as docx_file:
+            result = mammoth.convert_to_html(docx_file)
+            html_content = result.value or ""
+        if html_content.strip():
+            return html_content
+    except (BadZipFile, ValueError):
+        raise
+    except Exception as mammoth_err:
+        logger.warning(f"Mammoth conversion failed for {file_path}, falling back: {mammoth_err}")
+
+    doc = Document(file_path)
+    parts = []
+    for p in doc.paragraphs:
+        t = (p.text or "").strip()
+        if not t:
+            continue
+        escaped = (
+            t.replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+        )
+        parts.append(f"<p>{escaped}</p>")
+
+    if not parts:
+        parts.append("<p><em>No previewable text found in this DOCX.</em></p>")
+    return "".join(parts)
+
+
 @router.get("/upload/preview/{upload_id}", response_class=HTMLResponse)
 async def preview_docx(
     upload_id: int = Path(..., description="ID of the uploaded file"),
@@ -326,63 +381,20 @@ async def preview_docx(
         # PDF preview: extract text from first few pages
         if upload.file_type == 'pdf':
             try:
-                pages_out = []
-                with pdfplumber.open(upload.file_path) as pdf:
-                    max_pages = min(len(pdf.pages), 5)
-                    for i in range(max_pages):
-                        text = (pdf.pages[i].extract_text() or "").strip()
-                        if not text:
-                            continue
-                        escaped = (
-                            text.replace("&", "&amp;")
-                            .replace("<", "&lt;")
-                            .replace(">", "&gt;")
-                        )
-                        pages_out.append(f"<h3>Page {i+1}</h3><pre>{escaped}</pre>")
-
-                if not pages_out:
+                pages_html = await asyncio.to_thread(_render_pdf_preview, upload.file_path)
+                if not pages_html:
                     return HTMLResponse(content=_wrap_html("<p><em>No extractable text found in this PDF.</em></p>"))
-
-                return HTMLResponse(content=_wrap_html("".join(pages_out)))
+                return HTMLResponse(content=_wrap_html(pages_html))
             except Exception as pdf_err:
                 logger.error(f"PDF preview failed for upload_id={upload_id}: {pdf_err}", exc_info=True)
                 raise HTTPException(status_code=500, detail="Failed to render PDF preview")
 
         # DOCX preview: try Mammoth first (best HTML), then fallback to python-docx (plain HTML)
         try:
-            with open(upload.file_path, "rb") as docx_file:
-                result = mammoth.convert_to_html(docx_file)
-                html_content = result.value or ""
-
-            if html_content.strip():
-                return HTMLResponse(content=_wrap_html(html_content))
+            docx_html = await asyncio.to_thread(_render_docx_preview, upload.file_path)
+            return HTMLResponse(content=_wrap_html(docx_html))
         except (BadZipFile, ValueError) as bad_docx:
             logger.warning(f"Invalid DOCX for upload_id={upload_id}: {bad_docx}")
-            raise HTTPException(status_code=400, detail="Invalid DOCX file")
-        except Exception as mammoth_err:
-            logger.warning(f"Mammoth conversion failed for upload_id={upload_id}, falling back: {mammoth_err}", exc_info=True)
-
-        # Fallback: python-docx -> minimal HTML
-        try:
-            doc = Document(upload.file_path)
-            parts = []
-            for p in doc.paragraphs:
-                t = (p.text or "").strip()
-                if not t:
-                    continue
-                escaped = (
-                    t.replace("&", "&amp;")
-                    .replace("<", "&lt;")
-                    .replace(">", "&gt;")
-                )
-                parts.append(f"<p>{escaped}</p>")
-
-            if not parts:
-                parts.append("<p><em>No previewable text found in this DOCX.</em></p>")
-
-            return HTMLResponse(content=_wrap_html("".join(parts)))
-        except (BadZipFile, ValueError) as bad_docx2:
-            logger.warning(f"Invalid DOCX (fallback) for upload_id={upload_id}: {bad_docx2}")
             raise HTTPException(status_code=400, detail="Invalid DOCX file")
         except Exception as fallback_err:
             logger.error(f"DOCX preview failed for upload_id={upload_id}: {fallback_err}", exc_info=True)

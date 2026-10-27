@@ -5,6 +5,7 @@ from fastapi import Request, HTTPException, status, Header, Depends
 from typing import Optional
 import secrets
 import logging
+import asyncio
 from ..cache import redis_client
 from ..models import User
 from .auth import get_optional_user
@@ -28,40 +29,29 @@ def generate_csrf_token() -> str:
     return secrets.token_urlsafe(CSRF_TOKEN_LENGTH)
 
 
-def store_csrf_token(token: str, user_id: Optional[int] = None) -> None:
+def store_csrf_token(token: str, user_id: Optional[int] = None) -> bool:
     """
     Store CSRF token in Redis with optional user association
-    
-    Args:
-        token: CSRF token to store
-        user_id: Optional user ID to associate with token
     """
     if not redis_client:
-        # If Redis is not available, skip CSRF token storage
-        # In production, Redis should always be available
         logger.warning("Redis not available, CSRF token not stored")
-        return
+        return False
     
+    key = f"csrf_token:{token}"
+    if user_id:
+        key = f"csrf_token:{user_id}:{token}"
+
     try:
-        key = f"csrf_token:{token}"
-        if user_id:
-            key = f"csrf_token:{user_id}:{token}"
-        
         redis_client.setex(key, CSRF_TOKEN_TTL, "1")
-    except Exception as e:
-        logger.error(f"Failed to store CSRF token: {e}")
+        return True
+    except Exception:
+        logger.error("Redis store failed; CSRF token was not stored")
+        return False
 
 
 def verify_csrf_token(token: str, user_id: Optional[int] = None) -> bool:
     """
     Verify CSRF token exists and is valid
-    
-    Args:
-        token: CSRF token to verify
-        user_id: Optional user ID to check token against
-        
-    Returns:
-        True if token is valid, False otherwise
     """
     if not redis_client:
         logger.error("Redis not available; CSRF verification denied")
@@ -70,15 +60,14 @@ def verify_csrf_token(token: str, user_id: Optional[int] = None) -> bool:
     if not token:
         return False
     
+    key = f"csrf_token:{token}"
+    if user_id:
+        key = f"csrf_token:{user_id}:{token}"
+
     try:
-        key = f"csrf_token:{token}"
-        if user_id:
-            key = f"csrf_token:{user_id}:{token}"
-        
-        exists = redis_client.exists(key)
-        return bool(exists)
-    except Exception as e:
-        logger.error(f"Failed to verify CSRF token: {e}")
+        return bool(redis_client.exists(key))
+    except Exception:
+        logger.error("Redis check failed; CSRF verification denied")
         return False
 
 
@@ -108,7 +97,7 @@ async def validate_csrf_token(
     # Skip CSRF validation for health checks and static files
     if request.url.path in ["/health", "/api/health", "/docs", "/openapi.json"]:
         return True
-    
+
     if not x_csrf_token:
         logger.warning(f"CSRF token missing for {request.method} {request.url.path}")
         raise HTTPException(
@@ -122,7 +111,7 @@ async def validate_csrf_token(
         user_id = current_user.id
     
     # Verify token
-    if not verify_csrf_token(x_csrf_token, user_id):
+    if not await asyncio.to_thread(verify_csrf_token,x_csrf_token,user_id):
         logger.warning(f"Invalid CSRF token for {request.method} {request.url.path}")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

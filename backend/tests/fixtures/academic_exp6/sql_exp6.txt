@@ -1,0 +1,84 @@
+A.Y. 2023-2022
+Class: SE-ITA/B,
+Semester: III Subject:
+Structured Query Lab
+Experiment – 6: Perform joins and views on the chosen System
+1. Aim: To Perform joins and views on the chosen system.
+2. Objective:
+● After performing the experiment, the students will be able to
+formulate and use various join operation to manipulate database and
+retrieve data
+● Use views to have a different view of data from the database
+● Construct triggers to store, manipulate data in database
+3. Outcome: L303.4: To Write queries in SQL to retrieve any type of
+information from a database.
+4. Prerequisite: Understanding of various SQL JOIN operations, trigger, with
+notations and terminologies along with sample syntax.
+5. Requirements: PC, Oracle 11g/SQL Server 2008 R2, Microsoft Word, Internet
+6. Pre-Experiment Exercise:
+Brief Theory :(To be hand written)
+1. Explain what are Joins? Give example of inner and outer join
+2. Explain with example what are views
+3. Difference between table and View.
+7. Laboratory Exercise
+A. Procedure:
+i) Open SQL server 2008 using below login credentials:
+Username: Password: Lab306b
+ii) Use existing database created by you or
+iii) Construct your own database
+iv) Construct tables for any two to three entities from your chosen case study v)
+Insert at least 8 to 10 records for each tables
+vi) Execute below queries:
+For Joins (Any three)
+Use INNER JOIN example
+SELECT Orders.OrderID, Customers.CustomerName,
+Orders.OrderDate FROM Orders
+INNER JOIN Customers ON
+Orders.CustomerID=Customers.CustomerID;
+LEFT OUTER JOIN example
+SELECT Customers.CustomerName,
+Orders.OrderID FROM Customers
+LEFT JOIN
+Orders ON
+Customers.CustomerID =
+Orders.CustomerID ORDER BY
+Customers.CustomerName;
+RIGHT OUTER JOIN example
+SELECT Orders.OrderID, Employees.LastName,
+Employees.FirstName FROM Orders
+RIGHT JOIN Employees ON Orders.EmployeeID =
+Employees.EmployeeID ORDER BY Orders.OrderID;
+FULL OUTER JOIN example
+SELECT Customers.CustomerName,
+Orders.OrderID FROM Customers
+FULL OUTER JOIN Orders ON
+Customers.CustomerID=Orders.CustomerID ORDER BY
+Customers.CustomerName;
+VIEWS(Give two examples)
+CREATE View
+CREATE VIEW [Brazil Customers] AS
+SELECT CustomerName, ContactName
+FROM Customers
+WHERE Country = "Brazil";
+SELECT * FROM [Products Above AveragePrice];
+Example 2 :
+CREATE TABLE product (qty INT, price INT);
+INSERT INTO product VALUES(3, 50), (5, 60);
+select * from product;
+CREATE VIEW product_data AS SELECT qty, price, qty*price AS value FROM
+product;
+SELECT * FROM product_data;
+SELECT * FROM product_data WHERE qty = 5;
+drop view product_data;
+B. Conclusion:
+1. Write what was performed in the experiment
+2. Mention few applications of what was studied.
+3. Write the significance of the studied topic
+8.Result/Observation/Program code: Attach all queries executed code with proper
+Output
+C. References:
+[1] Elmasri and Navathe, “Fundamentals of Database Systems”, 5th Edition,
+PEARSON Education.
+[2] Korth, Silberchatz, Sudarshan, “Database System Concepts”, 6th Edition,
+McGraw – Hill
+[3] https://www.w3schools.com/sql/sql_default.asp

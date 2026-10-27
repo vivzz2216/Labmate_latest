@@ -61,6 +61,8 @@ const languages: { value: LabLanguage; label: string }[] = [
   { value: "html", label: "HTML / CSS / JavaScript" },
   { value: "react", label: "React" },
   { value: "node", label: "Node.js" },
+  { value: "sql", label: "SQL (MySQL runtime)" },
+  { value: "colab", label: "Python Notebook" },
 ];
 const stages = [
   {
@@ -83,16 +85,20 @@ const stages = [
   },
   {
     title: "Create Word report",
-    description: "Combine your original file and results.",
+    description: "Arrange questions, screenshots and short captions.",
     icon: ImageIcon,
     key: "report",
   },
 ];
-const outputName = (name: string) =>
-  (name
-    .replace(/\.[^.]+$/, "")
-    .replace(/[^A-Za-z0-9_-]+/g, "_")
-    .slice(0, 60) || "lab_assignment") + "_completed";
+const STRIPPABLE_EXT_RE = /\.(?:pdf|docx?|txt|md|rtf|odt|sql|py|ipynb|c|cpp|cc|cxx|h|hpp|java|js|jsx|ts|tsx|html?|css|json|xml|csv|zip|tar|gz)(?=$|[\s_()[\].-])/gi;
+const sanitizeOutputName = (name: string, fallback = "lab_report") => {
+  let cleaned = (name || "").replace(/\\/g, "/").trim().split("/").pop() || "";
+  let prev = "";
+  while (prev !== cleaned) { prev = cleaned; cleaned = cleaned.replace(STRIPPABLE_EXT_RE, ""); }
+  cleaned = cleaned.replace(/[^A-Za-z0-9_-]+/g, "_").replace(/_+/g, "_").replace(/-+/g, "-").replace(/(?:_-|-_)+/g, "_").replace(/^[_-]+|[_-]+$/g, "").slice(0, 70).replace(/^[_-]+|[_-]+$/g, "");
+  return /[A-Za-z0-9]/.test(cleaned) ? cleaned : fallback;
+};
+const outputName = (name: string) => `${sanitizeOutputName(name, "lab_assignment").replace(/_completed$/i, "").slice(0, 58).replace(/^[_-]+|[_-]+$/g, "") || "lab_assignment"}_completed`;
 
 export default function AssignmentPage() {
   const { user, loading: authLoading } = useAuth();
@@ -103,6 +109,7 @@ export default function AssignmentPage() {
   const [questions, setQuestions] = useState<LabQuestion[]>([]);
   const [language, setLanguage] = useState<LabLanguage>("auto");
   const [screenshotStyle, setScreenshotStyle] = useState<string>("style_1");
+  const [colabTheme, setColabTheme] = useState<"light" | "dark">("dark");
   const [instructions, setInstructions] = useState("");
   const [filename, setFilename] = useState("lab_report");
   const [busy, setBusy] = useState(false);
@@ -138,8 +145,9 @@ export default function AssignmentPage() {
     if (data.status === "ready" || restoreFields) setQuestions(data.questions);
     if (restoreFields) {
       setLanguage(data.language);
+      setColabTheme(data.questions.find((question) => question.colab_theme)?.colab_theme || "dark");
       setInstructions(data.instructions);
-      setFilename(data.output_name);
+      setFilename(sanitizeOutputName(data.output_name));
     }
   };
 
@@ -346,7 +354,7 @@ export default function AssignmentPage() {
 
             // Process with selected manualMode
             let runWf = await workflowApi.process(uploaded.id, {
-              questions: wf.questions,
+              questions: wf.questions.map((question) => ({ ...question, colab_theme: colabTheme })),
               language: "auto",
               instructions: "",
               output_name: outputName(item.file.name),
@@ -459,10 +467,10 @@ export default function AssignmentPage() {
     try {
       applyWorkflow(
         await workflowApi.process(upload.id, {
-          questions,
+          questions: questions.map((question) => ({ ...question, colab_theme: colabTheme })),
           language,
           instructions,
-          output_name: filename || "lab_report",
+          output_name: sanitizeOutputName(filename || "lab_report"),
           screenshot_style: screenshotStyle,
           mode: manualMode,
         }),
@@ -826,7 +834,18 @@ export default function AssignmentPage() {
                   </option>
                 ))}
               </select>
-              {(language === "python" || language === "auto") && (
+              {(language === "colab" || (language === "auto" && (!questions.length || questions.some((question) => question.language === "colab")))) && (
+                <div className={styles.colabThemeField}>
+                  <label className={styles.screenshotLabel} htmlFor="colab-theme">Colab screenshot theme</label>
+                  <select id="colab-theme" value={colabTheme} disabled={running || busy || batchProcessing}
+                    onChange={(event) => setColabTheme(event.target.value as "light" | "dark")}>
+                    <option value="dark">Dark</option>
+                    <option value="light">Light</option>
+                  </select>
+                  <p>Applies to every Colab code and output image.</p>
+                </div>
+              )}
+              {(language === "python" || (language === "auto" && (!questions.length || questions.some((question) => question.language === "python")))) && (
                 <div style={{ marginTop: "12px" }}>
                   <label className={styles.screenshotLabel}>
                     Python IDLE Screenshot Style
@@ -907,7 +926,7 @@ export default function AssignmentPage() {
             <span className={styles.stepNumber}>6</span>
             <div>
               <h2>File settings</h2>
-              <p>Your original assignment plus answers and screenshots.</p>
+              <p>Question headings, screenshots and short captions.</p>
               <label className={styles.filenameLabel}>
                 File name
                 <div>

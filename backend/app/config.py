@@ -2,6 +2,12 @@ from pydantic_settings import BaseSettings
 from pydantic import ConfigDict, field_validator, model_validator
 from typing import Optional
 import os
+from dotenv import load_dotenv
+
+# Load .env early so os.getenv reads configured values rather than auto-generating random secrets
+load_dotenv()
+if not os.getenv("DATABASE_URL") and os.path.exists("backend/.env"):
+    load_dotenv("backend/.env")
 
 
 class Settings(BaseSettings):
@@ -21,6 +27,15 @@ class Settings(BaseSettings):
     # Security
     BETA_KEY: str = os.getenv("BETA_KEY", "")
     EXECUTION_ALLOWED_EMAILS: str = ''
+    # Development mode is an explicit opt-out for trusted local tests only.
+    EXECUTION_ISOLATION: str = 'required'
+    SANDBOX_SSH_HOST: str = ''
+    SANDBOX_SSH_PORT: int = 22
+    SANDBOX_SSH_USER: str = 'labmate'
+    SANDBOX_SSH_KEY: str = ''
+    SANDBOX_KNOWN_HOSTS: str = ''
+    TRUSTED_PROXY_KEY: str = ''
+    NODE_RUNTIME_CACHE: str = ''
     _default_secret = os.urandom(32).hex() if not os.getenv("SECRET_KEY") else None
     SECRET_KEY: str = os.getenv("SECRET_KEY", _default_secret or "")
     
@@ -124,7 +139,35 @@ class Settings(BaseSettings):
     WORKFLOW_WORKERS: int = 2
     WORKFLOW_QUEUE_LIMIT: int = 1000
     WORKFLOW_USER_QUEUE_LIMIT: int = 25
-    WORKFLOW_STALE_SECONDS: int = 1800
+    WORKFLOW_STALE_SECONDS: int = 120
+    WORKFLOW_HEARTBEAT_SECONDS: int = 30
+    # Bounded admission (see services/resource_budget.py). *_LOCAL_LIMIT caps one process;
+    # *_GLOBAL_LIMIT (0 = off) caps the whole deployment through Redis. Size them from measured
+    # RAM/CPU per Chromium or runtime, not from CPU count.
+    BROWSER_CAPTURE_LOCAL_LIMIT: int = 2
+    BROWSER_CAPTURE_GLOBAL_LIMIT: int = 0
+    HEAVY_EXECUTION_LOCAL_LIMIT: int = 2
+    HEAVY_EXECUTION_GLOBAL_LIMIT: int = 0
+    RESOURCE_WAIT_SECONDS: int = 600
+    RESOURCE_LEASE_SECONDS: int = 900
+    # Provider admission and budgeting (see services/provider_budget.py).
+    # Bounds proactive RPM / TPM across processes (via Redis if available, with in-process fallback).
+    PROVIDER_BUDGET_ENABLED: bool = True
+    PROVIDER_MAX_WAIT_SECONDS: float = 30.0
+    PROVIDER_DEFAULT_RPM_LIMIT: int = 30
+    PROVIDER_DEFAULT_TPM_LIMIT: int = 40000
+    GROQ_RPM_LIMIT: int = 30
+    GROQ_TPM_LIMIT: int = 30000
+    GEMINI_RPM_LIMIT: int = 15
+    GEMINI_TPM_LIMIT: int = 1000000
+    OPENROUTER_RPM_LIMIT: int = 20
+    OPENROUTER_TPM_LIMIT: int = 40000
+    OPENCODE_RPM_LIMIT: int = 20
+    OPENCODE_TPM_LIMIT: int = 40000
+    DEEPSEEK_RPM_LIMIT: int = 30
+    DEEPSEEK_TPM_LIMIT: int = 60000
+    GLM_RPM_LIMIT: int = 30
+    GLM_TPM_LIMIT: int = 60000
     EXECUTION_TIMEOUT: float = 30.0
     COMPILATION_TIMEOUT: float = 30.0
     EXECUTION_MAX_OUTPUT_BYTES: int = 1048576
@@ -169,8 +212,19 @@ class Settings(BaseSettings):
     REDIS_CACHE_TTL: int = 3600
     
     # Rate limiting
-    RATE_LIMIT_ENABLED: bool = False
-    RATE_LIMIT_PER_MINUTE: int = 1000
+    RATE_LIMIT_ENABLED: bool = True
+    RATE_LIMIT_PER_MINUTE: int = 180
+    AUTH_RATE_LIMIT_PER_MINUTE: int = 20
+
+    # MySQL SQL-Lab Runtime Settings
+    MYSQL_URL: str = os.getenv("MYSQL_URL", "")
+    MYSQL_HOST: str = os.getenv("MYSQL_HOST", "127.0.0.1")
+    MYSQL_PORT: int = int(os.getenv("MYSQL_PORT", "3306"))
+    MYSQL_ADMIN_USER: str = os.getenv("MYSQL_ADMIN_USER", "root")
+    MYSQL_ADMIN_PASSWORD: str = os.getenv("MYSQL_ADMIN_PASSWORD", "")
+    MYSQL_QUERY_TIMEOUT: float = float(os.getenv("MYSQL_QUERY_TIMEOUT", "5.0"))
+    MYSQL_MAX_ROWS: int = int(os.getenv("MYSQL_MAX_ROWS", "1000"))
+    MYSQL_MAX_RESULT_BYTES: int = int(os.getenv("MYSQL_MAX_RESULT_BYTES", "1048576"))
 
     @model_validator(mode="after")
     def initialize_storage_paths(self):
@@ -182,7 +236,13 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_railway_settings(self):
+        if self.EXECUTION_ISOLATION not in {'required', 'development'}:
+            raise ValueError('EXECUTION_ISOLATION must be required or development.')
         if os.getenv("RAILWAY_ENVIRONMENT_ID"):
+            if os.getenv('LABMATE_SANDBOX_WORKER'):
+                raise ValueError('The Railway API cannot impersonate the namespace worker.')
+            if self.EXECUTION_ISOLATION != 'required':
+                raise ValueError('Railway requires isolated code execution.')
             self.REDIS_REQUIRED = True
             if not self.DATABASE_URL.startswith(("postgres://", "postgresql://", "postgresql+psycopg2://")):
                 raise ValueError("Railway requires DATABASE_URL referencing the PostgreSQL service.")

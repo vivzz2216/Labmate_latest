@@ -1,0 +1,158 @@
+[
+  {
+    "case": "python",
+    "language": "python",
+    "success": true,
+    "error": "",
+    "output": "5\n",
+    "screenshots": 0,
+    "verification": null,
+    "stages": {
+      "isolation": "linux_namespaces"
+    },
+    "seconds": 20.12
+  },
+  {
+    "case": "c",
+    "language": "c",
+    "success": true,
+    "error": "",
+    "output": "5\n",
+    "screenshots": 0,
+    "verification": null,
+    "stages": {
+      "compile": "passed",
+      "execution": "passed",
+      "isolation": "linux_namespaces"
+    },
+    "seconds": 4.62
+  },
+  {
+    "case": "cpp",
+    "language": "cpp",
+    "success": true,
+    "error": "",
+    "output": "5\n",
+    "screenshots": 0,
+    "verification": null,
+    "stages": {
+      "compile": "passed",
+      "execution": "passed",
+      "isolation": "linux_namespaces"
+    },
+    "seconds": 8.17
+  },
+  {
+    "case": "java",
+    "language": "java",
+    "success": true,
+    "error": "",
+    "output": "5\n",
+    "screenshots": 0,
+    "verification": null,
+    "stages": {
+      "compile": "passed",
+      "execution": "passed",
+      "isolation": "linux_namespaces"
+    },
+    "seconds": 9.3
+  },
+  {
+    "case": "node",
+    "language": "node",
+    "success": true,
+    "error": "",
+    "output": "5\n",
+    "screenshots": 0,
+    "verification": null,
+    "stages": {
+      "isolation": "linux_namespaces"
+    },
+    "seconds": 4.9
+  },
+  {
+    "case": "html",
+    "language": "html",
+    "success": true,
+    "error": "",
+    "output": "First Second Add 5\nBrowser interaction verification: PASSED\nPASSED: Add numbers; Expected: ['5']; Observed: First Second Add 5",
+    "screenshots": 1,
+    "verification": "passed",
+    "stages": {
+      "isolation": "linux_namespaces"
+    },
+    "seconds": 15.3
+  },
+  {
+    "case": "react",
+    "language": "react",
+    "success": true,
+    "error": "",
+    "output": "Isolated React works",
+    "screenshots": 1,
+    "verification": "not_required",
+    "stages": {
+      "isolation": "linux_namespaces"
+    },
+    "seconds": 19.39
+  },
+  {
+    "case": "colab",
+    "language": "colab",
+    "success": true,
+    "error": "",
+    "output": "5",
+    "screenshots": 2,
+    "verification": "passed",
+    "stages": {
+      "isolation": "linux_namespaces"
+    },
+    "seconds": 20.97
+  },
+  {
+    "case": "c-canary",
+    "language": "c",
+    "success": true,
+    "error": "",
+    "output": "DENIED\n",
+    "screenshots": 0,
+    "verification": null,
+    "stages": {
+      "compile": "passed",
+      "execution": "passed",
+      "isolation": "linux_namespaces"
+    },
+    "seconds": 4.27
+  },
+  {
+    "case": "flask",
+    "language": "python",
+    "success": true,
+    "error": "",
+    "output": "Isolated Flask works",
+    "screenshots": 1,
+    "verification": "not_required",
+    "stages": {
+      "server": "passed",
+      "render": "passed",
+      "browser": "not_required",
+      "isolation": "linux_namespaces"
+    },
+    "seconds": 5.41
+  },
+  {
+    "case": "java-ui",
+    "language": "java",
+    "success": true,
+    "error": "",
+    "output": "",
+    "screenshots": 2,
+    "verification": "passed",
+    "stages": {
+      "compile": "passed",
+      "gui": "passed",
+      "isolation": "linux_namespaces"
+    },
+    "seconds": 13.83
+  }
+]

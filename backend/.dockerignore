@@ -26,3 +26,6 @@ final_boss_manuals
 
 tests
 scripts
+**/audit_artifacts
+**/htmlcov
+**/.pytest_cache

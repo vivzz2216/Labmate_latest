@@ -45,7 +45,9 @@ services:
   #     retries: 5
 
   backend:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     env_file:
       - ./backend/.env
     ports:
@@ -89,7 +91,9 @@ services:
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
 
   worker:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     env_file:
       - ./backend/.env
     environment:

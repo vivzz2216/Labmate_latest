@@ -12,6 +12,7 @@ from jsonschema import ValidationError, validate
 from ..config import settings
 from .gemini_service import GeminiError, GeminiUnavailableError, gemini_service
 from .retry import RetryExhausted, RetryPolicy, retry_request, TRANSIENT_STATUSES, retry_after
+from .provider_budget import ProviderBudgetManager, account_hash
 
 logger = logging.getLogger(__name__)
 
@@ -35,15 +36,23 @@ def invalid_answer(message, draft=None):
 
 def student_personalization_prompt(student_name, roll_no, department, institution):
     """Keep the same student identity across generated examples and test runs."""
+    lines = []
+    if student_name and str(student_name).strip().lower() not in {"student", "user", "admin", "owner", "test", "test user"}:
+        lines.append(f"- Student Name: {student_name}")
+    if roll_no and str(roll_no).strip() not in {"USN-2024-001", "2024-001", "None", ""}:
+        lines.append(f"- Roll No / USN: {roll_no}")
+    if department and str(department).strip() not in {"None", ""}:
+        lines.append(f"- Department: {department}")
+    if institution and str(institution).strip() not in {"Engineering College", "Government Engineering College", "None", ""}:
+        lines.append(f"- Institution: {institution}")
+    if not lines:
+        return ""
     return (
         "CRITICAL REQUIREMENT: For all code examples requiring sample data, records, classes, "
         "test cases, or comments (such as student records, banking accounts, employee management, "
         "or greeting outputs), DO NOT USE 'John Doe' or generic placeholders. You MUST use the "
         "student's actual details:\n"
-        f"- Student Name: {student_name}\n"
-        f"- Roll No / USN: {roll_no}\n"
-        f"- Department: {department}\n"
-        f"- Institution: {institution}\n"
+        + "\n".join(lines) + "\n"
         "Ensure variable assignments, print statements, and test runs reflect these exact details."
     )
 
@@ -76,6 +85,8 @@ class GenerationService:
         self._groq_unavailable_until = 0
         self._backup_unavailable_until = 0
         self._free_unavailable_until = {}
+        self.budget = ProviderBudgetManager()
+        self.budget.reset()
 
     @property
     def provider_name(self):
@@ -161,16 +172,23 @@ class GenerationService:
 
     async def _free_generation(self,provider,instructions,content,schema):
         from .free_provider_service import generate_free_json
-        try:
-            return await generate_free_json(provider,instructions,content,schema)
-        except GenerationError as error:
-            if provider!='openrouter' or settings.OPENROUTER_MODEL=='openrouter/free' or getattr(error,'status_code',None)!=404:
-                raise
-            # A named free model can remain in the catalogue while all of its
-            # serving endpoints are gone. The router selects another free model
-            # with the same strict schema and zero-price constraints.
-            logger.warning('Named OpenRouter free model has no endpoint; trying the free router.')
-            return await generate_free_json(provider,instructions,content,schema,model_override='openrouter/free')
+        identity = self._route_identity(provider)
+        acc = identity[2].hex()[:16] if len(identity) > 2 and isinstance(identity[2], bytes) else "none"
+        model = identity[1] if len(identity) > 1 else "default"
+        est_tokens = max(500, (len(instructions) + len(content)) // 4 + min(2000, settings.FREE_LLM_MAX_TOKENS))
+        async with self.budget.slot(provider, model, acc, estimated_tokens=est_tokens):
+            try:
+                return await generate_free_json(provider,instructions,content,schema)
+            except GenerationError as error:
+                if getattr(error, 'status_code', None) == 429:
+                    self.budget.report_rate_limit(provider, model, acc, getattr(error, 'cooldown', 60))
+                if provider!='openrouter' or settings.OPENROUTER_MODEL=='openrouter/free' or getattr(error,'status_code',None)!=404:
+                    raise
+                # A named free model can remain in the catalogue while all of its
+                # serving endpoints are gone. The router selects another free model
+                # with the same strict schema and zero-price constraints.
+                logger.warning('Named OpenRouter free model has no endpoint; trying the free router.')
+                return await generate_free_json(provider,instructions,content,schema,model_override='openrouter/free')
 
     async def _configured_generation(self, instructions, content, schema, on_retry=None):
         fallback = settings.LLM_FALLBACK_PROVIDER.lower()
@@ -221,16 +239,20 @@ class GenerationService:
                 raise
 
     async def _gemini(self, instructions, content, schema, on_retry):
-        try:
-            result = await gemini_service.generate_json(instructions, content, schema, on_retry=on_retry)
-            validate(instance=result, schema=strict_json_schema(schema))
-            return result
-        except GeminiUnavailableError as error:
-            raise GenerationUnavailableError(str(error)) from None
-        except (GeminiError, ValidationError) as error:
-            if isinstance(error, ValidationError):
-                raise invalid_answer("Gemini returned an invalid structured answer.", result) from None
-            raise GenerationError(str(error)) from None
+        acc = account_hash(settings.GEMINI_API_KEY)
+        model = settings.GEMINI_MODEL
+        est_tokens = max(500, (len(instructions) + len(content)) // 4 + 2000)
+        async with self.budget.slot("gemini", model, acc, estimated_tokens=est_tokens):
+            try:
+                result = await gemini_service.generate_json(instructions, content, schema, on_retry=on_retry)
+                validate(instance=result, schema=strict_json_schema(schema))
+                return result
+            except GeminiUnavailableError as error:
+                raise GenerationUnavailableError(str(error)) from None
+            except (GeminiError, ValidationError) as error:
+                if isinstance(error, ValidationError):
+                    raise invalid_answer("Gemini returned an invalid structured answer.", result) from None
+                raise GenerationError(str(error)) from None
 
     async def _primary(self, instructions, content, schema, on_retry, can_fallback=False, model_override=None):
         provider = settings.LLM_PROVIDER.lower()
@@ -263,33 +285,41 @@ class GenerationService:
             if on_retry:
                 await on_retry(attempt, delay, status)
 
-        async with httpx.AsyncClient(timeout=settings.GROQ_REQUEST_TIMEOUT) as client:
-            async def request():
-                try:
-                    response = await client.post("https://api.groq.com/openai/v1/chat/completions",
-                                        headers={"Authorization": "Bearer " + settings.GROQ_API_KEY}, json=payload)
-                except httpx.TransportError:
-                    if can_fallback: raise GenerationUnavailableError("Groq transport unavailable.") from None
-                    raise
-                if response.status_code == 429:
+        acc = account_hash(settings.GROQ_API_KEY)
+        est_tokens = max(500, (len(instructions) + len(content)) // 4 + min(2000, settings.GROQ_MAX_COMPLETION_TOKENS))
+        async with self.budget.slot("groq", model, acc, estimated_tokens=est_tokens):
+            async with httpx.AsyncClient(timeout=settings.GROQ_REQUEST_TIMEOUT) as client:
+                async def request():
                     try:
-                        message=str(response.json().get('error',{}).get('message',''))
-                        windows=[window for window in ('tokens per minute','tokens per day','requests per minute','requests per day') if window in message.lower()]
-                        counters=re.findall(r'(?:Limit|Used|Requested)\s*\d+',message,re.I)
-                        logger.warning('Groq quota windows=%s counters=%s retry_after_seconds=%.1f',windows,counters,retry_after(response))
-                    except (ValueError,AttributeError): pass
-                if can_fallback and response.status_code in TRANSIENT_STATUSES:
-                    self._groq_unavailable_until = time.monotonic() + max(settings.LLM_FALLBACK_COOLDOWN_SECONDS, min(retry_after(response), 3600))
-                    raise GenerationUnavailableError("Groq is temporarily rate-limited or unavailable.")
-                return response
-            try:
-                response = await retry_request(
-                    request,
-                    RetryPolicy(settings.GROQ_RETRY_ATTEMPTS, settings.GROQ_RETRY_BASE_DELAY, settings.GROQ_RETRY_MAX_DELAY),
-                    on_retry=notify,
-                )
-            except RetryExhausted:
-                raise GenerationUnavailableError("Groq is temporarily unavailable or rate-limited. Your completed results are saved; retry to resume.") from None
+                        response = await client.post("https://api.groq.com/openai/v1/chat/completions",
+                                            headers={"Authorization": "Bearer " + settings.GROQ_API_KEY}, json=payload)
+                    except httpx.TransportError:
+                        if can_fallback: raise GenerationUnavailableError("Groq transport unavailable.") from None
+                        raise
+                    if response.status_code == 429:
+                        wait_sec = retry_after(response)
+                        self.budget.report_rate_limit("groq", model, acc, wait_sec)
+                        try:
+                            message=str(response.json().get('error',{}).get('message',''))
+                            windows=[window for window in ('tokens per minute','tokens per day','requests per minute','requests per day') if window in message.lower()]
+                            counters=re.findall(r'(?:Limit|Used|Requested)\s*\d+',message,re.I)
+                            logger.warning('Groq quota windows=%s counters=%s retry_after_seconds=%.1f',windows,counters,wait_sec)
+                        except (ValueError,AttributeError): pass
+                        if wait_sec > getattr(settings, 'PROVIDER_MAX_WAIT_SECONDS', 30.0):
+                            self._groq_unavailable_until = time.monotonic() + wait_sec
+                            raise GenerationUnavailableError(f"Groq is temporarily rate-limited (wait {wait_sec:.1f}s). Completed results are saved; retry to resume.")
+                    if can_fallback and response.status_code in TRANSIENT_STATUSES:
+                        self._groq_unavailable_until = time.monotonic() + max(settings.LLM_FALLBACK_COOLDOWN_SECONDS, min(retry_after(response), 3600))
+                        raise GenerationUnavailableError("Groq is temporarily rate-limited or unavailable.")
+                    return response
+                try:
+                    response = await retry_request(
+                        request,
+                        RetryPolicy(settings.GROQ_RETRY_ATTEMPTS, settings.GROQ_RETRY_BASE_DELAY, settings.GROQ_RETRY_MAX_DELAY),
+                        on_retry=notify,
+                    )
+                except RetryExhausted:
+                    raise GenerationUnavailableError("Groq is temporarily unavailable or rate-limited. Your completed results are saved; retry to resume.") from None
         # Do not return raw provider responses, which could contain sensitive inputs.
         if response.status_code in (401, 403):
             raise GenerationError("Groq rejected access. Check the backend GROQ_API_KEY and model permissions.")

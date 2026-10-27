@@ -61,6 +61,31 @@ def sanitize_filename(filename: str, max_length: int = 255) -> str:
     return filename
 
 
+_STRIPPABLE_EXT_RE = re.compile(
+    r"\.(?:pdf|docx?|txt|md|rtf|odt|sql|py|ipynb|c|cpp|cc|cxx|h|hpp|java|js|jsx|ts|tsx|html?|css|json|xml|csv|zip|tar|gz)(?=$|[\s_()\[\].-])",
+    re.IGNORECASE,
+)
+
+
+def normalize_output_name(raw_name: str, default: str = "lab_report", max_length: int = 70) -> str:
+    """Normalize a filename or user-supplied output_name into a safe ^[A-Za-z0-9_-]{1,max_length}$ identifier."""
+    if not isinstance(raw_name, str):
+        return default
+    cleaned = raw_name.replace("\x00", "").replace("\\", "/").strip().split("/")[-1]
+    prev = None
+    while prev != cleaned:
+        prev = cleaned
+        cleaned = _STRIPPABLE_EXT_RE.sub("", cleaned)
+    cleaned = re.sub(r"[^A-Za-z0-9_-]+", "_", cleaned)
+    cleaned = re.sub(r"_+", "_", cleaned)
+    cleaned = re.sub(r"-+", "-", cleaned)
+    cleaned = re.sub(r"(?:_-|-_)+", "_", cleaned)
+    cleaned = cleaned.strip("_-")[:max_length].strip("_-")
+    if not re.search(r"[A-Za-z0-9]", cleaned):
+        return default
+    return cleaned or default
+
+
 def validate_file_path(file_path: str, allowed_base_dirs: list) -> Tuple[bool, str]:
     """
     Validate that a file path doesn't escape allowed directories

@@ -17,16 +17,28 @@ try:
     redis_client = redis.from_url(
         redis_url,
         decode_responses=True,
-        socket_connect_timeout=10,  # Increased timeout for cloud connections
-        socket_timeout=10,
-        retry_on_timeout=True,
+        socket_connect_timeout=2,
+        socket_timeout=2,
+        retry_on_timeout=False,
         health_check_interval=30,
         socket_keepalive=True,  # Keep connection alive for cloud Redis
         socket_keepalive_options={}  # TCP keepalive options
     )
-    # Connect lazily. Keep the same client object in modules importing it so
-    # startup races/restarts of Redis can recover on the next command.
-    logger.info("Redis client configured")
+    if any(h in (redis_url or "") for h in ("localhost", "127.0.0.1")):
+        try:
+            redis_client.ping()
+            logger.info("Local Redis client connected")
+        except Exception as local_err:
+            if settings.REDIS_REQUIRED:raise ConnectionError('Required Redis is unreachable; development fallback is disabled.') from None
+            import fakeredis
+
+            logger.warning(
+                f"Local Redis at {redis_url} is not running ({local_err}); "
+                "using in-process FakeRedis with TTL enforcement for local execution."
+            )
+            redis_client = fakeredis.FakeRedis(decode_responses=True)
+    else:
+        logger.info("Redis client configured")
 except Exception as e:
     logger.warning(f"[WARNING] Redis not available: {e}. Caching will be disabled.")
     logger.warning(f"Redis URL was: {settings.REDIS_URL.split('@')[-1] if '@' in settings.REDIS_URL else settings.REDIS_URL}")
