@@ -83,7 +83,9 @@ def import_receipt(receipt):
         result = {k: remap(v) for k, v in receipt.items() if k in RuntimeResult.__dataclass_fields__}
         if any(p not in paths.values() for p in result.get('screenshots', {}).values()):
             raise ValueError('Worker returned an unvalidated screenshot reference.')
-        result.setdefault('stages', {})['isolation'] = 'linux_namespaces'
+        stages = result.setdefault('stages', {})
+        if stages.get('isolation') != 'failed':
+            stages['isolation'] = 'linux_namespaces'
         return RuntimeResult(**result)
     except Exception:
         for path in created: path.unlink(missing_ok=True)

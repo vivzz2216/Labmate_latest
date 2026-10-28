@@ -125,7 +125,7 @@ def batch_status(batch_id, user, db):
             "error": (workflow.error if workflow else item.error),
             "report_id": workflow.report_id if workflow else None,
         })
-    terminal = bool(states) and all(row["status"] in {"completed", "failed"} for row in states)
+    terminal = bool(states) and all(row["status"] in {"completed", "failed", "paused"} for row in states)
     return {
         "batch_id": batch_id, "total": len(states),
         "completed": sum(row["status"] == "completed" for row in states),

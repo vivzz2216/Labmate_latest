@@ -155,7 +155,11 @@ async def liveness_check():
 @app.get("/health")
 async def health_check(response: Response):
     # Database and Redis clients are synchronous; probes must not stall login/polling.
-    return await asyncio.to_thread(_health_check_sync, response)
+    from .services.worker_health import worker_health
+    result, worker = await asyncio.gather(asyncio.to_thread(_health_check_sync, response), worker_health.check())
+    result['services']['execution_worker'] = worker['status']
+    result['execution_ready'] = worker['available']
+    return result
 
 
 def _health_check_sync(response: Response):

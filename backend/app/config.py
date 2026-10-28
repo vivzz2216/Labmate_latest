@@ -34,6 +34,8 @@ class Settings(BaseSettings):
     SANDBOX_SSH_USER: str = 'labmate'
     SANDBOX_SSH_KEY: str = ''
     SANDBOX_KNOWN_HOSTS: str = ''
+    WORKER_HEALTH_TIMEOUT: float = 10.0
+    WORKER_HEALTH_TTL: float = 15.0
     TRUSTED_PROXY_KEY: str = ''
     NODE_RUNTIME_CACHE: str = ''
     _default_secret = os.urandom(32).hex() if not os.getenv("SECRET_KEY") else None
@@ -144,9 +146,9 @@ class Settings(BaseSettings):
     # Bounded admission (see services/resource_budget.py). *_LOCAL_LIMIT caps one process;
     # *_GLOBAL_LIMIT (0 = off) caps the whole deployment through Redis. Size them from measured
     # RAM/CPU per Chromium or runtime, not from CPU count.
-    BROWSER_CAPTURE_LOCAL_LIMIT: int = 2
+    BROWSER_CAPTURE_LOCAL_LIMIT: int = 1
     BROWSER_CAPTURE_GLOBAL_LIMIT: int = 0
-    HEAVY_EXECUTION_LOCAL_LIMIT: int = 2
+    HEAVY_EXECUTION_LOCAL_LIMIT: int = 1
     HEAVY_EXECUTION_GLOBAL_LIMIT: int = 0
     RESOURCE_WAIT_SECONDS: int = 600
     RESOURCE_LEASE_SECONDS: int = 900

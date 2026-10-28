@@ -1,6 +1,7 @@
 """Create a secret-free runtime bundle for the dedicated Linux worker VM."""
 from pathlib import Path
 import tarfile
+import hashlib
 
 repo = Path(__file__).resolve().parents[2]
 target = repo / 'backend/audit_artifacts/isolated-runtime/runtime.tar.gz'
@@ -23,6 +24,9 @@ with tarfile.open(target, 'w:gz') as archive:
                 archive.add(path, str(Path(dest) / relative), filter=safe_mode)
     for source, dest in [('backend/requirements.txt', 'requirements.txt'),
                          ('backend/scripts/sandbox_job.py', 'sandbox_job.py'),
+                         ('backend/scripts/provision_sandbox.sh', 'provision.sh'),
                          ('backend/scripts/sandbox_broker.py', 'broker.py')]:
         archive.add(repo / source, dest, filter=safe_mode)
 print(target)
+digest = hashlib.sha256(target.read_bytes()).hexdigest()
+target.with_suffix(target.suffix + '.sha256').write_text(digest + '  ' + target.name + '\n')

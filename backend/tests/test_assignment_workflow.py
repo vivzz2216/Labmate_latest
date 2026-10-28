@@ -46,7 +46,8 @@ class AssignmentReportTests(unittest.TestCase):
             source.save(source_path)
             upload = SimpleNamespace(file_type="docx", file_path=str(source_path), original_filename="manual.docx")
             self.assertIn("Calculate factorial of 5.", document_text(upload))
-            workflow = SimpleNamespace(id=1, output_name="completed_lab", instructions="Use functions.", results=[{
+            # Original-document preservation belongs to the explicit full-report mode.
+            workflow = SimpleNamespace(id=1, mode="theory_and_code", output_name="completed_lab", instructions="Use functions.", results=[{
                 "id": 1, "question": "Calculate factorial of 5.", "language": "python", "answer": "Multiply the integers from 1 through 5.",
                 "code": "print(120)", "output": "120", "error": "", "screenshot_paths": [str(image)],
             }])

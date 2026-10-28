@@ -15,7 +15,7 @@ from types import SimpleNamespace
 
 import pdfplumber
 from docx import Document
-from sqlalchemy import select, update
+from sqlalchemy import select, update, case
 from docx.shared import Inches, Pt
 
 from ..config import settings
@@ -35,6 +35,7 @@ from .analysis_service import normalize_generated_code, repair_generated_code
 from .profile_service import UserProfileService
 from .evidence_planner import plan_experiment, select_evidence, verification_summary
 from .manual_sections import numbered_experiments, ManualStructureError
+from .worker_health import WorkerUnavailableError, worker_health
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +87,9 @@ def fence_claim(db):
     owner = AssignmentWorkflow.claim_token.is_(None) if token is None else AssignmentWorkflow.claim_token == token
     changed = db.execute(
         update(AssignmentWorkflow).where(AssignmentWorkflow.id == workflow_id, owner)
-        .values(updated_at=now, lease_expires_at=now + timedelta(seconds=settings.WORKFLOW_STALE_SECONDS)),
+        .values(updated_at=now, lease_expires_at=case(
+            (AssignmentWorkflow.status.in_(['extracting','processing']), now + timedelta(seconds=settings.WORKFLOW_STALE_SECONDS)),
+            else_=None)),
         execution_options={"synchronize_session": False},
     ).rowcount
     if changed != 1:
@@ -385,6 +388,10 @@ async def execute_solution(code, language, question, group_id, username, stdin_d
                          if item.get("type") == "browser_verification"), None)
     screenshots = [item["path"] for item in files if item.get("path") and os.path.isfile(item["path"])]
     stages = next((item.get("stages") for item in files if item.get("type") == "execution_stages"), {})
+    if stages.get('isolation') == 'failed':
+        from .worker_health import WorkerUnavailableError, worker_health
+        worker_health.invalidate()
+        raise WorkerUnavailableError()
     return SolutionExecution(success, output, errors, screenshots, verification, stages)
 
 
@@ -478,6 +485,11 @@ async def _process_assignment(workflow_id: int):
         try:
             from ..security.execution_access import check_execution_access
             check_execution_access(upload.user)
+            needs_worker = any(not q.get('is_theory') and
+                (workflow.language if workflow.language != 'auto' else q.get('language')) not in {'sql', 'theory'}
+                for q in workflow.questions)
+            if needs_worker and not (await worker_health.check())['available']:
+                raise WorkerUnavailableError()
             continuing_resume = workflow.stage == 'resume'
             from .brain_agent import make_plan, task_plan
             record(workflow, db, 'plan', workflow.progress, 'Planning the runtime, project decisions and required evidence.')
@@ -731,6 +743,8 @@ async def _process_assignment(workflow_id: int):
                         success, output, error, screenshots = execution
                         verification = getattr(execution, "verification", None)
                         execution_stages = getattr(execution, "stages", None) or {}
+                    except WorkerUnavailableError:
+                        raise
                     except Exception as execution_error:
                         success, error = False, str(execution_error)
                         if requires_interaction:
@@ -755,7 +769,7 @@ async def _process_assignment(workflow_id: int):
                                 execution_stages = getattr(execution, "stages", None) or {}
                                 if success:
                                     break
-                            except GenerationUnavailableError:
+                            except (GenerationUnavailableError, WorkerUnavailableError):
                                 raise
                             except (GenerationError, ValueError) as repair_error:
                                 error = (error + '\nRepair failed: ' + str(repair_error)).strip()
@@ -885,6 +899,7 @@ async def _process_assignment(workflow_id: int):
             record(workflow, db, "report", 90, "Combining the laboratory manual, questions, and captured screenshots into Word.")
             report_data = SimpleNamespace(
                 id=workflow.id,
+                mode=workflow.mode,
                 instructions=workflow.instructions,
                 results=workflow.results,
                 output_name=workflow.output_name,
@@ -916,6 +931,10 @@ async def _process_assignment(workflow_id: int):
                 except OSError:
                     pass
                 raise
+        except WorkerUnavailableError as error:
+            workflow.status, workflow.error = 'paused', str(error)
+            workflow.lease_expires_at = None
+            record(workflow, db, workflow.stage, workflow.progress, str(error))
         except GenerationUnavailableError as error:
             workflow.status, workflow.error = ("failed" if workflow.batch_id else "paused"), str(error)
             record(workflow, db, workflow.stage, workflow.progress, str(error))

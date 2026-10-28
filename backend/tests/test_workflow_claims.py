@@ -208,6 +208,37 @@ def _patch_run(stack, db, generate):
 
 
 @pytest.mark.asyncio
+async def test_worker_outage_preserves_checkpoint_pauses_and_settles_only_once(db, monkeypatch):
+    completed=[{'id':1,'status':'completed','language':'python','code':'print(5)','screenshot_paths':['existing.png']}]
+    (workflow_id,)=seed(db,status='queued',results=completed)
+    with db.factory() as session:
+        workflow=session.get(AssignmentWorkflow,workflow_id)
+        upload=session.get(Upload,workflow.upload_id)
+        session.add(CreditWallet(user_id=upload.user_id,mode='test',balance=1,reserved=2))
+        session.add(WorkflowCreditHold(workflow_id=workflow_id,user_id=upload.user_id,mode='test',
+            run_token='held-before-outage',amount=2,baseline_ids=[],state='held'))
+        workflow.questions=workflow.questions+[{'id':2,'text':'Print six','language':'python'}]
+        session.commit()
+    monkeypatch.setattr(settings,'BILLING_ENABLED',True)
+    monkeypatch.setattr(settings,'EXECUTION_ALLOWED_EMAILS','')
+    monkeypatch.setattr(flow.worker_health,'check',AsyncMock(return_value={'available':False}))
+    generator=AsyncMock(side_effect=AssertionError('outage must not spend model tokens'))
+    monkeypatch.setattr(flow.generation_service,'generate_json',generator)
+    claim=queue.claim_next()
+    await flow.process_assignment(workflow_id,claim_token=claim.claim_token)
+    saved=row(db,workflow_id)
+    assert saved.status=='paused' and saved.results==completed and saved.lease_expires_at is None
+    assert 'worker unavailable' in saved.error.lower()
+    assert queue.claim_next() is None  # only an explicit retry may resume this workflow
+    await flow.process_assignment(workflow_id)  # repeated handling cannot charge/refund twice
+    with db.factory() as session:
+        wallet=session.query(CreditWallet).one()
+        assert (wallet.balance,wallet.reserved)==(2,0)
+        assert session.query(WorkflowCreditHold).one().state=='settled'
+    generator.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_stale_process_assignment_loses_writes_report_and_credit_settlement(db):
     from contextlib import ExitStack
     (workflow_id,) = seed(db, status="queued", stage="generate")

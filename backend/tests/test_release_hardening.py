@@ -299,7 +299,7 @@ def test_worker_bundle_excludes_generated_reports_and_private_files(tmp_path):
     repo = tmp_path / 'repo'
     (repo / 'backend/scripts').mkdir(parents=True)
     (repo / 'backend/app').mkdir()
-    for name in ('package_sandbox.py', 'sandbox_job.py', 'sandbox_broker.py'):
+    for name in ('package_sandbox.py', 'sandbox_job.py', 'sandbox_broker.py', 'provision_sandbox.sh'):
         shutil.copy2(original / 'scripts' / name, repo / 'backend/scripts' / name)
     (repo / 'backend/requirements.txt').write_text('')
     (repo / 'backend/app/__init__.py').write_text('')

@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import CreditStatus from '@/components/billing/CreditStatus';
 import AgentPlanPanel from '@/components/workflow/AgentPlanPanel';
+import ExecutionStatus from '@/components/workflow/ExecutionStatus';
 import { useRouter } from "next/navigation";
 
 const DotGrid = dynamic<any>(() => import("@/components/visual/DotGrid"), {
@@ -607,6 +608,8 @@ export default function AssignmentPage() {
         <aside className={styles.setupPanel}>
           <h2 className={styles.panelTitle}>Build your lab report</h2>
           <CreditStatus refreshKey={`${workflow?.status}-${workflow?.progress}`} />
+          {language !== "sql" && (language !== "auto" || questions.length === 0 ||
+            questions.some((question) => question.language !== "sql" && question.language !== "theory")) && <ExecutionStatus />}
           <p className={styles.setupIntro}>
             Configure the source, review the extracted questions, then run the execution and evidence checks.
           </p>

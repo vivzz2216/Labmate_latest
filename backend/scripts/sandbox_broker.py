@@ -11,8 +11,47 @@ import subprocess
 import sys
 import tempfile
 import uuid
+from contextlib import contextmanager
 
 ROOT = Path('/opt/labmate-runtime')
+
+
+@contextmanager
+def execution_slot():
+    """A host-wide cap protects the small local VM even without Redis."""
+    import fcntl
+    with open('/run/lock/labmate-runtime.lock', 'a') as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise RuntimeError('Execution worker is busy; retry after the active job completes.') from None
+        yield
+
+
+def health(job):
+    """Only a fixed probe is executable; callers cannot supply probe source."""
+    import re
+    if set(job) != {'operation', 'nonce'} or not isinstance(job['nonce'], str) or not re.fullmatch('[a-f0-9]{32}', job['nonce']):
+        raise ValueError('Invalid worker health request.')
+    unit = 'labmate-health-' + uuid.uuid4().hex + '.scope'
+    source = '''import os,socket,ctypes
+assert ctypes.CDLL(None).prctl(4,0,0,0,0)==0
+assert os.getuid()==65534 and os.getpid()==1
+assert not os.path.exists('/root/.ssh/authorized_keys')
+open('/work/probe','w').write('ok')
+s=socket.socket();s.bind(('127.0.0.1',0));s.close()
+print('LABMATE_SANDBOX_HEALTH_OK')
+'''
+    cmd = command(Path('/unused'), unit)
+    cmd[-2:] = ['/usr/bin/python3', '-c', source]
+    try:
+        result = subprocess.run(cmd, capture_output=True, timeout=8)
+        if result.returncode or result.stdout.strip() != b'LABMATE_SANDBOX_HEALTH_OK':
+            raise RuntimeError('Sandbox execution probe failed.')
+        return {'protocol': 1, 'nonce': job['nonce'], 'status': 'healthy', 'isolation': 'linux_namespaces'}
+    finally:
+        subprocess.run(['systemctl','kill','--kill-whom=all','--signal=KILL',unit],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=3)
 
 
 def validate_resources():
@@ -72,6 +111,9 @@ def main():
     request = sys.stdin.buffer.read(12 * 1024**2 + 1)
     if len(request) > 12 * 1024**2: raise ValueError('Job exceeds input budget.')
     job = json.loads(request)
+    if isinstance(job, dict) and job.get('operation') == 'health':
+        sys.stdout.write(json.dumps(health(job)))
+        return
     allowed = {'code', 'language', 'filename', 'stdin', 'project_files', 'routes', 'browser_tests',
                'interaction_is_required', 'objective', 'api_tests', 'project_config', 'file_mode'}
     if not isinstance(job, dict) or set(job) - allowed: raise ValueError('Invalid job schema.')
@@ -83,20 +125,22 @@ def main():
     with tempfile.TemporaryDirectory(dir='/var/lib/labmate-jobs') as folder:
         work = Path(folder)
         with tempfile.TemporaryFile() as output, tempfile.TemporaryFile() as error:
-            try:
-                proc = subprocess.run(command(work, unit), input=request, stdout=output, stderr=error, timeout=220)
-                output.seek(0); data = output.read(32 * 1024**2 + 1)
-                if proc.returncode or len(data) > 32 * 1024**2:
-                    error.seek(0)
-                    raise RuntimeError('Namespace job failed: ' + error.read(2048).decode('utf-8', 'replace'))
-                receipt = json.loads(data)
-                sys.stdout.write(json.dumps(receipt))
-            finally:
-                subprocess.run(['systemctl', 'kill', '--kill-whom=all', '--signal=KILL', unit],
-                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
+            with execution_slot():
+                try:
+                    proc = subprocess.run(command(work, unit), input=request, stdout=output, stderr=error, timeout=220)
+                    output.seek(0); data = output.read(32 * 1024**2 + 1)
+                    if proc.returncode or len(data) > 32 * 1024**2:
+                        error.seek(0)
+                        raise RuntimeError('Namespace job failed: ' + error.read(2048).decode('utf-8', 'replace'))
+                    receipt = json.loads(data)
+                    sys.stdout.write(json.dumps(receipt))
+                finally:
+                    subprocess.run(['systemctl', 'kill', '--kill-whom=all', '--signal=KILL', unit],
+                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
 
 
 if __name__ == '__main__':
     try: main()
     except Exception as error:
-        sys.stdout.write(json.dumps({'success': False, 'error': str(error), 'exit_code': 126}))
+        sys.stdout.write(json.dumps({'success': False, 'error': str(error), 'exit_code': 126,
+                                    'stages': {'isolation':'failed','execution':'not_run'}}))
