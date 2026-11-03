@@ -2,11 +2,14 @@
 import asyncio
 from datetime import datetime, timezone
 import json
+import logging
 import secrets
 import time
 
 from ..config import settings
 from .isolated_runtime import read_bounded, worker_command, isolation_required
+
+logger = logging.getLogger(__name__)
 
 
 class WorkerUnavailableError(RuntimeError):
@@ -77,8 +80,9 @@ class WorkerHealth:
                 receipt=await exchange({'operation':'health','nonce':nonce})
                 available=(isinstance(receipt,dict) and receipt.get('protocol')==1 and receipt.get('nonce')==nonce
                            and receipt.get('status')=='healthy' and receipt.get('isolation')=='railway_microvm')
-            except (OSError,ValueError,RuntimeError,TimeoutError):
-                pass
+            except (OSError,ValueError,RuntimeError,TimeoutError) as error:
+                # Transport errors are scrubbed by the adapter before logging.
+                logger.warning('Railway sandbox health probe failed: %s',error)
             self._identity=('railway_sandbox',)
             self._expires=time.monotonic()+max(1,settings.RAILWAY_SANDBOX_HEALTH_TTL if available else settings.WORKER_HEALTH_TTL)
             self._result={'status':'healthy' if available else 'unavailable','available':bool(available),
