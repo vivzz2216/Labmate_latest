@@ -37,7 +37,7 @@ export async function run(request, sdk=Sandbox, requirements=undefined) {
   process.once('SIGTERM', terminate);
   try {
     await vm.files.write('/tmp/runtime.tar.gz',Buffer.from(request.bundle,'base64'));
-    const setup = await vm.exec('tar -xzf /tmp/runtime.tar.gz -C /opt/labmate-runtime', {timeoutSec:30,maxOutputBytes:4096});
+    const setup = await vm.exec(`tar -xzf /tmp/runtime.tar.gz -C /opt/labmate-runtime && install -D "$(node -p 'process.execPath')" /opt/labmate-runtime/tools/node`, {timeoutSec:30,maxOutputBytes:4096});
     if (setup.exitCode !== 0 || setup.timedOut) throw new Error('Runtime installation failed.');
     const handle = vm.exec('/opt/labmate-runtime/venv/bin/python /opt/labmate-runtime/railway_job.py',
       {stdin:true,ephemeral:true,timeoutSec:230,maxOutputBytes:32*1024*1024});

@@ -91,6 +91,9 @@ def command(work, unit, *, managed_vm=False):
            'COMPILATION_TIMEOUT': '60',
            'REDIS_URL': 'redis://127.0.0.1:6379', 'REDIS_REQUIRED': 'true',
            'OPENBLAS_NUM_THREADS': '1', 'OMP_NUM_THREADS': '1', 'LANG': 'C.UTF-8'}
+    if managed_vm:
+        env['PATH'] = str(ROOT / 'tools') + ':' + env['PATH']
+        env['NODE_COMMAND'] = str(ROOT / 'tools/node')
     # A fresh, resource-bounded Railway VM does not run systemd as PID 1.
     prefix = [] if managed_vm else ['systemd-run', '--quiet', '--scope', '--unit=' + unit,
             '-p', 'MemoryMax=1536M', '-p', 'MemorySwapMax=0', '-p', 'TasksMax=160', '-p', 'CPUQuota=100%']

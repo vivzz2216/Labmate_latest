@@ -10,8 +10,10 @@ worker transport remains the default and its provisioning files remain available
 Eight Node lifecycle tests passed, including read-only network retry limits.
 The authenticated namespace probe and seven direct execution cases passed on
 real Railway sandboxes: Python functions/OOP, Java, C, C++, HTML interaction and
-NumPy notebook capture. Candidate upload/report and deployment verification are
-tracked separately; direct runtime success alone is not production proof.
+NumPy notebook capture. The candidate upload/report suite passed ten questions
+across seven manuals, including preserving completed Java evidence on resume.
+Candidate SQL used local MySQL 8.0.46; production MySQL and public deployment
+verification are tracked separately. The focused backend suite passed 88 tests.
 
 ## Configuration
 
