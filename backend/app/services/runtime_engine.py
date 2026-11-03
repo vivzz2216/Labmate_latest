@@ -837,10 +837,15 @@ class RuntimeEngine:
                     if response.status_code != test["expected_status"]:
                         raise ValueError(f"Expected HTTP {test['expected_status']}, observed {response.status_code}.")
                     if "expected_json" in test:
-                        actual, expected = response.json(), test["expected_json"]
+                        expected = test["expected_json"]
+                        content_type = response.headers.get('content-type', '').split(';', 1)[0].strip().lower()
+                        if isinstance(expected, str) and content_type == 'text/plain':
+                            actual = response.text
+                        else:
+                            actual = response.json()
                         result["expected_text"].append(json.dumps(expected, sort_keys=True))
                         if (isinstance(expected, dict) and (not isinstance(actual, dict) or any(actual.get(k) != v for k, v in expected.items()))) or (not isinstance(expected, dict) and actual != expected):
-                            raise ValueError("Response JSON did not match the expected data.")
+                            raise ValueError("Response body did not match the expected data.")
                     result["status"] = "passed"
                 except Exception as error:
                     result["error"] = str(error)[:500]

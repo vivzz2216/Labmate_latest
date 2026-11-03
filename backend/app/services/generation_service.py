@@ -48,12 +48,10 @@ def student_personalization_prompt(student_name, roll_no, department, institutio
     if not lines:
         return ""
     return (
-        "CRITICAL REQUIREMENT: For all code examples requiring sample data, records, classes, "
-        "test cases, or comments (such as student records, banking accounts, employee management, "
-        "or greeting outputs), DO NOT USE 'John Doe' or generic placeholders. You MUST use the "
-        "student's actual details:\n"
+        "Preserve all names, literal values, datasets and expected results explicitly required by the assignment. "
+        "Use the following student details for attribution comments, and for sample records only when the assignment leaves them unspecified:\n"
         + "\n".join(lines) + "\n"
-        "Ensure variable assignments, print statements, and test runs reflect these exact details."
+        "Do not replace required assignment data or print unsolicited identity information."
     )
 
 

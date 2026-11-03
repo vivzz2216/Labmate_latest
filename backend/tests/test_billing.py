@@ -18,7 +18,7 @@ from app.config import settings
 from app.database import Base, get_db
 from app.middleware.auth import get_current_user
 from app.middleware.csrf import require_csrf_token
-from app.models import (AssignmentWorkflow, CreditLedger, CreditWallet, PackPurchase, Upload, User, WorkflowCreditHold)
+from app.models import (AssignmentWorkflow, CreditLedger, CreditWallet, PackPurchase, Report, Upload, User, WorkflowCreditHold)
 from app.routers import billing as routes
 from app.services import billing_service as billing
 
@@ -76,10 +76,10 @@ def webhook(env,kind='payment.captured',payload=None,bad=False):
 
 def test_catalogue_and_wallet_are_server_owned(env):
     data=env.client.get('/api/billing/plans').json()
-    assert [(p['amount'],p['credits']) for p in data['packs']]==[(2900,10),(7900,35),(14900,80)]
+    assert [(p['amount'],p['credits']) for p in data['packs']]==[(2900,1),(7900,3),(14900,6)]
     assert 'fixture-secret' not in json.dumps(data) and data['mode']=='test'
-    assert credits(env)['available']==3
-    assert credits(env)['available']==3
+    assert credits(env)['available']==2
+    assert credits(env)['available']==2
     with env.factory() as db:assert db.query(CreditLedger).filter_by(kind='trial').count()==1
 
 
@@ -95,7 +95,7 @@ def test_create_is_idempotent_and_uses_paise(env):
     env.gateway.return_value={'id':'order_created','amount':2900,'currency':'INR'}
     data={'pack_id':'quick-lab','request_key':str(uuid.uuid4())}
     first=env.client.post('/api/billing/orders',json=data);assert first.status_code==200,first.text
-    assert first.json()['amount']==2900 and first.json()['credits']==10
+    assert first.json()['amount']==2900 and first.json()['credits']==1
     assert env.client.post('/api/billing/orders',json=data).json()['id']==first.json()['id']
     env.gateway.assert_awaited_once()
     call=env.gateway.call_args
@@ -106,7 +106,7 @@ def test_create_is_idempotent_and_uses_paise(env):
 def test_unmatched_gateway_order_is_rejected(env):
     env.gateway.return_value={'id':'order_created','amount':1,'currency':'INR'}
     assert env.client.post('/api/billing/orders',json={'pack_id':'quick-lab','request_key':str(uuid.uuid4())}).status_code==502
-    assert credits(env)['available']==3
+    assert credits(env)['available']==2
 
 
 def test_lost_order_creation_response_recovers_by_receipt(env):
@@ -128,14 +128,14 @@ def test_foreign_order_and_invalid_signature_never_call_provider(env):
     env.app.dependency_overrides[get_current_user]=lambda:SimpleNamespace(id=1,email='buyer@example.test')
     assert env.client.post('/api/billing/orders/'+pid+'/verify',json={**signed(),'razorpay_signature':'0'*64}).status_code==400
     assert env.client.post('/api/billing/orders/'+pid+'/verify',json=signed(order='order_wrong')).status_code==400
-    env.gateway.assert_not_called();assert credits(env)['available']==3
+    env.gateway.assert_not_called();assert credits(env)['available']==2
 
 
 @pytest.mark.parametrize('change',[{'order_id':'order_other'},{'amount':7900},{'currency':'USD'}])
 def test_signed_but_mismatched_payment_cannot_grant_credits(env,change):
     pid=purchase(env);env.gateway.return_value=payment(**change)
     assert env.client.post('/api/billing/orders/'+pid+'/verify',json=signed()).status_code==400
-    assert credits(env)['available']==3
+    assert credits(env)['available']==2
 
 
 def test_captured_callback_and_webhook_replays_grant_once(env):
@@ -144,7 +144,7 @@ def test_captured_callback_and_webhook_replays_grant_once(env):
     for _ in range(2):assert env.client.post(url,json=signed()).json()['status']=='paid'
     assert webhook(env).status_code==200
     assert webhook(env).json()['duplicate'] is True
-    assert credits(env)['available']==13
+    assert credits(env)['available']==12
     with env.factory() as db:assert db.query(CreditLedger).filter_by(kind='pack_purchase').count()==1
 
 
@@ -154,7 +154,7 @@ def test_authorized_payment_is_captured_for_saved_amount(env):
     r=env.client.post('/api/billing/orders/'+pid+'/verify',json=signed());assert r.json()['status']=='paid'
     assert env.gateway.await_args_list[1].args==('POST','/payments/pay_fixture/capture')
     assert env.gateway.await_args_list[1].kwargs['payload']=={'amount':2900,'currency':'INR'}
-    assert credits(env)['available']==13
+    assert credits(env)['available']==12
 
 
 @pytest.mark.parametrize('state',['failed','created','authorized'])
@@ -162,13 +162,13 @@ def test_uncaptured_failed_and_cancelled_checkout_do_not_unlock(env,state):
     pid=purchase(env);env.gateway.return_value=payment(status=state,captured=False)
     r=env.client.post('/api/billing/orders/'+pid+'/verify',json=signed())
     assert r.status_code==200 and r.json()['status']=='created'
-    assert credits(env)['available']==3
+    assert credits(env)['available']==2
 
 
 def test_reconcile_recovers_lost_success_callback(env):
     pid=purchase(env);env.gateway.side_effect=[{'items':[payment()]},payment()]
     r=env.client.post('/api/billing/orders/'+pid+'/reconcile');assert r.json()['status']=='paid'
-    assert credits(env)['available']==13
+    assert credits(env)['available']==12
 
 
 def test_webhook_signatures_raw_body_and_refunds(env):
@@ -179,14 +179,14 @@ def test_webhook_signatures_raw_body_and_refunds(env):
     env.gateway.return_value=payment(amount_refunded=1000)
     partial={'refund':{'entity':{'id':'rfnd_partial','payment_id':'pay_fixture'}}}
     assert webhook(env,'refund.processed',partial).status_code==200
-    assert credits(env)['available']==9  # ceil(10 * 1000 / 2900) credits reversed
+    assert credits(env)['available']==8  # ceil(10 * 1000 / 2900) credits reversed
     assert webhook(env,'refund.processed',partial).json()['duplicate']
     env.gateway.return_value=payment(status='refunded',amount_refunded=2900)
     assert webhook(env,'payment.refunded').status_code==200
-    assert credits(env)['available']==3
+    assert credits(env)['available']==2
     env.gateway.return_value=payment()  # delayed older captured payload cannot regrant
     webhook(env)
-    assert credits(env)['available']==3
+    assert credits(env)['available']==2
 
 
 def test_test_balances_and_orders_never_unlock_live_mode(env,monkeypatch):
@@ -194,7 +194,7 @@ def test_test_balances_and_orders_never_unlock_live_mode(env,monkeypatch):
     assert env.client.post('/api/billing/orders/'+pid+'/verify',json=signed()).status_code==200
     monkeypatch.setattr(settings,'RAZORPAY_MODE','live')
     assert not billing.configuration_ready()  # Test key cannot charge a live checkout.
-    assert credits(env)['available']==3
+    assert credits(env)['available']==2
     assert env.client.get('/api/billing/orders/'+pid).status_code==404
 
 
@@ -207,7 +207,7 @@ def add_workflow(env,number=1):
         db.add(w);db.commit();return w.id
 
 
-def test_reservation_settlement_and_resume_do_not_charge_failures_twice(env):
+def test_reservation_settlement_and_resume_do_not_charge_failures_twice(env,tmp_path):
     wid=add_workflow(env)
     with env.factory() as db:
         w=db.get(AssignmentWorkflow,wid);billing.reserve_workflow_credits(db,w,1);db.commit()
@@ -217,9 +217,17 @@ def test_reservation_settlement_and_resume_do_not_charge_failures_twice(env):
         billing.settle_workflow_credits(db,w);db.commit();billing.settle_workflow_credits(db,w);db.commit()
         assert billing.wallet(db,1)['available']==2 and billing.wallet(db,1)['reserved']==0
         billing.reserve_workflow_credits(db,w,1);db.commit()
-        w.results=[{'id':1,'status':'completed'},{'id':2,'status':'completed'}];db.commit()
+        report_path=tmp_path/'completed.docx';report_path.write_bytes(b'finished')
+        report=Report(upload_id=w.upload_id,filename='completed.docx',file_path=str(report_path),file_size=8,screenshot_order=[])
+        db.add(report);db.flush()
+        w.results=[{'id':1,'status':'completed'},{'id':2,'status':'completed'}];w.status='completed';w.report_id=report.id;db.commit()
         billing.settle_workflow_credits(db,w);db.commit()
         assert billing.wallet(db,1)['available']==1 and billing.wallet(db,1)['reserved']==0
+        billing.reserve_workflow_credits(db,w,1);db.commit()
+        assert billing.wallet(db,1)['available']==1
+        w.questions=[{'id':1,'text':'A different exercise','language':'python'}];db.commit()
+        billing.reserve_workflow_credits(db,w,1);db.commit()
+        assert billing.wallet(db,1)['available']==0 and billing.wallet(db,1)['reserved']==1
 
 
 def test_entire_failed_run_returns_all_reserved_credits(env):
@@ -227,18 +235,35 @@ def test_entire_failed_run_returns_all_reserved_credits(env):
     with env.factory() as db:
         w=db.get(AssignmentWorkflow,wid);billing.reserve_workflow_credits(db,w,1);db.commit()
         w.results=[{'id':1,'status':'failed'}];db.commit();billing.settle_workflow_credits(db,w);db.commit()
-        assert billing.wallet(db,1)['available']==3
+        assert billing.wallet(db,1)['available']==2
+
+
+def test_completed_results_without_downloadable_report_return_credit(env):
+    wid=add_workflow(env)
+    with env.factory() as db:
+        w=db.get(AssignmentWorkflow,wid);billing.reserve_workflow_credits(db,w,1);db.commit()
+        w.results=[{'id':1,'status':'completed'},{'id':2,'status':'completed'}]
+        w.status='completed';w.report_id=None;db.commit()
+        billing.settle_workflow_credits(db,w);db.commit()
+        assert billing.wallet(db,1)['available']==2
+
+
+def test_existing_wallet_is_not_reset_when_trial_changes(env):
+    with env.factory() as db:
+        db.add(CreditWallet(user_id=1,mode='test',balance=7,reserved=0));db.commit()
+        assert billing.wallet(db,1)['available']==7
 
 
 def test_concurrent_runs_cannot_overspend_the_same_balance(env):
     ids=[add_workflow(env,n) for n in [1,2]]
-    with env.factory() as db:billing.wallet(db,1);db.commit()
+    with env.factory() as db:
+        billing.wallet(db,1);db.get(CreditWallet,(1,'test')).balance=1;db.commit()
     def reserve(wid):
         with env.factory() as db:
             try:billing.reserve_workflow_credits(db,db.get(AssignmentWorkflow,wid),1);db.commit();return True
             except HTTPException as e:db.rollback();assert e.status_code==402;return False
     with ThreadPoolExecutor(max_workers=2) as pool:assert sum(pool.map(reserve,ids))==1
-    assert credits(env)['available']==1 and credits(env)['reserved']==2
+    assert credits(env)['available']==0 and credits(env)['reserved']==1
 
 
 def test_checkout_requires_authentication_csrf_and_beta_access(env,monkeypatch):
@@ -285,7 +310,7 @@ def test_retired_payment_shortcut_never_creates_captured_payments(env, monkeypat
     monkeypatch.setattr(settings, 'RAZORPAY_MODE', mode)
     response = env.client.post(f'/api/billing/orders/{pid}/test-pay')
     assert response.status_code == 410
-    assert credits(env)['available'] == 3
+    assert credits(env)['available'] == 2
     env.gateway.assert_not_called()
     with env.factory() as db:
         assert db.get(PackPurchase, pid).status == 'created'
@@ -297,7 +322,7 @@ def test_gateway_failure_never_fabricates_a_test_order(env):
     key = str(uuid.uuid4())
     response = env.client.post('/api/billing/orders', json={'pack_id':'quick-lab','request_key':key})
     assert response.status_code == 503
-    assert credits(env)['available'] == 3
+    assert credits(env)['available'] == 2
     with env.factory() as db:
         row = db.query(PackPurchase).filter_by(request_key=key).one()
         assert row.status == 'creating' and row.gateway_order_id is None
@@ -307,6 +332,6 @@ def test_gateway_failure_never_fabricates_a_test_order(env):
     recovered = env.client.post('/api/billing/orders', json={'pack_id':'quick-lab','request_key':key})
     assert recovered.status_code == 200
     assert recovered.json()['gateway_order_id'] == 'order_recovered'
-    assert credits(env)['available'] == 3
+    assert credits(env)['available'] == 2
 
 

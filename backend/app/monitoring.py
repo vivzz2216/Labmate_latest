@@ -8,15 +8,17 @@ from fastapi import Request
 import json
 import os
 log_dir = os.getenv('LOG_DIR', '/app/logs')
-os.makedirs(log_dir, exist_ok=True)
-
+handlers = [logging.StreamHandler()]
+try:
+    os.makedirs(log_dir, exist_ok=True)
+    handlers.append(logging.FileHandler(os.path.join(log_dir, 'app.log'), mode='a'))
+except OSError:
+    # A read-only filesystem must not prevent the API from starting.
+    pass
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler(os.path.join(log_dir, 'app.log'), mode='a')
-    ]
+    handlers=handlers
 )
 
 logger = logging.getLogger(__name__)

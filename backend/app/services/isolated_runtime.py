@@ -51,7 +51,7 @@ async def read_bounded(stream, limit):
     return bytes(data)
 
 
-def import_receipt(receipt):
+def import_receipt(receipt, isolation='linux_namespaces'):
     from .runtime_engine import RuntimeResult
     if not isinstance(receipt, dict) or not isinstance(receipt.get('success'), bool):
         raise ValueError('Invalid isolated runtime receipt.')
@@ -85,7 +85,7 @@ def import_receipt(receipt):
             raise ValueError('Worker returned an unvalidated screenshot reference.')
         stages = result.setdefault('stages', {})
         if stages.get('isolation') != 'failed':
-            stages['isolation'] = 'linux_namespaces'
+            stages['isolation'] = isolation
         return RuntimeResult(**result)
     except Exception:
         for path in created: path.unlink(missing_ok=True)
@@ -93,6 +93,9 @@ def import_receipt(receipt):
 
 
 async def execute_isolated(**job):
+    if settings.EXECUTION_BACKEND == 'railway_sandbox':
+        from .railway_sandbox import execute
+        return await execute(job)
     from .runtime_engine import RuntimeResult
     process = None
     try:

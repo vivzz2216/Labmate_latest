@@ -47,7 +47,7 @@ export default function CheckoutPanel({packId}:{packId:string}) {
   const accept=(saved:Purchase)=>{
     if(!active.current)return;
     setOrder(saved);setBalance(saved.wallet);
-    if(saved.status==='paid')setMessage(`${saved.mode==='test'?'Razorpay test payment verified':'Payment verified'}. ${saved.credits} ${saved.mode==='test'?'test ':''}experiment credits have been added to your account.`);
+    if(saved.status==='paid')setMessage(`${saved.mode==='test'?'Razorpay test payment verified':'Payment verified'}. ${saved.credits} ${saved.mode==='test'?'test ':''}manual credits have been added to your account.`);
     else if(saved.status.includes('refunded'))setMessage('This payment has a refund adjustment. Your balance has been updated.');
     else setMessage('Payment is not confirmed yet. Check status before trying another payment.');
   };
@@ -66,7 +66,7 @@ export default function CheckoutPanel({packId}:{packId:string}) {
       if(saved.status==='paid'){accept(saved);setBusy(false);return;}
       if(!saved.gateway_order_id||!window.Razorpay)throw new Error('Checkout is not ready. Please retry.');
       const checkout=new window.Razorpay({key:saved.key_id, amount:saved.amount,currency:saved.currency,
-        name:'LabMate',description:`${saved.pack_name} · ${saved.credits} experiment credits`,order_id:saved.gateway_order_id,
+        name:'LabMate',description:`${saved.pack_name} · ${saved.credits} manual credits`,order_id:saved.gateway_order_id,
         prefill:{name:user.name,email:user.email},theme:{color:'#192526'},
         ...checkoutMethods(saved.mode),
         handler:async(response)=>{
@@ -91,16 +91,16 @@ export default function CheckoutPanel({packId}:{packId:string}) {
         <h1>{paid?'Your next lab starts here.':'Your lab work, taken care of.'}</h1>
         <p>One pack for code, real execution screenshots, and your Word report. Keep the credits you do not use for another day.</p>
         <ol className={styles.steps}><li><span>01</span>Upload your PDF or Word manual</li><li><span>02</span>Execute & download your Word record</li></ol>
-        <p className={styles.rule}>A credit is used only when an experiment completes. Failed and unfinished experiments return their reserved credits.</p>
+        <p className={styles.rule}>One credit covers one completed manual. Failed and unfinished manuals return their reserved credit.</p>
       </section>
       <section className={styles.summary} aria-labelledby="order-heading">
         <div className={styles.summaryTop}><h2 id="order-heading">{paid?(order.mode==='test'?'Test payment confirmed':'Payment confirmed'):'Your pack'}</h2>{catalogue?.mode==='test'&&<span className={styles.testBadge}>TEST MODE</span>}</div>
         {!catalogue&&<p role="status">Loading your pack…</p>}
         {catalogue&&!pack&&<p role="alert">This pack could not be found. <Link href="/#pricing">Choose a pack</Link>.</p>}
-        {pack&&catalogue&&<><h3 className={styles.selectedPack}>{pack.name}</h3><p className={styles.selectedCredits}>{pack.credits} experiment credits</p>
+        {pack&&catalogue&&<><h3 className={styles.selectedPack}>{pack.name}</h3><p className={styles.selectedCredits}>{pack.credits} manual credits</p>
           <div className={styles.total}><span>One-time total</span><strong>{rupees(pack.amount)}</strong></div>
           <p className={styles.totalNote}>The price shown is the total. No recurring charge.</p>
-          {user&&<p className={styles.account}>Buying for <strong>{user.email}</strong>{balance&&<span>{balance.unlimited?'Unlimited experiment credits':`${balance.available} available · ${balance.reserved} reserved${balance.mode==='test'?' · test credits':''}`}</span>}</p>}
+          {user&&<p className={styles.account}>Buying for <strong>{user.email}</strong>{balance&&<span>{balance.unlimited?'Unlimited manual credits':`${balance.available} available · ${balance.reserved} reserved${balance.mode==='test'?' · test credits':''}`}</span>}</p>}
           {catalogue.mode==='test'&&<div className={styles.checkoutTest}>
             <h4>Try a payment without spending money</h4>
             <p>Choose <strong>Cards</strong> in Razorpay. Use this domestic test card:</p>

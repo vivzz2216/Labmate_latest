@@ -1,7 +1,9 @@
 """Server-priced packs, captured-payment verification, and transactional credits."""
 import hashlib
 import hmac
+import json
 import math
+import os
 import re
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -12,20 +14,28 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 
 from ..config import settings
-from ..models import (CreditWallet, CreditLedger, PackPurchase, WorkflowCreditHold, User)
+from ..models import (CreditWallet, CreditLedger, PackPurchase, WorkflowCreditHold, User, Report)
 from ..security.operator_access import is_user_credit_exempt
 
 PACKS = (
-    {'id': 'quick-lab', 'name': 'Quick Lab', 'amount': 2900, 'credits': 10,
+    {'id': 'quick-lab', 'name': 'Quick Lab', 'amount': 2900, 'credits': 1,
      'description': 'For your next set of practicals.', 'featured': False},
-    {'id': 'lab-pack', 'name': 'Lab Pack', 'amount': 7900, 'credits': 35,
+    {'id': 'lab-pack', 'name': 'Lab Pack', 'amount': 7900, 'credits': 3,
      'description': 'Room for a few lab manuals.', 'featured': True},
-    {'id': 'semester-pack', 'name': 'Semester Pack', 'amount': 14900, 'credits': 80,
+    {'id': 'semester-pack', 'name': 'Semester Pack', 'amount': 14900, 'credits': 6,
      'description': 'Keep several subjects moving.', 'featured': False},
 )
 PACK_BY_ID = {p['id']: p for p in PACKS}
 GATEWAY = 'https://api.razorpay.com/v1'
 ID_PATTERN = r'^[A-Za-z0-9_]{5,64}$'
+
+
+def manual_fingerprint(workflow):
+    content = {'questions': workflow.questions, 'language': workflow.language,
+               'instructions': workflow.instructions, 'mode': workflow.mode,
+               'screenshot_style': workflow.screenshot_style}
+    return hashlib.sha256(json.dumps(content, sort_keys=True, ensure_ascii=False,
+                                    separators=(',', ':')).encode()).hexdigest()
 
 
 def configuration_ready():
@@ -54,7 +64,7 @@ def wallet(db, user_id, mode=None):
         from sqlalchemy.dialects.postgresql import insert
     else:
         from sqlalchemy.dialects.sqlite import insert
-    trial = max(0, min(settings.BILLING_TRIAL_CREDITS, 100))
+    trial = max(0, min(settings.BILLING_TRIAL_CREDITS, 2))
     db.execute(insert(CreditWallet).values(user_id=user_id, mode=mode, balance=trial, reserved=0)
                .on_conflict_do_nothing(index_elements=['user_id', 'mode']))
     db.execute(insert(CreditLedger).values(user_id=user_id, mode=mode,
@@ -78,10 +88,14 @@ def settle_workflow_credits(db, workflow):
     if not hold or hold.state != 'held':
         return
     completed = {r['id'] for r in (workflow.results or []) if r.get('status') == 'completed'}
-    used = min(hold.amount, len(completed - set(hold.baseline_ids)))
+    manual_hold = bool(hold.baseline_ids) and hold.baseline_ids[0] == 'manual-v1'
+    expected = {q['id'] for q in (workflow.questions or [])}
+    report = db.get(Report, workflow.report_id) if manual_hold and workflow.report_id else None
+    used = int(bool(expected) and expected <= completed and workflow.status == 'completed' and
+               bool(report and report.upload_id == workflow.upload_id and os.path.isfile(report.file_path))) if manual_hold else min(hold.amount, len(completed - set(hold.baseline_ids)))
     changed = db.execute(update(WorkflowCreditHold).where(
         WorkflowCreditHold.workflow_id == workflow.id, WorkflowCreditHold.state == 'held')
-        .values(state='settled'), execution_options={'synchronize_session': False})
+        .values(state='consumed' if manual_hold and used else 'settled'), execution_options={'synchronize_session': False})
     if changed.rowcount != 1:
         return
     refund = hold.amount - used
@@ -97,8 +111,13 @@ def reserve_workflow_credits(db, workflow, user_id):
     existing = db.get(WorkflowCreditHold, workflow.id, populate_existing=True)
     if existing and existing.state == 'held':
         return  # The durable worker can resume an already reserved run.
-    baseline = [r['id'] for r in (workflow.results or []) if r.get('status') == 'completed']
-    count = sum(q['id'] not in baseline for q in workflow.questions)
+    fingerprint = manual_fingerprint(workflow)
+    if (existing and existing.state == 'consumed' and existing.mode == settings.RAZORPAY_MODE
+            and existing.baseline_ids == ['manual-v1', fingerprint]):
+        return  # Repeating the same completed manual does not consume another credit.
+    if not workflow.questions:
+        raise HTTPException(400, 'Select at least one question to process.')
+    count = 1
     mode = settings.RAZORPAY_MODE
     wallet(db, user_id, mode)
     changed = db.execute(update(CreditWallet).where(CreditWallet.user_id == user_id,
@@ -106,14 +125,14 @@ def reserve_workflow_credits(db, workflow, user_id):
         .values(balance=CreditWallet.balance - count, reserved=CreditWallet.reserved + count),
         execution_options={'synchronize_session': False})
     if changed.rowcount != 1:
-        raise HTTPException(402, f'This run needs {count} experiment credits. Top up a pack on the homepage to continue.')
+        raise HTTPException(402, 'This manual needs 1 credit. Choose a pack on the homepage to continue.')
     token = str(uuid.uuid4())
     if existing:
         existing.mode, existing.run_token, existing.amount = mode, token, count
-        existing.baseline_ids, existing.state = baseline, 'held'
+        existing.baseline_ids, existing.state = ['manual-v1', fingerprint], 'held'
     else:
         db.add(WorkflowCreditHold(workflow_id=workflow.id, user_id=user_id, mode=mode,
-            run_token=token, amount=count, baseline_ids=baseline, state='held'))
+            run_token=token, amount=count, baseline_ids=['manual-v1', fingerprint], state='held'))
     ledger(db, user_id, mode, 'reserve:' + token, 'run_reserved', -count)
 
 

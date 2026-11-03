@@ -70,10 +70,10 @@ const languageMeta: Record<
   html: { label: "Web Development", icon: SiHtml5, className: styles.html },
 };
 
-function Brand({ theme }: { theme: "dark" | "light" }) {
+function Brand() {
   return (
     <Link href="/" className={styles.brand} aria-label="LabMate Home">
-      <LabMateLogo size="sm" theme={theme} />
+      <LabMateLogo size="sm" theme="dark" />
     </Link>
   );
 }
@@ -198,12 +198,14 @@ export default function DashboardPage() {
     (sum, assignment) => sum + (assignment.completed_tasks || 0),
     0,
   );
-  const reportsReady = assignments.filter((a) =>
-    Boolean(a.report_download_url),
-  ).length;
+  const completedReports = assignments.filter((a) =>
+    Boolean(a.report_download_url) && a.total_tasks > 0 &&
+    a.completed_tasks === a.total_tasks && a.failed_tasks === 0,
+  );
+  const reportsReady = completedReports.length;
   const activeLabs = assignments.filter((a) => getProgress(a) < 100).length;
   const continuedLab = assignments.find((a) => getProgress(a) < 100);
-  const reports = assignments.filter((a) => a.report_download_url).slice(0, 4);
+  const reports = completedReports.slice(0, 4);
   const displayName = user?.name?.trim() || "Student";
 
   const go = (href: string) => {
@@ -234,7 +236,7 @@ export default function DashboardPage() {
           className={`${styles.sidebar} ${mobileNavOpen ? styles.sidebarOpen : ""}`}
         >
           <div className={styles.sidebarTop}>
-            <Brand theme={theme} />
+            <Brand />
             <button
               className={styles.mobileClose}
               onClick={() => setMobileNavOpen(false)}
@@ -358,7 +360,7 @@ export default function DashboardPage() {
                   Welcome back, <span>{displayName}</span>
                 </h2>
                 <p>
-                  Upload syllabus PDFs or lab manuals to decompose problem statements, compile deterministic solutions, and export accredited Word records.
+                  Upload a lab manual, review its questions, and generate a Word report with execution evidence.
                 </p>
                 <div className={styles.welcomeActions}>
                   <button
@@ -486,7 +488,7 @@ export default function DashboardPage() {
                   <div className={styles.panelHeader}>
                     <div>
                       <h2>Recent Reports</h2>
-                      <p>{reportsReady} accredited documents ready</p>
+                      <p>{reportsReady} reports ready</p>
                     </div>
                     {reportsReady > 0 && (
                       <button

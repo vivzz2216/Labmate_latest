@@ -24,6 +24,15 @@ from .resource_budget import browser_capture_budget
 
 logger = logging.getLogger(__name__)
 
+# On some Windows installations the Node executable bundled inside a virtual
+# environment is prevented from creating Playwright's temporary directories.
+# Prefer the installed system Node there; keep explicit overrides and the
+# bundled driver on other platforms or when Node is not installed.
+if os.name == 'nt' and not os.environ.get('PLAYWRIGHT_NODEJS_PATH'):
+    system_node = os.path.join(os.environ.get('ProgramFiles', r'C:\Program Files'), 'nodejs', 'node.exe')
+    if os.path.isfile(system_node):
+        os.environ['PLAYWRIGHT_NODEJS_PATH'] = system_node
+
 
 def launch_capture_browser_sync(playwright):
     """Launch a headless Chromium browser using sync API, falling back to local Chrome/Edge."""

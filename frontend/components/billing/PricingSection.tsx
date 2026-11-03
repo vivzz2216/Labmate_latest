@@ -18,7 +18,7 @@ export default function PricingSection() {
   return <section id="pricing" className={styles.pricing} aria-labelledby="pricing-heading">
     <div className={styles.headingRow}>
       <div><h2 id="pricing-heading">A little spend.<br/><span>A lot less lab work.</span></h2></div>
-      <p className={styles.intro}>Try {catalogue?.trial_credits ?? 3} experiments free. Top up when you need more.<br/>No monthly bill. No auto-renewal.</p>
+      <p className={styles.intro}>Try {catalogue?.trial_credits ?? 2} lab manuals free. Buy a pack when you need more.<br/>One-time payment. No auto-renewal.</p>
     </div>
     {catalogue?.mode==='test' && <p className={styles.testNote}>Test checkout is active. Payments are simulated and no real money is charged.</p>}
     {!catalogue && !error && <p className={styles.loading} role="status">Loading student packs…</p>}
@@ -27,8 +27,8 @@ export default function PricingSection() {
       <div className={styles.packTop}><h3>{pack.name}</h3>{pack.featured&&<span className={styles.recommendation}>A good place to start</span>}</div>
       <p className={styles.packDescription}>{pack.description}</p>
       <p className={styles.price}>{rupees(pack.amount)}<span> / once</span></p>
-      <p className={styles.quantity}>{pack.credits} experiment credits</p>
-      <p className={styles.unitPrice}>{new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:2}).format(pack.amount/100/pack.credits)} per experiment</p>
+      <p className={styles.quantity}>{pack.credits} manual {pack.credits === 1 ? 'credit' : 'credits'}</p>
+      <p className={styles.unitPrice}>{new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:2}).format(pack.amount/100/pack.credits)} per manual</p>
       <Link className={styles.buyButton} href={`/checkout?pack=${pack.id}`}>Choose {pack.name}<ArrowRight size={17} aria-hidden="true"/></Link>
       <ul className={styles.features}>
         <li><Check size={16} aria-hidden="true"/>Code generated and executed</li>
@@ -37,8 +37,8 @@ export default function PricingSection() {
         <li><Check size={16} aria-hidden="true"/>Unused credits do not expire</li>
       </ul>
     </article>)}</div>}
-    <div className={styles.pricingFoot}><p><strong>1 credit = 1 completed experiment.</strong> A 10-experiment manual uses 10 credits. Failed or unfinished experiments return their reserved credits. Downloading an existing report is free.</p>
+    <div className={styles.pricingFoot}><p><strong>1 credit = 1 completed manual.</strong> Each manual can contain up to 100 detected questions. Review them before processing. Failed or unfinished manuals return their reserved credit. Downloading an existing report is free; processing changed questions after completion requires another credit.</p>
       <span><LockKeyhole size={15} aria-hidden="true"/>Checkout by Razorpay</span></div>
-    <Link href="/code-execution" className={styles.freeLink}>Start with the free experiments <ArrowRight size={16} aria-hidden="true"/></Link>
+    <Link href="/code-execution" className={styles.freeLink}>Start with two free manuals <ArrowRight size={16} aria-hidden="true"/></Link>
   </section>;
 }

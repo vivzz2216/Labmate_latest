@@ -36,7 +36,7 @@ class VerifyInput(BaseModel):
 @router.get('/plans')
 def plans():
     return {'packs': [{**p, 'currency': 'INR'} for p in billing.PACKS],
-        'trial_credits': max(0, min(settings.BILLING_TRIAL_CREDITS, 100)),
+        'trial_credits': max(0, min(settings.BILLING_TRIAL_CREDITS, 2)),
         'mode': settings.RAZORPAY_MODE, 'checkout_available': billing.configuration_ready(),
         'billing_enabled': settings.BILLING_ENABLED}
 

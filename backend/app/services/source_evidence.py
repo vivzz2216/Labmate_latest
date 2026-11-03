@@ -72,31 +72,40 @@ async def capture_source_evidence(project_files,code,filename,*,theme,group,user
     files=plan['files']
     candidates,failures=[],[]
     if not files:return [],['No executable source files were available for capture.']
-    if policy=='complete' and sum(max(1,(len(text.splitlines())+31)//32) for _,text in files)>80:
+    page_size = 32 if language in {'html','react','node','flask','java_gui'} else 18
+    if (policy=='complete' or language in {'python','java','c','cpp'}) and sum(max(1,(len(text.splitlines())+page_size-1)//page_size) for _,text in files)>80:
         return [],['Complete source exceeds 80 readable capture pages. Split the project; no source was silently omitted.']
     for name,text in files:
         digest=hashlib.sha256(text.encode('utf-8')).hexdigest()
         web=language in {'html','react','node','flask','java_gui'}
         count=len(text.splitlines())
-        pages=[[[start,min(start+31,count)]] for start in range(1,count+1,32)] if policy=='complete' and count else [excerpt_ranges(text) if web else []]
+        if not web and count:
+            page_count=(count+page_size-1)//page_size
+            pages=[[[i*count//page_count+1, (i+1)*count//page_count]] for i in range(page_count)]
+        elif policy=='complete' and count:
+            pages=[[[start,min(start+page_size-1,count)]] for start in range(1,count+1,page_size)]
+        else:
+            pages=[excerpt_ranges(text) if web else []]
         for page_index,ranges in enumerate(pages,1):
             excerpt=''.join(''.join(text.splitlines(keepends=True)[start-1:end]) for start,end in ranges) if ranges else text
             ok,path,width,height=await screenshot_service.generate_screenshot(
-                text,'',theme,group,username,name,view_mode='editor',presentation='vscode_evidence' if web else 'evidence',
+                text,'',theme,group,username,name,view_mode='editor',presentation='vscode_evidence' if web else 'ide_evidence',
                 language=language,screenshot_style=screenshot_style,
                 palette='dark' if web or screenshot_style=='style_2' else 'light',
-                source_ranges=ranges if web or policy=='complete' else None,project_files=project_files)
+                source_ranges=ranges if web else None,project_files=project_files,
+                **({'start_line': ranges[0][0], 'end_line': ranges[0][1]} if not web and ranges else {}))
             if not ok:
-                failures.append(f'Source screenshot could not be captured completely: {name}'+(f', page {page_index}' if policy=='complete' else ''))
+                failures.append(f'Source screenshot could not be captured completely: {name}'+(f', page {page_index}' if len(pages)>1 else ''))
                 continue
-            label='VS Code-style source excerpt' if web and len(ranges)>1 else 'VS Code-style source preview' if web else 'Rendered source preview'
+            label='VS Code-style source excerpt' if web and len(ranges)>1 else 'VS Code-style source preview' if web else {'python':'IDLE-style source preview','java':'Notepad-style source preview','c':'Code::Blocks-style source preview','cpp':'Code::Blocks-style source preview'}.get(language,'Rendered source preview')
             if policy=='complete':
                 label=f'Complete source — {name} — lines {ranges[0][0]}–{ranges[-1][1]}, part {page_index}/{len(pages)}' if ranges else 'Complete source — '+name+' (empty file)'
             else:
                 label+=' — '+name
+                if not web and len(pages)>1: label+=f' — lines {ranges[0][0]}–{ranges[0][1]}, part {page_index}/{len(pages)}'
             candidates.append({'path':path,'kind':'source_preview','caption':label,
                                'source_file':name,'source_sha256':digest,'source_line_count':count,
                                'source_ranges':ranges,'excerpt_sha256':hashlib.sha256(excerpt.encode()).hexdigest(),
-                               'omitted_line_count':count-sum(b-a+1 for a,b in ranges) if web else 0,
+                               'omitted_line_count':count-sum(b-a+1 for a,b in ranges) if ranges else 0,
                                'complete_source':policy=='complete','selection':plan['selection'],'width':width,'height':height})
     return candidates,failures

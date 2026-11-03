@@ -33,5 +33,5 @@ async def execution_user(user=Depends(get_current_user)):
 
 async def legacy_execution_user(user=Depends(execution_user)):
     if settings.BILLING_ENABLED and not is_user_credit_exempt(user):
-        raise HTTPException(402, 'Use Code execution (/code-execution) to run an assignment with experiment credits.')
+        raise HTTPException(402, 'Use Code execution (/code-execution) to run a manual with credits.')
     return user

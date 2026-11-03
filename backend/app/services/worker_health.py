@@ -27,6 +27,8 @@ class WorkerHealth:
     async def check(self, force=False):
         if not isolation_required():
             return {'status': 'not_required', 'available': True, 'checked_at': None}
+        if settings.EXECUTION_BACKEND == 'railway_sandbox':
+            return await self._railway_check(force)
         identity = (settings.SANDBOX_SSH_HOST, settings.SANDBOX_SSH_PORT,
                     settings.SANDBOX_SSH_USER, settings.SANDBOX_SSH_KEY, settings.SANDBOX_KNOWN_HOSTS)
         async with self._lock:
@@ -62,6 +64,25 @@ class WorkerHealth:
             self._expires = time.monotonic() + max(1, settings.WORKER_HEALTH_TTL)
             self._result = {'status': 'healthy' if available else 'unavailable', 'available': bool(available),
                             'checked_at': datetime.now(timezone.utc).isoformat()}
+            return dict(self._result)
+
+    async def _railway_check(self, force):
+        from .railway_sandbox import exchange
+        async with self._lock:
+            if not force and self._identity == ('railway_sandbox',) and time.monotonic() < self._expires:
+                return dict(self._result)
+            nonce=secrets.token_hex(16)
+            available=False
+            try:
+                receipt=await exchange({'operation':'health','nonce':nonce})
+                available=(isinstance(receipt,dict) and receipt.get('protocol')==1 and receipt.get('nonce')==nonce
+                           and receipt.get('status')=='healthy' and receipt.get('isolation')=='railway_microvm')
+            except (OSError,ValueError,RuntimeError,TimeoutError):
+                pass
+            self._identity=('railway_sandbox',)
+            self._expires=time.monotonic()+max(1,settings.RAILWAY_SANDBOX_HEALTH_TTL if available else settings.WORKER_HEALTH_TTL)
+            self._result={'status':'healthy' if available else 'unavailable','available':bool(available),
+                          'checked_at':datetime.now(timezone.utc).isoformat()}
             return dict(self._result)
 
 

@@ -123,7 +123,7 @@ export default function HomePage() {
         </h1>
 
         <p className={styles.heroDescription}>
-          Transform raw lab manuals into verified code, authentic execution evidence, and accredited Word reports.
+          Transform lab manuals into code, execution evidence, and downloadable Word reports.
         </p>
 
         <div className={styles.heroCtas}>
@@ -180,12 +180,12 @@ export default function HomePage() {
           <span className={styles.metricDot}>•</span>
           <div className={styles.metricItem}>
             <Terminal size={13} className="text-sky-400" />
-            <span>Real 1080p Terminal Screenshots</span>
+            <span>Execution Screenshots</span>
           </div>
           <span className={styles.metricDot}>•</span>
           <div className={styles.metricItem}>
             <FileText size={13} className="text-indigo-400" />
-            <span>Submission-Ready Word &amp; PDF</span>
+            <span>Downloadable Word Reports</span>
           </div>
           <span className={styles.metricDot}>•</span>
           <div className={styles.metricItem}>

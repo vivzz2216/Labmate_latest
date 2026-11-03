@@ -259,7 +259,8 @@
         </span>
       </div>
     </div>
-    <div class="cmd-body">Microsoft Windows [Version 10.0.22631.4317]
+    <div class="cmd-body"{% if illustrative_evidence %} style="min-height: 220px"{% endif %}>{% if illustrative_evidence %}{{ output_content }}{% if error_content and error_content not in output_content %}
+{{ error_content }}{% endif %}{% else %}Microsoft Windows [Version 10.0.22631.4317]
 (c) Microsoft Corporation. All rights reserved.
 
 C:\Users\{{ username or 'Student' }}\workspace&gt; javac {{ filename }}
@@ -269,7 +270,7 @@ C:\Users\{{ username or 'Student' }}\workspace&gt; java {{ class_name }}
 {{ output_content }}
 {% endif %}
 
-C:\Users\{{ username or 'Student' }}\workspace&gt;<span class="cmd-cursor"></span></div>
+C:\Users\{{ username or 'Student' }}\workspace&gt;<span class="cmd-cursor"></span>{% endif %}</div>
   </div>
   {% endif %}
 

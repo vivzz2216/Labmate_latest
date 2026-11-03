@@ -618,7 +618,7 @@ async def _process_assignment(workflow_id: int):
                             f"1. STUDENT COMMENT HEADER: Begin the source code with a standard student header comment including Experiment/Program title, {header_str}.\n"
                             "2. NO AI DOCSTRINGS: Do NOT write verbose Google-style docstrings (\"\"\"Args:... Returns:...\"\"\") or academic lectures in comments. Use clean, natural student comments (e.g. '// Function to insert element', '# Taking input from user', '/* Menu options */').\n"
                             "3. REALISTIC STUDENT LOGIC: Write direct, correct, undergraduate-level code without over-engineering, unnecessary abstract wrapper classes, or excessive typing annotations unless requested.\n"
-                            f"4. STUDENT DATA ONLY: In all sample data, employee/student classes, test cases, or output prints, use {student_data_str}. NEVER use 'John Doe', 'Alice', 'Bob', or dummy placeholder names.\n"
+                            f"4. Preserve every name, literal value, dataset and expected result explicitly specified by the assignment. Only when sample data is unspecified, prefer {student_data_str}; do not add unsolicited identity print statements.\n"
                             "5. Code must be self-contained and completely executable without network or external uninstalled packages.\n"
                             "6. For interactive programs with input()/scanf()/cin, provide realistic finite newline-separated stdin values in the 'stdin' field that thoroughly test the program and choose the menu exit option; use an empty string for non-interactive programs.\n"
                             "7. Keep answer to one short sentence of at most 20 words; no introductions, walkthroughs or conclusions. Return complete executable source code in code. Return only schema JSON. "
@@ -804,7 +804,7 @@ async def _process_assignment(workflow_id: int):
                     # Source is a labelled preview. Browser images are genuine runner pixels.
                     category = evidence_plan["category"]
                     actual_http = (verification or {}).get("kind") in {"http", "fullstack"}
-                    capture_views = ("output",) if category in {"console", "api"} or actual_http else ()
+                    capture_views = (("shell" if actual_language == "python" else "output"),) if category in {"console", "api"} or actual_http else ()
                     browser_captures = list(screenshots)
                     candidates = ([{'path':p,'kind':'gui','caption':'Actual Java UI component capture (private display)'} for p in browser_captures]
                                   if category in {'java_awt','java_swing'} else report_browser_captures(browser_captures,verification))
@@ -838,18 +838,21 @@ async def _process_assignment(workflow_id: int):
                         input_echoed = True  # Already represented separately, never guess prompt timing.
                     for capture_view in capture_views:
                         ok, path, _, _ = await screenshot_service.generate_screenshot(
-                            code, display_output, theme, group, username, src_filename,
+                            code, display_output, theme, group, username, source_plan['files'][0][0] if source_plan['files'] and actual_language in {'python', 'java', 'c', 'cpp'} else src_filename,
                             screenshot_style=screenshot_style, error=error if not success else "",
                             stdin_data=stdin_data, input_echoed=input_echoed, view_mode=capture_view,
-                            presentation="evidence", language=actual_language,
+                            presentation="ide_evidence" if actual_language in {"python", "java", "c", "cpp"} and not actual_http else "evidence", language=actual_language,
                             palette="dark" if screenshot_style == "style_2" else "light",
                             evidence_kind="http" if actual_http else "terminal",
                         )
                         if ok:
                             kind = "source_preview" if capture_view == "editor" else "http" if actual_http else "terminal"
+                            terminal_caption = ('IDLE-style shell; captured program output' if actual_language == 'python' else
+                                                'Windows Terminal-style transcript; Java commands are illustrative, output is captured' if actual_language == 'java' else
+                                                'Windows Terminal-style rendering of captured program output')
                             candidates.append({"path": path, "kind": kind, "caption": {
                                 "source_preview": "Rendered source preview", "http": "Captured HTTP request and response",
-                                "terminal": "Captured process transcript"}[kind]})
+                                "terminal": terminal_caption}[kind]})
                         else:
                             success = False
                             error = (error + f"\n{capture_view.title()} evidence could not be captured.").strip()

@@ -56,6 +56,24 @@ async def test_each_project_source_is_captured_with_exact_filename_and_content(t
     assert not selection['missing_requirements']
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize('language,theme,filename',[('python','idle','main.py'),('java','notepad','Main.java'),('c','codeblocks','main.c'),('cpp','codeblocks','main.cpp')])
+async def test_console_source_uses_ide_style_and_covers_all_lines(tmp_path, language, theme, filename):
+    code='\n'.join(f'line {number}' for number in range(1,36))
+    calls=[]
+    async def capture(code_arg, output, chosen_theme, group, username, chosen_file, **kw):
+        assert chosen_theme == theme and kw['presentation'] == 'ide_evidence'
+        calls.append((kw['start_line'], kw['end_line']))
+        path=tmp_path/f'{language}-{len(calls)}.png'
+        Image.new('RGB',(100,100),(len(calls), 50, 60)).save(path)
+        return True,str(path),100,100
+    with patch('app.services.source_evidence.screenshot_service.generate_screenshot',side_effect=capture):
+        sources,errors=await capture_source_evidence(None,code,filename,theme=theme,group='test',username='Student',language=language,screenshot_style='style_1')
+    assert not errors
+    assert calls==[(1,17),(18,35)]
+    assert [item['source_ranges'] for item in sources]==[[[1,17]],[[18,35]]]
+
+
 def test_ai_selection_uses_real_functional_files_and_omits_react_css():
     files={'src/main.jsx':"createRoot(root).render(<App/>);",'src/App.jsx':'function App(){return <main/>}', 'src/styles.css':'main{}'}
     plan=source_capture_plan(files,'','src/main.jsx','react',['src/styles.css','src/main.jsx'])

@@ -16,10 +16,14 @@ RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
     && rm -rf /var/lib/apt/lists/*
 
 COPY backend/requirements.txt ./requirements.txt
+COPY backend/railway_runtime/package*.json ./railway_runtime/
+RUN cd /app/railway_runtime && npm ci --ignore-scripts --no-audit --no-fund
 RUN pip install --no-cache-dir -r requirements.txt \
     && python -m playwright install --with-deps chromium \
     && rm -rf /var/lib/apt/lists/*
 COPY backend/app ./app
+COPY backend/railway_runtime/*.mjs backend/railway_runtime/job.py ./railway_runtime/
+COPY backend/scripts/sandbox_broker.py backend/scripts/sandbox_job.py ./runtime_scripts/
 COPY backend/templates ./templates
 COPY backend/migrations ./migrations
 COPY backend/start.sh ./start.sh

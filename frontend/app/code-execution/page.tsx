@@ -116,7 +116,7 @@ export default function AssignmentPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [dragging, setDragging] = useState(false);
-  const [showQuestions, setShowQuestions] = useState(false);
+  const [showQuestions, setShowQuestions] = useState(true);
   const [showLogs, setShowLogs] = useState(false);
   const [preview, setPreview] = useState("");
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -570,7 +570,7 @@ export default function AssignmentPage() {
         if (workflow?.stage === "generate") return "Generating code for the selected language...";
         if (workflow?.stage === "execute") return "Executing in 512MB POSIX sandbox...";
         if (workflow?.stage === "capture") return "Capturing terminal output & proofs...";
-        if (workflow?.stage === "report") return "Compiling accredited Word report...";
+        if (workflow?.stage === "report") return "Preparing your Word report...";
         return "Executing assignment pipeline...";
       }
       return "Initializing sandbox execution pipeline...";
@@ -871,7 +871,8 @@ export default function AssignmentPage() {
             <span className={styles.stepNumber}>4</span>
             <div>
               <h2>Extracted questions</h2>
-              <p>Review and edit before processing.</p>
+              <p>Review the detected questions and remove anything you do not need. One credit covers this manual; failed runs return the reserved credit.</p>
+              <p>To include pre-lab and post-lab theory answers, choose Theory &amp; Code above. Check the extracted list for anything missing before continuing.</p>
               <button
                 className={styles.questionsButton}
                 onClick={() => setShowQuestions(!showQuestions)}
@@ -902,6 +903,11 @@ export default function AssignmentPage() {
                           )
                         }
                       />
+                      <button type="button" disabled={running || busy || questions.length <= 1}
+                        onClick={() => setQuestions(questions.filter((q) => q.id !== question.id))}
+                        aria-label={`Remove question ${index + 1}`}>
+                        Remove question
+                      </button>
                     </label>
                   ))}
                 </div>

@@ -1,0 +1,9 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:#0c0c0c}.titlebar{height:40px;background:#2d2d2d;display:flex;align-items:stretch;color:#fff;font:14px 'Segoe UI',Arial,sans-serif}.tab{background:#0c0c0c;border-radius:8px 8px 0 0;width:307px;display:flex;align-items:center;padding:0 12px;gap:12px;font-weight:600}.terminal-icon{border:1px solid #888;color:#bbb;width:19px;height:15px;font:9px Consolas,monospace;line-height:13px;text-align:center}.tab-close{margin-left:auto;font:22px Arial;font-weight:200}.add,.dropdown{display:flex;align-items:center;justify-content:center;font:24px Arial;width:45px;color:#ddd}.dropdown{font-size:15px;width:28px}.spacer{flex:1}.control{width:58px;display:flex;align-items:center;justify-content:center;font:22px Arial;font-weight:200}.min{width:13px;border-top:1px solid #eee}.max{width:12px;height:11px;border:1px solid #eee}.body{color:#ccc;padding:8px 7px;font:20px/24px Consolas,'Courier New',monospace;white-space:pre-wrap;overflow-wrap:anywhere;min-height:calc(100vh - 40px)}
+</style></head><body><div class="titlebar"><div class="tab"><span class="terminal-icon">&gt;_</span><span>Command Prompt</span><span class="tab-close">×</span></div><span class="add">+</span><span class="dropdown">⌄</span><span class="spacer"></span><span class="control"><i class="min"></i></span><span class="control"><i class="max"></i></span><span class="control">×</span></div><div class="body">Microsoft Windows [Command Prompt-style display]
+(c) Microsoft Corporation. All rights reserved.
+
+{% if is_java %}C:\Users\{{ student_path }}\Documents&gt;javac {{ filename }}
+C:\Users\{{ student_path }}\Documents&gt;java {{ java_class }}
+{% endif %}{{ output_content }}{% if error_content and error_content not in output_content %}
+{{ error_content }}{% endif %}</div></body></html>

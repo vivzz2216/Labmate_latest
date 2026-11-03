@@ -22,8 +22,8 @@ class IdleScreenshotTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('class="shell-stdout">Sum: 30', rendered)
         self.assertLess(rendered.index("Enter first number: 25"), rendered.index("Enter second number: 5"))
         self.assertLess(rendered.index("Enter second number: 5"), rendered.index("Sum: 30"))
-        self.assertIn("C:/Users/Student/Desktop/sum.py", rendered)
-        self.assertIn("Python 3.11.4 Shell", rendered)
+        self.assertIn("C:/Users/Student/Documents/sum.py", rendered)
+        self.assertIn("IDLE Shell", rendered)
         self.assertNotIn("#12161c", rendered)
         self.assertNotIn("#e8edf3", rendered)
 
@@ -36,7 +36,7 @@ class IdleScreenshotTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn('class="win-window editor-window"', rendered)
         self.assertIn("Last line", rendered)
         self.assertIn('class="shell-stderr">Traceback: issue', rendered)
-        self.assertIn("C:/Users/Student/Desktop/evil.py", rendered)
+        self.assertIn("C:/Users/Student/Documents/evil.py", rendered)
         self.assertNotIn("../../evil.py", rendered)
 
     async def test_editor_only_and_repeated_prompts_show_every_input(self):
@@ -66,5 +66,5 @@ class IdleScreenshotTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(width, 840)
             self.assertTrue(Path(path).is_file())
             with Image.open(path).convert("RGB") as image:
-                self.assertEqual(image.getpixel((0, 0)), (255, 255, 255))
+                self.assertEqual(image.getpixel((0, 0)), (160, 160, 160))
                 self.assertEqual(image.getpixel((500, 200)), (255, 255, 255))

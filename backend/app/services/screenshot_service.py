@@ -192,6 +192,8 @@ class ScreenshotService:
                     vp_width, min_height = 840, 520
                 else:
                     vp_width, min_height = 1000, 700
+                if kwargs.get('presentation') == 'ide_evidence':
+                    vp_width, min_height = (827, 780) if view_mode == 'editor' else (865, 417)
             elif theme == 'notepad':
                 if view_mode == 'editor':
                     vp_width, min_height = 1040, 520
@@ -622,12 +624,12 @@ class ScreenshotService:
                                    evidence_kind=kwargs.get("evidence_kind", "terminal"))
         
         # Select template file
-        template_file = f"{theme}_theme.html"
+        template_file = 'idle_reference_evidence.html' if theme == 'idle' else f"{theme}_theme.html"
         template_path = os.path.join(self.template_dir, template_file)
         
         if not os.path.exists(template_path):
             # Fallback to idle theme
-            template_path = os.path.join(self.template_dir, "idle_theme.html")
+            template_path = os.path.join(self.template_dir, "idle_reference_evidence.html")
         
         # Render template
         template = Environment(loader=FileSystemLoader(self.template_dir), autoescape=True).get_template(os.path.basename(template_path))
@@ -653,6 +655,18 @@ class ScreenshotService:
             output_content = self._interleave_stdin_output(output, stdin_data, source_code=source_code)
             session_segments = []
         safe_filename = self._sanitize_screenshot_filename(os.path.basename(filename.replace("\\", "/")))
+
+        # The report's Windows-like chrome is a presentation of the actual
+        # source/transcript, not a claim that the sandbox is running Windows.
+        if kwargs.get('presentation') == 'ide_evidence':
+            if theme in {'notepad', 'codeblocks'} and view_mode in {'output', 'shell'}:
+                template = Environment(loader=FileSystemLoader(self.template_dir), autoescape=True).get_template('windows_terminal_evidence.html')
+        student_path = re.sub(r'[^A-Za-z0-9_-]', '_', username or 'Student').strip('_') or 'Student'
+        icon_path = os.path.join(self.template_dir, 'idle_logo.png')
+        idle_icon = ''
+        if theme == 'idle' and os.path.isfile(icon_path):
+            with open(icon_path, 'rb') as asset:
+                idle_icon = base64.b64encode(asset.read()).decode('ascii')
         
         start_line = kwargs.get("start_line", 1)
         end_line = kwargs.get("end_line", len(source_code.splitlines()) if source_code else 1)
@@ -671,6 +685,11 @@ class ScreenshotService:
             start_line=start_line,
             end_line=end_line,
             source_code=source_code or "",
+            illustrative_evidence=kwargs.get('presentation') == 'ide_evidence',
+            student_path=student_path,
+            idle_icon=idle_icon,
+            is_java=kwargs.get('language') == 'java',
+            java_class=os.path.splitext(safe_filename)[0],
         )
         
         return html_content

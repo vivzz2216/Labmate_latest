@@ -73,7 +73,7 @@ def validate_resources():
                 raise ValueError('Worker lab assets contain an unsafe file; install a clean bundle.')
 
 
-def command(work, unit):
+def command(work, unit, *, managed_vm=False):
     validate_resources()
     system = ROOT / 'system'
     system.mkdir(exist_ok=True)
@@ -91,9 +91,10 @@ def command(work, unit):
            'COMPILATION_TIMEOUT': '60',
            'REDIS_URL': 'redis://127.0.0.1:6379', 'REDIS_REQUIRED': 'true',
            'OPENBLAS_NUM_THREADS': '1', 'OMP_NUM_THREADS': '1', 'LANG': 'C.UTF-8'}
-    args = ['systemd-run', '--quiet', '--scope', '--unit=' + unit,
-            '-p', 'MemoryMax=1536M', '-p', 'MemorySwapMax=0', '-p', 'TasksMax=160', '-p', 'CPUQuota=100%',
-            'bwrap', '--die-with-parent', '--new-session', '--unshare-user', '--unshare-pid', '--as-pid-1', '--unshare-net',
+    # A fresh, resource-bounded Railway VM does not run systemd as PID 1.
+    prefix = [] if managed_vm else ['systemd-run', '--quiet', '--scope', '--unit=' + unit,
+            '-p', 'MemoryMax=1536M', '-p', 'MemorySwapMax=0', '-p', 'TasksMax=160', '-p', 'CPUQuota=100%']
+    args = prefix + ['bwrap', '--die-with-parent', '--new-session', '--unshare-user', '--unshare-pid', '--as-pid-1', '--unshare-net',
             '--unshare-ipc', '--unshare-uts', '--unshare-cgroup-try', '--uid', '65534', '--gid', '65534',
             '--cap-drop', 'ALL', '--clearenv', '--ro-bind', '/usr', '/usr', '--symlink', 'usr/bin', '/bin',
             '--symlink', 'usr/lib', '/lib', '--symlink', 'usr/lib64', '/lib64',

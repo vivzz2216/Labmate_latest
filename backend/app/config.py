@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     EXECUTION_ALLOWED_EMAILS: str = ''
     # Development mode is an explicit opt-out for trusted local tests only.
     EXECUTION_ISOLATION: str = 'required'
+    EXECUTION_BACKEND: str = 'ssh'
+    RAILWAY_SANDBOX_TIMEOUT: int = 480
+    RAILWAY_SANDBOX_HEALTH_TTL: int = 300
     SANDBOX_SSH_HOST: str = ''
     SANDBOX_SSH_PORT: int = 22
     SANDBOX_SSH_USER: str = 'labmate'
@@ -182,7 +185,7 @@ class Settings(BaseSettings):
     JAVA_GUI_TOTAL_TIMEOUT: float = 90.0
     # One-time Razorpay packs. Test and live balances are separate.
     BILLING_ENABLED: bool = False
-    BILLING_TRIAL_CREDITS: int = 3
+    BILLING_TRIAL_CREDITS: int = 2
     RAZORPAY_MODE: str = 'test'
     RAZORPAY_KEY_ID: str = ''
     RAZORPAY_KEY_SECRET: str = ''
@@ -238,6 +241,8 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_railway_settings(self):
+        if self.EXECUTION_BACKEND not in {'ssh', 'railway_sandbox'}:
+            raise ValueError('EXECUTION_BACKEND must be ssh or railway_sandbox.')
         if self.EXECUTION_ISOLATION not in {'required', 'development'}:
             raise ValueError('EXECUTION_ISOLATION must be required or development.')
         if os.getenv("RAILWAY_ENVIRONMENT_ID"):
