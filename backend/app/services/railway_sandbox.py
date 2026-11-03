@@ -52,7 +52,8 @@ def runtime_bundle():
 
 
 async def exchange(job):
-    if not os.environ.get('RAILWAY_API_TOKEN') or not os.environ.get('RAILWAY_ENVIRONMENT_ID'):
+    environment_id = settings.RAILWAY_SANDBOX_ENVIRONMENT_ID or os.environ.get('RAILWAY_ENVIRONMENT_ID')
+    if not os.environ.get('RAILWAY_API_TOKEN') or not environment_id:
         raise ValueError('Railway sandbox credentials are not configured.')
     def encode(value):
         if isinstance(value,bytes):return {'__labmate_bytes__':base64.b64encode(value).decode()}
@@ -62,6 +63,7 @@ async def exchange(job):
     payload=json.dumps({'bundle':runtime_bundle(),'job':job},default=encode).encode()
     env={key:value for key,value in os.environ.items() if key.upper() in
          {'PATH','PATHEXT','SYSTEMROOT','WINDIR','TEMP','TMP','RAILWAY_API_TOKEN','RAILWAY_ENVIRONMENT_ID'}}
+    env['RAILWAY_ENVIRONMENT_ID']=environment_id
     process=await asyncio.create_subprocess_exec(settings.NODE_COMMAND,str(BACKEND/'railway_runtime/bridge.mjs'),
         env=env,stdin=asyncio.subprocess.PIPE,stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.PIPE)
     try:

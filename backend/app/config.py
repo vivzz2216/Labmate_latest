@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     # Development mode is an explicit opt-out for trusted local tests only.
     EXECUTION_ISOLATION: str = 'required'
     EXECUTION_BACKEND: str = 'ssh'
+    RAILWAY_SANDBOX_ENVIRONMENT_ID: str = ''
     RAILWAY_SANDBOX_TIMEOUT: int = 480
     RAILWAY_SANDBOX_HEALTH_TTL: int = 300
     SANDBOX_SSH_HOST: str = ''

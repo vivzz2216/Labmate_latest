@@ -20,10 +20,10 @@ def run(request):
         if set(job) != {'operation', 'nonce'} or not isinstance(job['nonce'], str) or not re.fullmatch('[a-f0-9]{32}', job['nonce']):
             raise ValueError('Invalid health probe.')
         source = "import os,socket; assert os.getuid()==65534 and os.getpid()==1; assert not os.getenv('RAILWAY_API_TOKEN'); assert not os.path.exists('/root/.ssh'); open('/work/probe','w').write('ok'); s=socket.socket(); s.bind(('127.0.0.1',0)); s.close(); print('PROBE_OK')"
-        cmd[-2:] = ['/usr/bin/python3', '-c', source]
+        cmd[-2:] = ['/opt/labmate-runtime/venv/bin/python', '-c', source]
         result = subprocess.run(cmd, capture_output=True, timeout=15)
         if result.returncode or result.stdout.strip() != b'PROBE_OK':
-            raise RuntimeError('Railway namespace execution probe failed.')
+            raise RuntimeError('Railway namespace execution probe failed: '+result.stderr.decode('utf-8','replace')[-1500:])
         return {'protocol':1, 'nonce':job['nonce'], 'status':'healthy', 'isolation':'railway_microvm'}
     allowed = {'code','language','filename','stdin','project_files','routes','browser_tests','interaction_is_required','objective','api_tests','project_config','file_mode'}
     if set(job) - allowed:

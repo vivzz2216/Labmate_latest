@@ -139,6 +139,22 @@ THEORY_ANSWER_SCHEMA = {
 }
 
 
+async def generate_complete_answer(instructions, content, schema, *, on_retry=None):
+    """One bounded regeneration for structurally valid but empty model answers."""
+    request=content
+    for attempt in range(2):
+        solution=await generation_service.generate_json(instructions,request,schema,on_retry=on_retry)
+        missing=[]
+        if solution.get('language') not in LANGUAGES:missing.append('supported language')
+        if not str(solution.get('answer') or '').strip():missing.append('short answer')
+        if not isinstance(solution.get('code'),str) or not normalize_generated_code(solution['code']).strip():missing.append('complete executable code')
+        if not missing:return solution
+        if attempt:
+            raise GenerationError('Model returned an incomplete solution after one regeneration: '+', '.join(missing))
+        logger.warning('Regenerating incomplete model answer; missing fields: %s',', '.join(missing))
+        request=content+'\nThe previous response omitted '+', '.join(missing)+'. Return a complete schema response for this exact exercise.'
+
+
 def document_text(upload: Upload) -> str:
     if upload.file_type == "docx":
         doc = Document(upload.file_path)
@@ -654,7 +670,7 @@ async def _process_assignment(workflow_id: int):
                         elif language=='colab':
                             code_instruction+='\nNOTEBOOK RUNTIME: Return Python source, using numpy, pandas, sklearn, scipy and matplotlib. Read only supplied workspace datasets; if no dataset was supplied, create self-contained inline sample/synthetic data or use built-in offline toy datasets (e.g. load_iris, make_classification). Never invent real training data or hardware capabilities. No os/subprocess imports, network, pip installs or Google Drive mounts. Do not download remote datasets or models (e.g. do not call fetch_20newsgroups or nltk.download). Use relative dataset paths or /content aliases. Prefer numeric_only=True explicitly when appropriate for mixed DataFrames. Capture plots with plt.show().'
                             code_instruction+=' Use pandas Copy on Write compatible assignments: df[col] = df[col].fillna(value) or df.loc[mask, col] = value. Never use df[col].fillna(..., inplace=True) or other chained inplace updates. Do not suppress data correctness warnings. Check requested row counts and missing-value invariants after cleaning.'
-                        solution = await generation_service.generate_json(
+                        solution = await generate_complete_answer(
                             code_instruction,
                             f"Language: {language}\n{personalization_prompt}\nAdditional requirements: {workflow.instructions}\nProject brief: {planned.get('brief','')}\n"
                             + (dataset_brief(question['datasets'])+'\n' if question.get('datasets') else '')

@@ -102,7 +102,8 @@ def command(work, unit, *, managed_vm=False):
             '--proc', '/proc', '--dev', '/dev', '--size', str(128 * 1024**2), '--tmpfs', '/tmp', '--dir', '/etc', '--chdir', '/work']
     for name in ['passwd', 'group', 'hosts']:
         args += ['--ro-bind', str(system / name), '/etc/' + name]
-    for source in ['/etc/ld.so.cache', '/etc/alternatives', '/etc/fonts', '/etc/java-21-openjdk', '/usr/local']:
+    java_configs = [str(path) for path in sorted(Path('/etc').glob('java-*-openjdk')) if path.is_dir()]
+    for source in ['/etc/ld.so.cache', '/etc/alternatives', '/etc/fonts', '/usr/local', *java_configs]:
         if Path(source).exists(): args += ['--ro-bind', source, source]
     for key, value in env.items(): args += ['--setenv', key, value]
     return args + ['--', str(ROOT / 'venv/bin/python'), str(ROOT / 'sandbox_job.py')]

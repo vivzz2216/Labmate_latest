@@ -16,12 +16,12 @@ export async function fetchReadRetry(url, options={}, fetcher=fetch) {
   }
 }
 
-function template(sdk, requirements) {
+export function template(sdk, requirements) {
   const deps = {private:true,dependencies:{express:'4.21.2',joi:'17.13.3',cors:'2.8.5','cookie-parser':'1.4.7','express-session':'1.18.1',react:'18.2.0','react-dom':'18.2.0','react-router-dom':'6.30.1',vite:'5.4.21'}};
   const encodedDeps = Buffer.from(JSON.stringify(deps)).toString('base64');
   return sdk.template()
-    .withPackages('python3','python3-venv','gcc','g++','default-jdk','bubblewrap','xvfb','xauth','libmagic1','fonts-dejavu-core')
-    .run(`mkdir -p /opt/labmate-runtime && echo '${requirements.toString('base64')}' | base64 -d > /opt/labmate-runtime/requirements.txt && python3 -m venv /opt/labmate-runtime/venv && /opt/labmate-runtime/venv/bin/pip install -r /opt/labmate-runtime/requirements.txt`)
+    .run('apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends gcc g++ default-jdk bubblewrap xvfb xauth libmagic1 fonts-dejavu-core')
+    .run(`mkdir -p /opt/labmate-runtime && echo '${requirements.toString('base64')}' | base64 -d > /opt/labmate-runtime/requirements.txt && UV_PYTHON_INSTALL_DIR=/opt/labmate-runtime/python uv python install 3.11 && UV_PYTHON_INSTALL_DIR=/opt/labmate-runtime/python uv venv --python 3.11 --seed /opt/labmate-runtime/venv && /opt/labmate-runtime/venv/bin/pip install -r /opt/labmate-runtime/requirements.txt`)
     .run('PLAYWRIGHT_BROWSERS_PATH=/opt/labmate-runtime/browsers /opt/labmate-runtime/venv/bin/python -m playwright install --with-deps chromium')
     .run(`for kind in node react; do mkdir -p /opt/labmate-runtime/node_cache/$kind; echo '${encodedDeps}' | base64 -d > /opt/labmate-runtime/node_cache/$kind/package.json; (cd /opt/labmate-runtime/node_cache/$kind && npm install --ignore-scripts --no-audit --no-fund) || exit 1; done`);
 }
@@ -44,7 +44,7 @@ export async function run(request, sdk=Sandbox, requirements=undefined) {
     await handle.stdin.write(JSON.stringify(request.job));
     await handle.stdin.end();
     const result = await handle;
-    if (result.exitCode !== 0 || result.timedOut || result.truncated) throw new Error('Incomplete sandbox receipt.');
+    if (result.exitCode !== 0 || result.timedOut || result.truncated) throw new Error('Incomplete sandbox receipt: '+String(result.stderr || '').slice(-2000));
     return JSON.parse(result.stdout);
   } finally {
     try { await vm.destroy(); } finally { process.removeListener('SIGTERM',terminate); }

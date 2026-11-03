@@ -7,9 +7,11 @@ worker transport remains the default and its provisioning files remain available
 
 ## Status
 
-Prepared locally. Seven Node lifecycle tests and 22 Python transport/health/startup
-tests passed. SDK calls were simulated. No live Railway sandbox or Docker build
-has been verified; do not label this release production-ready before that test.
+Eight Node lifecycle tests passed, including read-only network retry limits.
+The authenticated namespace probe and seven direct execution cases passed on
+real Railway sandboxes: Python functions/OOP, Java, C, C++, HTML interaction and
+NumPy notebook capture. Candidate upload/report and deployment verification are
+tracked separately; direct runtime success alone is not production proof.
 
 ## Configuration
 
@@ -29,6 +31,8 @@ BROWSER_CAPTURE_GLOBAL_LIMIT=1
 Railway supplies RAILWAY_ENVIRONMENT_ID. Never set LABMATE_SANDBOX_WORKER on the
 API service and never put the API token in frontend variables or sandbox env.
 Keep PostgreSQL/Redis configuration unchanged. A missing token fails closed.
+Local candidate APIs can set RAILWAY_SANDBOX_ENVIRONMENT_ID to target Railway
+without pretending that the local API itself is hosted there.
 
 ## Validation before release
 
