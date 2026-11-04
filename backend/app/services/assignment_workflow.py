@@ -244,8 +244,10 @@ async def _extract_assignment(workflow_id: int):
             mode = workflow.mode or "code_only"
             workflow.agent_plan = {}
             original_text = await asyncio.to_thread(document_text, document_snapshot(upload))
-            from .unix_manual import unix_manual_tasks
-            sections = unix_manual_tasks(original_text) or (numbered_experiments(original_text) if mode == "code_only" else [])
+            # Keep the Railway release independent of the optional Unix/Ubuntu
+            # lab package. That parser is not shipped with this release; importing
+            # it here made every assignment upload fail before normal extraction.
+            sections = numbered_experiments(original_text) if mode == "code_only" else []
             if sections:
                 workflow.questions = sections
                 workflow.error = None
@@ -562,9 +564,7 @@ async def _process_assignment(workflow_id: int):
                         "   - Advantages & Practical Applications\n"
                         "3. Do not return source code, code fences, compiler output, or fabricated screenshots. Return only schema JSON."
                     )
-                    from .unix_theory import unix_overview
-                    grounded_theory=unix_overview(question['text']) if question.get('experiment_label')=='1A' else None
-                    theory = {'answer':grounded_theory} if grounded_theory else await generation_service.generate_json(
+                    theory = await generation_service.generate_json(
                         theory_instruction,
                         f"{personalization_prompt}\nQuestion:\n{question['text']}\nContext:\n{source[:2000]}",
                         THEORY_ANSWER_SCHEMA, on_retry=retry_status,
