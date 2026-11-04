@@ -14,6 +14,7 @@ VERSION = 1
 MINI = re.compile(r'\bmini[\s-]*project\b|\bcapstone\b', re.I)
 UNCLEAR = re.compile(r'\bTBD\b|\bto be decided\b|\bunspecified\b|\bnot provided\b|\bsame as above\b',re.I)
 TOOLS = ['generate_project', 'execute_console', 'execute_browser', 'execute_api', 'execute_java_ui',
+         'execute_ubuntu', 'capture_ubuntu_editor', 'capture_ubuntu_terminal',
          'capture_complete_source', 'capture_selected_source', 'capture_output', 'verify_results', 'repair_project', 'compose_report']
 TOPICS = ['Restaurant', 'Any Tourist location', 'Music Store', 'Lifestyle Brand',
           'A self-paced learning course', 'Any product', 'Personal webpage', 'Any event/conference webpage']
@@ -62,7 +63,7 @@ def blockers(text, ident):
     if re.search(r'\b(?:must|only|required|using|use)\b.{0,25}\b(?:Vue|Angular)\b',text,re.I):
         questions.append({'id':f'framework-{ident}','prompt':'This assignment mentions a framework without a configured runner. Should I use the supported React runtime, or keep this task for manual review?',
             'options':['Use React','Keep for manual review'],'source_excerpt':text[:500]})
-    if re.search(r'\b(?:real|live)\s+(?:payments?|transactions?)\b|\b(?:must|requires?)\b.{0,30}\b(?:MySQL|MongoDB|external API)\b',text,re.I):
+    if re.search(r'\b(?:real|live)\s+(?:payments?|transactions?)\b|\b(?:must|requires?)\b.{0,30}\b(?:MongoDB|external API)\b',text,re.I):
         questions.append({'id':f'service-{ident}','prompt':'This task requires an external-service adapter that is not configured. Keep it for manual review, or revise the assignment before execution?',
             'options':['Keep for manual review','Revise the assignment'],'source_excerpt':text[:500]})
     if re.search(r'\bask\s+(?:me|the user)\b.{0,35}\btopic\b|\bconfirm\s+(?:the\s+)?topic\b',text,re.I):
@@ -198,9 +199,14 @@ async def _make_plan_once(questions, instructions='', language='auto', previous=
         if 'Use React' in task_overrides:
             actual_language = 'react'
         category = plan_experiment(q['text'],actual_language)['category']
-        source_policy = 'complete' if MINI.search(q['text']) or re.search(r'\b(?:entire|complete|all)\s+(?:source|code|lines)\b',instructions,re.I) else 'selected'
+        source_request = instructions + '\n' + q['text']
+        source_policy = 'complete' if MINI.search(q['text']) or re.search(
+            r'\b(?:entire|complete|all)\b[^\n.]{0,80}\b(?:source|code|lines|source files)\b',
+            source_request, re.I,
+        ) else 'selected'
         mini_project = bool(MINI.search(q['text']))
-        tool = 'execute_browser' if category in {'browser','react','flask'} else 'execute_java_ui' if category in {'java_awt','java_swing'} else 'execute_api' if category=='api' else 'execute_console'
+        if actual_language == 'ubuntu':source_policy='complete'
+        tool = 'execute_ubuntu' if category=='ubuntu' else 'execute_browser' if category in {'browser','react','flask'} else 'execute_java_ui' if category in {'java_awt','java_swing'} else 'execute_api' if category=='api' else 'execute_console'
         if not plan_experiment(q['text'],actual_language)['supported']:
             raise GenerationError(f'{category} does not have a configured runtime; no execution was attempted.')
         task = {'id':q['id'],'language':actual_language,'category':category,'topic':decision.get('topic',''),
@@ -211,7 +217,10 @@ async def _make_plan_once(questions, instructions='', language='auto', previous=
         task['brief'] = ('Chosen topic: '+task['topic']+'.\n' if task['topic'] else '') + '\n'.join(task['features'])
         if task_overrides:
             task['brief']+='\nStudent clarification: '+'; '.join(task_overrides)+'.'
-        if source_policy=='complete':
+        if actual_language == 'ubuntu':
+            task['tools'] += ['capture_ubuntu_editor','capture_ubuntu_terminal']
+            task['brief'] += '\nUse the actual Ubuntu Bash adapter and native GNOME editor/terminal evidence. Preserve all shell source lines. Administrative and OS installation tasks must respect the VM capability boundary; disclose missing evidence.'
+        elif source_policy=='complete':
             task['brief']+='\nMINI-PROJECT EVIDENCE: supply all authored HTML, CSS, JavaScript and React files. Every source line will be captured across readable pages, including CSS and mounting files. source_capture_files remains at most three recommendations; the host captures every authored file independently. Format source with line breaks, keep lines below 110 characters, and keep the implementation small. Do not minify or generate dependencies/configuration.'
         base['tasks'].append(task)
     return base

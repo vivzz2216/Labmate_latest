@@ -1,177 +1,54 @@
 from datetime import datetime
-import secrets
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi import APIRouter, Depends, HTTPException, Response, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func, distinct, case
 
 from ..config import settings
 from ..database import get_db
-from ..models import User, Upload, Job, Report, Subscription, StudentFeedback
-
+from ..models import User, Subscription, StudentFeedback
+from ..middleware.auth import get_current_user
+from ..middleware.csrf import require_csrf_token
+from ..security.operator_access import is_admin_user
+from ..services import admin_analytics
 
 router = APIRouter()
-security = HTTPBasic()
 
 
-def require_admin(credentials: HTTPBasicCredentials = Depends(security)) -> bool:
-    # An unconfigured admin account must never be reachable with blank values.
-    configured = bool(settings.ADMIN_USERID and settings.ADMIN_PASSWORD)
-    ok_user = secrets.compare_digest(credentials.username, str(settings.ADMIN_USERID))
-    ok_pass = secrets.compare_digest(credentials.password, str(settings.ADMIN_PASSWORD))
-    if not (configured and ok_user and ok_pass):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid admin credentials",
-            headers={"WWW-Authenticate": "Basic"},
-        )
-    return True
+def require_admin(response: Response, current_user: User = Depends(get_current_user)) -> User:
+    if not is_admin_user(current_user):
+        raise HTTPException(status_code=403, detail="This page is restricted to the platform owner.")
+    response.headers["Cache-Control"] = "private, no-store"
+    return current_user
 
 
 @router.get("/admin/ping")
-def admin_ping(_ok: bool = Depends(require_admin)):
-    return {"ok": True, "ts": datetime.utcnow().isoformat() + "Z"}
+def admin_ping(_owner: User = Depends(require_admin)):
+    return {"ok": True, "owner_email": _owner.email}
 
 
 @router.get("/admin/overview")
-def admin_overview(db: Session = Depends(get_db), _ok: bool = Depends(require_admin)):
-    total_users = db.query(func.count(User.id)).scalar() or 0
-    active_subs = (
-        db.query(func.count(Subscription.id))
-        .filter(Subscription.is_active.is_(True))
-        .scalar()
-        or 0
-    )
-    total_uploads = db.query(func.count(Upload.id)).scalar() or 0
-    completed_jobs = db.query(func.count(Job.id)).filter(Job.status == "completed").scalar() or 0
-    feedback_count = db.query(func.count(StudentFeedback.id)).scalar() or 0
-
-    return {
-        "total_users": total_users,
-        "active_subscriptions": active_subs,
-        "total_uploads": total_uploads,
-        "completed_jobs": completed_jobs,
-        "feedback_count": feedback_count,
-    }
+def admin_overview(db: Session = Depends(get_db), _owner: User = Depends(require_admin)):
+    return admin_analytics.overview(db)
 
 
 @router.get("/admin/users")
-def admin_users(db: Session = Depends(get_db), _ok: bool = Depends(require_admin)):
-    # Subqueries for aggregates
-    uploads_sq = (
-        db.query(Upload.user_id.label("user_id"), func.count(Upload.id).label("uploads_total"))
-        .group_by(Upload.user_id)
-        .subquery()
-    )
+def admin_users(search: str = Query(default="", max_length=120), paid: Optional[bool] = None,
+                active: Optional[bool] = None, limit: int = Query(default=25, ge=1, le=100),
+                offset: int = Query(default=0, ge=0, le=1000000),
+                db: Session = Depends(get_db), _owner: User = Depends(require_admin)):
+    return admin_analytics.users(db, search=search, paid=paid, active=active, limit=limit, offset=offset)
 
-    completed_jobs_sq = (
-        db.query(
-            Upload.user_id.label("user_id"),
-            func.count(Job.id).label("jobs_completed"),
-        )
-        .join(Upload, Job.upload_id == Upload.id)
-        .filter(Job.status == "completed")
-        .group_by(Upload.user_id)
-        .subquery()
-    )
 
-    completed_uploads_sq = (
-        db.query(
-            Upload.user_id.label("user_id"),
-            func.count(distinct(Upload.id)).label("uploads_with_completed_jobs"),
-        )
-        .join(Job, Job.upload_id == Upload.id)
-        .filter(Job.status == "completed")
-        .group_by(Upload.user_id)
-        .subquery()
-    )
-
-    reports_sq = (
-        db.query(
-            Upload.user_id.label("user_id"),
-            func.count(Report.id).label("reports_total"),
-        )
-        .join(Upload, Report.upload_id == Upload.id)
-        .group_by(Upload.user_id)
-        .subquery()
-    )
-
-    # subscription: active if ANY active subscription exists
-    subs_sq = (
-        db.query(
-            Subscription.user_id.label("user_id"),
-            func.max(case((Subscription.is_active.is_(True), 1), else_=0)).label("subscription_active"),
-            func.max(Subscription.plan).label("subscription_plan"),
-            func.max(Subscription.expires_at).label("subscription_expires_at"),
-        )
-        .group_by(Subscription.user_id)
-        .subquery()
-    )
-
-    feedback_sq = (
-        db.query(
-            StudentFeedback.user_id.label("user_id"),
-            func.count(StudentFeedback.id).label("feedback_count"),
-        )
-        .group_by(StudentFeedback.user_id)
-        .subquery()
-    )
-
-    rows = (
-        db.query(
-            User.id,
-            User.email,
-            User.name,
-            User.created_at,
-            User.last_login,
-            User.is_active,
-            uploads_sq.c.uploads_total,
-            completed_jobs_sq.c.jobs_completed,
-            completed_uploads_sq.c.uploads_with_completed_jobs,
-            reports_sq.c.reports_total,
-            subs_sq.c.subscription_active,
-            subs_sq.c.subscription_plan,
-            subs_sq.c.subscription_expires_at,
-            feedback_sq.c.feedback_count,
-        )
-        .outerjoin(uploads_sq, uploads_sq.c.user_id == User.id)
-        .outerjoin(completed_jobs_sq, completed_jobs_sq.c.user_id == User.id)
-        .outerjoin(completed_uploads_sq, completed_uploads_sq.c.user_id == User.id)
-        .outerjoin(reports_sq, reports_sq.c.user_id == User.id)
-        .outerjoin(subs_sq, subs_sq.c.user_id == User.id)
-        .outerjoin(feedback_sq, feedback_sq.c.user_id == User.id)
-        .order_by(User.created_at.desc())
-        .all()
-    )
-
-    out: List[Dict[str, Any]] = []
-    for r in rows:
-        out.append(
-            {
-                "id": r.id,
-                "email": r.email,
-                "name": r.name,
-                "created_at": r.created_at.isoformat() if r.created_at else None,
-                "last_login": r.last_login.isoformat() if r.last_login else None,
-                "is_active": bool(r.is_active),
-                "subscription_active": bool(r.subscription_active or 0),
-                "subscription_plan": r.subscription_plan,
-                "subscription_expires_at": r.subscription_expires_at.isoformat() if r.subscription_expires_at else None,
-                "uploads_total": int(r.uploads_total or 0),
-                "assignments_completed": int(r.uploads_with_completed_jobs or 0),
-                "jobs_completed": int(r.jobs_completed or 0),
-                "reports_total": int(r.reports_total or 0),
-                "feedback_count": int(r.feedback_count or 0),
-            }
-        )
-
-    return {"users": out}
+@router.get("/admin/payments")
+def admin_payments(mode: Literal["live", "test"] = "live", limit: int = Query(default=25, ge=1, le=100),
+                   offset: int = Query(default=0, ge=0, le=1000000),
+                   db: Session = Depends(get_db), _owner: User = Depends(require_admin)):
+    return admin_analytics.payments(db, mode=mode, limit=limit, offset=offset)
 
 
 @router.get("/admin/feedback")
-def admin_feedback(db: Session = Depends(get_db), _ok: bool = Depends(require_admin)):
+def admin_feedback(db: Session = Depends(get_db), _ok: User = Depends(require_admin)):
     rows = (
         db.query(StudentFeedback, User)
         .outerjoin(User, User.id == StudentFeedback.user_id)
@@ -200,7 +77,8 @@ def set_subscription(
     user_id: int,
     body: Dict[str, Any],
     db: Session = Depends(get_db),
-    _ok: bool = Depends(require_admin),
+    _ok: User = Depends(require_admin),
+    _csrf: bool = Depends(require_csrf_token),
 ):
     """
     Upsert a subscription record for a user.
@@ -236,6 +114,3 @@ def set_subscription(
             "expires_at": sub.expires_at.isoformat() if sub.expires_at else None,
         },
     }
-
-
-

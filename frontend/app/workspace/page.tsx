@@ -1,28 +1,29 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   FileText,
   Download,
   Image as ImageIcon,
   Code2,
-  ExternalLink,
   Search,
   CheckCircle2,
   Clock,
-  AlertCircle,
   Copy,
   Check,
-  ChevronRight,
-  Sparkles,
-  ArrowLeft,
   X,
   Maximize2,
   Terminal,
   BookOpen,
+  ArrowUpRight,
 } from "lucide-react";
+import DashboardShell, {
+  EmptyState,
+  LoadingState,
+  getLanguage,
+} from "@/components/dashboard/DashboardShell";
+import dashStyles from "@/app/dashboard/dashboard.module.css";
 import { useAuth } from "@/contexts/BasicAuthContext";
 import { apiService } from "@/lib/api";
 import { saveReport } from "@/lib/workflow";
@@ -32,7 +33,6 @@ interface ScreenshotItem {
   index: number;
   title: string;
   url: string | null;
-  path: string;
 }
 
 interface QuestionItem {
@@ -44,6 +44,8 @@ interface QuestionItem {
   language: string;
   is_theory: boolean;
   theory_answer?: string;
+  error_message?: string;
+  project_files?: Record<string, string>;
   screenshots: ScreenshotItem[];
 }
 
@@ -74,8 +76,12 @@ export default function WorkspacePage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
 
-  const [assignments, setAssignments] = useState<any[]>([]);
-  const [loadingList, setLoadingList] = useState(true);
+  const [assignments, setAssignments] = useState<any[]>(
+    () => apiService.peekUserAssignments(user?.id) || [],
+  );
+  const [loadingList, setLoadingList] = useState(
+    () => !apiService.peekUserAssignments(user?.id),
+  );
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
   const [workspace, setWorkspace] = useState<WorkspaceData | null>(null);
@@ -86,8 +92,10 @@ export default function WorkspacePage() {
   const [copiedCodeId, setCopiedCodeId] = useState<number | null>(null);
   const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
   const [downloadingDoc, setDownloadingDoc] = useState(false);
+  const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
+  const [workspaceError, setWorkspaceError] = useState('');
 
-  // Authentication check
+  // Authentication check & initial fetch
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
@@ -96,16 +104,40 @@ export default function WorkspacePage() {
     }
 
     fetchAssignments();
-  }, [authLoading, user, router]);
+  }, [authLoading, user?.id, router]);
 
   const fetchAssignments = async () => {
     if (!user?.id) return;
-    try {
+    const cached = apiService.peekUserAssignments(user.id);
+    if (cached) {
+      setAssignments(cached);
+      setLoadingList(false);
+      if (cached.length > 0 && selectedId === null) {
+        const requestedId =
+          typeof window !== "undefined"
+            ? Number(new URLSearchParams(window.location.search).get("assignment"))
+            : NaN;
+        if (Number.isSafeInteger(requestedId) && requestedId > 0 && cached.some((a: any) => a.id === requestedId)) {
+          setSelectedId(requestedId);
+        } else {
+          setSelectedId(cached[0].id);
+        }
+      }
+    } else {
       setLoadingList(true);
+    }
+    try {
       const data: any = await apiService.getUserAssignments(user.id);
-      const list = Array.isArray(data) ? data : data?.assignments ?? [];
+      const list = Array.isArray(data) ? data : data?.assignments ?? data?.data ?? [];
       setAssignments(list);
-      if (list.length > 0 && selectedId === null) {
+
+      const requestedId =
+        typeof window !== "undefined"
+          ? Number(new URLSearchParams(window.location.search).get("assignment"))
+          : NaN;
+      if (Number.isSafeInteger(requestedId) && requestedId > 0 && list.some((a: any) => a.id === requestedId)) {
+        setSelectedId(requestedId);
+      } else if (list.length > 0 && selectedId === null) {
         setSelectedId(list[0].id);
       }
     } catch (err) {
@@ -123,12 +155,15 @@ export default function WorkspacePage() {
     const loadWorkspace = async () => {
       try {
         setLoadingWorkspace(true);
+        setWorkspaceError('');
+        setWorkspace(null);
         const data = await apiService.getAssignmentWorkspace(selectedId);
         if (active) {
           setWorkspace(data);
         }
       } catch (err) {
         console.error("Failed to fetch assignment workspace", err);
+        if (active) setWorkspaceError('This workspace could not be loaded. Select it again to retry.');
       } finally {
         if (active) setLoadingWorkspace(false);
       }
@@ -140,10 +175,14 @@ export default function WorkspacePage() {
     };
   }, [selectedId]);
 
-  const handleCopyCode = (id: number, code: string) => {
-    navigator.clipboard.writeText(code);
-    setCopiedCodeId(id);
-    setTimeout(() => setCopiedCodeId(null), 2000);
+  const handleCopyCode = async (id: number, code: string) => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopiedCodeId(id);
+      setTimeout(() => setCopiedCodeId(null), 2000);
+    } catch {
+      setWorkspaceError('Clipboard access was denied. Select and copy the code directly.');
+    }
   };
 
   const handleDownloadReport = async () => {
@@ -159,7 +198,9 @@ export default function WorkspacePage() {
   };
 
   const filteredAssignments = assignments.filter((a) =>
-    (a.original_filename || a.filename || "").toLowerCase().includes(searchQuery.toLowerCase())
+    `${a.original_filename || a.filename || ""} ${a.language || ""}`
+      .toLowerCase()
+      .includes(searchQuery.trim().toLowerCase()),
   );
 
   const allScreenshots: { questionId: number; questionText: string; screenshot: ScreenshotItem }[] = [];
@@ -184,81 +225,88 @@ export default function WorkspacePage() {
   const formatDate = (isoString: string) => {
     try {
       const d = new Date(isoString);
-      return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+      return Number.isNaN(d.getTime())
+        ? isoString
+        : d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
     } catch {
       return isoString;
     }
   };
 
   return (
-    <div className={styles.container}>
-      {/* Top Navbar */}
-      <header className={styles.navbar}>
-        <div className={styles.navLeft}>
-          <Link href="/dashboard" className={styles.backBtn} title="Back to Dashboard">
-            <ArrowLeft size={18} />
-          </Link>
-          <div className={styles.brandTitle}>
-            <span className={styles.brandIcon}>
-              <Sparkles size={16} />
-            </span>
-            <h1>LabMate Workspace</h1>
+    <DashboardShell
+      title="Workspace"
+      subtitle="Inspect execution screenshots, verified solutions, and Word reports"
+      searchValue={searchQuery}
+      onSearchChange={setSearchQuery}
+      searchPlaceholder="Search lab manuals..."
+    >
+      {workspaceError && <p role="alert" className={styles.executionError}>{workspaceError}</p>}
+      <div className={styles.workspaceGrid}>
+        {/* Left Panel: Manuals List */}
+        <aside className={styles.manualsPanel}>
+          <div className={styles.manualsHeader}>
+            <h2>Lab Manuals</h2>
+            <span className={styles.manualsCount}>{filteredAssignments.length}</span>
           </div>
-        </div>
 
-        <div className={styles.navRight}>
-          <Link href="/dashboard" className={styles.uploadNewBtn}>
-            + Upload New Manual
-          </Link>
-          <div className={styles.userBadge}>
-            <span className={styles.userDot}></span>
-            <span>{user?.name || user?.email || "Student"}</span>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Layout: Sidebar & Content Area */}
-      <div className={styles.layout}>
-        {/* Left Sidebar: Manuals List */}
-        <aside className={styles.sidebar}>
           <div className={styles.searchBox}>
-            <Search size={16} className={styles.searchIcon} />
+            <Search size={14} className={styles.searchIcon} />
             <input
               type="text"
-              placeholder="Search lab manuals..."
+              placeholder="Filter manuals..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className={styles.searchInput}
+              aria-label="Filter lab manuals"
             />
           </div>
 
           <div className={styles.manualList}>
             {loadingList ? (
-              <div className={styles.loadingSpinner}>Loading your manuals...</div>
+              <LoadingState message="Loading your manuals..." />
             ) : filteredAssignments.length === 0 ? (
-              <div className={styles.emptySidebar}>
-                <BookOpen size={32} />
-                <p>No lab manuals found</p>
-                <Link href="/dashboard" className={styles.sidebarUploadLink}>
-                  Upload your first manual
-                </Link>
-              </div>
+              <EmptyState
+                compact
+                icon={BookOpen}
+                title={searchQuery ? "No matching manuals" : "No lab manuals found"}
+                description={
+                  searchQuery
+                    ? "Try a different search query."
+                    : "Upload your first manual to inspect its workspace."
+                }
+                action={
+                  !searchQuery
+                    ? {
+                        label: "Upload manual",
+                        onClick: () => router.push("/code-execution"),
+                      }
+                    : undefined
+                }
+              />
             ) : (
               filteredAssignments.map((item) => {
                 const isSelected = item.id === selectedId;
-                const isCompleted = item.completed_tasks > 0 && item.completed_tasks >= item.total_tasks;
+                const isCompleted =
+                  item.completed_tasks > 0 && item.completed_tasks >= item.total_tasks;
+                const meta = getLanguage(item.language);
+                const LangIcon = meta.icon;
 
                 return (
                   <button
+                    type="button"
                     key={item.id}
                     onClick={() => setSelectedId(item.id)}
                     className={`${styles.manualCard} ${isSelected ? styles.manualCardActive : ""}`}
                   >
                     <div className={styles.manualCardHeader}>
-                      <span className={styles.fileIcon}>
-                        <FileText size={18} />
+                      <span className={styles.fileIconWrap}>
+                        <LangIcon className={meta.className} size={16} />
                       </span>
-                      <span className={styles.manualName} title={item.original_filename || item.filename}>
+                      <span
+                        className={styles.manualName}
+                        title={item.original_filename || item.filename}
+                      >
                         {item.original_filename || item.filename}
                       </span>
                     </div>
@@ -270,11 +318,11 @@ export default function WorkspacePage() {
                       <span className={styles.datePill}>{formatDate(item.uploaded_at)}</span>
                       {isCompleted ? (
                         <span className={styles.statusCompleted} title="Completed">
-                          <CheckCircle2 size={13} /> Done
+                          <CheckCircle2 size={12} /> Done
                         </span>
                       ) : (
                         <span className={styles.statusProcessing} title="In Progress">
-                          <Clock size={13} /> Active
+                          <Clock size={12} /> Active
                         </span>
                       )}
                     </div>
@@ -285,22 +333,27 @@ export default function WorkspacePage() {
           </div>
         </aside>
 
-        {/* Workspace Main Pane */}
-        <main className={styles.mainPane}>
+        {/* Right Pane: Selected Manual Workspace */}
+        <section className={styles.mainPane}>
           {loadingWorkspace ? (
-            <div className={styles.loadingWorkspacePane}>
-              <div className={styles.pulseLoader}></div>
-              <p>Opening lab manual workspace...</p>
+            <div className={styles.statePanel}>
+              <LoadingState message="Opening lab manual workspace..." />
             </div>
           ) : !workspace ? (
-            <div className={styles.noSelection}>
-              <BookOpen size={48} className={styles.noSelectionIcon} />
-              <h2>Select a Lab Manual</h2>
-              <p>Choose an assignment from the sidebar to inspect its Word report, screenshots, and solutions.</p>
+            <div className={styles.statePanel}>
+              <EmptyState
+                icon={BookOpen}
+                title="Select a Lab Manual"
+                description="Choose an assignment from the left panel to inspect its Word report, screenshots, and solutions."
+                action={{
+                  label: "Upload New Manual",
+                  onClick: () => router.push("/code-execution"),
+                }}
+              />
             </div>
           ) : (
-            <div className={styles.contentWrap}>
-              {/* Header Banner */}
+            <>
+              {/* Assignment Header Card */}
               <div className={styles.assignmentHeader}>
                 <div className={styles.assignmentTitleRow}>
                   <div>
@@ -312,7 +365,8 @@ export default function WorkspacePage() {
                         {workspace.assignment.language?.toUpperCase() || "AUTO"}
                       </span>
                       <span className={styles.subMeta}>
-                        Uploaded {formatDate(workspace.assignment.uploaded_at)} • {formatFileSize(workspace.assignment.file_size)}
+                        Uploaded {formatDate(workspace.assignment.uploaded_at)} ·{" "}
+                        {formatFileSize(workspace.assignment.file_size)}
                       </span>
                       <span className={styles.badgeSuccess}>
                         <CheckCircle2 size={13} /> {workspace.questions.length} Questions Processed
@@ -320,42 +374,64 @@ export default function WorkspacePage() {
                     </div>
                   </div>
 
-                  {workspace.report && (
+                  <div className={styles.headerActions}>
                     <button
-                      onClick={handleDownloadReport}
-                      disabled={downloadingDoc}
-                      className={styles.downloadReportBtn}
-                      title="Download the compiled Word Report with high-res screenshots"
+                      type="button"
+                      onClick={() =>
+                        router.push(`/code-execution?assignment=${workspace.assignment.id}`)
+                      }
+                      className={dashStyles.secondaryButton}
                     >
-                      <Download size={16} />
-                      {downloadingDoc ? "Downloading..." : "Download Word Report (.docx)"}
+                      Open in Studio <ArrowUpRight size={15} />
                     </button>
-                  )}
+
+                    {workspace.report && (
+                      <button
+                        type="button"
+                        onClick={handleDownloadReport}
+                        disabled={downloadingDoc}
+                        className={dashStyles.primaryButton}
+                        title="Download the compiled Word Report with high-res screenshots"
+                      >
+                        <Download size={15} />
+                        {downloadingDoc ? "Downloading..." : "Download Word Report (.docx)"}
+                      </button>
+                    )}
+                  </div>
                 </div>
 
-                {/* Tabs */}
-                <div className={styles.tabsNav}>
+                {/* Tabs Navigation */}
+                <div className={styles.tabsNav} role="tablist">
                   <button
+                    type="button"
+                    role="tab"
+                    aria-selected={activeTab === "screenshots"}
                     onClick={() => setActiveTab("screenshots")}
                     className={`${styles.tabBtn} ${activeTab === "screenshots" ? styles.tabBtnActive : ""}`}
                   >
-                    <ImageIcon size={16} />
+                    <ImageIcon size={15} />
                     <span>Screenshots ({allScreenshots.length})</span>
                   </button>
 
                   <button
+                    type="button"
+                    role="tab"
+                    aria-selected={activeTab === "code"}
                     onClick={() => setActiveTab("code")}
                     className={`${styles.tabBtn} ${activeTab === "code" ? styles.tabBtnActive : ""}`}
                   >
-                    <Code2 size={16} />
-                    <span>Solutions & Output ({workspace.questions.length})</span>
+                    <Code2 size={15} />
+                    <span>Solutions &amp; Output ({workspace.questions.length})</span>
                   </button>
 
                   <button
+                    type="button"
+                    role="tab"
+                    aria-selected={activeTab === "report"}
                     onClick={() => setActiveTab("report")}
                     className={`${styles.tabBtn} ${activeTab === "report" ? styles.tabBtnActive : ""}`}
                   >
-                    <FileText size={16} />
+                    <FileText size={15} />
                     <span>Word Report Document</span>
                   </button>
                 </div>
@@ -365,9 +441,17 @@ export default function WorkspacePage() {
               {activeTab === "screenshots" && (
                 <div className={styles.tabContent}>
                   {allScreenshots.length === 0 ? (
-                    <div className={styles.emptyGallery}>
-                      <ImageIcon size={40} />
-                      <p>No execution screenshots generated for this manual yet.</p>
+                    <div className={styles.statePanel}>
+                      <EmptyState
+                        icon={ImageIcon}
+                        title="No execution screenshots yet"
+                        description="Run this lab manual in the studio to capture authentic IDE and terminal outputs."
+                        action={{
+                          label: "Open in Lab Studio",
+                          onClick: () =>
+                            router.push(`/code-execution?assignment=${workspace.assignment.id}`),
+                        }}
+                      />
                     </div>
                   ) : (
                     <div className={styles.screenshotGrid}>
@@ -375,38 +459,49 @@ export default function WorkspacePage() {
                         <div key={idx} className={styles.screenshotCard}>
                           <div
                             className={styles.screenshotImgWrap}
+                            role={item.screenshot.url && !imageErrors[item.screenshot.url] ? 'button' : undefined}
+                            tabIndex={item.screenshot.url && !imageErrors[item.screenshot.url] ? 0 : -1}
+                            aria-label={`View ${item.screenshot.title}`}
+                            onKeyDown={(event) => {
+                              if ((event.key === 'Enter' || event.key === ' ') && item.screenshot.url && !imageErrors[item.screenshot.url]) {
+                                event.preventDefault();
+                                setPreviewImage({url: item.screenshot.url, title: item.screenshot.title});
+                              }
+                            }}
                             onClick={() =>
-                              item.screenshot.url &&
+                              item.screenshot.url && !imageErrors[item.screenshot.url] &&
                               setPreviewImage({
                                 url: item.screenshot.url,
                                 title: item.screenshot.title,
                               })
                             }
                           >
-                            {item.screenshot.url ? (
+                            {item.screenshot.url && !imageErrors[item.screenshot.url] ? (
                               <img
                                 src={item.screenshot.url}
                                 alt={item.screenshot.title}
                                 className={styles.screenshotImg}
                                 loading="lazy"
+                                onError={() => setImageErrors(previous => ({...previous, [item.screenshot.url!]: true}))}
                               />
                             ) : (
-                              <div className={styles.imagePlaceholder}>Generating preview...</div>
+                              <div className={styles.imagePlaceholder}>Screenshot unavailable. Check the Word report.</div>
                             )}
-                            <div className={styles.zoomOverlay}>
-                              <Maximize2 size={20} />
+                            {item.screenshot.url && !imageErrors[item.screenshot.url] && <div className={styles.zoomOverlay}>
+                              <Maximize2 size={18} />
                               <span>Click to zoom</span>
-                            </div>
+                            </div>}
                           </div>
 
                           <div className={styles.screenshotCardFooter}>
-                            <div>
+                            <div className={styles.screenshotFooterText}>
                               <p className={styles.screenshotTitle}>{item.screenshot.title}</p>
                               <span className={styles.screenshotContext}>
-                                Q{item.questionId}: {item.questionText.slice(0, 45)}...
+                                Q{item.questionId}: {item.questionText.slice(0, 52)}
+                                {item.questionText.length > 52 ? "…" : ""}
                               </span>
                             </div>
-                            {item.screenshot.url && (
+                            {item.screenshot.url && !imageErrors[item.screenshot.url] && (
                               <a
                                 href={item.screenshot.url}
                                 download={`${item.screenshot.title.replace(/\s+/g, "_")}.png`}
@@ -414,6 +509,7 @@ export default function WorkspacePage() {
                                 rel="noreferrer"
                                 className={styles.downloadIconBtn}
                                 title="Download screenshot"
+                                aria-label={`Download ${item.screenshot.title}`}
                               >
                                 <Download size={14} />
                               </a>
@@ -429,64 +525,87 @@ export default function WorkspacePage() {
               {/* Tab 2: Code & Outputs */}
               {activeTab === "code" && (
                 <div className={styles.tabContent}>
-                  <div className={styles.questionsList}>
-                    {workspace.questions.map((q) => (
-                      <div key={q.id} className={styles.questionCard}>
-                        <div className={styles.questionCardHeader}>
-                          <span className={styles.questionNumberPill}>Question {q.id}</span>
-                          <h4 className={styles.questionTextHeading}>{q.question_text}</h4>
+                  {workspace.questions.length === 0 ? (
+                    <div className={styles.statePanel}>
+                      <EmptyState
+                        icon={Code2}
+                        title="No questions extracted yet"
+                        description="Open this assignment in Lab Studio to extract and solve questions."
+                      />
+                    </div>
+                  ) : (
+                    <div className={styles.questionsList}>
+                      {workspace.questions.map((q) => (
+                        <div key={q.id} className={styles.questionCard}>
+                          <div className={styles.questionCardHeader}>
+                            <span className={styles.questionNumberPill}>Question {q.id}</span>
+                            <h4 className={styles.questionTextHeading}>{q.question_text}</h4>
+                          </div>
+
+                          <p className={styles.questionStatus}>Status: {q.status}</p>
+                          {q.error_message && <p role="alert" className={styles.executionError}>{q.error_message}</p>}
+                          {Object.entries(q.project_files || {}).map(([filename, source]) => (
+                            <details key={filename} className={styles.codeBlockWrap}>
+                              <summary className={styles.codeBlockBar}>{filename}</summary>
+                              <pre className={styles.codeSnippet}><code>{source}</code></pre>
+                            </details>
+                          ))}
+                          {q.code && !Object.keys(q.project_files || {}).length && (
+                            <div className={styles.codeBlockWrap}>
+                              <div className={styles.codeBlockBar}>
+                                <span className={styles.codeLangLabel}>
+                                  <Code2 size={13} /> {q.language}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopyCode(q.id, q.code)}
+                                  className={styles.copyBtn}
+                                  title="Copy code"
+                                >
+                                  {copiedCodeId === q.id ? (
+                                    <>
+                                      <Check size={12} /> Copied!
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Copy size={12} /> Copy Code
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                              <pre className={styles.codeSnippet}>
+                                <code>{q.code}</code>
+                              </pre>
+                            </div>
+                          )}
+
+                          {q.output && (
+                            <div className={styles.outputBlockWrap}>
+                              <div className={styles.outputBlockBar}>
+                                <span className={styles.codeLangLabel}>
+                                  <Terminal size={13} /> Execution Console Output
+                                </span>
+                              </div>
+                              <pre className={styles.outputSnippet}>
+                                <code>{q.output}</code>
+                              </pre>
+                            </div>
+                          )}
+
+                          {q.is_theory && q.theory_answer && (
+                            <div className={styles.theoryBlockWrap}>
+                              <div className={styles.theoryBlockBar}>
+                                <span className={styles.codeLangLabel}>
+                                  <BookOpen size={13} /> Theoretical Answer
+                                </span>
+                              </div>
+                              <div className={styles.theoryContent}>{q.theory_answer}</div>
+                            </div>
+                          )}
                         </div>
-
-                        {q.code && (
-                          <div className={styles.codeBlockWrap}>
-                            <div className={styles.codeBlockBar}>
-                              <span className={styles.codeLangLabel}>
-                                <Code2 size={13} /> {q.language}
-                              </span>
-                              <button
-                                onClick={() => handleCopyCode(q.id, q.code)}
-                                className={styles.copyBtn}
-                                title="Copy code"
-                              >
-                                {copiedCodeId === q.id ? (
-                                  <>
-                                    <Check size={13} /> Copied!
-                                  </>
-                                ) : (
-                                  <>
-                                    <Copy size={13} /> Copy Code
-                                  </>
-                                )}
-                              </button>
-                            </div>
-                            <pre className={styles.codeSnippet}>
-                              <code>{q.code}</code>
-                            </pre>
-                          </div>
-                        )}
-
-                        {q.output && (
-                          <div className={styles.outputBlockWrap}>
-                            <div className={styles.outputBlockBar}>
-                              <Terminal size={13} /> Execution Console Output
-                            </div>
-                            <pre className={styles.outputSnippet}>
-                              <code>{q.output}</code>
-                            </pre>
-                          </div>
-                        )}
-
-                        {q.is_theory && q.theory_answer && (
-                          <div className={styles.theoryBlockWrap}>
-                            <div className={styles.theoryBlockBar}>
-                              <BookOpen size={13} /> Theoretical Answer
-                            </div>
-                            <div className={styles.theoryContent}>{q.theory_answer}</div>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -496,40 +615,54 @@ export default function WorkspacePage() {
                   {workspace.report ? (
                     <div className={styles.reportSummaryCard}>
                       <div className={styles.reportDocIcon}>
-                        <FileText size={48} />
+                        <FileText size={38} />
                       </div>
                       <div className={styles.reportDocDetails}>
                         <h3>{workspace.report.filename}</h3>
                         <p>
-                          Generated Word report ready for academic submission. Includes original lab manual formatting,
-                          clean question listings, verified program code, and authentic execution screenshots.
+                          Generated Word report ready for academic submission. Includes original
+                          lab manual formatting, clean question listings, verified program code,
+                          and authentic execution screenshots.
                         </p>
                         <div className={styles.reportMetaList}>
                           <span>• File Size: {formatFileSize(workspace.report.file_size)}</span>
                           <span>• Format: Microsoft Word (.docx)</span>
                           <span>• Status: Ready to print / submit</span>
                         </div>
-                        <button
-                          onClick={handleDownloadReport}
-                          disabled={downloadingDoc}
-                          className={styles.downloadReportBtnLarge}
-                        >
-                          <Download size={18} />
-                          {downloadingDoc ? "Downloading Report..." : "Download Completed Word Document (.docx)"}
-                        </button>
+                        <div className={styles.reportActions}>
+                          <button
+                            type="button"
+                            onClick={handleDownloadReport}
+                            disabled={downloadingDoc}
+                            className={dashStyles.primaryButton}
+                          >
+                            <Download size={16} />
+                            {downloadingDoc
+                              ? "Downloading Report..."
+                              : "Download Completed Word Document (.docx)"}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   ) : (
-                    <div className={styles.emptyGallery}>
-                      <Clock size={40} />
-                      <p>Word document is currently being compiled or queued.</p>
+                    <div className={styles.statePanel}>
+                      <EmptyState
+                        icon={Clock}
+                        title="Word report not compiled yet"
+                        description="Word document is currently being compiled or awaiting execution in the Lab Studio."
+                        action={{
+                          label: "Open in Lab Studio",
+                          onClick: () =>
+                            router.push(`/code-execution?assignment=${workspace.assignment.id}`),
+                        }}
+                      />
                     </div>
                   )}
                 </div>
               )}
-            </div>
+            </>
           )}
-        </main>
+        </section>
       </div>
 
       {/* Image Zoom Modal */}
@@ -538,8 +671,13 @@ export default function WorkspacePage() {
           <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
             <div className={styles.modalHeader}>
               <span>{previewImage.title}</span>
-              <button onClick={() => setPreviewImage(null)} className={styles.modalCloseBtn}>
-                <X size={20} />
+              <button
+                type="button"
+                onClick={() => setPreviewImage(null)}
+                className={styles.modalCloseBtn}
+                aria-label="Close preview"
+              >
+                <X size={18} />
               </button>
             </div>
             <div className={styles.modalImageWrap}>
@@ -549,7 +687,7 @@ export default function WorkspacePage() {
               <a
                 href={previewImage.url}
                 download={`${previewImage.title.replace(/\s+/g, "_")}.png`}
-                className={styles.downloadModalBtn}
+                className={dashStyles.primaryButton}
                 target="_blank"
                 rel="noreferrer"
               >
@@ -559,6 +697,6 @@ export default function WorkspacePage() {
           </div>
         </div>
       )}
-    </div>
+    </DashboardShell>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import dynamic from "next/dynamic";
@@ -39,6 +39,9 @@ export default function HomePage() {
   const isAuthenticated = Boolean(user);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [authDestination, setAuthDestination] = useState<"/dashboard" | "/code-execution">("/dashboard");
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('login') === '1' && !user) setIsLoginOpen(true);
+  }, [user]);
 
   const requireAccount = (event: React.MouseEvent<HTMLButtonElement>, destination: "/dashboard" | "/code-execution") => {
     if (isAuthenticated) return;
@@ -123,7 +126,7 @@ export default function HomePage() {
         </h1>
 
         <p className={styles.heroDescription}>
-          Transform raw lab manuals into verified code, authentic execution evidence, and accredited Word reports.
+          Transform raw lab manuals into tested code, execution evidence, and formatted Word reports.
         </p>
 
         <div className={styles.heroCtas}>
@@ -437,7 +440,7 @@ export default function HomePage() {
               {" · "}<a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noreferrer">CC BY-SA 4.0</a>.
             </li>
             <li>
-              <a href="https://colab.research.google.com/notebooks/charts.ipynb" target="_blank" rel="noreferrer">Google Colab — Charts in Colaboratory</a>. Screenshot captured from Google's public example notebook.
+              <a href="https://colab.research.google.com/notebooks/charts.ipynb" target="_blank" rel="noreferrer">Google Colab — Charts in Colaboratory</a>. Screenshot captured from Google&apos;s public example notebook.
             </li>
           </ul>
         </details>

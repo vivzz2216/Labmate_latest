@@ -10,7 +10,7 @@
       background: #ffffff;
       margin: 0;
       padding: 24px;
-      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-family: 'Segoe UI', Arial, sans-serif;
       display: flex;
       justify-content: center;
       align-items: flex-start;
@@ -37,18 +37,8 @@
       padding: 0 10px;
       gap: 0;
     }
-    .chrome-dots {
-      display: flex;
-      gap: 6px;
-      padding: 0 10px;
-    }
-    .dot {
-      width: 12px; height: 12px;
-      border-radius: 50%;
-    }
-    .dot-red    { background: #ff5f57; }
-    .dot-yellow { background: #febc2e; }
-    .dot-green  { background: #28c840; }
+    .chrome-controls { margin-left: auto; height: 100%; display: flex; align-items: center; }
+    .chrome-control { width: 46px; height: 100%; display: flex; align-items: center; justify-content: center; color: #333; }
 
     /* Tab bar */
     .chrome-tabs {
@@ -135,11 +125,6 @@
 
   <!-- Title + Tab bar -->
   <div class="chrome-titlebar">
-    <div class="chrome-dots">
-      <div class="dot dot-red"></div>
-      <div class="dot dot-yellow"></div>
-      <div class="dot dot-green"></div>
-    </div>
     <div class="chrome-tabs">
       <div class="chrome-tab">
         <!-- favicon -->
@@ -153,6 +138,11 @@
         <span class="tab-close">✕</span>
       </div>
       <div style="width:32px;height:28px;display:flex;align-items:center;justify-content:center;color:#5f6368;font-size:18px;">+</div>
+    </div>
+    <div class="chrome-controls" aria-label="Windows window controls">
+      <span class="chrome-control" aria-label="Minimize">&#x2013;</span>
+      <span class="chrome-control" aria-label="Maximize">&#x25A1;</span>
+      <span class="chrome-control" aria-label="Close">&#x2715;</span>
     </div>
   </div>
 

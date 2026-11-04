@@ -26,3 +26,8 @@ final_boss_manuals
 
 frontend
 chrome_extension
+# Local verification bundles can be large and never belong in deployment contexts.
+**/audit_artifacts
+**/htmlcov
+**/.pytest_cache
+scratch

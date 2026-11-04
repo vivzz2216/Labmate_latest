@@ -37,7 +37,7 @@ async def _background_worker(worker_id: int):
                 if asyncio.iscoroutinefunction(task_func):
                     await task_func(*task_args, **task_kwargs)
                 else:
-                    task_func(*task_args, **task_kwargs)
+                    await asyncio.to_thread(task_func, *task_args, **task_kwargs)
                 logger.debug(f"Worker {worker_id} completed task: {task_func.__name__}")
             except Exception as e:
                 logger.error(f"Worker {worker_id} task failed: {e}", exc_info=True)
@@ -76,7 +76,7 @@ def start_background_workers(num_workers: int = 3):
     logger.info(f"Started {num_workers} background workers")
 
 
-def stop_background_workers():
+async def stop_background_workers():
     """
     Stop all background worker threads gracefully
     """
@@ -94,7 +94,7 @@ def stop_background_workers():
     
     # Wait for workers to finish
     if _task_workers:
-        asyncio.gather(*_task_workers, return_exceptions=True)
+        await asyncio.gather(*_task_workers, return_exceptions=True)
     
     _task_workers = []
     logger.info("Background workers stopped")

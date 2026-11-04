@@ -1,20 +1,24 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import func
+from sqlalchemy import update,case
 from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel, EmailStr, Field, validator
 from typing import Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import bcrypt
 import secrets
 import re
 import logging
+import asyncio
+import json
+from starlette.concurrency import run_in_threadpool
 
 from ..database import get_db, get_db_transaction
 from ..models import User, UserProfile
-from ..security.jwt import create_access_token, create_refresh_token, verify_token
+from ..security.jwt import create_access_token, create_refresh_token, verify_token, revoke_token
 from ..middleware.auth import get_current_user
-from ..middleware.csrf import generate_csrf_token, store_csrf_token
+from ..middleware.csrf import generate_csrf_token, store_csrf_token, require_csrf_token
 from ..security.operator_access import admin_email, is_admin_user
 
 # Set up logging for debugging
@@ -26,6 +30,23 @@ router = APIRouter()
 MIN_PASSWORD_LENGTH = 8
 MAX_LOGIN_ATTEMPTS = 5
 LOCKOUT_DURATION_MINUTES = 15
+PASSWORD_WORKERS = asyncio.Semaphore(4)
+
+
+async def password_work(function, *args):
+    async with PASSWORD_WORKERS:
+        return await asyncio.to_thread(function, *args)
+
+
+def load_auth_user(db, email=None, user_id=None):
+    """Return loaded scalars without holding a DB connection during bcrypt/Redis awaits."""
+    try:
+        condition = func.lower(User.email) == func.lower(email) if email is not None else User.id == user_id
+        user = db.query(User).filter(condition).first()
+        if user is not None: db.expunge(user)
+        return user
+    finally:
+        db.rollback()
 
 class UserSignup(BaseModel):
     email: EmailStr
@@ -65,7 +86,8 @@ class UserResponse(BaseModel):
     name: str
     profile_picture: Optional[str] = None
     created_at: str
-    last_login: str
+    last_login: Optional[str] = None
+    is_admin: bool = False
 
     class Config:
         from_attributes = True
@@ -81,7 +103,7 @@ class TokenResponse(BaseModel):
 
 
 class RefreshTokenRequest(BaseModel):
-    refresh_token: str
+    refresh_token: str = Field(min_length=1, max_length=8192)
 
 def hash_password(password: str) -> str:
     """Hash a password using bcrypt with secure rounds"""
@@ -99,20 +121,24 @@ def verify_password(password: str, hashed: str) -> bool:
 
 def check_account_lockout(user: User) -> bool:
     """Check if account is locked due to failed login attempts"""
-    if user.locked_until and user.locked_until > datetime.utcnow():
-        return True
-    return False
+    return lockout_seconds(user)>0
+
+
+def lockout_seconds(user: User) -> float:
+    locked=user.locked_until
+    if locked is None:return 0
+    if locked.tzinfo is None:locked=locked.replace(tzinfo=timezone.utc)
+    return max(0,(locked-datetime.now(timezone.utc)).total_seconds())
 
 def handle_failed_login(db: Session, user: User):
     """Handle failed login attempt with progressive lockout"""
     # Best-effort: never let tracking/lockout updates turn a normal 401 into a 500.
     try:
-        user.failed_login_attempts = int(user.failed_login_attempts or 0) + 1
-
-        if user.failed_login_attempts >= MAX_LOGIN_ATTEMPTS:
-            # Lock account for LOCKOUT_DURATION_MINUTES
-            user.locked_until = datetime.utcnow() + timedelta(minutes=LOCKOUT_DURATION_MINUTES)
-
+        attempts=case((User.locked_until<=datetime.utcnow(),1),else_=func.coalesce(User.failed_login_attempts,0)+1)
+        db.execute(update(User).where(User.id==user.id).values(
+            failed_login_attempts=attempts,
+            locked_until=case((attempts>=MAX_LOGIN_ATTEMPTS,datetime.utcnow()+timedelta(minutes=LOCKOUT_DURATION_MINUTES)),else_=User.locked_until)
+        ).execution_options(synchronize_session=False))
         db.commit()
     except Exception as e:
         try:
@@ -121,13 +147,22 @@ def handle_failed_login(db: Session, user: User):
             pass
         logger.warning(f"Failed to update failed_login_attempts for user {getattr(user, 'id', None)}: {e}", exc_info=True)
 
+
+async def persist_csrf(token, user_id):
+    if await asyncio.to_thread(store_csrf_token, token, user_id) is False:
+        raise HTTPException(503, 'Session storage is temporarily unavailable. Please retry.')
+
 def reset_failed_attempts(db: Session, user: User):
     """Reset failed login attempts after successful login"""
     # Best-effort: do not fail login if this bookkeeping update fails.
     try:
+        now = datetime.utcnow()
+        db.execute(update(User).where(User.id == user.id).values(
+            failed_login_attempts=0, locked_until=None, last_login=now).execution_options(synchronize_session=False))
+        db.commit()
         user.failed_login_attempts = 0
         user.locked_until = None
-        db.commit()
+        user.last_login = now
     except Exception as e:
         try:
             db.rollback()
@@ -150,9 +185,7 @@ async def signup(request: UserSignup, db: Session = Depends(get_db)):
     try:
         # Check if user already exists (case-insensitive email check)
         logger.debug(f"Checking if user exists with email: {request.email}")
-        existing_user = db.query(User).filter(
-            func.lower(User.email) == func.lower(request.email)
-        ).first()
+        existing_user = await run_in_threadpool(load_auth_user, db, email=request.email)
 
         if existing_user:
             logger.warning(f"Signup failed: Email already registered - {request.email}")
@@ -163,7 +196,7 @@ async def signup(request: UserSignup, db: Session = Depends(get_db)):
 
         # Hash the password securely
         logger.debug("Hashing password...")
-        hashed_password = hash_password(request.password)
+        hashed_password = await password_work(hash_password, request.password)
         logger.debug("Password hashed successfully")
 
         # Create new user with hashed password
@@ -183,6 +216,8 @@ async def signup(request: UserSignup, db: Session = Depends(get_db)):
         db.add(user)
         db.commit()
         db.refresh(user)
+        db.expunge(user)
+        db.rollback()
 
         logger.info(f"User created successfully: id={user.id}, email={user.email}")
 
@@ -217,7 +252,7 @@ async def signup(request: UserSignup, db: Session = Depends(get_db)):
         
         # Generate CSRF token
         csrf_token = generate_csrf_token()
-        store_csrf_token(csrf_token, user.id)
+        await persist_csrf(csrf_token, user.id)
     except ValueError as jwt_error:
         # JWT generation failed (e.g., SECRET_KEY not set)
         logger.error(f"JWT token generation failed: {jwt_error}")
@@ -238,7 +273,8 @@ async def signup(request: UserSignup, db: Session = Depends(get_db)):
             name=user.name,
             profile_picture=user.profile_picture,
             created_at=user.created_at.isoformat(),
-            last_login=user.last_login.isoformat()
+            is_admin=is_admin_user(user),
+            last_login=user.last_login.isoformat() if user.last_login else None
         ),
         csrf_token=csrf_token
     )
@@ -255,9 +291,7 @@ async def login(request: UserLogin, db: Session = Depends(get_db)):
     try:
         # Find user by email (case-insensitive)
         logger.debug(f"Looking up user with email: {request.email}")
-        user = db.query(User).filter(
-            func.lower(User.email) == func.lower(request.email)
-        ).first()
+        user = await run_in_threadpool(load_auth_user, db, email=request.email)
         
         # Use constant-time comparison to prevent timing attacks
         # Return same error message whether user exists or password is wrong
@@ -272,7 +306,8 @@ async def login(request: UserLogin, db: Session = Depends(get_db)):
         
         # Check if account is locked
         if check_account_lockout(user):
-            remaining_time = int((user.locked_until - datetime.utcnow()).total_seconds() / 60)
+            rem_sec = lockout_seconds(user)
+            remaining_time = max(1, int(rem_sec / 60))
             logger.warning(f"Login failed: Account locked for user {user.id}, remaining time: {remaining_time} minutes")
             raise HTTPException(
                 status_code=status.HTTP_423_LOCKED,
@@ -296,10 +331,10 @@ async def login(request: UserLogin, db: Session = Depends(get_db)):
             )
         
         logger.debug("Verifying password...")
-        if not verify_password(request.password, user.password_hash):
+        if not await password_work(verify_password,request.password,user.password_hash):
             # Password incorrect - increment failed attempts
             logger.warning(f"Login failed: Invalid password for user {user.id}, incrementing failed attempts")
-            handle_failed_login(db, user)
+            await run_in_threadpool(handle_failed_login, db, user)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid email or password"
@@ -307,9 +342,7 @@ async def login(request: UserLogin, db: Session = Depends(get_db)):
         
         # Successful login - reset failed attempts and update last login
         logger.debug(f"Password verified successfully for user {user.id}")
-        reset_failed_attempts(db, user)
-        user.last_login = datetime.utcnow()
-        # Note: db.commit() is called automatically by get_db() dependency
+        await run_in_threadpool(reset_failed_attempts, db, user)
         
         # Generate JWT tokens
         token_data = {"sub": str(user.id), "email": user.email}
@@ -318,7 +351,7 @@ async def login(request: UserLogin, db: Session = Depends(get_db)):
         
         # Generate CSRF token
         csrf_token = generate_csrf_token()
-        store_csrf_token(csrf_token, user.id)
+        await persist_csrf(csrf_token, user.id)
         
         logger.info(f"Login successful for user {user.id}, email: {user.email}")
         
@@ -333,7 +366,8 @@ async def login(request: UserLogin, db: Session = Depends(get_db)):
                 name=user.name,
                 profile_picture=user.profile_picture,
                 created_at=user.created_at.isoformat(),
-                last_login=user.last_login.isoformat()
+                is_admin=is_admin_user(user),
+                last_login=user.last_login.isoformat() if user.last_login else None
             ),
             csrf_token=csrf_token
         )
@@ -354,11 +388,11 @@ async def refresh_token(request: RefreshTokenRequest, db: Session = Depends(get_
     """
     try:
         # Verify refresh token
-        payload = verify_token(request.refresh_token, token_type="refresh")
+        payload = await asyncio.to_thread(verify_token, request.refresh_token, token_type="refresh")
         user_id = int(payload.get("sub"))
         
         # Get user from database
-        user = db.query(User).filter(User.id == user_id).first()
+        user = await run_in_threadpool(load_auth_user, db, user_id=user_id)
         if not user or not user.is_active:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -372,7 +406,8 @@ async def refresh_token(request: RefreshTokenRequest, db: Session = Depends(get_
         
         # Generate new CSRF token
         csrf_token = generate_csrf_token()
-        store_csrf_token(csrf_token, user.id)
+        await persist_csrf(csrf_token, user.id)
+        await asyncio.to_thread(revoke_token, request.refresh_token, payload, single_use=True)
         
         return TokenResponse(
             access_token=access_token,
@@ -385,7 +420,8 @@ async def refresh_token(request: RefreshTokenRequest, db: Session = Depends(get_
                 name=user.name,
                 profile_picture=user.profile_picture,
                 created_at=user.created_at.isoformat(),
-                last_login=user.last_login.isoformat()
+                is_admin=is_admin_user(user),
+                last_login=user.last_login.isoformat() if user.last_login else None
             ),
             csrf_token=csrf_token
         )
@@ -397,6 +433,24 @@ async def refresh_token(request: RefreshTokenRequest, db: Session = Depends(get_
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid refresh token"
         )
+
+
+class LogoutRequest(BaseModel):
+    refresh_token: Optional[str] = Field(default=None, max_length=8192)
+
+
+@router.post('/logout')
+async def logout(body: LogoutRequest, request: Request, current_user: User = Depends(get_current_user),
+                 csrf: bool = Depends(require_csrf_token)):
+    access = request.headers.get('authorization', '').split(' ', 1)[-1]
+    access_payload = await asyncio.to_thread(verify_token, access)
+    if body.refresh_token:
+        refresh_payload = await asyncio.to_thread(verify_token, body.refresh_token, token_type='refresh')
+        if str(refresh_payload.get('sub')) != str(current_user.id):
+            raise HTTPException(403, 'Refresh token belongs to another account.')
+        await asyncio.to_thread(revoke_token, body.refresh_token, refresh_payload)
+    await asyncio.to_thread(revoke_token, access, access_payload)
+    return {'ok': True}
 
 
 @router.get("/me", response_model=UserResponse)
@@ -412,22 +466,36 @@ async def get_current_user_info(
         name=current_user.name,
         profile_picture=current_user.profile_picture,
         created_at=current_user.created_at.isoformat(),
-        last_login=current_user.last_login.isoformat()
+        is_admin=is_admin_user(current_user),
+        last_login=current_user.last_login.isoformat() if current_user.last_login else None
     )
 
 
 class ProfileUpdateRequest(BaseModel):
-    name: Optional[str] = None
-    institution: Optional[str] = None
-    course: Optional[str] = None
-    profile_metadata: Optional[dict] = None
+    name: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    institution: Optional[str] = Field(default=None, max_length=300)
+    course: Optional[str] = Field(default=None, max_length=200)
+    profile_metadata: Optional[dict] = Field(default=None, max_length=64)
+
+    @validator('name')
+    def trim_profile_name(cls, value):
+        if value is not None and not value.strip():
+            raise ValueError('Name must not be blank.')
+        return value.strip() if value is not None else None
+
+    @validator('profile_metadata')
+    def bound_profile_metadata(cls, value):
+        if value is not None and len(json.dumps(value).encode('utf-8')) > 32768:
+            raise ValueError('Profile metadata must be at most 32 KiB.')
+        return value
 
 
 @router.post("/profile")
 async def update_user_profile(
     request: ProfileUpdateRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    csrf: bool = Depends(require_csrf_token)
 ):
     """
     Update or create user profile information
@@ -448,12 +516,12 @@ async def update_user_profile(
             current_user.name = request.name
         
         # Update profile fields
-        if request.institution:
+        if request.institution is not None:
             profile.institution = request.institution
-        if request.course:
+        if request.course is not None:
             profile.course = request.course
         if request.profile_metadata:
-            existing_metadata = profile.profile_metadata or {}
+            existing_metadata = dict(profile.profile_metadata or {})
             existing_metadata.update(request.profile_metadata)
             profile.profile_metadata = existing_metadata
         
@@ -495,6 +563,7 @@ async def get_user_profile(
             "institution": None,
             "course": None,
             "profile_metadata": None,
+            "is_admin": is_admin_user(current_user),
             "is_complete": is_admin_user(current_user),
             "onboarding_required": not is_admin_user(current_user),
         }
@@ -513,6 +582,7 @@ async def get_user_profile(
         "institution": profile.institution,
         "course": profile.course,
         "profile_metadata": profile.profile_metadata,
+        "is_admin": is_admin_user(current_user),
         "is_complete": is_complete or is_admin_user(current_user),
         "onboarding_required": not (is_complete or is_admin_user(current_user)),
     }

@@ -58,11 +58,11 @@ async def test_real_app_ui_workflow_word_preview_and_owned_download(tmp_path,lan
         assert workflow.report_id and workflow.results[0]['verification']['status']==('failed' if wrong else 'passed')
         report=db.get(Report,workflow.report_id);document=Document(report.file_path)
         text='\n'.join(p.text for p in document.paragraphs)
-        assert 'VS Code-style source' in text
+        assert ('VS Code-style preview' if language == 'python' else 'Notepad-style preview') in text
         if wrong:assert 'Diagnostic report' in text
         if language=='java':
             assert any(e['kind']=='gui' for e in workflow.results[0]['evidence_plan']['evidence']['selected'])
-            assert 'Java UI interaction verification' in text
+            assert ('Java UI interaction verification' if wrong else 'Actual Java UI component capture') in text
     from app.routers import workflows,download
     app=FastAPI();app.include_router(workflows.router,prefix='/api');app.include_router(download.router,prefix='/api')
     def database():

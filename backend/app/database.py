@@ -25,11 +25,21 @@ else:
 
     if db_url.startswith("sqlite:"):
         # Local recovery runs can use a file database without PostgreSQL.
+        from sqlalchemy import event
+
         engine = create_engine(
             db_url,
             pool_pre_ping=True,
-            connect_args={"check_same_thread": False},
+            connect_args={"check_same_thread": False, "timeout": 30},
         )
+
+        @event.listens_for(engine, "connect")
+        def set_sqlite_pragma(dbapi_connection, connection_record):
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA busy_timeout=30000")
+            cursor.execute("PRAGMA synchronous=NORMAL")
+            cursor.close()
     else:
         # Production PostgreSQL pool settings.
         engine = create_engine(

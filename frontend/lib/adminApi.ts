@@ -1,104 +1,41 @@
-import axios from 'axios'
+import api from './api'
 
-// Call same-origin paths (e.g. `/api/...`) and let Next.js rewrites proxy to the backend.
-// This avoids browser CORS issues on Railway.
-const API_BASE_URL = ''
-
+export type PaymentMode = 'live' | 'test'
+export interface Revenue {
+  gross_paise: number; refunds_paise: number; net_paise: number
+  captured_orders: number; paying_students: number
+}
 export interface AdminOverview {
-  total_users: number
-  active_subscriptions: number
-  total_uploads: number
-  completed_jobs: number
-  feedback_count: number
+  generated_at: string; owner_email: string; billing_mode: PaymentMode
+  total_students: number; enabled_students: number; active_students_7d: number
+  students_with_uploads: number; uploads_total: number; reports_total: number
+  completed_manuals: number; running_manuals: number; failed_or_paused_manuals: number
+  revenue: Record<PaymentMode, Revenue>
 }
-
 export interface AdminUserRow {
-  id: number
-  email: string
-  name: string
-  created_at: string | null
-  last_login: string | null
-  is_active: boolean
-  subscription_active: boolean
-  subscription_plan?: string | null
-  subscription_expires_at?: string | null
-  uploads_total: number
-  assignments_completed: number
-  jobs_completed: number
-  reports_total: number
-  feedback_count: number
+  id: number; name: string; email: string; is_active: boolean
+  created_at: string | null; last_login: string | null; last_activity: string | null
+  institution: string | null; course: string | null
+  uploads_total: number; completed_manuals: number; failed_or_paused_manuals: number; reports_total: number
+  paid_orders: number; gross_paid_paise: number; refunded_paise: number; net_paid_paise: number; is_paying: boolean
+  credits: Record<PaymentMode, { balance: number; reserved: number }>
 }
-
-export interface AdminFeedbackRow {
-  id: number
-  user_id: number | null
-  user_email: string | null
-  user_name: string | null
-  rating: number | null
-  message: string
-  created_at: string | null
+export interface AdminPayment {
+  id: string; user_id: number; name: string; email: string; mode: PaymentMode
+  pack_id: string; amount_paise: number; currency: string; status: string; captured: boolean
+  refunded_paise: number; net_paise: number; credits: number
+  gateway_order_id: string | null; gateway_payment_id: string | null
+  created_at: string | null; fulfilled_at: string | null
 }
+export interface StudentPage { users: AdminUserRow[]; total: number; offset: number; limit: number }
+export interface PaymentPage { payments: AdminPayment[]; total: number; offset: number; limit: number; mode: PaymentMode }
 
-const adminApi = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 60000,
-})
-
-const ADMIN_AUTH_KEY = 'labmate_admin_basic'
-
-export function saveAdminCreds(userId: string, password: string) {
-  if (typeof window === 'undefined') return
-  const token = btoa(`${userId}:${password}`)
-  localStorage.setItem(ADMIN_AUTH_KEY, token)
+export async function fetchAdminOverview(signal?: AbortSignal): Promise<AdminOverview> {
+  return (await api.get('/api/admin/overview', { signal })).data
 }
-
-export function clearAdminCreds() {
-  if (typeof window === 'undefined') return
-  localStorage.removeItem(ADMIN_AUTH_KEY)
+export async function fetchAdminUsers(params: { search: string; paid?: boolean; active?: boolean; offset: number; limit: number }, signal?: AbortSignal): Promise<StudentPage> {
+  return (await api.get('/api/admin/users', { params, signal })).data
 }
-
-export function getAdminAuthHeader(): string | null {
-  if (typeof window === 'undefined') return null
-  const token = localStorage.getItem(ADMIN_AUTH_KEY)
-  if (!token) return null
-  return `Basic ${token}`
+export async function fetchAdminPayments(mode: PaymentMode, offset: number, signal?: AbortSignal): Promise<PaymentPage> {
+  return (await api.get('/api/admin/payments', { params: { mode, offset, limit: 25 }, signal })).data
 }
-
-function authHeaders() {
-  const auth = getAdminAuthHeader()
-  return auth ? { Authorization: auth } : {}
-}
-
-export async function adminPing(userId: string, password: string) {
-  const token = btoa(`${userId}:${password}`)
-  const res = await adminApi.get('/api/admin/ping', {
-    headers: { Authorization: `Basic ${token}` },
-  })
-  return res.data
-}
-
-export async function fetchAdminOverview(): Promise<AdminOverview> {
-  const res = await adminApi.get('/api/admin/overview', { headers: authHeaders() })
-  return res.data
-}
-
-export async function fetchAdminUsers(): Promise<{ users: AdminUserRow[] }> {
-  const res = await adminApi.get('/api/admin/users', { headers: authHeaders() })
-  return res.data
-}
-
-export async function fetchAdminFeedback(): Promise<{ feedback: AdminFeedbackRow[] }> {
-  const res = await adminApi.get('/api/admin/feedback', { headers: authHeaders() })
-  return res.data
-}
-
-export async function setUserSubscription(
-  userId: number,
-  body: { is_active: boolean; plan?: string; expires_at?: string | null }
-) {
-  const res = await adminApi.post(`/api/admin/subscription/${userId}`, body, { headers: authHeaders() })
-  return res.data
-}
-
-
-

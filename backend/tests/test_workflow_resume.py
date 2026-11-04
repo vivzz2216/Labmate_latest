@@ -71,6 +71,7 @@ class WorkflowResumeTests(unittest.IsolatedAsyncioTestCase):
         with self.factory() as db:
             upload = db.get(Upload, self.upload_id)
             upload.file_path = str(source_path)
+            db.get(AssignmentWorkflow, self.id).mode = "theory_and_code"
             db.commit()
         answer = {"answer": "Slice the string with a negative step.", "code": "print('hello'[::-1])", "language": "python"}
         with patch("app.services.assignment_workflow.SessionLocal", self.factory), patch("app.services.assignment_workflow.generation_service.generate_json", AsyncMock(return_value=answer)) as generation, patch("app.services.assignment_workflow.settings.REPORT_DIR", str(root / "reports")), patch("app.services.assignment_workflow.settings.SCREENSHOT_DIR", str(root / "screenshots")), patch("app.services.assignment_workflow.settings.REACT_TEMP_DIR", str(root / "runtime")):

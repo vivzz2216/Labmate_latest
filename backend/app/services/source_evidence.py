@@ -76,20 +76,21 @@ async def capture_source_evidence(project_files,code,filename,*,theme,group,user
         return [],['Complete source exceeds 80 readable capture pages. Split the project; no source was silently omitted.']
     for name,text in files:
         digest=hashlib.sha256(text.encode('utf-8')).hexdigest()
-        web=language in {'html','react','node','flask','java_gui'}
+        web=language in {'html','react','node','flask'}
+        ide=language in {'python','java','java_gui','c','cpp'}
         count=len(text.splitlines())
         pages=[[[start,min(start+31,count)]] for start in range(1,count+1,32)] if policy=='complete' and count else [excerpt_ranges(text) if web else []]
         for page_index,ranges in enumerate(pages,1):
             excerpt=''.join(''.join(text.splitlines(keepends=True)[start-1:end]) for start,end in ranges) if ranges else text
             ok,path,width,height=await screenshot_service.generate_screenshot(
-                text,'',theme,group,username,name,view_mode='editor',presentation='vscode_evidence' if web else 'evidence',
+                text,'','notepad' if language=='java_gui' else theme,group,username,name,view_mode='editor',presentation='vscode_evidence' if web else 'ide_evidence' if ide else 'evidence',
                 language=language,screenshot_style=screenshot_style,
                 palette='dark' if web or screenshot_style=='style_2' else 'light',
                 source_ranges=ranges if web or policy=='complete' else None,project_files=project_files)
             if not ok:
                 failures.append(f'Source screenshot could not be captured completely: {name}'+(f', page {page_index}' if policy=='complete' else ''))
                 continue
-            label='VS Code-style source excerpt' if web and len(ranges)>1 else 'VS Code-style source preview' if web else 'Rendered source preview'
+            label='VS Code-style source excerpt' if web and len(ranges)>1 else 'VS Code-style source preview' if web else 'Rendered IDLE source preview' if language=='python' else 'Rendered Notepad source preview' if language in {'java','java_gui'} else 'Rendered Code::Blocks source preview' if language in {'c','cpp'} else 'Rendered source preview'
             if policy=='complete':
                 label=f'Complete source — {name} — lines {ranges[0][0]}–{ranges[-1][1]}, part {page_index}/{len(pages)}' if ranges else 'Complete source — '+name+' (empty file)'
             else:

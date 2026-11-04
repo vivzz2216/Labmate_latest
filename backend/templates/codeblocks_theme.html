@@ -363,7 +363,7 @@
     .cb-console-window {
       width: 980px;
       background: #0c0c0c;
-      border: 1px solid #333333;
+      border: 1px solid #454545;
       border-radius: 8px;
       overflow: hidden;
       box-shadow: 0 12px 36px rgba(0, 0, 0, 0.40);
@@ -372,13 +372,13 @@
       font-family: 'Consolas', 'Courier New', monospace;
     }
     .cb-console-titlebar {
-      height: 32px;
-      background: #1f1f1f;
-      border-bottom: 1px solid #2d2d2d;
+      height: 40px;
+      background: #202020;
+      border-bottom: 1px solid #353535;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0 10px;
+      padding: 0;
       color: #cccccc;
       font-size: 12px;
       user-select: none;
@@ -386,13 +386,40 @@
     .cb-console-title-left {
       display: flex;
       align-items: center;
-      gap: 8px;
+      height: 100%;
+      gap: 0;
+      min-width: 0;
+    }
+    .cb-console-tab {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      height: 32px;
+      min-width: 240px;
+      margin: 8px 0 0 8px;
+      padding: 0 12px;
+      background: #303030;
+      border-radius: 6px 6px 0 0;
+      font-family: 'Segoe UI', sans-serif;
+    }
+    .cb-console-add, .cb-console-dropdown {
+      padding: 0 10px;
+      font: 18px 'Segoe UI', sans-serif;
+      color: #d1d1d1;
+    }
+    .cb-console-dropdown { font-size: 12px; padding-left: 2px; }
+    .cb-console-window .cb-win-btn {
+      width: 46px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
     .cb-console-body {
-      padding: 12px 14px;
-      color: #cccccc;
-      font-size: 13px;
-      line-height: 1.45;
+      padding: 14px 16px;
+      color: #f2f2f2;
+      font-size: 16px;
+      line-height: 1.4;
       min-height: 340px;
       white-space: pre-wrap;
       word-break: break-word;
@@ -402,12 +429,7 @@
       color: #ffffff;
       font-weight: bold;
     }
-    .cb-console-meta {
-      color: #888888;
-      border-top: 1px solid #222222;
-      padding-top: 10px;
-      margin-top: 14px;
-    }
+    .cb-console-output, .cb-console-error { white-space: pre-wrap; overflow-wrap: anywhere; }
     .cb-console-cursor {
       display: inline-block;
       width: 8px;
@@ -432,11 +454,15 @@
   <div class="cb-console-window">
     <div class="cb-console-titlebar">
       <div class="cb-console-title-left">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-          <rect width="24" height="24" rx="2" fill="#111111"/>
-          <path d="M4 7L10 12L4 17M12 17H20" stroke="#cccccc" stroke-width="2" stroke-linecap="round"/>
-        </svg>
-        <span>Captured program output — {{ filename }}</span>
+        <div class="cb-console-tab">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <rect x="2" y="3" width="20" height="18" rx="2" fill="#171717" stroke="#8c8c8c"/>
+            <path d="M6 8L10 12L6 16M12 16H18" stroke="#eeeeee" stroke-width="1.5"/>
+          </svg>
+          <span>Captured program output</span><span aria-hidden="true">×</span>
+        </div>
+        <span class="cb-console-add" aria-hidden="true">+</span>
+        <span class="cb-console-dropdown" aria-hidden="true">⌄</span>
       </div>
       <div class="cb-win-controls">
         <span class="cb-win-btn"><svg width="10" height="1" viewBox="0 0 10 1"><rect width="10" height="1" fill="#cccccc"/></svg></span>
@@ -444,13 +470,7 @@
         <span class="cb-win-btn close"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M1 1L9 9M9 1L1 9" stroke="#cccccc" stroke-width="1.2"/></svg></span>
       </div>
     </div>
-    <div class="cb-console-body">{{ output_content|default(output) }}
-
-<div class="cb-console-meta">
-{% if error_content and error_content not in output_content %}{{ error_content }}{% endif %}
-Formatted transcript of captured output. No exit status or duration is inferred.
-</div>
-    </div>
+    <div class="cb-console-body"><span class="cb-console-output">{{ output_content|default(output) }}</span>{% if error_content and error_content not in output_content %}<span class="cb-console-error">{{ '\n' if output_content else '' }}{{ error_content }}</span>{% endif %}</div>
   </div>
 
 {% else %}

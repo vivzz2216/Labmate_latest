@@ -10,28 +10,34 @@ from typing import Literal
 import mammoth
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, StreamingResponse
-from pydantic import BaseModel, Field
-from sqlalchemy import text, update
+from pydantic import BaseModel, Field, field_validator
+from sqlalchemy import event, text, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..middleware.auth import get_current_user
 from ..security.execution_access import execution_user
+from ..security.validators import normalize_output_name
 from ..middleware.csrf import require_csrf_token
 from ..models import AssignmentWorkflow, Report, Upload, User, WorkflowBatch, WorkflowBatchItem
 from ..config import settings
+from ..security.html_preview import PREVIEW_HEADERS
 from ..services.lab_question_filter import filter_lab_tasks
 from ..services.billing_service import reserve_workflow_credits, settle_workflow_credits
 from ..services.workflow_batch import archive_chunks, create_batch_archive, stage_batch_file
 
 router = APIRouter(prefix="/workflows")
-Language = Literal["auto", "python", "java", "c", "cpp", "html", "react", "node", "theory"]
+Language = Literal["auto", "python", "java", "c", "cpp", "html", "react", "node", "sql", "colab", "ubuntu", "theory"]
 
 
 class QuestionInput(BaseModel):
     id: int = Field(gt=0)
     text: str = Field(min_length=1, max_length=15000)
     language: Language = "python"
+    datasets: dict[str,str] = Field(default_factory=dict,max_length=20)
+    colab_theme: Literal["light", "dark"] = "dark"
+    browser_theme: Literal["edge", "chrome"] = "edge"
 
 
 class ProcessInput(BaseModel):
@@ -41,6 +47,16 @@ class ProcessInput(BaseModel):
     output_name: str = Field(default="lab_report", min_length=1, max_length=80, pattern=r"^[A-Za-z0-9_-]+$")
     screenshot_style: str = Field(default="style_1", max_length=40)
     mode: Literal["code_only", "theory_and_code"] = "code_only"
+
+    @field_validator("output_name", mode="before")
+    @classmethod
+    def _clean_output_name(cls, value):
+        if not isinstance(value, str):
+            return value
+        normalized = normalize_output_name(value, default="")
+        if not normalized:
+            raise ValueError("Output filename must contain at least one alphanumeric character.")
+        return normalized
 
 
 def owned_upload(upload_id, user, db):
@@ -88,6 +104,25 @@ def check_queue_capacity(db, user_id, additional=1):
         raise HTTPException(429, "Finish an active assignment before starting another.", headers={"Retry-After": "30"})
     if db.query(AssignmentWorkflow.id).filter(AssignmentWorkflow.status.in_(queued)).count() + additional > settings.WORKFLOW_QUEUE_LIMIT:
         raise HTTPException(503, "Assignment queue is full. Please retry shortly.", headers={"Retry-After": "30"})
+    db.info["_queue_capacity_user_id"] = user_id
+    if not db.info.get("_queue_capacity_hook_registered"):
+        db.info["_queue_capacity_hook_registered"] = True
+
+        @event.listens_for(db, "before_commit")
+        def _verify_flushed_capacity(session):
+            uid = session.info.pop("_queue_capacity_user_id", None)
+            if uid is None or session.get_bind().dialect.name == "postgresql":
+                return
+            if session.query(AssignmentWorkflow.id).join(Upload, Upload.id == AssignmentWorkflow.upload_id).filter(
+                Upload.user_id == uid, AssignmentWorkflow.status.in_(queued)
+            ).count() > settings.WORKFLOW_USER_QUEUE_LIMIT:
+                raise HTTPException(429, "Finish an active assignment before starting another.", headers={"Retry-After": "30"})
+            if session.query(AssignmentWorkflow.id).filter(AssignmentWorkflow.status.in_(queued)).count() > settings.WORKFLOW_QUEUE_LIMIT:
+                raise HTTPException(503, "Assignment queue is full. Please retry shortly.", headers={"Retry-After": "30"})
+
+        @event.listens_for(db, "after_soft_rollback")
+        def _clear_capacity_check(session, previous_transaction):
+            session.info.pop("_queue_capacity_user_id", None)
 
 
 def owned_batch(batch_id, user, db):
@@ -112,7 +147,7 @@ def batch_status(batch_id, user, db):
             "error": (workflow.error if workflow else item.error),
             "report_id": workflow.report_id if workflow else None,
         })
-    terminal = bool(states) and all(row["status"] in {"completed", "failed"} for row in states)
+    terminal = bool(states) and all(row["status"] in {"completed", "failed", "paused"} for row in states)
     return {
         "batch_id": batch_id, "total": len(states),
         "completed": sum(row["status"] == "completed" for row in states),
@@ -158,7 +193,7 @@ async def batch_upload(
                 upload = Upload(user_id=user.id, **metadata)
                 db.add(upload)
                 db.flush()
-                output_name = re.sub(r"[^A-Za-z0-9_-]", "_", os.path.splitext(metadata["original_filename"])[0])[:70].strip("_") or "lab_report"
+                output_name = normalize_output_name(metadata["original_filename"])
                 workflow = AssignmentWorkflow(
                     upload_id=upload.id, batch_id=batch_id, status="queued", stage="extract",
                     progress=0, language="auto", mode=mode, screenshot_style=screenshot_style,
@@ -197,9 +232,9 @@ async def download_batch_zip(batch_id: str, user: User = Depends(get_current_use
             if report is None:
                 item["error"] = "The completed report is missing."
             else:
-                workflow = db.get(AssignmentWorkflow, row["workflow_id"])
+                workflow = db.get(AssignmentWorkflow, row["workflow_id"]) if row.get("workflow_id") else None
                 item.update(report_path=report.file_path, report_filename=report.filename,
-                            screenshots=[path for result in (workflow.results or [])
+                            screenshots=[path for result in ((workflow.results or []) if workflow else [])
                                          for path in result.get("screenshot_paths", [])])
         elif row["status"] == "completed":
             item["error"] = "The completed report is missing."
@@ -218,19 +253,56 @@ async def download_batch_zip(batch_id: str, user: User = Depends(get_current_use
 async def extract(upload_id: int, request: Request, background: BackgroundTasks, mode: Literal["code_only", "theory_and_code"] | None = None, user: User = Depends(get_current_user), db: Session = Depends(get_db), csrf: bool = Depends(require_csrf_token)):
     upload = owned_upload(upload_id, user, db)
     workflow = db.query(AssignmentWorkflow).filter_by(upload_id=upload_id).first()
-    if workflow and workflow.status in {"queued", "extracting", "processing"}:
+    if workflow and (workflow.status in {"queued", "extracting", "processing"}
+                     or (workflow.status in {"ready", "completed"}
+                         and (mode is None or mode == workflow.mode))):
         return workflow_response(workflow, db)
-    check_queue_capacity(db, user.id)
-    if workflow is None:
-        workflow = AssignmentWorkflow(upload_id=upload_id, output_name=os.path.splitext(upload.original_filename)[0].replace(" ", "_")[:70] or "lab_report")
-        db.add(workflow)
+    try:
+        check_queue_capacity(db, user.id)
+    except HTTPException:
+        # Another request may have filled the last queue slot with this upload.
+        # That duplicate is a read of its existing job, not a new admission.
+        db.expire_all()
+        current = db.query(AssignmentWorkflow).filter_by(upload_id=upload_id).first()
+        if current and (current.status in {"queued", "extracting", "processing"}
+                        or (current.status in {"ready", "completed"}
+                            and (mode is None or mode == current.mode))):
+            return workflow_response(current, db)
+        raise
+    values = dict(status="queued", stage="extract", progress=0, error=None,
+                  questions=[], results=[], logs=[], report_id=None,
+                  claim_token=uuid.uuid4().hex, lease_expires_at=None,
+                  updated_at=datetime.now(timezone.utc))
     if mode is not None:
-        workflow.mode = mode
-    workflow.status, workflow.stage, workflow.progress = "queued", "extract", 0
-    workflow.error, workflow.questions, workflow.results, workflow.logs = None, [], [], []
-    workflow.report_id = None
-    workflow.updated_at = datetime.now(timezone.utc)
-    db.commit()
+        values["mode"] = mode
+    if workflow is None:
+        workflow = AssignmentWorkflow(upload_id=upload_id,
+            output_name=normalize_output_name(upload.original_filename), **values)
+        db.add(workflow)
+        try:
+            db.commit()
+        except IntegrityError:
+            # The unique upload_id constraint elects one creator across API
+            # processes. A loser must reload without resetting the winner.
+            db.rollback()
+            current = db.query(AssignmentWorkflow).filter_by(upload_id=upload_id).first()
+            if current is None:
+                raise
+            return workflow_response(current, db)
+    else:
+        # A retry of an existing failed job must also have only one winner.
+        # The token fences a stale request even if a worker has already cycled
+        # from queued back to the original status while that request waited.
+        changed = db.execute(update(AssignmentWorkflow).where(
+            AssignmentWorkflow.id == workflow.id,
+            AssignmentWorkflow.status == workflow.status,
+            AssignmentWorkflow.claim_token == workflow.claim_token,
+        ).values(**values), execution_options={"synchronize_session": False}).rowcount
+        if changed != 1:
+            db.rollback()
+            db.refresh(workflow)
+            return workflow_response(workflow, db)
+        db.commit()
     db.refresh(workflow)
     return workflow_response(workflow, db)
 
@@ -257,7 +329,12 @@ async def process(upload_id: int, data: ProcessInput, request: Request, backgrou
     check_queue_capacity(db, user.id)
     if len({q.id for q in data.questions}) != len(data.questions):
         raise HTTPException(400, 'Question IDs must be unique; original experiment numbers are preserved.')
-    questions = [{"id": q.id, "text": q.text.strip(), "language": "python" if q.language == "auto" else q.language} for q in data.questions]
+    questions = [{"id": q.id, "text": q.text.strip(), "language": "python" if q.language == "auto" else q.language,
+                  **({'datasets':q.datasets} if q.datasets else {}),
+                  **({'colab_theme':q.colab_theme} if q.language=='colab' or data.language=='colab' else {}),
+                  **({'browser_theme':q.browser_theme} if q.browser_theme == 'chrome' or q.language in {'html','react','node'} or data.language in {'html','react','node'} else {})} for q in data.questions]
+    if sum(sum(len(name)+len(content) for name,content in q.datasets.items()) for q in data.questions)>8*1024*1024:
+        raise HTTPException(400,'Dataset upload exceeds 8 MiB.')
     filtered = filter_lab_tasks(questions, mode=data.mode)
     if len(filtered) != len(questions):
         raise HTTPException(400, "Only valid laboratory questions can be processed. Handwritten exercises are excluded.")
@@ -329,6 +406,16 @@ async def clarify(upload_id: int, data: ClarificationInput, user: User = Depends
     return workflow_response(workflow, db)
 
 
+def _convert_docx_to_html(file_path: str) -> str:
+    def convert_image(image):
+        with image.open() as stream:
+            encoded = base64.b64encode(stream.read()).decode("ascii")
+        return {"src": f"data:{image.content_type};base64,{encoded}"}
+    with open(file_path, "rb") as source:
+        result = mammoth.convert_to_html(source, convert_image=mammoth.images.img_element(convert_image))
+    return result.value
+
+
 @router.get("/{upload_id}/preview", response_class=HTMLResponse)
 async def preview(upload_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     owned_upload(upload_id, user, db)
@@ -336,11 +423,6 @@ async def preview(upload_id: int, user: User = Depends(get_current_user), db: Se
     report = db.query(Report).get(workflow.report_id) if workflow and workflow.report_id else None
     if not report or not os.path.isfile(report.file_path):
         raise HTTPException(404, "The Word document is not ready yet.")
-    def convert_image(image):
-        with image.open() as stream:
-            encoded = base64.b64encode(stream.read()).decode("ascii")
-        return {"src": f"data:{image.content_type};base64,{encoded}"}
-    with open(report.file_path, "rb") as source:
-        result = mammoth.convert_to_html(source, convert_image=mammoth.images.img_element(convert_image))
+    html_value = await asyncio.to_thread(_convert_docx_to_html, report.file_path)
     # Browser sandbox plus restrictive CSP protect previews of user-supplied documents.
-    return HTMLResponse(f'''<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'"><title>{html.escape(report.filename)}</title><style>body{{max-width:780px;margin:24px auto;padding:28px;background:white;color:#172747;font:14px/1.6 Arial,sans-serif}}img{{max-width:100%;height:auto}}table{{border-collapse:collapse;width:100%}}td,th{{border:1px solid #ccd5e3;padding:8px}}pre{{white-space:pre-wrap}}h1,h2,h3{{line-height:1.3}}a{{color:#075cf7;pointer-events:none}}</style></head><body>{result.value}</body></html>''', headers={"Cache-Control": "no-store"})
+    return HTMLResponse(f'''<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'"><title>{html.escape(report.filename)}</title><style>body{{max-width:780px;margin:24px auto;padding:28px;background:white;color:#172747;font:14px/1.6 Arial,sans-serif}}img{{max-width:100%;height:auto}}table{{border-collapse:collapse;width:100%}}td,th{{border:1px solid #ccd5e3;padding:8px}}pre{{white-space:pre-wrap}}h1,h2,h3{{line-height:1.3}}a{{color:#075cf7;pointer-events:none}}</style></head><body>{html_value}</body></html>''', headers=PREVIEW_HEADERS)

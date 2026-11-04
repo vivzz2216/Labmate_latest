@@ -45,7 +45,9 @@ services:
   #     retries: 5
 
   backend:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     env_file:
       - ./backend/.env
     ports:
@@ -80,7 +82,6 @@ services:
       - ./backend/screenshots:/app/screenshots
       - ./backend/reports:/app/reports
       - ./backend/react_temp:/app/react_temp  # Temp directory for React projects
-      - /var/run/docker.sock:/var/run/docker.sock  # Mount Docker socket for Docker-in-Docker
     depends_on:
       postgres:
         condition: service_healthy
@@ -89,7 +90,9 @@ services:
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
 
   worker:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     env_file:
       - ./backend/.env
     environment:
@@ -109,7 +112,6 @@ services:
       - ./backend/screenshots:/app/screenshots
       - ./backend/reports:/app/reports
       - ./backend/react_temp:/app/react_temp
-      - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       postgres:
         condition: service_healthy

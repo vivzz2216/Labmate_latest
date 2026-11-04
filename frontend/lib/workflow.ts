@@ -9,11 +9,17 @@ export type LabLanguage =
   | "html"
   | "react"
   | "node"
+  | "sql"
+  | "colab"
+  | "ubuntu"
   | "theory";
 export interface LabQuestion {
   id: number;
   text: string;
   language: LabLanguage;
+  datasets?: Record<string, string>;
+  colab_theme?: "light" | "dark";
+  browser_theme?: "edge" | "chrome";
 }
 export interface LabResult {
   id: number;
@@ -158,7 +164,8 @@ export async function saveReport(reportId: number, filename: string) {
 export function errorMessage(error: unknown): string {
   const detail = (error as { response?: { data?: { detail?: unknown } } })
     ?.response?.data?.detail;
-  return typeof detail === "string"
-    ? detail
-    : "The request could not finish. Please try again.";
+  if (typeof detail === "string") return detail;
+  const msg = (error as { message?: string })?.message;
+  if (typeof msg === "string") return msg;
+  return "The request could not finish. Please try again.";
 }

@@ -166,3 +166,14 @@ def test_gui_objectives_survive_titles_and_viva_sections():
         tasks = parser._extract_tasks_from_lines(lines)
     assert [t['detected_language'] for t in tasks] == ['java', 'python', 'python']
     assert 'Explain inheritance' not in str(tasks)
+def test_nonempty_inline_aim_without_a_known_command_verb_is_a_problem():
+    from app.services.manual_sections import numbered_experiments
+    result = numbered_experiments('Experiment 1: Word frequency\nAim: Count repeated words in a sentence.')
+    assert len(result) == 1
+    assert 'Count repeated words' in result[0]['text']
+
+
+def test_inline_aim_with_a_language_prefix_is_a_problem():
+    from app.services.manual_sections import numbered_experiments
+    result = numbered_experiments('Experiment 1: Joins\nAim: In MySQL create Customers and Orders tables.')
+    assert len(result) == 1

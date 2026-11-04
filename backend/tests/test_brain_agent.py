@@ -25,6 +25,11 @@ DECISION={'decisions':[{'id':9,'topic':'Restaurant','reason':'A local menu and c
 
 
 class BrainTests(unittest.IsolatedAsyncioTestCase):
+    async def test_explicit_full_source_in_manual_uses_complete_policy(self):
+        question={'id':1,'language':'html','text':'Build a portfolio. Capture all HTML, CSS and JavaScript source code.'}
+        plan=await make_plan([question])
+        self.assertEqual(plan['tasks'][0]['source_policy'],'complete')
+
     async def test_topic_alternatives_are_read_from_unseen_manuals(self):
         self.assertEqual(topic_choices('Choose one topic from the following list:\n- Fitness Tracker\n- Quiz app\n8. Results:'),['Fitness Tracker','Quiz app'])
         self.assertEqual(topic_choices('Choose one topic: Restaurant; Music Store; Personal webpage.'),['Restaurant','Music Store','Personal webpage'])

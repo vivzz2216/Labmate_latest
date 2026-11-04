@@ -1,254 +1,146 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import {
-  clearAdminCreds,
-  fetchAdminFeedback,
-  fetchAdminOverview,
-  fetchAdminUsers,
-  getAdminAuthHeader,
-  setUserSubscription,
-  type AdminFeedbackRow,
-  type AdminOverview,
-  type AdminUserRow,
-} from '@/lib/adminApi'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+import { useEffect, useState } from 'react'
+import Link from 'next/link'
+import { ArrowLeft, ArrowRight, LockKeyhole, RefreshCw, Search, ShieldCheck } from 'lucide-react'
+import { useAuth } from '@/contexts/BasicAuthContext'
+import LabMateLogo from '@/components/brand/LabMateLogo'
+import LoginModal from '@/components/auth/LoginModal'
+import { fetchAdminOverview, fetchAdminUsers, fetchAdminPayments, type AdminOverview, type StudentPage, type PaymentPage, type PaymentMode } from '@/lib/adminApi'
+import styles from './admin.module.css'
+
+const money = (paise: number, currency = 'INR') => new Intl.NumberFormat('en-IN', { style: 'currency', currency, maximumFractionDigits: 2 }).format(paise / 100)
+const number = (value: number) => new Intl.NumberFormat('en-IN').format(value)
+const date = (value: string | null) => value ? new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Kolkata' }).format(new Date(value)) : 'No activity recorded'
 
 export default function AdminDashboardPage() {
-  const router = useRouter()
+  const { user, loading: authLoading } = useAuth()
   const [overview, setOverview] = useState<AdminOverview | null>(null)
-  const [users, setUsers] = useState<AdminUserRow[]>([])
-  const [feedback, setFeedback] = useState<AdminFeedbackRow[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [students, setStudents] = useState<StudentPage | null>(null)
+  const [payments, setPayments] = useState<PaymentPage | null>(null)
+  const [tab, setTab] = useState<'students' | 'payments'>('students')
+  const [search, setSearch] = useState('')
   const [query, setQuery] = useState('')
+  const [filter, setFilter] = useState('all')
+  const [mode, setMode] = useState<PaymentMode>('live')
+  const [page, setPage] = useState(0)
+  const [refresh, setRefresh] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [denied, setDenied] = useState(false)
+  const [loginOpen, setLoginOpen] = useState(false)
 
-  const filteredUsers = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    if (!q) return users
-    return users.filter(
-      (u) =>
-        u.email.toLowerCase().includes(q) ||
-        u.name.toLowerCase().includes(q) ||
-        String(u.id).includes(q)
-    )
-  }, [users, query])
-
-  const load = async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const [o, u, f] = await Promise.all([fetchAdminOverview(), fetchAdminUsers(), fetchAdminFeedback()])
-      setOverview(o)
-      setUsers(u.users || [])
-      setFeedback(f.feedback || [])
-    } catch (err: any) {
-      const msg = err?.response?.data?.detail || err?.message || 'Failed to load admin data'
-      setError(msg)
-      if (String(err?.response?.status) === '401') {
-        clearAdminCreds()
-        router.push('/admin')
-      }
-    } finally {
-      setLoading(false)
-    }
-  }
-
+  useEffect(() => { try { localStorage.removeItem('labmate_admin_basic') } catch { /* No legacy storage to clear. */ } }, [])
   useEffect(() => {
-    const auth = getAdminAuthHeader()
-    if (!auth) {
-      router.push('/admin')
-      return
-    }
-    load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    const timer = setTimeout(() => { setQuery(search); setPage(0) }, 250)
+    return () => clearTimeout(timer)
+  }, [search])
+  useEffect(() => {
+    if (authLoading) return
+    if (!user) { setOverview(null); setLoading(false); return }
+    const controller = new AbortController()
+    setLoading(true); setError(''); setDenied(false)
+    const detail = tab === 'students'
+      ? fetchAdminUsers({ search: query, paid: filter === 'paid' ? true : filter === 'unpaid' ? false : undefined, active: filter === 'inactive' ? false : undefined, offset: page * 25, limit: 25 }, controller.signal)
+      : fetchAdminPayments(mode, page * 25, controller.signal)
+    Promise.all([fetchAdminOverview(controller.signal), detail]).then(([summary, records]) => {
+      if (controller.signal.aborted) return
+      setOverview(summary)
+      if (tab === 'students') setStudents(records as StudentPage)
+      else setPayments(records as PaymentPage)
+    }).catch((err) => {
+      if (controller.signal.aborted) return
+      if ([401, 403].includes(err?.response?.status)) { setDenied(true); setOverview(null) }
+      else setError('Dashboard data could not be loaded. Refresh to try again.')
+    }).finally(() => { if (!controller.signal.aborted) setLoading(false) })
+    return () => controller.abort()
+  }, [authLoading, user?.id, user?.is_admin, tab, query, filter, mode, page, refresh])
 
-  const toggleSubscription = async (userId: number, current: boolean) => {
-    try {
-      await setUserSubscription(userId, { is_active: !current, plan: 'hobby', expires_at: null })
-      await load()
-    } catch (err: any) {
-      setError(err?.response?.data?.detail || err?.message || 'Failed to update subscription')
-    }
-  }
+  const total = tab === 'students' ? students?.total || 0 : payments?.total || 0
+  const checkingAccess = authLoading || (!!user && !user.is_admin && !overview && loading && !denied)
+  const allowed = !!user && (!!user.is_admin || !!overview) && !denied
 
-  const signOut = () => {
-    clearAdminCreds()
-    router.push('/admin')
-  }
-
-  return (
-    <div className="min-h-screen bg-[#0b1220] text-white p-6">
-      <div className="max-w-6xl mx-auto space-y-6">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold">Admin Dashboard</h1>
-            <p className="text-white/60 text-sm">
-              Users, subscriptions, assignments progress, and student feedback
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <Button variant="outline" onClick={load} className="border-white/15 text-white hover:bg-white/10">
-              Refresh
-            </Button>
-            <Button variant="outline" onClick={signOut} className="border-white/15 text-white hover:bg-white/10">
-              Sign out
-            </Button>
-          </div>
+  return <div className={styles.shell}>
+    <header className={styles.header}>
+      <Link href="/" aria-label="LabMate home" className={styles.brand}><LabMateLogo theme="light" /></Link>
+      <span className={styles.owner}><ShieldCheck size={16} /> Owner dashboard</span>
+      <Link href="/dashboard" className={styles.back}><ArrowLeft size={15} /> Student workspace</Link>
+    </header>
+    {checkingAccess ? <main className={styles.gate} aria-busy="true"><p>Checking your session…</p></main> : !allowed ?
+      <main className={styles.gate}>
+        <LockKeyhole size={30} /><h1>Owner access only</h1>
+        <p>{user ? 'Your account does not have access to student or payment records.' : 'Sign in with your configured LabMate owner account to continue.'}</p>
+        {!user && <button className={styles.primary} onClick={() => setLoginOpen(true)}>Sign in as owner</button>}
+        <Link href="/dashboard">Return to LabMate</Link>
+      </main> : <main className={styles.main}>
+        <div className={styles.heading}>
+          <div><h1>Platform overview</h1><p>Students, lab activity and credit-pack payments.</p></div>
+          <button className={styles.refresh} disabled={loading} onClick={() => setRefresh(n => n + 1)}><RefreshCw size={15} className={loading ? styles.spinning : undefined} /> Refresh data</button>
         </div>
-
-        {error && (
-          <Card className="bg-red-500/10 border-red-500/30">
-            <CardContent className="p-4 text-red-200 text-sm">{error}</CardContent>
-          </Card>
-        )}
-
-        <div className="grid gap-4 md:grid-cols-5">
-          <Card className="bg-white/5 border-white/10">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-white/70">Users</CardTitle>
-            </CardHeader>
-            <CardContent className="text-2xl font-bold">{overview?.total_users ?? '—'}</CardContent>
-          </Card>
-          <Card className="bg-white/5 border-white/10">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-white/70">Active Subs</CardTitle>
-            </CardHeader>
-            <CardContent className="text-2xl font-bold">{overview?.active_subscriptions ?? '—'}</CardContent>
-          </Card>
-          <Card className="bg-white/5 border-white/10">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-white/70">Uploads</CardTitle>
-            </CardHeader>
-            <CardContent className="text-2xl font-bold">{overview?.total_uploads ?? '—'}</CardContent>
-          </Card>
-          <Card className="bg-white/5 border-white/10">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-white/70">Completed Jobs</CardTitle>
-            </CardHeader>
-            <CardContent className="text-2xl font-bold">{overview?.completed_jobs ?? '—'}</CardContent>
-          </Card>
-          <Card className="bg-white/5 border-white/10">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-white/70">Feedback</CardTitle>
-            </CardHeader>
-            <CardContent className="text-2xl font-bold">{overview?.feedback_count ?? '—'}</CardContent>
-          </Card>
-        </div>
-
-        <Card className="bg-white/5 border-white/10">
-          <CardHeader className="flex flex-row items-center justify-between gap-3">
-            <CardTitle className="text-white">Users</CardTitle>
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search by name/email/id…"
-              className="w-full max-w-sm rounded-lg border border-white/15 bg-black/30 px-3 py-2 text-sm text-white outline-none"
-            />
-          </CardHeader>
-          <CardContent className="overflow-auto">
-            {loading ? (
-              <p className="text-white/60 text-sm">Loading…</p>
-            ) : (
-              <table className="w-full text-sm">
-                <thead className="text-white/70">
-                  <tr className="border-b border-white/10">
-                    <th className="text-left py-2 pr-3">User</th>
-                    <th className="text-left py-2 pr-3">Joined</th>
-                    <th className="text-left py-2 pr-3">Subscription</th>
-                    <th className="text-right py-2 pr-3">Uploads</th>
-                    <th className="text-right py-2 pr-3">Assignments Done</th>
-                    <th className="text-right py-2 pr-3">Jobs Done</th>
-                    <th className="text-right py-2 pr-3">Feedback</th>
-                    <th className="text-right py-2">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredUsers.map((u) => (
-                    <tr key={u.id} className="border-b border-white/5">
-                      <td className="py-2 pr-3">
-                        <div className="font-medium">{u.name}</div>
-                        <div className="text-white/60">{u.email}</div>
-                        <div className="text-white/40 text-xs">ID: {u.id}</div>
-                      </td>
-                      <td className="py-2 pr-3 text-white/70">
-                        {u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}
-                      </td>
-                      <td className="py-2 pr-3">
-                        <div className={u.subscription_active ? 'text-green-300' : 'text-white/60'}>
-                          {u.subscription_active ? `Active (${u.subscription_plan || 'hobby'})` : 'None'}
-                        </div>
-                      </td>
-                      <td className="py-2 pr-3 text-right">{u.uploads_total}</td>
-                      <td className="py-2 pr-3 text-right">{u.assignments_completed}</td>
-                      <td className="py-2 pr-3 text-right">{u.jobs_completed}</td>
-                      <td className="py-2 pr-3 text-right">{u.feedback_count}</td>
-                      <td className="py-2 text-right">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="border-white/15 text-white hover:bg-white/10"
-                          onClick={() => toggleSubscription(u.id, u.subscription_active)}
-                        >
-                          {u.subscription_active ? 'Deactivate' : 'Activate'}
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                  {filteredUsers.length === 0 && (
-                    <tr>
-                      <td colSpan={8} className="py-6 text-center text-white/60">
-                        No users found.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white/5 border-white/10">
-          <CardHeader>
-            <CardTitle className="text-white">Student Feedback</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {loading ? (
-              <p className="text-white/60 text-sm">Loading…</p>
-            ) : feedback.length === 0 ? (
-              <p className="text-white/60 text-sm">No feedback yet.</p>
-            ) : (
-              feedback.slice(0, 30).map((f) => (
-                <div key={f.id} className="rounded-lg border border-white/10 bg-black/20 p-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="text-sm">
-                      <span className="font-medium">{f.user_name || 'Unknown user'}</span>{' '}
-                      <span className="text-white/60">{f.user_email ? `(${f.user_email})` : ''}</span>
-                      {typeof f.rating === 'number' && (
-                        <span className="ml-2 text-yellow-300">Rating: {f.rating}/5</span>
-                      )}
-                    </div>
-                    <div className="text-xs text-white/50">
-                      {f.created_at ? new Date(f.created_at).toLocaleString() : ''}
-                    </div>
-                  </div>
-                  <div className="mt-2 text-white/80 whitespace-pre-wrap text-sm">{f.message}</div>
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
-
-        <p className="text-xs text-white/50">
-          Admin routes: <span className="font-mono">/admin</span> and <span className="font-mono">/admin/dashboard</span>
-        </p>
-      </div>
-    </div>
-  )
+        <div className={styles.meta}>{overview ? <>Updated {date(overview.generated_at)} IST <span>·</span> {overview.owner_email}</> : 'Loading verified records…'}</div>
+        {error && <div className={styles.error} role="alert">{error}</div>}
+        {overview && <>
+          <section className={styles.metrics} aria-label="Platform totals">
+            <div><span>Registered students</span><strong>{number(overview.total_students)}</strong><small>{number(overview.enabled_students)} enabled accounts · owner excluded</small></div>
+            <div><span>Active in 7 days</span><strong>{number(overview.active_students_7d)}</strong><small>Sign-in, upload or lab processing activity</small></div>
+            <div><span>Paying students</span><strong>{number(overview.revenue.live.paying_students)}</strong><small>Verified live payments with retained funds</small></div>
+            <div><span>Net revenue</span><strong>{money(overview.revenue.live.net_paise)}</strong><small>Live receipts after refunds, before gateway fees</small></div>
+          </section>
+          <section className={styles.activity} aria-label="Lab activity totals">
+            <div><strong>{number(overview.uploads_total)}</strong><span>Manuals uploaded</span></div>
+            <div><strong>{number(overview.completed_manuals)}</strong><span>Manuals completed</span></div>
+            <div><strong>{number(overview.reports_total)}</strong><span>Reports created</span></div>
+            <div><strong>{number(overview.running_manuals)}</strong><span>Queued or processing</span></div>
+            <div><strong>{number(overview.failed_or_paused_manuals)}</strong><span>Failed or paused</span></div>
+          </section>
+          <section className={styles.revenue} aria-label="Revenue details">
+            <div><span>Live gross receipts</span><strong>{money(overview.revenue.live.gross_paise)}</strong></div>
+            <div><span>Live refunds</span><strong>{money(overview.revenue.live.refunds_paise)}</strong></div>
+            <div><span>Captured live orders</span><strong>{number(overview.revenue.live.captured_orders)}</strong></div>
+            <p><span className={styles.testBadge}>Test mode</span> {money(overview.revenue.test.net_paise)} simulated net receipts; excluded from revenue.</p>
+          </section>
+        </>}
+        <section className={styles.records} aria-label="Student and payment records" aria-busy={loading}>
+          <div className={styles.tabs} role="tablist" aria-label="Records">
+            <button role="tab" aria-selected={tab === 'students'} aria-controls="owner-records" onClick={() => { setTab('students'); setPage(0) }}>Students {overview && <span>{number(overview.total_students)}</span>}</button>
+            <button role="tab" aria-selected={tab === 'payments'} aria-controls="owner-records" onClick={() => { setTab('payments'); setPage(0) }}>Payments</button>
+          </div>
+          <div className={styles.tools}>
+            {tab === 'students' ? <>
+              <label className={styles.search}><Search size={16} /><input aria-label="Search students" placeholder="Search students by name or email" value={search} maxLength={120} onChange={e => setSearch(e.target.value)} /></label>
+              <select aria-label="Student payment filter" value={filter} onChange={e => { setFilter(e.target.value); setPage(0) }}><option value="all">All students</option><option value="paid">Paid students · live</option><option value="unpaid">No retained live payment</option><option value="inactive">Disabled accounts</option></select>
+            </> : <>
+              <div><h2>Credit-pack purchases</h2><p>One-time payments. Pending orders are excluded from revenue.</p></div>
+              <select aria-label="Payment mode" value={mode} onChange={e => { setMode(e.target.value as PaymentMode); setPage(0) }}><option value="live">Live payments</option><option value="test">Test payments · simulated</option></select>
+            </>}
+          </div>
+          <div id="owner-records" role="tabpanel" tabIndex={0} className={styles.tableWrap}>
+            {loading ? <p className={styles.empty} role="status">Loading records…</p> : error ? <p className={styles.empty}>Refresh to load records.</p> : total === 0 ? <div className={styles.empty}><h2>{tab === 'students' ? (query || filter !== 'all' ? 'No matching students' : 'No students yet') : `No ${mode} payments yet`}</h2><p>{tab === 'students' ? 'Registered student accounts will appear here.' : 'Recorded orders and verified payments will appear here.'}</p></div> : tab === 'students' ?
+              <table><caption className={styles.srOnly}>Registered students and their platform usage</caption><thead><tr><th>Student</th><th>Last activity</th><th>Lab activity</th><th>Live payments</th><th>Credits · {overview?.billing_mode}</th><th>Account</th></tr></thead><tbody>
+                {students?.users.map(student => <tr key={student.id}>
+                  <td><strong>{student.name}</strong><span>{student.email}</span><small>{[student.institution, student.course].filter(Boolean).join(' · ') || 'Profile not completed'}</small><small>Joined {date(student.created_at)}</small></td>
+                  <td>{date(student.last_activity)}<small>Last sign-in: {date(student.last_login)}</small></td>
+                  <td><strong>{student.uploads_total} uploaded · {student.completed_manuals} completed</strong><small>{student.reports_total} reports · {student.failed_or_paused_manuals} failed or paused</small></td>
+                  <td><span className={student.is_paying ? styles.paid : styles.neutral}>{student.is_paying ? 'Paid' : student.refunded_paise > 0 ? 'Fully refunded' : 'Free'}</span><strong>{money(student.net_paid_paise)}</strong><small>{student.paid_orders} captured orders · {money(student.refunded_paise)} refunded</small></td>
+                  <td><strong>{student.credits[overview?.billing_mode || 'live'].balance} available</strong><small>{student.credits[overview?.billing_mode || 'live'].reserved} reserved</small></td>
+                  <td><span className={student.is_active ? styles.enabled : styles.neutral}>{student.is_active ? 'Enabled' : 'Disabled'}</span></td>
+                </tr>)}
+              </tbody></table> :
+              <table><caption className={styles.srOnly}>{mode === 'test' ? 'Simulated test' : 'Live'} credit-pack orders</caption><thead><tr><th>Student</th><th>Pack</th><th>Payment</th><th>Refund / net</th><th>Status</th><th>Reference</th></tr></thead><tbody>
+                {payments?.payments.map(payment => <tr key={payment.id}>
+                  <td><strong>{payment.name}</strong><span>{payment.email}</span></td>
+                  <td><strong>{payment.pack_id.replace(/-/g, ' ')}</strong><small>{payment.credits} manual credits</small></td>
+                  <td><strong>{money(payment.amount_paise, payment.currency)}</strong><small>{date(payment.fulfilled_at || payment.created_at)}</small></td>
+                  <td><strong>{money(payment.net_paise, payment.currency)} net</strong><small>{money(payment.refunded_paise, payment.currency)} refunded</small></td>
+                  <td><span className={payment.captured ? styles.paid : styles.neutral}>{payment.status.replace(/_/g, ' ')}</span>{payment.mode === 'test' && <small>Simulated payment</small>}</td>
+                  <td className={styles.reference}>{payment.gateway_payment_id || 'Payment not captured'}<small>{payment.gateway_order_id || 'Order not created'}</small></td>
+                </tr>)}
+              </tbody></table>}
+          </div>
+          <footer className={styles.pagination}><span>{total ? `${page * 25 + 1}–${Math.min((page + 1) * 25, total)} of ${number(total)}` : '0 records'}</span><div><button aria-label="Previous page" disabled={page === 0 || loading} onClick={() => setPage(p => p - 1)}><ArrowLeft size={16} /> Previous</button><button aria-label="Next page" disabled={(page + 1) * 25 >= total || loading} onClick={() => setPage(p => p + 1)}>Next <ArrowRight size={16} /></button></div></footer>
+        </section>
+        <p className={styles.footnote}>Student totals exclude your owner account. Financial totals use captured INR payment records and recorded refunds. Activity is recorded usage, not a live online-user count. All times are IST.</p>
+      </main>}
+    <LoginModal isOpen={loginOpen} onClose={() => setLoginOpen(false)} redirectTo="/admin/dashboard" />
+  </div>
 }
-
-
-

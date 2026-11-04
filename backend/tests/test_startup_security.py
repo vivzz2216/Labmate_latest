@@ -2,8 +2,8 @@
 
 import pytest
 from unittest.mock import MagicMock
-from fastapi import HTTPException
-from fastapi.security import HTTPBasicCredentials
+from fastapi import HTTPException, Response
+from types import SimpleNamespace
 
 from app.middleware import csrf
 from app.middleware import rate_limit
@@ -14,16 +14,18 @@ def test_admin_denies_unconfigured_account(monkeypatch):
     monkeypatch.setattr(admin.settings, "ADMIN_USERID", "")
     monkeypatch.setattr(admin.settings, "ADMIN_PASSWORD", "")
     with pytest.raises(HTTPException) as error:
-        admin.require_admin(HTTPBasicCredentials(username="", password=""))
-    assert error.value.status_code == 401
+        admin.require_admin(Response(), SimpleNamespace(email="", is_active=True))
+    assert error.value.status_code == 403
 
 
-def test_admin_accepts_only_configured_credentials(monkeypatch):
-    monkeypatch.setattr(admin.settings, "ADMIN_USERID", "test-admin")
-    monkeypatch.setattr(admin.settings, "ADMIN_PASSWORD", "test-secret")
-    assert admin.require_admin(HTTPBasicCredentials(username="test-admin", password="test-secret"))
+def test_admin_accepts_only_configured_authenticated_owner(monkeypatch):
+    monkeypatch.setattr(admin.settings, "ADMIN_USERID", "owner@example.test")
+    owner = SimpleNamespace(email="owner@example.test", is_active=True)
+    response = Response()
+    assert admin.require_admin(response, owner) is owner
+    assert response.headers['Cache-Control'] == 'private, no-store'
     with pytest.raises(HTTPException):
-        admin.require_admin(HTTPBasicCredentials(username="test-admin", password="wrong"))
+        admin.require_admin(Response(), SimpleNamespace(email="student@example.test", is_active=True))
 
 
 def test_csrf_denies_when_redis_unavailable(monkeypatch):

@@ -1,11 +1,8 @@
 @echo off
 title Labmate - Backend (FastAPI)
 cd /d "%~dp0backend"
-if exist .venv\Scripts\uvicorn.exe (
-    echo Starting FastAPI backend on port 8000 using .venv...
-    .venv\Scripts\uvicorn.exe app.main:app --reload --port 8000
-) else (
-    echo Starting FastAPI backend on port 8000...
-    uvicorn app.main:app --reload --port 8000
-)
+set "PYTHONPATH=%~dp0backend\.venv\Lib\site-packages;%~dp0backend"
+set "PATH=C:\Users\pilla\AppData\Local\Python\pythoncore-3.14-64;C:\Users\pilla\AppData\Local\Python\pythoncore-3.14-64\DLLs;%PATH%"
+echo Starting FastAPI backend on port 8000...
+python -m uvicorn app.main:app --reload --port 8000
 pause

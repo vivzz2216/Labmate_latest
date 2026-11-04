@@ -1,9 +1,11 @@
 import ast
+import asyncio
 import base64
 import os
 import uuid
 import textwrap
 import re
+import json
 from typing import Tuple
 from html import escape as html_escape
 from playwright.async_api import async_playwright
@@ -14,7 +16,7 @@ from pygments.formatters import HtmlFormatter
 from jinja2 import Environment, FileSystemLoader, Template
 from markupsafe import Markup
 from ..config import settings
-from .browser_capture import launch_capture_browser
+from .browser_capture import acquire_capture_context, launch_capture_browser
 
 
 class ScreenshotService:
@@ -73,6 +75,15 @@ class ScreenshotService:
                 'vscode': 'vscode',
                 'browser': 'browser_preview',
                 'browser_preview': 'browser_preview',
+                'sql': 'workbench',
+                'mysql': 'workbench',
+                'workbench': 'workbench',
+                'colab': 'colab',
+                'google_colab': 'colab',
+                'collab': 'colab',
+                'datascience': 'colab',
+                'ml': 'colab',
+                'ipynb': 'colab',
             }
             theme = theme_map.get(raw_theme, 'idle')
 
@@ -89,8 +100,46 @@ class ScreenshotService:
             screenshot_dir = os.path.join(settings.SCREENSHOT_DIR, str(job_id) if job_id else "temp")
             os.makedirs(screenshot_dir, exist_ok=True)
             
+            if theme == 'workbench':
+                screenshot_path = os.path.join(
+                    screenshot_dir,
+                    f"screenshot_{uuid.uuid4().hex[:8]}.png"
+                )
+                success, width, height = await self._capture_workbench(code, screenshot_path)
+                if success:
+                    from .storage_service import storage_service
+                    storage_service.sync_file(screenshot_path)
+                    return True, screenshot_path, width, height
+                else:
+                    return False, "", 0, 0
+
+            if theme == 'colab':
+                screenshot_path = os.path.join(
+                    screenshot_dir,
+                    f"colab_{uuid.uuid4().hex[:8]}.png"
+                )
+                colab_title = filename if filename and filename.endswith(".ipynb") else None
+                success, width, height = await self._capture_colab(
+                    code=code,
+                    output=output,
+                    error=error,
+                    output_path=screenshot_path,
+                    notebook_title=colab_title,
+                    student_name=username or "Student",
+                    subject=kwargs.get("subject", "DSLab"),
+                    exp_no=kwargs.get("exp_no") or ((lambda m: f"{int(m.group(1)):02d}" if m else "01")(re.search(r'exp(?:eriment)?[\s_–-]*(\d+)', (filename or "") + " " + str(kwargs.get("subject", "")), re.I))),
+                    datasets=project_files,
+                    plots=kwargs.get("plots"),
+                )
+                if success:
+                    from .storage_service import storage_service
+                    storage_service.sync_file(screenshot_path)
+                    return True, screenshot_path, width, height
+                else:
+                    return False, "", 0, 0
+
             # For Java themes, extract the class name from code to use as filename
-            if kwargs.get('presentation') in {'evidence','vscode_evidence'}:
+            if kwargs.get('presentation') in {'evidence','vscode_evidence','ide_evidence'}:
                 # Evidence names are the real manifest paths (including .cjs,
                 # CSS and SVG), not an invented IDE/student filename.
                 pass
@@ -107,6 +156,16 @@ class ScreenshotService:
             
             start_line = kwargs.get("start_line", 1)
             end_line = kwargs.get("end_line", None)
+            if kwargs.get('presentation') == 'ide_evidence':
+                if theme == 'idle' and view_mode == 'output':
+                    view_mode = 'shell'
+                ranges = kwargs.get('source_ranges')
+                if ranges is not None:
+                    if (not isinstance(ranges,list) or len(ranges)!=1 or not isinstance(ranges[0],list)
+                            or len(ranges[0])!=2 or any(type(v) is not int for v in ranges[0])
+                            or not 1<=ranges[0][0]<=ranges[0][1]<=len(code.splitlines())):
+                        raise ValueError('IDE source pages require one valid contiguous range from the real file.')
+                    start_line, end_line = ranges[0]
             
             code_to_highlight = code
             if start_line > 1 or end_line is not None:
@@ -115,7 +174,8 @@ class ScreenshotService:
                 code_to_highlight = "\n".join(all_code_lines[start_line - 1 : actual_end])
             
             # Generate syntax-highlighted HTML
-            highlighted_code = self._highlight_code(code_to_highlight, theme)
+            highlighted_code = self._highlight_code(code_to_highlight, theme,
+                preserve_whitespace=kwargs.get('presentation')=='ide_evidence')
             
             clean_kwargs = {k: v for k, v in kwargs.items() if k not in ("start_line", "end_line")}
             html_content = await self._render_template(
@@ -352,8 +412,9 @@ class ScreenshotService:
 
     async def generate_browser_preview_from_image(
         self, image_path: str, job_id: str, filename: str,
+        *, browser_theme: str = "edge", page_url: str = "about:blank", page_title: str = "",
     ) -> Tuple[bool, str, int, int]:
-        """Return genuine browser pixels without a synthetic browser window or resizing."""
+        """Add a labelled Windows browser frame; preserve every captured content pixel."""
         source = os.path.realpath(image_path)
         screenshot_root = os.path.realpath(settings.SCREENSHOT_DIR)
         if os.path.commonpath([source, screenshot_root]) != screenshot_root or not os.path.isfile(source):
@@ -361,13 +422,45 @@ class ScreenshotService:
         if os.path.getsize(source) > 15 * 1024 * 1024:
             return False, "Browser capture exceeds the preview size limit.", 0, 0
         from PIL import Image
+        from urllib.parse import urlsplit, urlunsplit
+        if browser_theme not in {"edge", "chrome"}:
+            return False, "Unsupported browser frame.", 0, 0
         with Image.open(source) as image:
             image.verify()
             width, height = image.size
-        return True, source, width, height
+        if not 160 <= width <= 4096 or height + 88 > 16000 or width * (height + 88) > 24_000_000:
+            return False, "Browser capture exceeds the frame dimensions limit.", 0, 0
+        # Display the actual loopback origin/port/path, never an invented dev-server URL.
+        parsed = urlsplit(page_url)
+        if parsed.hostname in {"127.0.0.1", "localhost", "::1"} and parsed.scheme in {"http", "https"}:
+            address = urlunsplit((parsed.scheme, "localhost" + (f":{parsed.port}" if parsed.port else ""), parsed.path or "/", parsed.query, parsed.fragment))
+        else:
+            address = "about:blank"
+        directory = os.path.dirname(source)
+        header_path = os.path.join(directory, f"browser_header_{uuid.uuid4().hex}.png")
+        framed_path = os.path.join(directory, f"browser_{browser_theme}_{uuid.uuid4().hex}.png")
+        template = Environment(loader=FileSystemLoader(self.template_dir), autoescape=True).get_template("browser_frame_theme.html")
+        html = template.render(frame_width=width, browser_theme=browser_theme,
+                               browser_name="Microsoft Edge" if browser_theme == "edge" else "Google Chrome",
+                               page_title=(page_title or filename or "Local page")[:160], address=address[:1500])
+        try:
+            ok, _, _ = await self._take_screenshot(html, header_path, width, 88)
+            if not ok:
+                return False, "Browser frame could not be captured.", 0, 0
+            with Image.open(header_path) as header, Image.open(source) as capture:
+                framed = Image.new("RGB", (width, height + 88), "white")
+                framed.paste(header.convert("RGB"), (0, 0))
+                framed.paste(capture.convert("RGB"), (0, 88))
+                framed.save(framed_path)
+            from .storage_service import storage_service
+            await asyncio.to_thread(storage_service.sync_file, framed_path)
+            return True, framed_path, width, height + 88
+        finally:
+            if os.path.isfile(header_path):
+                os.remove(header_path)
     
     
-    def _highlight_code(self, code: str, theme: str = "idle") -> str:
+    def _highlight_code(self, code: str, theme: str = "idle", *, preserve_whitespace: bool = False) -> str:
         """Apply syntax highlighting based on theme/language"""
         try:
             # Map theme to appropriate lexer
@@ -382,6 +475,9 @@ class ScreenshotService:
             }
             
             lexer = lexer_map.get(theme, PythonLexer())
+            if preserve_whitespace:
+                lexer.stripnl = False
+                lexer.ensurenl = False
             
             formatter = HtmlFormatter(
                 nowrap=True,
@@ -580,10 +676,6 @@ class ScreenshotService:
             # Fallback to idle theme
             template_path = os.path.join(self.template_dir, "idle_theme.html")
         
-        # Read template
-        with open(template_path, 'r', encoding='utf-8') as f:
-            template_content = f.read()
-        
         # Render template
         template = Environment(loader=FileSystemLoader(self.template_dir), autoescape=True).get_template(os.path.basename(template_path))
         
@@ -598,6 +690,9 @@ class ScreenshotService:
             else:
                 session_segments = self._idle_session_segments(source_code, output_content, stdin_data, error)
         # Keep the existing formatting path for non-IDLE themes.
+        elif theme == "codeblocks" and kwargs.get("presentation") == "ide_evidence" and (kwargs.get("input_echoed") or not stdin_data):
+            output_content = output or ""
+            session_segments = []
         elif kwargs.get("input_echoed"):
             # Output is already interleaved with inputs — do not duplicate
             output_content = self._clean_output(output)
@@ -618,7 +713,7 @@ class ScreenshotService:
             output_content=output_content,
             error_content=error,
             username=username,
-            filename=safe_filename if theme == "idle" else filename,
+            filename=safe_filename,
             screenshot_style=screenshot_style,
             project_files=project_files or {},
             session_segments=session_segments,
@@ -847,7 +942,7 @@ class ScreenshotService:
         template_path = os.path.join(self.template_dir, "notepad_file_theme.html")
         with open(template_path, 'r', encoding='utf-8') as f:
             template_content = f.read()
-        template = Template(template_content)
+        template = Environment(autoescape=True).from_string(template_content)
         
         for file_data in files:
             filename = file_data.get("filename", "file.txt")
@@ -875,43 +970,60 @@ class ScreenshotService:
         
         return results
     
+    async def _capture_workbench(self, sql, output_path, width=1440, height=900):
+        from .lab_capture import capture_sql
+        result = await capture_sql(sql, output_path)
+        return bool(result.screenshots), 1440, 900
+
+    async def _capture_colab(self, code, output, output_path, error="", notebook_title=None,
+            student_name="Student", subject="DSLab", exp_no="6", datasets=None, plots=None,
+            width=1600, height=900):
+        from .lab_capture import capture_notebook
+        if output or error or plots:
+            # Preserve the caller's execution receipt. Re-running random/stateful
+            # code here would make the screenshot disagree with the verified run.
+            from .colab_pipeline import render_and_capture_colab
+            cell={'type':'code','code':code,'stdout':output,'error':error or None,
+                  'plots':plots or [],'repr':None,'html':None,'execCount':1,'execTime':''}
+            return await asyncio.to_thread(render_and_capture_colab,cells=[cell],screenshot_path=output_path,
+                notebook_title=notebook_title,student_name=student_name,subject=subject,exp_no=exp_no,
+                datasets=datasets,expand_full=True)
+        # Image capture and execution verification have separate return contracts.
+        result = await capture_notebook(code, datasets, output_path, notebook_title=notebook_title,
+            student_name=student_name, subject=subject, exp_no=exp_no)
+        info = result.verification or {}
+        return bool(result.screenshots), info.get("width", width), info.get("height", height)
+
     async def _take_screenshot(self, html_content: str, output_path: str, width=1000, minimum_height=700):
         """Render static IDE templates with scripts disabled and a bounded image size."""
-        browser = None
         try:
-            async with async_playwright() as playwright:
-                browser = await launch_capture_browser(playwright)
-                try:
-                    context = await browser.new_context(viewport={"width": width, "height": minimum_height}, java_script_enabled=False)
-                    await context.route("**/*", lambda route: route.abort())
-                    page = await context.new_page()
-                    await page.set_content(html_content, wait_until="load", timeout=15000)
-                    await page.evaluate('document.fonts.ready')
-                    required_height = await page.evaluate(
-                        "Math.max(document.body.scrollHeight, document.documentElement.scrollHeight)")
-                    if required_height > 16000:
-                        raise ValueError("Screenshot content is too tall to capture completely.")
-                    height = max(minimum_height, required_height)
-                    # A clip taller than the viewport is truncated by some
-                    # browser builds. Grow the viewport before taking the image.
-                    await page.set_viewport_size({"width": width, "height": height})
-                    height = max(height, await page.evaluate(
-                        "Math.max(document.body.scrollHeight, document.documentElement.scrollHeight)"))
-                    if height > 16000:
-                        raise ValueError("Screenshot content is too tall to capture completely.")
-                    await page.set_viewport_size({"width": width, "height": height})
-                    await page.screenshot(path=output_path, full_page=True, timeout=15000)
-                    from PIL import Image
-                    with Image.open(output_path) as capture:
-                        if capture.width != width or capture.height < height:
-                            raise ValueError("Screenshot was cropped during capture.")
-                        height = capture.height
-                    await context.close()
-                    return True, width, height
-                finally:
-                    await browser.close()
+            async with acquire_capture_context(viewport={"width": width, "height": minimum_height}, java_script_enabled=False) as context:
+                await context.route("**/*", lambda route: route.abort())
+                page = await context.new_page()
+                await page.set_content(html_content, wait_until="load", timeout=15000)
+                await page.evaluate('document.fonts.ready')
+                required_height = await page.evaluate(
+                    "Math.max(document.body.scrollHeight, document.documentElement.scrollHeight)")
+                if required_height > 16000:
+                    raise ValueError("Screenshot content is too tall to capture completely.")
+                height = max(minimum_height, required_height)
+                # A clip taller than the viewport is truncated by some
+                # browser builds. Grow the viewport before taking the image.
+                await page.set_viewport_size({"width": width, "height": height})
+                height = max(height, await page.evaluate(
+                    "Math.max(document.body.scrollHeight, document.documentElement.scrollHeight)"))
+                if height > 16000:
+                    raise ValueError("Screenshot content is too tall to capture completely.")
+                await page.set_viewport_size({"width": width, "height": height})
+                await page.screenshot(path=output_path, full_page=True, timeout=15000)
+                from PIL import Image
+                with Image.open(output_path) as capture:
+                    if capture.width != width or capture.height < height:
+                        raise ValueError("Screenshot was cropped during capture.")
+                    height = capture.height
+                return True, width, height
         except Exception as error:
-            print(f"Screenshot capture failed: {type(error).__name__}")
+            print(f"Screenshot capture failed: {type(error).__name__}: {str(error)[:300]}")
             return False, 0, 0
     
     async def test_screenshot(self) -> bool:

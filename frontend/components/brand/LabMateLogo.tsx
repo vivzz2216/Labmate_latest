@@ -20,7 +20,7 @@ export default function LabMateLogo({
     xl: { icon: 44, font: "text-3xl tracking-tighter", markW: 48, markH: 48 },
   };
 
-  const { icon, font, markW, markH } = sizeMap[size];
+  const { font, markW, markH } = sizeMap[size];
   const textColor = theme === "dark" ? "#ffffff" : "#0a0a0a";
   const iconColor = theme === "dark" ? "#ffffff" : "#0a0a0a";
 

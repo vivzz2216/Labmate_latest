@@ -121,7 +121,7 @@ export default function UserOnboarding({ isOpen, onComplete, onSkip }: UserOnboa
               >
                 <Step>
                   <div className="space-y-4">
-                    <h2 className="text-2xl font-bold text-white mb-4">Welcome! Let's get started</h2>
+                    <h2 className="text-2xl font-bold text-white mb-4">Welcome! Let&apos;s get started</h2>
                     <p className="text-white/80 mb-6">
                       We need a few details to personalize your experience and help with your assignments.
                     </p>

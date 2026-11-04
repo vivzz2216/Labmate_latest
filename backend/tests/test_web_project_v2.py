@@ -100,6 +100,12 @@ class WebContractTests(unittest.TestCase):
 
 
 class ProviderBackupTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        # These tests cover Groq/Gemini only, regardless of local backup keys.
+        routes = patch.object(GenerationService, '_backup_routes', return_value=[])
+        routes.start()
+        self.addCleanup(routes.stop)
+
     async def test_flask_manifest_accepts_python_files_with_consistent_generation_contract(self):
         from fixtures.app_ui_cases import FLASK_FILES, FLASK_TESTS
         response={'answer':'Adds and validates on the Flask server.','entrypoint':'app.py','readme':FLASK_FILES['README.md'],

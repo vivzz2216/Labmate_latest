@@ -25,7 +25,9 @@ services:
       retries: 12
 
   backend:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     environment:
       DATABASE_URL: postgresql://labmate:${POSTGRES_PASSWORD:-labmate_local_only}@postgres:5432/labmate
       SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY to at least 32 characters}

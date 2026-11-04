@@ -130,7 +130,10 @@ class ComposerLayoutTests(unittest.TestCase):
 
 class RuntimeTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
-        self.folder = tempfile.TemporaryDirectory()
+        # Native tools must use the same operator-approved writable root as the app.
+        from app.config import settings
+        Path(settings.REACT_TEMP_DIR).mkdir(parents=True, exist_ok=True)
+        self.folder = tempfile.TemporaryDirectory(dir=Path(settings.REACT_TEMP_DIR).resolve())
         self.root = Path(self.folder.name)
         self.patches = [patch("app.services.runtime_engine.settings.REACT_TEMP_DIR", str(self.root / "runtime")), patch("app.services.runtime_engine.settings.SCREENSHOT_DIR", str(self.root / "screenshots"))]
         for item in self.patches:

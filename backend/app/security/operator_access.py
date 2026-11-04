@@ -3,8 +3,9 @@ from ..config import settings
 
 
 def admin_email():
-    email = settings.ADMIN_USERID.strip().casefold()
-    return email if '@' in email and settings.ADMIN_PASSWORD else ''
+    email = (settings.ADMIN_USERID or '').strip().strip("'\"").casefold()
+    password = (settings.ADMIN_PASSWORD or '').strip().strip("'\"")
+    return email if '@' in email and password else ''
 
 
 def is_admin_user(user):

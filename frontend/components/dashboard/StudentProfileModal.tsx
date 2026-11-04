@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { UserCheck, Sparkles, Building2, BookOpen, Hash, User, X } from "lucide-react";
 import { apiService } from "@/lib/api";
 import { useAuth } from "@/contexts/BasicAuthContext";
@@ -16,7 +16,7 @@ export default function StudentProfileModal({
   onClose,
   onSaved,
 }: StudentProfileModalProps) {
-  const { user } = useAuth();
+  const { user, checkProfileComplete } = useAuth();
   const [name, setName] = useState(user?.name || "");
   const [usn, setUsn] = useState("");
   const [department, setDepartment] = useState("");
@@ -24,6 +24,13 @@ export default function StudentProfileModal({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!isOpen) return;
+    const previous = document.activeElement as HTMLElement | null;
+    dialogRef.current?.querySelector('input')?.focus();
+    return () => { previous?.focus(); };
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -34,11 +41,11 @@ export default function StudentProfileModal({
       .then((data) => {
         if (!active) return;
         const profile = data?.profile || data || {};
-        setName(user?.name || profile.name || "");
-        setDepartment(profile.course || "Computer Science & Engineering");
-        setInstitution(profile.institution || "Engineering College");
+        setName(profile.name || user?.name || "");
+        setDepartment(profile.course || "");
+        setInstitution(profile.institution || "");
         const meta = profile.metadata || profile.profile_metadata || {};
-        setUsn(meta.roll_number || meta.usn || meta.roll_no || "USN-2024-001");
+        setUsn(meta.roll_number || meta.usn || meta.roll_no || "");
       })
       .catch((err) => {
         console.error("Could not fetch profile:", err);
@@ -60,6 +67,7 @@ export default function StudentProfileModal({
     setMessage("");
     try {
       await apiService.updateUserProfile({
+        name: name.trim(),
         course: department.trim(),
         institution: institution.trim(),
         profile_metadata: {
@@ -68,6 +76,7 @@ export default function StudentProfileModal({
           department: department.trim(),
         },
       });
+      await checkProfileComplete();
       setMessage("Profile saved successfully!");
       setTimeout(() => {
         if (onSaved) onSaved();
@@ -97,13 +106,26 @@ export default function StudentProfileModal({
       onClick={onClose}
     >
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="student-profile-title"
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') { event.preventDefault(); onClose(); }
+          if (event.key !== 'Tab') return;
+          const controls = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href]'));
+          const first = controls[0], last = controls[controls.length - 1];
+          if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+          if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+        }}
         style={{
           backgroundColor: "#ffffff",
           borderRadius: "20px",
           width: "100%",
           maxWidth: "520px",
           boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
-          overflow: "hidden",
+          overflowY: "auto",
+          maxHeight: "calc(100dvh - 32px)",
           border: "1px solid #e2e8f0",
           animation: "scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
         }}
@@ -119,6 +141,8 @@ export default function StudentProfileModal({
           }}
         >
           <button
+            type="button"
+            aria-label="Close student profile"
             onClick={onClose}
             style={{
               position: "absolute",
@@ -152,7 +176,7 @@ export default function StudentProfileModal({
             >
               <Sparkles size={22} color="#fbbf24" />
             </div>
-            <h2 style={{ fontSize: "20px", fontWeight: 700, margin: 0 }}>
+            <h2 id="student-profile-title" style={{ fontSize: "20px", fontWeight: 700, margin: 0 }}>
               Personalize Code Examples
             </h2>
           </div>
@@ -183,6 +207,7 @@ export default function StudentProfileModal({
               <input
                 type="text"
                 value={name}
+                aria-label="Full student name"
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g. Rahul Sharma"
                 required
@@ -216,6 +241,7 @@ export default function StudentProfileModal({
               <input
                 type="text"
                 value={usn}
+                aria-label="USN or roll number"
                 onChange={(e) => setUsn(e.target.value)}
                 placeholder="e.g. 1MS21CS042"
                 required
@@ -248,6 +274,7 @@ export default function StudentProfileModal({
               <input
                 type="text"
                 value={department}
+                aria-label="Department"
                 onChange={(e) => setDepartment(e.target.value)}
                 placeholder="e.g. Computer Science & Engineering"
                 required
@@ -280,6 +307,7 @@ export default function StudentProfileModal({
               <input
                 type="text"
                 value={institution}
+                aria-label="Institution"
                 onChange={(e) => setInstitution(e.target.value)}
                 placeholder="e.g. Ramaiah Institute of Technology"
                 required

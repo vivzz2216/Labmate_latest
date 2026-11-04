@@ -40,15 +40,8 @@ async def stage_batch_file(file):
         if extension == "pdf" and not header.startswith(b"%PDF-"):
             raise ValueError("The file is not a valid PDF.")
         if extension == "docx":
-            try:
-                with ZipFile(stored) as package:
-                    names = set(package.namelist())
-                    if not {"[Content_Types].xml", "word/document.xml"} <= names:
-                        raise ValueError("The file is not a valid Word document.")
-                    if len(names) > 3000 or sum(info.file_size for info in package.infolist()) > 200 * 1024 * 1024:
-                        raise ValueError("The Word document is too large after decompression.")
-            except BadZipFile:
-                raise ValueError("The file is not a valid Word document.") from None
+            from ..security.docx_archive import validate_docx_archive
+            validate_docx_archive(stored)
         os.chmod(stored, 0o600)
         from .storage_service import storage_service
         storage_service.sync_file(stored)

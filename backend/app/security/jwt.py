@@ -3,10 +3,14 @@ JWT token generation and validation for secure authentication
 """
 from datetime import datetime, timedelta
 from typing import Optional
-from jose import JWTError, jwt
+import jwt
+from jwt import InvalidTokenError as JWTError
 from fastapi import HTTPException, status
 from ..config import settings
 import logging
+import hashlib
+import time
+import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +41,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     else:
         expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     
-    to_encode.update({"exp": expire, "iat": datetime.utcnow(), "type": "access"})
+    to_encode.update({"exp": expire, "iat": datetime.utcnow(), "type": "access", "jti": uuid.uuid4().hex})
     
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
@@ -59,7 +63,7 @@ def create_refresh_token(data: dict) -> str:
     to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
     
-    to_encode.update({"exp": expire, "iat": datetime.utcnow(), "type": "refresh"})
+    to_encode.update({"exp": expire, "iat": datetime.utcnow(), "type": "refresh", "jti": uuid.uuid4().hex})
     
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
@@ -104,14 +108,44 @@ def verify_token(token: str, token_type: str = "access") -> dict:
         if user_id is None:
             raise credentials_exception
             
+        from ..cache import redis_client
+        try:
+            if redis_client is None:
+                raise RuntimeError('Session store unavailable')
+            if redis_client.exists(_revocation_key(token)):
+                raise credentials_exception
+        except HTTPException:
+            raise
+        except Exception:
+            raise HTTPException(503, 'Session storage is temporarily unavailable. Please retry.') from None
         return payload
         
     except JWTError as e:
         logger.warning(f"JWT validation failed: {e}")
         raise credentials_exception
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Unexpected error during token verification: {e}")
         raise credentials_exception
+
+
+def _revocation_key(token):
+    return 'session:revoked:' + hashlib.sha256(token.encode()).hexdigest()
+
+
+def revoke_token(token, payload, *, single_use=False):
+    """Atomically retire a token until expiry, including tokens issued before jti."""
+    from ..cache import redis_client
+    ttl = max(1, int(payload['exp'] - time.time()) + 1)
+    try:
+        if redis_client is None:
+            raise RuntimeError('Session store unavailable')
+        stored = redis_client.set(_revocation_key(token), '1', ex=ttl, nx=single_use)
+    except Exception:
+        raise HTTPException(503, 'Session storage is temporarily unavailable. Please retry.') from None
+    if single_use and not stored:
+        raise HTTPException(401, 'Refresh token has already been used. Please sign in again.')
 
 
 def get_user_id_from_token(token: str) -> int:

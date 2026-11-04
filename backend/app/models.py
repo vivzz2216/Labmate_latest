@@ -119,6 +119,10 @@ class AssignmentWorkflow(Base):
     logs = Column(JSON, nullable=False, default=list)
     error = Column(Text, nullable=True)
     report_id = Column(Integer, ForeignKey("reports.id"), nullable=True)
+    # Fencing: every worker write must present the token issued by claim_next(). Recovery,
+    # release and a new claim replace it, so a worker that went stale loses write authority.
+    claim_token = Column(String(64), nullable=True)
+    lease_expires_at = Column(DateTime(timezone=True), nullable=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 

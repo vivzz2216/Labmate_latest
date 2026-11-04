@@ -1,173 +1,91 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import {
-  LayoutDashboard,
   FolderGit2,
-  Terminal,
   FileText,
-  Settings,
-  LogOut,
-  Menu,
-  MoreHorizontal,
   Plus,
-  Search,
   UploadCloud,
-  X,
   CheckCircle2,
   ChevronRight,
   Download,
-  Bell,
-  Sun,
-  Moon,
   Layers,
   ArrowUpRight,
   FileCheck2,
+  Sparkles,
 } from "lucide-react";
-import { SiC, SiCplusplus, SiHtml5, SiPython } from "react-icons/si";
-import { FaJava } from "react-icons/fa";
-import LabMateLogo from "@/components/brand/LabMateLogo";
+import DashboardShell, {
+  type Assignment,
+  EmptyState,
+  LoadingState,
+  StatCard,
+  formatDate,
+  getLanguage,
+  getProgress,
+} from "@/components/dashboard/DashboardShell";
 import UserOnboarding from "@/components/auth/UserOnboarding";
 import { useAuth } from "@/contexts/BasicAuthContext";
 import { apiService } from "@/lib/api";
 import { errorMessage, saveReport } from "@/lib/workflow";
 import styles from "./dashboard.module.css";
 
-interface Assignment {
-  id: number;
-  filename: string;
-  original_filename: string;
-  language?: string;
-  uploaded_at: string;
-  total_tasks: number;
-  completed_tasks: number;
-  failed_tasks: number;
-  in_progress_tasks: number;
-  report_download_url?: string;
-  report_id?: number;
-  report_filename?: string;
-}
-
-const navItems = [
-  { label: "Dashboard", icon: LayoutDashboard, href: "/dashboard" },
-  { label: "Workspace", icon: FolderGit2, href: "/workspace" },
-  { label: "My Labs", icon: Terminal, href: "/code-execution" },
-  { label: "Reports", icon: FileText, href: "/reports" },
-  { label: "Settings", icon: Settings, href: "/user-dashboard?tab=settings" },
-];
-
-const languageMeta: Record<
-  string,
-  { label: string; icon: any; className: string }
-> = {
-  python: { label: "Python", icon: SiPython, className: styles.python },
-  java: { label: "Java", icon: FaJava, className: styles.java },
-  c: { label: "C", icon: SiC, className: styles.c },
-  cpp: { label: "C++", icon: SiCplusplus, className: styles.cpp },
-  webdev: { label: "Web Development", icon: SiHtml5, className: styles.html },
-  html: { label: "Web Development", icon: SiHtml5, className: styles.html },
-};
-
-function Brand({ theme }: { theme: "dark" | "light" }) {
-  return (
-    <Link href="/" className={styles.brand} aria-label="LabMate Home">
-      <LabMateLogo size="sm" theme={theme} />
-    </Link>
-  );
-}
-
-function formatDate(value?: string) {
-  if (!value) return "—";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? "—"
-    : date.toLocaleDateString(undefined, {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      });
-}
-
-function getLanguage(language?: string) {
-  return (
-    languageMeta[language || ""] || {
-      label: language || "Not specified",
-      icon: FileText,
-      className: styles.fileIcon,
-    }
-  );
-}
-
-function getProgress(assignment: Assignment) {
-  return assignment.total_tasks
-    ? Math.min(
-        100,
-        Math.round((assignment.completed_tasks / assignment.total_tasks) * 100),
-      )
-    : 0;
-}
-
 export default function DashboardPage() {
   const router = useRouter();
-  const pathname = usePathname();
   const {
     user,
     checkProfileComplete,
-    signOut,
     loading: authLoading,
   } = useAuth();
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [assignments, setAssignments] = useState<Assignment[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [assignments, setAssignments] = useState<Assignment[]>(
+    () => (apiService.peekUserAssignments(user?.id) as Assignment[]) || [],
+  );
+  const [loading, setLoading] = useState(
+    () => !apiService.peekUserAssignments(user?.id),
+  );
   const [loadError, setLoadError] = useState("");
   const [search, setSearch] = useState("");
-
-  // Dual Theme State: "dark" (Runway-grade homepage aesthetic) & "light" (classic light theme)
-  const [theme, setTheme] = useState<"dark" | "light">("dark");
-
-  useEffect(() => {
-    // Read saved theme or default to "dark" matching homepage
-    const saved = localStorage.getItem("labmate_dashboard_theme");
-    if (saved === "light" || saved === "dark") {
-      setTheme(saved);
-    }
-  }, []);
-
-  const toggleTheme = () => {
-    const nextTheme = theme === "dark" ? "light" : "dark";
-    setTheme(nextTheme);
-    localStorage.setItem("labmate_dashboard_theme", nextTheme);
-  };
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "completed">("all");
 
   useEffect(() => {
     let active = true;
 
     const loadDashboard = async () => {
-      setLoading(true);
+      if (!user) {
+        router.replace("/");
+        return;
+      }
+
+      const cached = apiService.peekUserAssignments(user.id) as Assignment[] | null;
+      if (cached) {
+        setAssignments(cached);
+        setLoading(false);
+      } else {
+        setLoading(true);
+      }
       setLoadError("");
+
       try {
-        if (!user) {
-          router.replace("/");
-          return;
-        }
+        const [profileComplete, response] = await Promise.all([
+          checkProfileComplete(),
+          apiService.getUserAssignments(user.id),
+        ]);
+        if (!active) return;
+        setShowOnboarding(!profileComplete);
 
-        const profileComplete = await checkProfileComplete();
-        if (active) setShowOnboarding(!profileComplete);
-
-        const response: any = await apiService.getUserAssignments(user.id);
         const list = Array.isArray(response)
           ? response
-          : (response?.assignments ?? response?.data ?? []);
-        
-        if (active) setAssignments(Array.isArray(list) ? list : []);
+          : ((response as any)?.assignments ?? (response as any)?.data ?? []);
+
+        setAssignments(Array.isArray(list) ? list : []);
       } catch (error) {
         console.error("Failed to load dashboard data:", error);
-        if (active) {
+        if (active && !cached) {
           setAssignments([]);
-          setLoadError("We couldn't load your lab manuals. Please refresh the page and try again.");
+          setLoadError(
+            "We couldn't load your lab manuals. Please refresh the page and try again.",
+          );
         }
       } finally {
         if (active) setLoading(false);
@@ -181,39 +99,47 @@ export default function DashboardPage() {
     return () => {
       active = false;
     };
-  }, [authLoading, checkProfileComplete, router, user]);
+  }, [authLoading, router, user?.id]);
 
   const filteredAssignments = useMemo(() => {
     const query = search.trim().toLowerCase();
-    return query
-      ? assignments.filter((a) =>
-          `${a.original_filename || a.filename} ${a.language || ""}`
+    return assignments.filter((a) => {
+      const matchesQuery = !query
+        ? true
+        : `${a.original_filename || a.filename} ${a.language || ""}`
             .toLowerCase()
-            .includes(query),
-        )
-      : assignments;
-  }, [assignments, search]);
+            .includes(query);
+      if (!matchesQuery) return false;
+      const progress = getProgress(a);
+      if (statusFilter === "active") return progress < 100;
+      if (statusFilter === "completed") return progress >= 100;
+      return true;
+    });
+  }, [assignments, search, statusFilter]);
 
+  const totalQuestions = assignments.reduce(
+    (sum, assignment) => sum + (assignment.total_tasks || 0),
+    0,
+  );
   const questionsSolved = assignments.reduce(
     (sum, assignment) => sum + (assignment.completed_tasks || 0),
     0,
   );
+  const completionRate =
+    totalQuestions > 0 ? Math.round((questionsSolved / totalQuestions) * 100) : 0;
+
   const reportsReady = assignments.filter((a) =>
-    Boolean(a.report_download_url),
+    Boolean(a.report_download_url || a.report_id),
   ).length;
   const activeLabs = assignments.filter((a) => getProgress(a) < 100).length;
   const continuedLab = assignments.find((a) => getProgress(a) < 100);
-  const reports = assignments.filter((a) => a.report_download_url).slice(0, 4);
+  const reports = assignments
+    .filter((a) => a.report_download_url || a.report_id)
+    .slice(0, 6);
   const displayName = user?.name?.trim() || "Student";
 
   const go = (href: string) => {
-    setMobileNavOpen(false);
     router.push(href);
-  };
-
-  const handleLogout = async () => {
-    await signOut();
-    router.push("/");
   };
 
   return (
@@ -225,363 +151,249 @@ export default function DashboardPage() {
           setShowOnboarding(false);
         }}
       />
-      <div className={styles.shell} data-theme={theme}>
-        {/* Subtle Ambient Radial Glow (Runway Homepage Style) */}
-        <div className={styles.ambientGlow} />
-
-        {/* Sidebar */}
-        <aside
-          className={`${styles.sidebar} ${mobileNavOpen ? styles.sidebarOpen : ""}`}
-        >
-          <div className={styles.sidebarTop}>
-            <Brand theme={theme} />
+      <DashboardShell
+        title="Dashboard"
+        subtitle="Overview of your lab manuals, execution progress, and reports"
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search labs, languages, reports..."
+        lockViewport={true}
+      >
+        {/* Streamlined Command Banner */}
+        <section className={styles.welcomeCard}>
+          <div className={styles.welcomeCopy}>
+            <span className={styles.welcomeEyebrow}>
+              <Sparkles size={13} /> Lab Intelligence Studio
+            </span>
+            <h2>
+              Welcome back, <span>{displayName}</span>
+            </h2>
+            <p>
+              {assignments.length === 0
+                ? "Upload a syllabus PDF or Word lab manual to extract questions, run verified solutions, and export a formatted report."
+                : `You have ${activeLabs} active lab${activeLabs === 1 ? "" : "s"} in progress and ${reportsReady} accredited Word report${reportsReady === 1 ? "" : "s"} ready for submission.`}
+            </p>
+          </div>
+          <div className={styles.welcomeActions}>
             <button
-              className={styles.mobileClose}
-              onClick={() => setMobileNavOpen(false)}
-              aria-label="Close navigation"
+              type="button"
+              className={styles.primaryButton}
+              onClick={() => go("/code-execution")}
             >
-              <X size={20} />
+              <UploadCloud size={16} strokeWidth={2} /> Upload Assignment
+            </button>
+            <button
+              type="button"
+              className={styles.secondaryButton}
+              onClick={() => go("/workspace")}
+            >
+              <FolderGit2 size={16} strokeWidth={1.8} /> Open Workspace
             </button>
           </div>
+        </section>
 
-          <nav className={styles.sidebarNav} aria-label="Dashboard navigation">
-            {navItems.map(({ label, icon: Icon, href }) => {
-              const active =
-                href === "/dashboard"
-                  ? pathname === "/dashboard"
-                  : pathname?.startsWith(href.split("?")[0]);
-              return (
-                <button
-                  key={label}
-                  className={`${styles.navItem} ${active ? styles.navItemActive : ""}`}
-                  onClick={() => go(href)}
-                >
-                  <Icon size={18} strokeWidth={1.8} />
-                  <span>{label}</span>
-                </button>
-              );
-            })}
-          </nav>
-
-          <div className={styles.sidebarBottom}>
-            <button className={styles.signOut} onClick={handleLogout}>
-              <LogOut size={16} strokeWidth={1.8} /> Sign out
-            </button>
-            <div className={styles.account} onClick={() => go("/user-dashboard")}>
-              <span className={styles.accountAvatar}>
-                {displayName.charAt(0).toUpperCase()}
-              </span>
-              <span className={styles.accountText}>
-                <strong>{displayName}</strong>
-                <small>{user?.email || "Student Account"}</small>
-              </span>
-              <ChevronRight size={15} strokeWidth={2} />
-            </div>
-          </div>
-        </aside>
-
-        {mobileNavOpen && (
-          <button
-            className={styles.scrim}
-            onClick={() => setMobileNavOpen(false)}
-            aria-label="Close navigation overlay"
+        {/* Workspace Totals Grid */}
+        <section className={styles.statsGrid} aria-label="Workspace totals">
+          <StatCard
+            icon={Layers}
+            label="Active Labs"
+            value={activeLabs}
+            subtext={
+              assignments.length === 0
+                ? "No manuals uploaded yet"
+                : `${assignments.length} total manual${assignments.length === 1 ? "" : "s"} tracked`
+            }
+            tone="blue"
           />
-        )}
+          <StatCard
+            icon={CheckCircle2}
+            label="Questions Solved"
+            value={questionsSolved}
+            subtext={
+              totalQuestions > 0
+                ? `${completionRate}% completion (${questionsSolved}/${totalQuestions})`
+                : "Across your lab manuals"
+            }
+            tone="green"
+          />
+          <StatCard
+            icon={FileCheck2}
+            label="Reports Ready"
+            value={reportsReady}
+            subtext={
+              reportsReady > 0
+                ? "Accredited .docx ready to export"
+                : "Complete a lab to generate"
+            }
+            tone="blue"
+          />
+        </section>
 
-        <section className={styles.content}>
-          {/* Topbar */}
-          <header className={styles.topbar}>
-            <div className={styles.topbarTitle}>
-              <button
-                className={styles.mobileMenu}
-                onClick={() => setMobileNavOpen(true)}
-                aria-label="Open navigation"
-              >
-                <Menu size={20} />
-              </button>
-              <h1>Dashboard</h1>
-            </div>
-
-            <div className={styles.topbarActions}>
-              <label className={styles.search}>
-                <Search size={16} strokeWidth={1.8} />
-                <input
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search labs, reports..."
-                  aria-label="Search labs and reports"
-                />
-              </label>
-
-              {/* Theme Toggle Button */}
-              <button
-                className={styles.themeToggle}
-                onClick={toggleTheme}
-                title={theme === "dark" ? "Switch to Light Theme" : "Switch to Dark Theme (Homepage Style)"}
-                aria-label="Toggle theme"
-              >
-                {theme === "dark" ? (
-                  <>
-                    <Sun size={15} strokeWidth={2} />
-                    <span>Light</span>
-                  </>
-                ) : (
-                  <>
-                    <Moon size={15} strokeWidth={2} />
-                    <span>Dark</span>
-                  </>
-                )}
-              </button>
-
-              <button
-                className={styles.notification}
-                aria-label="Notifications"
-                title="Notifications"
-              >
-                <Bell size={17} strokeWidth={1.8} />
-              </button>
-
-              <span className={styles.topAvatar}>
-                {displayName.charAt(0).toUpperCase()}
-              </span>
-              <strong className={styles.topName}>{displayName}</strong>
-              <ChevronRight className={styles.topChevron} size={15} strokeWidth={2} />
-            </div>
-          </header>
-
-          {/* Main Dashboard Canvas */}
-          <main className={styles.main}>
-            {/* Welcome Banner Card */}
-            <section className={styles.welcomeCard}>
-              <div className={styles.welcomeCopy}>
-                <h2>
-                  Welcome back, <span>{displayName}</span>
-                </h2>
+        {/* Split Content Layout */}
+        <div className={styles.dashboardGrid}>
+          {/* Left Panel: Recent Labs with Independent Vertical Scroll */}
+          <section className={styles.panel}>
+            <div className={styles.panelHeader}>
+              <div>
+                <h2>Recent Lab Assignments</h2>
                 <p>
-                  Upload syllabus PDFs or lab manuals to decompose problem statements, compile deterministic solutions, and export accredited Word records.
+                  {filteredAssignments.length === assignments.length
+                    ? `${assignments.length} total manuals tracked`
+                    : `Showing ${filteredAssignments.length} of ${assignments.length} manuals`}
                 </p>
-                <div className={styles.welcomeActions}>
+              </div>
+              <div className={styles.panelHeaderControls}>
+                {assignments.length > 0 && (
+                  <div
+                    className={styles.filterGroup}
+                    role="group"
+                    aria-label="Filter assignments by status"
+                  >
+                    <button
+                      type="button"
+                      className={`${styles.filterPill} ${statusFilter === "all" ? styles.filterPillActive : ""}`}
+                      onClick={() => setStatusFilter("all")}
+                    >
+                      All ({assignments.length})
+                    </button>
+                    <button
+                      type="button"
+                      className={`${styles.filterPill} ${statusFilter === "active" ? styles.filterPillActive : ""}`}
+                      onClick={() => setStatusFilter("active")}
+                    >
+                      In Progress ({activeLabs})
+                    </button>
+                    <button
+                      type="button"
+                      className={`${styles.filterPill} ${statusFilter === "completed" ? styles.filterPillActive : ""}`}
+                      onClick={() => setStatusFilter("completed")}
+                    >
+                      Done ({assignments.length - activeLabs})
+                    </button>
+                  </div>
+                )}
+                {assignments.length > 0 && (
                   <button
-                    className={styles.primaryButton}
+                    type="button"
+                    className={styles.linkButton}
                     onClick={() => go("/code-execution")}
                   >
-                    <UploadCloud size={17} strokeWidth={2} /> Upload Assignment
+                    Open Studio <ChevronRight size={14} strokeWidth={2.2} />
                   </button>
-                  <button
-                    className={styles.secondaryButton}
-                    onClick={() => go("/reports")}
-                  >
-                    <FileText size={17} strokeWidth={1.8} /> View Reports
-                  </button>
+                )}
+              </div>
+            </div>
+
+            {loadError && (
+              <p role="alert" className={styles.dashboardError}>
+                {loadError}
+              </p>
+            )}
+            {loading ? (
+              <LoadingState />
+            ) : filteredAssignments.length === 0 ? (
+              <EmptyState
+                icon={FolderGit2}
+                title={
+                  search || statusFilter !== "all"
+                    ? "No matching labs"
+                    : "No labs yet"
+                }
+                description={
+                  search || statusFilter !== "all"
+                    ? "Try clearing your search or switching the status filter."
+                    : "Upload your first department lab manual to begin."
+                }
+                action={
+                  !search && statusFilter === "all"
+                    ? {
+                        label: "Upload assignment",
+                        onClick: () => go("/code-execution"),
+                      }
+                    : {
+                        label: "Reset filters",
+                        onClick: () => {
+                          setSearch("");
+                          setStatusFilter("all");
+                        },
+                      }
+                }
+              />
+            ) : (
+              <LabTable
+                assignments={filteredAssignments}
+                onOpen={(id) => go(`/code-execution?assignment=${id}`)}
+              />
+            )}
+          </section>
+
+          {/* Right Rail: Continue Working & Recent Reports */}
+          <aside className={styles.rightRail}>
+            <section className={styles.panel}>
+              <div className={styles.panelHeader}>
+                <div>
+                  <h2>Continue Working</h2>
+                  <p>
+                    {continuedLab
+                      ? "Pick up right where you left off."
+                      : "Active labs in progress appear here."}
+                  </p>
                 </div>
               </div>
+
+              {continuedLab ? (
+                <ContinueCard
+                  assignment={continuedLab}
+                  onOpen={() =>
+                    go(`/code-execution?assignment=${continuedLab.id}`)
+                  }
+                />
+              ) : (
+                <EmptyState
+                  compact
+                  icon={Plus}
+                  title="All labs completed"
+                  description="Upload a new lab assignment to continue."
+                  action={{
+                    label: "Upload Lab",
+                    onClick: () => go("/code-execution"),
+                  }}
+                />
+              )}
             </section>
 
-            {/* Workspace Totals Grid */}
-            <section className={styles.statsGrid} aria-label="Workspace totals">
-              <StatCard
-                icon={Layers}
-                label="Active Labs"
-                value={activeLabs}
-                tone="blue"
-              />
-              <StatCard
-                icon={CheckCircle2}
-                label="Questions Solved"
-                value={questionsSolved}
-                tone="green"
-              />
-              <StatCard
-                icon={FileCheck2}
-                label="Reports Ready"
-                value={reportsReady}
-                tone="blue"
-              />
-            </section>
-
-            {/* Split Content Layout */}
-            <div className={styles.dashboardGrid}>
-              {/* Left Panel: Recent Labs */}
-              <section className={styles.panel}>
-                <div className={styles.panelHeader}>
-                  <div>
-                    <h2>Recent Lab Assignments</h2>
-                    <p>{assignments.length} total manuals tracked</p>
-                  </div>
-                  {assignments.length > 0 && (
-                    <button
-                      className={styles.linkButton}
-                      onClick={() => go("/code-execution")}
-                    >
-                      View all <ChevronRight size={14} strokeWidth={2.2} />
-                    </button>
-                  )}
+            <section className={styles.panel}>
+              <div className={styles.panelHeader}>
+                <div>
+                  <h2>Recent Reports</h2>
+                  <p>{reportsReady} accredited documents ready</p>
                 </div>
-
-                {loadError && <p role="alert" className={styles.dashboardError}>{loadError}</p>}
-                {loading ? (
-                  <LoadingState />
-                ) : filteredAssignments.length === 0 ? (
-                  <EmptyState
-                    icon={FolderGit2}
-                    title={search ? "No matching labs" : "No labs yet"}
-                    description={
-                      search
-                        ? "Try a different search query."
-                        : "Upload your first department lab manual to begin."
-                    }
-                    action={
-                      !search
-                        ? {
-                            label: "Upload assignment",
-                            onClick: () => go("/code-execution"),
-                          }
-                        : undefined
-                    }
-                  />
-                ) : (
-                  <LabTable
-                    assignments={filteredAssignments}
-                    onOpen={(id) => go(`/code-execution?assignment=${id}`)}
-                  />
+                {reportsReady > 0 && (
+                  <button
+                    type="button"
+                    className={styles.linkButton}
+                    onClick={() => go("/reports")}
+                  >
+                    View all <ChevronRight size={14} strokeWidth={2.2} />
+                  </button>
                 )}
-              </section>
+              </div>
 
-              {/* Right Rail: Continue Working & Recent Reports */}
-              <aside className={styles.rightRail}>
-                <section className={styles.panel}>
-                  <div className={styles.panelHeader}>
-                    <div>
-                      <h2>Continue Working</h2>
-                      <p>
-                        {continuedLab
-                          ? "Pick up right where you left off."
-                          : "Active labs in progress appear here."}
-                      </p>
-                    </div>
-                  </div>
-
-                  {continuedLab ? (
-                    <ContinueCard
-                      assignment={continuedLab}
-                      onOpen={() =>
-                        go(`/code-execution?assignment=${continuedLab.id}`)
-                      }
-                    />
-                  ) : (
-                    <EmptyState
-                      compact
-                      icon={Plus}
-                      title="All labs completed"
-                      description="Upload a new lab assignment to continue."
-                      action={{
-                        label: "Upload Lab",
-                        onClick: () => go("/code-execution"),
-                      }}
-                    />
-                  )}
-                </section>
-
-                <section className={styles.panel}>
-                  <div className={styles.panelHeader}>
-                    <div>
-                      <h2>Recent Reports</h2>
-                      <p>{reportsReady} accredited documents ready</p>
-                    </div>
-                    {reportsReady > 0 && (
-                      <button
-                        className={styles.linkButton}
-                        onClick={() => go("/reports")}
-                      >
-                        View all <ChevronRight size={14} strokeWidth={2.2} />
-                      </button>
-                    )}
-                  </div>
-
-                  {reports.length === 0 ? (
-                    <EmptyState
-                      compact
-                      icon={FileText}
-                      title="No reports generated"
-                      description="Completed lab records will appear here for download."
-                    />
-                  ) : (
-                    <ReportList reports={reports} />
-                  )}
-                </section>
-              </aside>
-            </div>
-          </main>
-        </section>
-      </div>
+              {reports.length === 0 ? (
+                <EmptyState
+                  compact
+                  icon={FileText}
+                  title="No reports generated"
+                  description="Completed lab records will appear here for download."
+                />
+              ) : (
+                <ReportList reports={reports} />
+              )}
+            </section>
+          </aside>
+        </div>
+      </DashboardShell>
     </>
-  );
-}
-
-function StatCard({
-  icon: Icon,
-  label,
-  value,
-  tone,
-}: {
-  icon: any;
-  label: string;
-  value: number;
-  tone: "blue" | "green";
-}) {
-  return (
-    <article className={styles.statCard}>
-      <span
-        className={`${styles.statIcon} ${tone === "green" ? styles.statGreen : styles.statBlue}`}
-      >
-        <Icon size={22} strokeWidth={1.8} />
-      </span>
-      <div>
-        <span>{label}</span>
-        <strong>{value}</strong>
-        <small>{value === 0 ? "No activity yet" : "Across your lab manuals"}</small>
-      </div>
-    </article>
-  );
-}
-
-function LoadingState() {
-  return (
-    <div className={styles.emptyState}>
-      <div className={styles.spinner} />
-      <p>Loading your lab manuals...</p>
-    </div>
-  );
-}
-
-function EmptyState({
-  icon: Icon,
-  title,
-  description,
-  action,
-  compact = false,
-}: {
-  icon: any;
-  title: string;
-  description: string;
-  action?: { label: string; onClick: () => void };
-  compact?: boolean;
-}) {
-  return (
-    <div
-      className={`${styles.emptyState} ${compact ? styles.emptyCompact : ""}`}
-    >
-      <span className={styles.emptyIcon}>
-        <Icon size={compact ? 20 : 26} strokeWidth={1.8} />
-      </span>
-      <strong>{title}</strong>
-      <p>{description}</p>
-      {action && (
-        <button className={styles.emptyAction} onClick={action.onClick}>
-          <Plus size={14} strokeWidth={2} /> {action.label}
-        </button>
-      )}
-    </div>
   );
 }
 
@@ -593,7 +405,7 @@ function LabTable({
   onOpen: (id: number) => void;
 }) {
   return (
-    <div className={styles.tableWrap}>
+    <div className={styles.tableWrap} role="region" aria-label="Recent lab assignments list" tabIndex={0}>
       <div className={styles.tableHead}>
         <span>Lab / Language</span>
         <span>Questions</span>
@@ -607,13 +419,14 @@ function LabTable({
         const progress = getProgress(assignment);
         return (
           <button
+            type="button"
             className={styles.labRow}
             key={assignment.id}
             onClick={() => onOpen(assignment.id)}
           >
             <span className={styles.labName}>
               <span className={styles.labIcon}>
-                <Icon className={meta.className} size={20} />
+                <Icon className={meta.className} size={19} />
               </span>
               <span>
                 <strong>
@@ -626,7 +439,9 @@ function LabTable({
               {assignment.completed_tasks} / {assignment.total_tasks}
             </span>
             <span className={styles.progressCell}>
-              <span className={styles.progressTrack}>
+              <span
+                className={`${styles.progressTrack} ${progress >= 100 ? styles.progressComplete : ""}`}
+              >
                 <span style={{ width: `${progress}%` }} />
               </span>
               <small>{progress}%</small>
@@ -636,7 +451,6 @@ function LabTable({
               <span className={styles.rowActionBtn}>
                 Open <ArrowUpRight size={13} strokeWidth={2.2} />
               </span>
-              <MoreHorizontal size={16} strokeWidth={1.8} />
             </span>
           </button>
         );
@@ -658,7 +472,7 @@ function ContinueCard({
   return (
     <div className={styles.continueCard}>
       <div className={styles.continueTitle}>
-        <Icon className={meta.className} size={22} />
+        <Icon className={meta.className} size={20} />
         <strong>{assignment.original_filename || assignment.filename}</strong>
         <span>{meta.label}</span>
       </div>
@@ -671,7 +485,7 @@ function ContinueCard({
       </span>
       <div className={styles.continueFooter}>
         <span>{progress}% complete</span>
-        <button onClick={onOpen}>
+        <button type="button" onClick={onOpen}>
           Continue lab <ChevronRight size={14} strokeWidth={2.2} />
         </button>
       </div>
@@ -701,21 +515,22 @@ function ReportList({ reports }: { reports: Assignment[] }) {
 
   return (
     <div className={styles.reportList}>
-      {downloadError && <p role="alert">{downloadError}</p>}
+      {downloadError && <p role="alert" className={styles.dashboardError}>{downloadError}</p>}
       {reports.map((report) => (
         <div className={styles.reportRow} key={report.id}>
           <span className={styles.reportIcon}>
-            <FileText size={17} strokeWidth={1.8} />
+            <FileText size={16} strokeWidth={1.8} />
           </span>
           <span>
             <strong>{report.original_filename || report.filename}</strong>
             <small>Ready · {formatDate(report.uploaded_at)}</small>
           </span>
-          {report.report_download_url && (
+          {(report.report_download_url || report.report_id) && (
             <button
+              type="button"
               className={styles.downloadBtn}
               onClick={() => download(report)}
-              disabled={downloading === report.id}
+              disabled={downloading === report.id || !report.report_id}
               title={`Download ${report.original_filename || report.filename}`}
               aria-label={`Download ${report.original_filename || report.filename}`}
             >

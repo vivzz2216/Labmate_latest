@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Task Board</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main>
+    <h1>Task Board</h1>
+    <form id="task-form" novalidate>
+      <label for="task-title">Task title</label>
+      <input type="text" id="task-title" data-testid="task-title" autocomplete="off">
+      <p id="title-error" class="error" role="alert" hidden>Task title required</p>
+      <button type="submit" data-testid="add-task">Add task</button>
+    </form>
+    <div class="search-row">
+      <label for="search">Search</label>
+      <input type="text" id="search" data-testid="search" autocomplete="off">
+      <p id="task-count" role="status">Tasks: 0</p>
+    </div>
+    <ul id="task-list"></ul>
+    <p id="empty-state" hidden>No tasks match</p>
+  </main>
+  <script src="script.js"></script>
+</body>
+</html>

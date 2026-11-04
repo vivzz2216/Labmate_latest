@@ -1,0 +1,536 @@
+/* ========================================================
+   LABMATE SETTINGS & ACCOUNT STYLESHEET
+   Inherits theme variables from DashboardShell (dashboard.module.css)
+   ======================================================== */
+
+.settingsGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.85fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.formBody {
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.fieldGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.fieldGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fieldLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.fieldInput,
+.fieldSelect {
+  height: 40px;
+  width: 100%;
+  padding: 0 13px;
+  border-radius: 10px;
+  border: 1px solid var(--search-border);
+  background: var(--search-bg);
+  color: var(--search-text);
+  font-size: 13.5px;
+  outline: none;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.fieldInput::placeholder {
+  color: var(--search-placeholder);
+}
+
+.fieldInput:focus,
+.fieldSelect:focus {
+  border-color: var(--search-focus-border);
+  background: var(--search-focus-bg);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+.fieldInput:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.fieldHint {
+  font-size: 11.5px;
+  color: var(--text-dim);
+  margin: 0;
+}
+
+.formFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 6px;
+  border-top: 1px solid var(--panel-header-border);
+  flex-wrap: wrap;
+}
+
+.feedbackBanner {
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.feedbackSuccess {
+  background: var(--stat-green-bg);
+  border: 1px solid var(--stat-green-border);
+  color: var(--stat-green-color);
+}
+
+.feedbackError {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  color: #ef4444;
+}
+
+/* Right Column: Account & Theme Preferences */
+.rightColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.accountBody {
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.profileIdentity {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.avatarLarge {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, #2563eb, #4f46e5);
+  color: #ffffff;
+  font-size: 20px;
+  font-weight: 700;
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.identityDetails {
+  min-width: 0;
+  flex: 1;
+}
+
+.identityDetails h3 {
+  margin: 0 0 3px;
+  font-family: var(--font-heading, -apple-system, sans-serif);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-heading);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.identityDetails p {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.preferenceRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 0;
+  border-top: 1px solid var(--panel-header-border);
+}
+
+.preferenceLabel strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--table-row-title);
+}
+
+.preferenceLabel small {
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+
+.themeSwitcher {
+  display: inline-flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 9999px;
+  background: var(--surface-subtle);
+  border: 1px solid var(--panel-header-border);
+}
+
+.themeOption {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 9999px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.themeOptionActive {
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
+}
+
+.accountActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--panel-header-border);
+  flex-wrap: wrap;
+}
+
+.dangerButton {
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 16px;
+  border-radius: 9999px;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.08);
+  color: #ef4444;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+
+.dangerButton:hover {
+  background: rgba(239, 68, 68, 0.16);
+  transform: translateY(-1px);
+}
+
+/* ========================================================
+   YOUR COLLEGE MANUAL PROMPT (AGENT PROMPT TEMPLATE)
+   ======================================================== */
+.promptBody {
+  padding: 20px 24px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.promptTopRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.presetGroup {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.presetBtn {
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 9999px;
+  border: 1px solid var(--panel-header-border);
+  background: var(--surface-subtle);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.presetBtn:hover {
+  color: var(--text-main);
+  border-color: var(--search-focus-border);
+}
+
+.presetBtnActive {
+  background: var(--btn-primary-bg);
+  border-color: var(--btn-primary-border);
+  color: var(--btn-primary-text) !important;
+}
+
+.promptToolbarActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.promptTextareaWrap {
+  position: relative;
+  border-radius: 14px;
+  border: 1px solid var(--code-border);
+  background: var(--code-surface);
+  overflow: hidden;
+}
+
+.promptTextareaHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  font-size: 11.5px;
+  color: #94a3b8;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+}
+
+.promptTextarea {
+  width: 100%;
+  min-height: 250px;
+  padding: 16px 18px;
+  border: 0;
+  outline: none;
+  resize: vertical;
+  background: transparent;
+  color: #e2e8f0;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 12.5px;
+  line-height: 1.65;
+}
+
+.promptStepsGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.promptStepCard {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--surface-subtle);
+  border: 1px solid var(--panel-header-border);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.promptStepCard strong {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--table-row-title);
+}
+
+.promptStepCard span {
+  font-size: 11.5px;
+  color: var(--text-dim);
+  line-height: 1.45;
+}
+
+/* Assignment History List */
+.historyScroll {
+  max-height: 440px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+.historyScroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.historyScroll::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb);
+  border-radius: 9999px;
+}
+
+.historyRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--table-row-border);
+  background: var(--table-row-bg);
+  transition: background 0.15s ease;
+}
+
+.historyRow:last-child {
+  border-bottom: 0;
+}
+
+.historyRow:hover {
+  background: var(--table-row-hover);
+}
+
+.historyInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+
+.historyTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.historyTitleRow h3 {
+  margin: 0;
+  font-family: var(--font-heading, -apple-system, sans-serif);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--table-row-title);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.statusBadge {
+  padding: 2px 9px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.statusCompleted {
+  background: var(--stat-green-bg);
+  border: 1px solid var(--stat-green-border);
+  color: var(--stat-green-color);
+}
+
+.statusFailed {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: #ef4444;
+}
+
+.statusInProgress {
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  color: #f59e0b;
+}
+
+.statusPending {
+  background: var(--surface-elevated);
+  border: 1px solid var(--panel-header-border);
+  color: var(--text-muted);
+}
+
+.historyMetaRow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 12px;
+  color: var(--text-dim);
+  flex-wrap: wrap;
+}
+
+.metaItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.taskCounters {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 12px;
+  flex-wrap: wrap;
+}
+
+.counterDone {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--stat-green-color);
+  font-weight: 500;
+}
+
+.counterFailed {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #ef4444;
+  font-weight: 500;
+}
+
+.counterActive {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #f59e0b;
+  font-weight: 500;
+}
+
+.historyActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+@media (max-width: 1024px) {
+  .settingsGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 680px) {
+  .fieldGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .historyRow {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 16px 18px;
+  }
+
+  .historyActions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}

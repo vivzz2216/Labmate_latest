@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 
 function backendUrl() {
-  const raw = (process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000")
-    .trim().replace(/\/+$/, "");
+  let raw = process.env.BACKEND_URL;
+  // Next loads .env.local at startup; avoid synchronous disk reads per API call.
+  if (!raw) {
+    raw = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  }
+  raw = raw.trim().replace(/\/+$/, "");
   const value = /^https?:\/\//.test(raw) ? raw : `https://${raw}`;
   const parsed = new URL(value);
   if (!["http:", "https:"].includes(parsed.protocol)) throw new Error("Invalid BACKEND_URL");
@@ -17,6 +21,15 @@ export async function proxyBackend(req: NextRequest) {
     if (value) headers.set(name, value);
   }
   if (!headers.has("x-beta-key") && process.env.BETA_KEY) headers.set("x-beta-key", process.env.BETA_KEY);
+  // Railway's edge sets X-Real-IP. Authenticate our relay so backend callers
+  // cannot spoof it and every student does not share the proxy's rate bucket.
+  if (process.env.TRUSTED_PROXY_KEY && process.env.RAILWAY_ENVIRONMENT_ID) {
+    const clientIp = req.headers.get('x-real-ip');
+    if (clientIp) {
+      headers.set('x-labmate-client-ip', clientIp);
+      headers.set('x-labmate-proxy-key', process.env.TRUSTED_PROXY_KEY);
+    }
+  }
   const init: RequestInit & { duplex?: "half" } = {
     method: req.method, headers, redirect: "manual", cache: "no-store", signal: req.signal,
   };
@@ -27,7 +40,7 @@ export async function proxyBackend(req: NextRequest) {
   try {
     const upstream = await fetch(`${backendUrl()}${url.pathname}${url.search}`, init);
     const responseHeaders = new Headers();
-    for (const name of ["content-type", "content-disposition", "cache-control", "etag", "last-modified", "content-range", "accept-ranges", "www-authenticate", "retry-after"]) {
+    for (const name of ["content-type", "content-disposition", "cache-control", "etag", "last-modified", "content-range", "accept-ranges", "www-authenticate", "retry-after", "content-security-policy", "x-content-type-options", "referrer-policy", "x-frame-options"]) {
       const value = upstream.headers.get(name);
       if (value) responseHeaders.set(name, value);
     }

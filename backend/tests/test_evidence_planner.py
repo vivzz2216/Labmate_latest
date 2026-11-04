@@ -9,6 +9,23 @@ from app.services.screenshot_service import screenshot_service
 
 
 class EvidencePlannerTests(unittest.TestCase):
+    def test_java_console_negations_do_not_request_a_gui(self):
+        for instruction in ('No GUI or external libraries are required.',
+                            'Use Scanner without Swing.', 'GUI is not required.', 'No Swing or AWT.'):
+            plan=plan_experiment('Write a Java console factorial program. '+instruction,'java')
+            self.assertEqual(plan['category'],'console')
+        plan=plan_experiment('Create a Java Swing calculator. No external libraries required.','java')
+        self.assertEqual(plan['category'],'java_swing')
+
+    def test_verification_timing_does_not_invent_intermediate_states(self):
+        plan=plan_experiment('Test the button before marking this exercise verified. Capture the page after the successful interaction.','html')
+        self.assertFalse(plan['intermediate_required'])
+        for objective in ('Capture before and after submitting the form.',
+                          'Show invalid input and successful submission.',
+                          'Show invalid input. Then show successful submission.',
+                          'Capture the initial state before submission. Show the state after submission.'):
+            self.assertTrue(plan_experiment(objective,'html')['intermediate_required'])
+
     def test_gui_requirement_survives_console_code_substitution(self):
         plan = plan_experiment("Create a Java Swing calculator", "java", 'public class Main{public static void main(String[]args){System.out.print(5);}}')
         self.assertEqual(plan["category"], "java_swing")

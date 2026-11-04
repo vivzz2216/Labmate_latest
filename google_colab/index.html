@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Untitled4.ipynb - Colab</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="colab-dark-body">
+
+  <!-- 1. Top Header Bar (#131314) -->
+  <header class="colab-header" id="colab-header">
+    <div class="header-left">
+      <!-- Colab Orange Logo + PRO Badge -->
+      <div class="colab-brand" title="Google Colaboratory Pro">
+        <img src="assets/icons/colab_logo.svg" class="colab-infinity-logo" alt="Colab">
+        <span class="colab-pro-badge">PRO</span>
+      </div>
+
+      <!-- Title Row + Menubar -->
+      <div class="header-title-menu">
+        <div class="title-row">
+          <img src="assets/icons/google_drive.svg" class="drive-logo-icon" alt="Google Drive" title="Colab Notebooks">
+          <input type="text" id="notebook-title-input" class="notebook-title-input" value="Untitled4.ipynb" spellcheck="false" aria-label="Notebook name">
+          <button class="icon-btn star-btn" id="btn-star" title="Star">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8">
+              <polygon points="12,2.5 14.9,8.6 21.6,9.5 16.7,14.2 17.9,20.9 12,17.7 6.1,20.9 7.3,14.2 2.4,9.5 9.1,8.6"/>
+            </svg>
+          </button>
+          <span class="save-status-text" id="save-status-text"></span>
+        </div>
+
+        <!-- Menubar -->
+        <nav class="colab-menubar" id="colab-menubar">
+          <div class="menu-item" data-menu="file">
+            <span>File</span>
+            <div class="menu-dropdown">
+              <div class="menu-option" data-action="new-notebook"><span>New notebook in Drive</span><span class="menu-kbd">Ctrl+Alt+N</span></div>
+              <div class="menu-option" data-action="open-notebook"><span>Open notebook</span><span class="menu-kbd">Ctrl+O</span></div>
+              <div class="menu-option" data-action="upload-notebook"><span>Upload notebook</span></div>
+              <div class="menu-divider"></div>
+              <div class="menu-option" data-action="save-notebook"><span>Save</span><span class="menu-kbd">Ctrl+S</span></div>
+              <div class="menu-option" data-action="save-copy"><span>Save a copy in Drive</span></div>
+              <div class="menu-divider"></div>
+              <div class="menu-option" data-action="download-ipynb"><span>Download .ipynb</span></div>
+              <div class="menu-option" data-action="download-py"><span>Download .py</span></div>
+              <div class="menu-divider"></div>
+              <div class="menu-option" data-action="print-notebook"><span>Print</span><span class="menu-kbd">Ctrl+P</span></div>
+            </div>
+          </div>
+          <div class="menu-item" data-menu="edit">
+            <span>Edit</span>
+            <div class="menu-dropdown">
+              <div class="menu-option" data-action="select-all"><span>Select all cells</span><span class="menu-kbd">Ctrl+Shift+A</span></div>
+              <div class="menu-option" data-action="cut-cell"><span>Cut cell or selection</span><span class="menu-kbd">Ctrl+M X</span></div>
+              <div class="menu-option" data-action="copy-cell"><span>Copy cell or selection</span><span class="menu-kbd">Ctrl+M C</span></div>
+              <div class="menu-divider"></div>
+              <div class="menu-option" data-action="delete-cell"><span>Delete selected cells</span><span class="menu-kbd">Ctrl+M D</span></div>
+              <div class="menu-option" data-action="clear-outputs"><span>Clear all outputs</span></div>
+            </div>
+          </div>
+          <div class="menu-item" data-menu="view">
+            <span>View</span>
+            <div class="menu-dropdown">
+              <div class="menu-option" data-action="toggle-toc"><span>Table of contents</span></div>
+              <div class="menu-option" data-action="toggle-vars"><span>Variables</span></div>
+              <div class="menu-option" data-action="toggle-terminal"><span>Terminal</span></div>
+            </div>
+          </div>
+          <div class="menu-item" data-menu="insert">
+            <span>Insert</span>
+            <div class="menu-dropdown">
+              <div class="menu-option" data-action="add-code"><span>Code cell</span><span class="menu-kbd">Ctrl+M B</span></div>
+              <div class="menu-option" data-action="add-text"><span>Text cell</span><span class="menu-kbd">Ctrl+M A</span></div>
+              <div class="menu-option" data-action="add-section"><span>Section header cell</span></div>
+            </div>
+          </div>
+          <div class="menu-item" data-menu="runtime">
+            <span>Runtime</span>
+            <div class="menu-dropdown">
+              <div class="menu-option" data-action="run-all"><span>Run all</span><span class="menu-kbd">Ctrl+F9</span></div>
+              <div class="menu-option" data-action="run-focused"><span>Run selection</span><span class="menu-kbd">Ctrl+Enter</span></div>
+              <div class="menu-divider"></div>
+              <div class="menu-option" data-action="interrupt"><span>Interrupt execution</span><span class="menu-kbd">Ctrl+M I</span></div>
+              <div class="menu-option" data-action="restart-runtime"><span>Restart session</span><span class="menu-kbd">Ctrl+M .</span></div>
+              <div class="menu-option" data-action="disconnect-runtime"><span>Disconnect and delete runtime</span></div>
+              <div class="menu-divider"></div>
+              <div class="menu-option" data-action="change-runtime"><span>Change runtime type</span></div>
+            </div>
+          </div>
+          <div class="menu-item" data-menu="tools">
+            <span>Tools</span>
+            <div class="menu-dropdown">
+              <div class="menu-option" data-action="command-palette"><span>Command palette</span><span class="menu-kbd">Ctrl+Shift+P</span></div>
+              <div class="menu-option" data-action="settings"><span>Settings</span></div>
+              <div class="menu-option" data-action="shortcuts"><span>Keyboard shortcuts</span><span class="menu-kbd">Ctrl+M H</span></div>
+            </div>
+          </div>
+          <div class="menu-item" data-menu="help">
+            <span>Help</span>
+            <div class="menu-dropdown">
+              <div class="menu-option" data-action="faq"><span>Frequently asked questions</span></div>
+              <div class="menu-option" data-action="release-notes"><span>Release notes</span></div>
+              <div class="menu-option" data-action="search-snippets"><span>Search code snippets</span></div>
+            </div>
+          </div>
+        </nav>
+      </div>
+    </div>
+
+    <div class="header-right">
+      <!-- Comment Icon -->
+      <button class="header-icon-btn" id="btn-comments" title="Open comments">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+          <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12zM6 12h12v2H6zm0-3h12v2H6zm0-3h12v2H6z"/>
+        </svg>
+      </button>
+
+      <!-- Settings Gear Icon -->
+      <button class="header-icon-btn" id="btn-settings" title="Settings">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+          <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+        </svg>
+      </button>
+
+      <!-- Share Pill Button (#004a77) -->
+      <button class="share-pill-btn" id="btn-share" title="Private to only me">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+          <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM9 6c0-1.66 1.34-3 3-3s3 1.34 3 3v2H9V6zm9 14H6V10h12v10zm-6-3c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2z"/>
+        </svg>
+        <span>Share</span>
+      </button>
+
+      <!-- Google Account Avatar with 4-Color Ring -->
+      <div class="google-avatar-ring" title="Google Account: Vivzz">
+        <svg class="ring-svg" viewBox="0 0 40 40">
+          <path d="M20 2 A18 18 0 0 1 37.3 15" fill="none" stroke="#ea4335" stroke-width="2.4" stroke-linecap="round"/>
+          <path d="M37.3 15 A18 18 0 0 1 25 37.3" fill="none" stroke="#4285f4" stroke-width="2.4" stroke-linecap="round"/>
+          <path d="M25 37.3 A18 18 0 0 1 2.7 25" fill="none" stroke="#34a853" stroke-width="2.4" stroke-linecap="round"/>
+          <path d="M2.7 25 A18 18 0 0 1 20 2" fill="none" stroke="#fbbc05" stroke-width="2.4" stroke-linecap="round"/>
+        </svg>
+        <div class="avatar-inner">V</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- 2. Action Sub-Toolbar (#1e1f20) -->
+  <div class="colab-action-bar">
+    <div class="action-bar-left">
+      <!-- Q Commands Pill -->
+      <button class="commands-pill-btn" id="btn-commands" title="Open command palette (Ctrl+Shift+P)">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor">
+          <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+        </svg>
+        <span>Commands</span>
+      </button>
+
+      <!-- + Code -->
+      <div class="split-action-btn">
+        <button class="toolbar-action-btn" id="btn-add-code" title="Insert code cell below (Ctrl+M B)">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+            <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+          </svg>
+          <span>Code</span>
+        </button>
+        <button class="toolbar-caret-btn" title="More code cell options">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>
+        </button>
+      </div>
+
+      <!-- + Text -->
+      <button class="toolbar-action-btn" id="btn-add-text" title="Insert text cell below (Ctrl+M A)">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+          <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+        </svg>
+        <span>Text</span>
+      </button>
+
+      <div class="toolbar-divider"></div>
+
+      <!-- Run all -->
+      <div class="split-action-btn">
+        <button class="toolbar-action-btn" id="btn-run-all" title="Run all cells (Ctrl+F9)">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+            <path d="M10 8.64L15.27 12 10 15.36V8.64M8 5v14l11-7L8 5z"/>
+          </svg>
+          <span>Run all</span>
+        </button>
+        <button class="toolbar-caret-btn" title="Run options">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="action-bar-right">
+      <!-- Connect / Resource Monitor Widget -->
+      <div class="connect-group" id="connect-widget">
+        <button class="connect-btn" id="btn-connect" title="Click to connect to a runtime">
+          <span class="connect-label" id="connect-label">Connect</span>
+          <!-- Connected RAM/Disk Meters (shown when runtime connects) -->
+          <div class="connected-meters" id="connected-meters" style="display: none;">
+            <svg class="connected-check" viewBox="0 0 24 24" width="16" height="16">
+              <circle cx="12" cy="12" r="10" fill="#81c995"/>
+              <path d="M9.5 16.2L5.8 12.5 7.2 11.1 9.5 13.4 16.8 6.1 18.2 7.5z" fill="#131314"/>
+            </svg>
+            <div class="meter-bars">
+              <div class="meter-row">
+                <span class="meter-name">RAM</span>
+                <div class="meter-track"><div class="meter-fill ram" id="ram-fill" style="width: 24%;"></div></div>
+              </div>
+              <div class="meter-row">
+                <span class="meter-name">Disk</span>
+                <div class="meter-track"><div class="meter-fill disk" id="disk-fill" style="width: 28%;"></div></div>
+              </div>
+            </div>
+          </div>
+        </button>
+        <button class="connect-caret-btn" id="btn-connect-caret" title="Additional connection options">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>
+        </button>
+
+        <!-- Runtime Resource Dropdown Popover -->
+        <div class="runtime-popover" id="runtime-popover">
+          <div class="rt-pop-title" id="rt-pop-status">Connected to Python 3 Google Compute Engine backend</div>
+          <div class="rt-pop-row">
+            <span>System RAM</span>
+            <span id="rt-ram-text">1.4 / 12.7 GB</span>
+          </div>
+          <div class="rt-pop-bar"><div class="rt-pop-fill" style="width: 18%; background: #8ab4f8;"></div></div>
+          <div class="rt-pop-row">
+            <span>Disk</span>
+            <span id="rt-disk-text">30.1 / 107.7 GB</span>
+          </div>
+          <div class="rt-pop-bar"><div class="rt-pop-fill" style="width: 28%; background: #fdd663;"></div></div>
+          <div class="rt-pop-actions">
+            <button class="rt-action-link" id="btn-view-resources">View resources</button>
+            <button class="rt-action-link" id="btn-disconnect-rt">Disconnect and delete runtime</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Collapse Header Button -->
+      <button class="collapse-chevron-btn" id="btn-toggle-header" title="Toggle header visibility">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+          <path d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- 3. Main Workspace Area -->
+  <div class="colab-main-workspace">
+
+    <!-- Left Vertical Icon Rail Pill -->
+    <aside class="left-icon-rail">
+      <div class="rail-pill">
+        <button class="rail-icon-btn" data-panel="toc" title="Table of contents">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+            <path d="M4 10.5c-.83 0-1.5.67-1.5 1.5s.67 1.5 1.5 1.5 1.5-.67 1.5-1.5-.67-1.5-1.5-1.5zm0-6c-.83 0-1.5.67-1.5 1.5S3.17 7.5 4 7.5 5.5 6.83 5.5 6 4.83 4.5 4 4.5zm0 12c-.83 0-1.5.68-1.5 1.5s.68 1.5 1.5 1.5 1.5-.68 1.5-1.5-.67-1.5-1.5-1.5zM7 19h14v-2H7v2zm0-6h14v-2H7v2zm0-8v2h14V5H7z"/>
+          </svg>
+        </button>
+        <button class="rail-icon-btn" data-panel="find" title="Find and replace">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+            <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zM6 20V4h7v5h5v11H6zm5.5-5.5c1.38 0 2.5-1.12 2.5-2.5S12.88 9.5 11.5 9.5 9 10.62 9 12s1.12 2.5 2.5 2.5zm0-3.5c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm2.36 3.55l-.71.71 2.14 2.14.71-.71-2.14-2.14z"/>
+          </svg>
+        </button>
+        <button class="rail-icon-btn" data-panel="snippets" title="Code snippets">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+            <path d="M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z"/>
+          </svg>
+        </button>
+        <button class="rail-icon-btn" data-panel="variables" title="Variables">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+            <path d="M4 6H2v12c0 1.1.9 2 2 2h2v-2H4V6zm16-2h-2v2h2v12h-2v2h2c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-8 4.5c-2.33 0-4.32 1.45-5.12 3.5.8 2.05 2.79 3.5 5.12 3.5s4.32-1.45 5.12-3.5c-.8-2.05-2.79-3.5-5.12-3.5zm0 5.5c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/>
+          </svg>
+        </button>
+        <button class="rail-icon-btn" data-panel="secrets" title="Secrets">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+            <path d="M21 10h-8.35C11.83 7.67 9.61 6 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6c2.61 0 4.83-1.67 5.65-4H13l2 2 2-2 2 2 4-4.04L21 10zM7 15c-1.65 0-3-1.35-3-3s1.35-3 3-3 3 1.35 3 3-1.35 3-3 3z"/>
+          </svg>
+        </button>
+        <button class="rail-icon-btn" data-panel="files" title="Files">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+            <path d="M9.17 6l2 2H20v10H4V6h5.17M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
+          </svg>
+        </button>
+        <button class="rail-icon-btn" data-panel="tables" title="Data tables">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+            <path d="M20 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h15c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 2v3H5V5h15zm-5 14h-5v-9h5v9zM5 10h3v9H5v-9zm12 9v-9h3v9h-3z"/>
+          </svg>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Optional Slide-out Left Panel (Hidden by default to match collab-clone.png) -->
+    <section class="side-drawer" id="side-drawer">
+      <div class="side-drawer-header">
+        <span class="side-drawer-title" id="side-drawer-title">Table of contents</span>
+        <button class="side-drawer-close" id="btn-close-drawer" title="Close">✕</button>
+      </div>
+      <div class="side-drawer-body" id="side-drawer-body"></div>
+    </section>
+
+    <!-- Main Rounded Dark Notebook Canvas (#282a2c) -->
+    <main class="notebook-surface" id="notebook-surface">
+      <div class="cells-container" id="cells-container">
+
+        <!-- Default Initial Code Cell matching collab-clone.png -->
+        <div class="colab-cell code-cell focused" data-cell-id="cell-1">
+          <!-- Left Gutter: [ ] or Play / Checkmark -->
+          <div class="cell-left-gutter">
+            <span class="cell-status-check" style="display: none;">✓</span>
+            <span class="cell-exec-time" style="display: none;">0s</span>
+            <span class="cell-bracket-indicator">[ ]</span>
+          </div>
+
+          <!-- Cell Box -->
+          <div class="cell-box">
+            <!-- Floating Top-Right Cell Action Toolbar -->
+            <div class="cell-floating-toolbar">
+              <button class="cft-btn" data-cell-action="move-up" title="Move cell up (Ctrl+M K)">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                  <path d="M4 12l1.41 1.41L11 7.83V20h2V7.83l5.58 5.59L20 12l-8-8-8 8z"/>
+                </svg>
+              </button>
+              <button class="cft-btn" data-cell-action="move-down" title="Move cell down (Ctrl+M J)">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                  <path d="M20 12l-1.41-1.41L13 16.17V4h-2v12.17l-5.58-5.59L4 12l8 8 8-8z"/>
+                </svg>
+              </button>
+              <button class="cft-btn" data-cell-action="ai-edit" title="Explain or transform code with Gemini">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                  <path d="M7.5 5.6L10 7 8.6 4.5 10 2 7.5 3.4 5 2l1.4 2.5L5 7zm12 9.8L17 14l1.4 2.5L17 19l2.5-1.4L22 19l-1.4-2.5L22 14zM22 2l-2.5 1.4L17 2l1.4 2.5L17 7l2.5-1.4L22 7l-1.4-2.5zm-7.63 5.29a.996.996 0 0 0-1.41 0L1.29 18.96a.996.996 0 0 0 0 1.41l2.34 2.34c.39.39 1.02.39 1.41 0L16.7 11.05a.996.996 0 0 0 0-1.41l-2.33-2.35zm-1.03 5.49l-2.12-2.12 2.44-2.44 2.12 2.12-2.44 2.44z"/>
+                </svg>
+              </button>
+              <button class="cft-btn" data-cell-action="delete" title="Delete cell (Ctrl+M D)">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                  <path d="M16 9v10H8V9h8m-1.5-6h-5l-1 1H5v2h14V4h-3.5l-1-1zM18 7H6v12c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7z"/>
+                </svg>
+              </button>
+              <button class="cft-btn" data-cell-action="more" title="More cell actions">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                  <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
+                </svg>
+              </button>
+            </div>
+
+            <!-- Code Editor Row -->
+            <div class="cell-editor-row">
+              <!-- Play Button Circle inside Cell -->
+              <button class="cell-play-btn" title="Run cell (Ctrl+Enter)">
+                <svg class="play-icon" viewBox="0 0 24 24" width="12" height="12">
+                  <path d="M8 5v14l11-7z" fill="#1e1f20"/>
+                </svg>
+              </button>
+
+              <!-- Editable Code Wrapper with Placeholder & Live Syntax Highlighting -->
+              <div class="cell-code-wrap">
+                <div class="cell-placeholder">Start coding or <span class="placeholder-link">generate</span> with AI.</div>
+                <pre class="cell-code-highlight" aria-hidden="true"></pre>
+                <textarea class="cell-code-textarea" rows="1" spellcheck="false" aria-label="Code editor"></textarea>
+              </div>
+            </div>
+
+            <!-- Cell Execution Output Area (Hidden until executed) -->
+            <div class="cell-output-wrapper" style="display: none;">
+              <div class="cell-output-gutter">
+                <button class="output-action-btn" title="Clear output">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                  </svg>
+                </button>
+              </div>
+              <div class="cell-output-content"></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Custom Right Scrollbar Thumb matching collab-clone.png -->
+      <div class="canvas-scrollbar-track">
+        <div class="canvas-scrollbar-thumb"></div>
+      </div>
+    </main>
+
+    <!-- Bottom Drawer for Terminal / Variables (toggled from footer) -->
+    <div class="bottom-drawer" id="bottom-drawer" style="display: none;">
+      <div class="bottom-drawer-header">
+        <span class="bottom-drawer-title" id="bottom-drawer-title">Terminal</span>
+        <button class="bottom-drawer-close" id="btn-close-bottom-drawer">✕</button>
+      </div>
+      <div class="bottom-drawer-body" id="bottom-drawer-body"></div>
+    </div>
+
+  </div>
+
+  <!-- 4. Bottom Status Bar (#1e1f20) & Floating Gemini Sparkle Button -->
+  <footer class="colab-footer">
+    <div class="footer-left">
+      <button class="footer-btn" id="btn-footer-vars">
+        <span class="footer-brace-icon">{ }</span>
+        <span>Variables</span>
+      </button>
+      <button class="footer-btn" id="btn-footer-terminal">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor">
+          <path d="M20 4H4c-1.11 0-2 .9-2 2v12c0 1.1.89 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.89-2-2-2zm0 14H4V8h16v10zm-2-1h-6v-2h6v2zM7.5 17l-1.41-1.41L8.67 13l-2.59-2.59L7.5 9l4 4-4 4z"/>
+        </svg>
+        <span>Terminal</span>
+      </button>
+    </div>
+
+    <!-- Floating Blue Gemini Sparkle Button at Bottom Center -->
+    <button class="gemini-sparkle-fab" id="btn-gemini-fab" title="Gemini">
+      <svg viewBox="0 0 24 24" width="20" height="20">
+        <path d="M12 3C12.4 7.6 16.4 11.6 21 12C16.4 12.4 12.4 16.4 12 21C11.6 16.4 7.6 12.4 3 12C7.6 11.6 11.6 7.6 12 3Z" fill="#062e6f"/>
+      </svg>
+    </button>
+
+    <div class="footer-right">
+      <span class="footer-runtime-status" id="footer-runtime-status"></span>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

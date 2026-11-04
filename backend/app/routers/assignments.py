@@ -28,20 +28,18 @@ class AssignmentResponse(BaseModel):
     report_filename: Optional[str] = None
 
 
-def assignment_response(upload, db):
-    workflow = db.query(AssignmentWorkflow).filter_by(upload_id=upload.id).first()
-    if workflow:
+def _build_assignment_response(upload, workflow=None, jobs=None, report=None):
+    if workflow is not None:
         total = len(workflow.questions or [])
         completed = sum(result.get("status") == "completed" for result in (workflow.results or []))
         failed = sum(result.get("status") == "failed" for result in (workflow.results or []))
         running = max(0, total - completed - failed) if workflow.status == "processing" else 0
     else:
-        jobs = db.query(Job).filter_by(upload_id=upload.id).all()
-        total = len(jobs)
-        completed = sum(job.status == "completed" for job in jobs)
-        failed = sum(job.status == "failed" for job in jobs)
-        running = sum(job.status in {"pending", "running"} for job in jobs)
-    report = db.query(Report).filter_by(upload_id=upload.id).order_by(Report.id.desc()).first()
+        job_list = jobs or []
+        total = len(job_list)
+        completed = sum(job.status == "completed" for job in job_list)
+        failed = sum(job.status == "failed" for job in job_list)
+        running = sum(job.status in {"pending", "running"} for job in job_list)
     return AssignmentResponse(
         id=upload.id, filename=upload.filename, original_filename=upload.original_filename,
         language=upload.language, uploaded_at=upload.uploaded_at.isoformat(),
@@ -52,15 +50,49 @@ def assignment_response(upload, db):
     )
 
 
+def assignment_response(upload, db):
+    workflow = db.query(AssignmentWorkflow).filter_by(upload_id=upload.id).first()
+    jobs = None if workflow else db.query(Job).filter_by(upload_id=upload.id).all()
+    report = db.query(Report).filter_by(upload_id=upload.id).order_by(Report.id.desc()).first()
+    return _build_assignment_response(upload, workflow=workflow, jobs=jobs, report=report)
+
+
 @router.get("/", response_model=list[AssignmentResponse])
 @router.get("", response_model=list[AssignmentResponse])
-async def get_user_assignments(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_user_assignments(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     uploads = db.query(Upload).filter_by(user_id=current_user.id).order_by(Upload.uploaded_at.desc()).all()
-    return [assignment_response(upload, db) for upload in uploads]
+    if not uploads:
+        return []
+    upload_ids = [u.id for u in uploads]
+
+    workflows_by_upload = {
+        w.upload_id: w
+        for w in db.query(AssignmentWorkflow).filter(AssignmentWorkflow.upload_id.in_(upload_ids)).all()
+    }
+
+    missing_workflow_ids = [uid for uid in upload_ids if uid not in workflows_by_upload]
+    jobs_by_upload: dict[int, list] = {}
+    if missing_workflow_ids:
+        for job in db.query(Job).filter(Job.upload_id.in_(missing_workflow_ids)).all():
+            jobs_by_upload.setdefault(job.upload_id, []).append(job)
+
+    reports_by_upload = {}
+    for rep in db.query(Report).filter(Report.upload_id.in_(upload_ids)).order_by(Report.id.asc()).all():
+        reports_by_upload[rep.upload_id] = rep
+
+    return [
+        _build_assignment_response(
+            upload,
+            workflow=workflows_by_upload.get(upload.id),
+            jobs=jobs_by_upload.get(upload.id),
+            report=reports_by_upload.get(upload.id),
+        )
+        for upload in uploads
+    ]
 
 
 @router.get("/{assignment_id}", response_model=AssignmentResponse)
-async def get_assignment_details(assignment_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_assignment_details(assignment_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     upload = db.query(Upload).filter_by(id=assignment_id, user_id=current_user.id).first()
     if not upload:
         raise HTTPException(404, "Assignment not found.")
@@ -68,7 +100,7 @@ async def get_assignment_details(assignment_id: int, current_user: User = Depend
 
 
 @router.get("/{assignment_id}/workspace")
-async def get_assignment_workspace(
+def get_assignment_workspace(
     assignment_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -81,9 +113,14 @@ async def get_assignment_workspace(
     report = db.query(Report).filter_by(upload_id=upload.id).order_by(Report.id.desc()).first()
 
     questions_data = []
-    if workflow and workflow.results:
+    if workflow:
         from ..security.signed_assets import screenshot_url
-        for item in workflow.results:
+        pending = {q.get("id"): q for q in (workflow.questions or [])}
+        saved = {r.get("id"): r for r in (workflow.results or [])}
+        ordered = list(pending) + [key for key in saved if key not in pending]
+        for question_id in ordered:
+            original = pending.get(question_id, {})
+            item = saved.get(question_id, {"id": question_id})
             screenshots = []
             for idx, s_path in enumerate(item.get("screenshot_paths", [])):
                 try:
@@ -102,18 +139,20 @@ async def get_assignment_workspace(
                     "index": idx + 1,
                     "title": s_title,
                     "url": s_url,
-                    "path": s_path,
                 })
 
             questions_data.append({
                 "id": item.get("id"),
-                "question_text": item.get("question_text", ""),
+                "question_text": item.get("question_text") or item.get("question") or original.get("text", ""),
                 "code": item.get("code", ""),
                 "output": item.get("output", ""),
                 "status": item.get("status", "pending"),
-                "language": item.get("language", upload.language or "python"),
-                "is_theory": item.get("is_theory", False),
-                "theory_answer": item.get("theory_answer", ""),
+                "language": item.get("language") or original.get("language") or upload.language or "python",
+                "is_theory": bool(item.get("is_theory") or original.get("is_theory") or original.get("language") == "theory"),
+                "theory_answer": item.get("theory_answer") or item.get("answer", ""),
+                "error_message": item.get("error", ""),
+                "project_files": item.get("project_files") or {},
+                "verification_summary": item.get("verification_summary"),
                 "screenshots": screenshots,
             })
 

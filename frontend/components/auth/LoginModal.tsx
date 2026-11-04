@@ -9,7 +9,7 @@ import { isValidEmail, validatePasswordStrength } from "@/lib/sanitize";
 interface LoginModalProps {
   isOpen: boolean;
   onClose: () => void;
-  redirectTo?: "/dashboard" | "/code-execution" | `/checkout?pack=${string}`;
+  redirectTo?: "/dashboard" | "/code-execution" | "/admin/dashboard" | `/checkout?pack=${string}`;
 }
 
 export default function LoginModal({ isOpen, onClose, redirectTo = "/dashboard" }: LoginModalProps) {
@@ -56,7 +56,6 @@ export default function LoginModal({ isOpen, onClose, redirectTo = "/dashboard" 
       if (isLogin) {
         await login(email, password, redirectTo);
       } else {
-        // Client-side validation to avoid 422 spam (backend enforces strong password rules)
         if (!isValidEmail(email)) {
           setError("Please enter a valid email address");
           return;
@@ -70,7 +69,6 @@ export default function LoginModal({ isOpen, onClose, redirectTo = "/dashboard" 
       }
       onClose();
     } catch (err: any) {
-      // Ensure we always render a string (FastAPI validation errors can be an array/object)
       const detail = err?.response?.data?.detail;
       const msg =
         (typeof detail === "string" && detail) ||

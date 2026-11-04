@@ -12,6 +12,9 @@ def ensure_workflow_columns(engine):
         "mode": "VARCHAR(24) NOT NULL DEFAULT 'code_only'",
         "screenshot_style": "VARCHAR(40) NOT NULL DEFAULT 'style_1'",
         "agent_plan": "JSON NOT NULL DEFAULT '{}'",
+        "claim_token": "VARCHAR(64)",
+        # SQLite needs a DATETIME type name so SQLAlchemy reads the stored text back as a datetime.
+        "lease_expires_at": "TIMESTAMP WITH TIME ZONE" if dialect == "postgresql" else "DATETIME",
     }
     with engine.begin() as connection:
         if dialect == "postgresql":

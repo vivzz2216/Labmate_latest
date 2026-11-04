@@ -34,8 +34,8 @@ WEB_SCHEMA = {"type": "OBJECT", "properties": {
     }, "required": ["name", "requirement_ids", "steps", "viewport"]}},
     "api_tests": {"type": "ARRAY", "items": {"type": "OBJECT", "properties": {
         "name": {"type": "STRING"}, "path": {"type": "STRING"}, "method": {"type": "STRING"},
-        "body_json": {"type": "STRING"}, "expected_status": {"type": "INTEGER"}, "expected_json": {"type": "STRING"},
-    }, "required": ["name", "path", "method", "body_json", "expected_status", "expected_json"]}},
+        "body_json": {"type": "STRING"}, "expected_status": {"type": "INTEGER"}, "expected_json": {"type": "STRING"}, "expected_text": {"type": "STRING"},
+    }, "required": ["name", "path", "method", "body_json", "expected_status", "expected_json", "expected_text"]}},
 }, "required": ["answer", "language", "project_type", "entrypoint", "server_entrypoint", "files", "browser_tests", "api_tests"]}
 
 # These are generic behavioral contracts, not implementations of particular labs.
@@ -198,6 +198,7 @@ def api_tests(data):
         record = {key: test[key] for key in ("name", "path", "method", "expected_status")}
         if test.get("body_json"): record["json"] = json.loads(test["body_json"])
         if test.get("expected_json"): record["expected_json"] = json.loads(test["expected_json"])
+        if test.get("expected_text"): record["expected_text"] = test["expected_text"]
         tests.append(record)
     return tests
 

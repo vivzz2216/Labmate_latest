@@ -103,7 +103,7 @@ class TheoryProcessingTests(unittest.IsolatedAsyncioTestCase):
             self.assertNotIn("Greeting example", text)
             self.assertEqual(len(document.inline_shapes), 2)
 
-    async def test_generated_profile_uses_requested_fallback_details(self):
+    async def test_generated_profile_does_not_fabricate_fallback_details(self):
         with self.factory() as db:
             profile = db.query(UserProfile).first()
             profile.course = "Computer Science and Engineering"
@@ -118,5 +118,6 @@ class TheoryProcessingTests(unittest.IsolatedAsyncioTestCase):
              patch("app.services.assignment_workflow.settings.REPORT_DIR", str(self.root / "reports")):
             await process_assignment(self.workflow_id)
         prompt = generated.await_args.args[1]
-        for value in ("Asha Rao", "USN-2024-001", "Computer Science & Engineering", "Engineering College"):
-            self.assertIn(value, prompt)
+        self.assertIn("Asha Rao", prompt)
+        self.assertNotIn("USN-2024-001", prompt)
+        self.assertNotIn("Engineering College", prompt)

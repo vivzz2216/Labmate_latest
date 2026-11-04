@@ -5,6 +5,7 @@ import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import PreviewGrid from '@/components/preview/PreviewGrid'
+import LabMateLogo from '@/components/brand/LabMateLogo'
 import { ArrowLeft, CheckCircle, AlertCircle, FileText } from 'lucide-react'
 import { apiService, type JobStatus, type ComposeResponse } from '@/lib/api'
 import Link from 'next/link'
@@ -60,28 +61,8 @@ function PreviewContent() {
         
         setJobs(convertedJobs)
       } else {
-        // Fallback to mock data if no params
-        const mockJobs: JobStatus[] = [
-          {
-            id: 1,
-            task_id: 1,
-            question_text: "Write a Python function to calculate the factorial of a number.",
-            status: "completed",
-            output_text: "Factorial function created successfully. Test with factorial(5) = 120",
-            execution_time: 150,
-            screenshot_url: "/screenshots/1/screenshot_abc123.png"
-          },
-          {
-            id: 2,
-            task_id: 2,
-            question_text: "Create a list comprehension to generate squares of numbers 1 to 10.",
-            status: "completed",
-            output_text: "[1, 4, 9, 16, 25, 36, 49, 64, 81, 100]",
-            execution_time: 89,
-            screenshot_url: "/screenshots/2/screenshot_def456.png"
-          }
-        ]
-        setJobs(mockJobs)
+        setJobs([])
+        setError('No report selected. Open an assignment from your workspace.')
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load jobs')
@@ -166,12 +147,7 @@ function PreviewContent() {
                   Back to Dashboard
                 </Button>
               </Link>
-              <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-[#5f3bff] rounded-lg flex items-center justify-center">
-                  <FileText className="w-4 h-4 text-white" />
-                </div>
-                <span className="text-xl font-bold text-slate-900">LabMate AI</span>
-              </div>
+              <LabMateLogo size="md" theme="light" />
             </div>
             <div className="text-sm text-slate-600 font-medium">
               Preview & Download
@@ -196,7 +172,7 @@ function PreviewContent() {
                   <div>
                     <h3 className="font-semibold text-green-900">Report Generated Successfully!</h3>
                     <p className="text-sm text-green-700">
-                      Your report "{reportGenerated.filename}" has been generated and downloaded.
+                      Your report &quot;{reportGenerated.filename}&quot; has been generated and downloaded.
                     </p>
                   </div>
                 </div>
@@ -339,7 +315,7 @@ function PreviewContent() {
                 <div className="space-y-2">
                   <h4 className="font-semibold text-[#5f3bff]">3. Update Document</h4>
                   <p className="text-sm text-slate-600">
-                    Click "Update & Download Document" to add screenshots to your original assignment document.
+                    Click &quot;Update &amp; Download Document&quot; to add screenshots to your original assignment document.
                   </p>
                 </div>
               </div>

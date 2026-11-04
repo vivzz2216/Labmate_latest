@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MySQL Workbench</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="workbench-window">
+
+  <!-- 1. OS TITLE BAR (Native Windows Win32 Titlebar - Official MySQL Workbench Logo) -->
+  <header class="wb-titlebar">
+    <div class="wb-title-left">
+      <img src="assets/icons/app_logo_16.png" class="wb-dolphin-logo" width="16" height="16" alt="MySQL Workbench">
+      <span class="wb-app-title">MySQL Workbench</span>
+    </div>
+    <div class="wb-window-controls">
+      <button class="wb-win-btn" title="Minimize">
+        <svg viewBox="0 0 10 10" width="10" height="10"><rect x="0" y="4.5" width="10" height="1" fill="#333"/></svg>
+      </button>
+      <button class="wb-win-btn" title="Maximize">
+        <svg viewBox="0 0 10 10" width="10" height="10"><rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="#333" stroke-width="1"/></svg>
+      </button>
+      <button class="wb-win-btn close" title="Close">
+        <svg viewBox="0 0 10 10" width="10" height="10"><path d="M1 1L9 9M9 1L1 9" stroke="#333" stroke-width="1.2"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- 2. CONNECTION TAB BAR (Official WB Home Icon + Demo connection Tab) -->
+  <div class="wb-connection-bar">
+    <button class="wb-home-btn" title="Workbench Central (Home)">
+      <img src="assets/icons/home.png" width="16" height="16" alt="Workbench Central">
+    </button>
+    <div class="wb-conn-tab active">
+      <span class="conn-name">Demo connection</span>
+      <span class="conn-close" title="Close connection">✕</span>
+    </div>
+  </div>
+
+  <!-- 3. MAIN MENU BAR -->
+  <nav class="wb-menubar" id="wb-menubar">
+    <div class="menu-item" data-menu="file">
+      <span>File</span>
+      <div class="menu-dropdown">
+        <div class="menu-drop-item" data-action="new-tab"><span>New Query Tab</span><span class="menu-shortcut">Ctrl+T</span></div>
+        <div class="menu-drop-item" data-action="open-script"><span>Open SQL Script...</span><span class="menu-shortcut">Ctrl+Shift+O</span></div>
+        <div class="menu-drop-item" data-action="save-script"><span>Save Script</span><span class="menu-shortcut">Ctrl+S</span></div>
+        <div class="menu-drop-sep"></div>
+        <div class="menu-drop-item" data-action="close-tab"><span>Close Tab</span><span class="menu-shortcut">Ctrl+W</span></div>
+        <div class="menu-drop-sep"></div>
+        <div class="menu-drop-item" data-action="exit"><span>Exit</span><span class="menu-shortcut">Alt+F4</span></div>
+      </div>
+    </div>
+    <div class="menu-item" data-menu="edit">
+      <span>Edit</span>
+      <div class="menu-dropdown">
+        <div class="menu-drop-item" data-action="undo"><span>Undo</span><span class="menu-shortcut">Ctrl+Z</span></div>
+        <div class="menu-drop-item" data-action="redo"><span>Redo</span><span class="menu-shortcut">Ctrl+Y</span></div>
+        <div class="menu-drop-sep"></div>
+        <div class="menu-drop-item" data-action="format-sql"><span>Format ► Beautify Query</span><span class="menu-shortcut">Ctrl+B</span></div>
+      </div>
+    </div>
+    <div class="menu-item" data-menu="view">
+      <span>View</span>
+      <div class="menu-dropdown">
+        <div class="menu-drop-item" id="menu-toggle-sidebar"><span>✔ Show Sidebar (Navigator)</span></div>
+        <div class="menu-drop-item" id="menu-toggle-output"><span>✔ Show Secondary Sidebar (Output)</span></div>
+        <div class="menu-drop-item" id="menu-toggle-additions"><span>✔ Show SQL Additions</span></div>
+      </div>
+    </div>
+    <div class="menu-item" data-menu="query">
+      <span>Query</span>
+      <div class="menu-dropdown">
+        <div class="menu-drop-item" data-action="exec-all"><span>Execute (All or Selection)</span><span class="menu-shortcut">Ctrl+Shift+Enter</span></div>
+        <div class="menu-drop-item" data-action="exec-current"><span>Execute Current Statement</span><span class="menu-shortcut">Ctrl+Enter</span></div>
+        <div class="menu-drop-item" data-action="explain"><span>Explain Current Statement</span><span class="menu-shortcut">Ctrl+Alt+X</span></div>
+        <div class="menu-drop-sep"></div>
+        <div class="menu-drop-item" data-action="reconnect"><span>Reconnect to Server</span></div>
+      </div>
+    </div>
+    <div class="menu-item" data-menu="database">
+      <span>Database</span>
+      <div class="menu-dropdown">
+        <div class="menu-drop-item"><span>Connect to Database...</span><span class="menu-shortcut">Ctrl+U</span></div>
+        <div class="menu-drop-item"><span>Reverse Engineer...</span><span class="menu-shortcut">Ctrl+R</span></div>
+      </div>
+    </div>
+    <div class="menu-item" data-menu="server">
+      <span>Server</span>
+      <div class="menu-dropdown">
+        <div class="menu-drop-item"><span>Server Status</span></div>
+        <div class="menu-drop-item"><span>Client Connections</span></div>
+        <div class="menu-drop-item"><span>Users and Privileges</span></div>
+        <div class="menu-drop-item"><span>Data Export</span></div>
+        <div class="menu-drop-item"><span>Data Import</span></div>
+      </div>
+    </div>
+    <div class="menu-item" data-menu="tools">
+      <span>Tools</span>
+      <div class="menu-dropdown">
+        <div class="menu-drop-item"><span>Configuration</span></div>
+        <div class="menu-drop-item"><span>Utilities</span></div>
+      </div>
+    </div>
+    <div class="menu-item" data-menu="scripting">
+      <span>Scripting</span>
+      <div class="menu-dropdown">
+        <div class="menu-drop-item"><span>Scripting Shell...</span></div>
+        <div class="menu-drop-item"><span>New Script</span></div>
+      </div>
+    </div>
+    <div class="menu-item" data-menu="help">
+      <span>Help</span>
+      <div class="menu-dropdown">
+        <div class="menu-drop-item"><span>Help Index</span><span class="menu-shortcut">F1</span></div>
+        <div class="menu-drop-item"><span>About Workbench</span></div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- 4. GLOBAL ACTION TOOLBAR (Matching top_header.png 1:1) -->
+  <div class="wb-global-toolbar">
+    <div class="tb-group">
+      <span class="tb-grip-dots">⋮</span>
+      <!-- 1. New SQL script -->
+      <button class="tb-btn" id="btn-tb-new-sql" title="Create a new SQL tab for executing queries (Ctrl+T)">
+        <img src="assets/icons/tb_new_sql.png" width="18" height="18" alt="New SQL">
+      </button>
+      <!-- 2. Open SQL script -->
+      <button class="tb-btn" id="btn-tb-open-sql" title="Open a SQL script file in a new query tab (Ctrl+Shift+O)">
+        <img src="assets/icons/tb_open_sql.png" width="18" height="18" alt="Open SQL">
+      </button>
+      <!-- 3. Inspector / Server Info -->
+      <button class="tb-btn" id="btn-tb-server-info" title="Open inspector for selected object">
+        <img src="assets/icons/nav_server_status.png" width="18" height="18" alt="Inspector">
+      </button>
+      <span class="tb-sep-dotted"></span>
+      <!-- 4. Create Schema -->
+      <button class="tb-btn" id="btn-tb-add-schema" title="Create a new schema in the connected server">
+        <img src="assets/icons/tb_add_schema.png" width="18" height="18" alt="Add Schema">
+      </button>
+      <!-- 5. Create Table -->
+      <button class="tb-btn" id="btn-tb-add-table" title="Create a new table in the active schema">
+        <img src="assets/icons/tb_add_table.png" width="18" height="18" alt="Add Table">
+      </button>
+      <!-- 6. Create View -->
+      <button class="tb-btn" id="btn-tb-add-view" title="Create a new view in the active schema">
+        <img src="assets/icons/tb_add_view.png" width="18" height="18" alt="Add View">
+      </button>
+      <!-- 7. Create Stored Procedure -->
+      <button class="tb-btn" id="btn-tb-add-routine" title="Create a new stored procedure in the active schema">
+        <img src="assets/icons/tb_add_routine.png" width="18" height="18" alt="Add Routine">
+      </button>
+      <!-- 8. Create Function -->
+      <button class="tb-btn" id="btn-tb-add-function" title="Create a new function in the active schema">
+        <img src="assets/icons/tb_add_function.png" width="18" height="18" alt="Add Function">
+      </button>
+      <span class="tb-sep-dotted"></span>
+      <!-- 9. Search Table Data -->
+      <button class="tb-btn" id="btn-tb-search-db" title="Search Table Data">
+        <img src="assets/icons/tb_search_db.png" width="18" height="18" alt="Search DB">
+      </button>
+      <!-- 10. Reconnect to DBMS -->
+      <button class="tb-btn" id="btn-tb-reconnect" title="Reconnect to DBMS">
+        <img src="assets/icons/nav_refresh.png" width="18" height="18" alt="Reconnect">
+      </button>
+    </div>
+
+    <div class="tb-group right-controls">
+      <!-- Preferences Gear -->
+      <button class="tb-btn" id="btn-tb-preferences" title="Edit preferences">
+        <img src="assets/icons/tb_preferences.png" width="18" height="18" alt="Preferences">
+      </button>
+      <span class="tb-sep-dotted"></span>
+      <!-- 3 Layout Panel Toggles matching top_header.png (Left Sidebar, Bottom Output, Right SQL Additions) -->
+      <button class="tb-btn view-toggle active" id="toggle-sidebar" title="Show/Hide Left Sidebar (Navigator)">
+        <svg viewBox="0 0 18 16" width="17" height="15">
+          <rect x="1" y="1.5" width="16" height="13" fill="#ffffff" stroke="#4a7ebb" stroke-width="1.2"/>
+          <rect x="1" y="1.5" width="5.5" height="13" fill="#3b73b9"/>
+        </svg>
+      </button>
+      <button class="tb-btn view-toggle active" id="toggle-output" title="Show/Hide Bottom Output Panel">
+        <svg viewBox="0 0 18 16" width="17" height="15">
+          <rect x="1" y="1.5" width="16" height="13" fill="#ffffff" stroke="#4a7ebb" stroke-width="1.2"/>
+          <rect x="1" y="9.5" width="16" height="5" fill="#3b73b9"/>
+        </svg>
+      </button>
+      <button class="tb-btn view-toggle active" id="toggle-additions" title="Show/Hide Right Sidebar (SQL Additions)">
+        <svg viewBox="0 0 18 16" width="17" height="15">
+          <rect x="1" y="1.5" width="16" height="13" fill="#ffffff" stroke="#4a7ebb" stroke-width="1.2"/>
+          <rect x="11.5" y="1.5" width="5.5" height="13" fill="#3b73b9"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- 5. MAIN 3-COLUMN WORKSPACE (Navigator | Center SQL Editor + Result Grid + Output | SQL Additions) -->
+  <div class="wb-workspace">
+
+    <!-- COLUMN 1: LEFT NAVIGATOR PANE (Matching left_navigator.png) -->
+    <aside class="wb-sidebar" id="sidebar-panel">
+      <div class="panel-section-header">
+        <span class="header-title">Navigator</span>
+        <span class="splitter-grip-dots">::::::::::::::::::::::::::</span>
+      </div>
+
+      <div class="nav-scroll-area">
+        <!-- MANAGEMENT -->
+        <div class="nav-category">
+          <div class="category-header">
+            <span>MANAGEMENT</span>
+            <span class="category-collapse-icon" title="Toggle section">⤡</span>
+          </div>
+          <ul class="nav-list">
+            <li class="nav-item-clickable" data-info="Server Status: Running (MySQL Community Server 8.0.36)">
+              <span class="nav-icon-wrap"><img src="assets/icons/nav_server_status.png" width="16" height="16" alt=""></span>
+              <span>Server Status</span>
+            </li>
+            <li class="nav-item-clickable" data-info="Client Connections: 2 active connections (root@localhost)">
+              <span class="nav-icon-wrap"><img src="assets/icons/nav_client_connections.png" width="16" height="16" alt=""></span>
+              <span>Client Connections</span>
+            </li>
+            <li class="nav-item-clickable" data-info="Users and Privileges: root@localhost (DBA)">
+              <span class="nav-icon-wrap"><img src="assets/icons/nav_users_privileges.png" width="16" height="16" alt=""></span>
+              <span>Users and Privileges</span>
+            </li>
+            <li class="nav-item-clickable" data-info="Status and System Variables: 612 variables loaded">
+              <span class="nav-icon-wrap"><img src="assets/icons/nav_system_variables.png" width="16" height="16" alt=""></span>
+              <span>Status and System Variables</span>
+            </li>
+            <li class="nav-item-clickable" data-info="Data Export: Export database schemas to self-contained SQL file">
+              <span class="nav-icon-wrap"><img src="assets/icons/nav_data_export.png" width="16" height="16" alt=""></span>
+              <span>Data Export</span>
+            </li>
+            <li class="nav-item-clickable" data-info="Data Import/Restore: Restore exported dump project or SQL script">
+              <span class="nav-icon-wrap"><img src="assets/icons/nav_data_export.png" width="16" height="16" style="transform: scaleY(-1);" alt=""></span>
+              <span>Data Import/Restore</span>
+            </li>
+          </ul>
+        </div>
+
+        <!-- INSTANCE -->
+        <div class="nav-category">
+          <div class="category-header">
+            <div style="display:flex; align-items:center; gap:5px;">
+              <span>INSTANCE</span>
+              <span class="instance-wrench-badge">🔧</span>
+            </div>
+          </div>
+          <ul class="nav-list">
+            <li class="disabled-nav-item">
+              <span class="nav-icon-wrap">
+                <svg viewBox="0 0 16 16" width="14" height="14">
+                  <rect x="5" y="1" width="6" height="14" rx="2" fill="#999"/>
+                  <circle cx="8" cy="4" r="1.5" fill="#e0e0e0"/>
+                  <circle cx="8" cy="8" r="1.5" fill="#e0e0e0"/>
+                  <circle cx="8" cy="12" r="1.5" fill="#e0e0e0"/>
+                </svg>
+              </span>
+              <span>Startup / Shutdown</span>
+            </li>
+            <li class="disabled-nav-item">
+              <span class="nav-icon-wrap"><img src="assets/icons/nav_server_logs.png" width="16" height="16" style="opacity:0.55;" alt=""></span>
+              <span>Server Logs</span>
+            </li>
+            <li class="disabled-nav-item">
+              <span class="nav-icon-wrap"><img src="assets/icons/nav_options_file.png" width="16" height="16" style="opacity:0.55;" alt=""></span>
+              <span>Options File</span>
+            </li>
+          </ul>
+        </div>
+
+        <!-- PERFORMANCE -->
+        <div class="nav-category">
+          <div class="category-header">
+            <span>PERFORMANCE</span>
+          </div>
+          <ul class="nav-list">
+            <li class="nav-item-clickable" data-info="Performance Dashboard: Real-time network, MySQL & InnoDB status">
+              <span class="nav-icon-wrap"><img src="assets/icons/nav_dashboard.png" width="16" height="16" alt=""></span>
+              <span>Dashboard</span>
+            </li>
+            <li class="nav-item-clickable" data-info="Performance Reports: High cost SQL statements & I/O hotspots">
+              <span class="nav-icon-wrap"><img src="assets/icons/nav_perf_reports.png" width="16" height="16" alt=""></span>
+              <span>Performance Reports</span>
+            </li>
+            <li class="nav-item-clickable" data-info="Performance Schema Setup: Easy configuration enabled">
+              <span class="nav-icon-wrap"><img src="assets/icons/nav_perf_setup.png" width="16" height="16" alt=""></span>
+              <span>Performance Schema Setup</span>
+            </li>
+          </ul>
+        </div>
+
+        <!-- SCHEMAS -->
+        <div class="nav-category schemas-section">
+          <div class="category-header schema-header">
+            <span>SCHEMAS</span>
+            <div class="schema-tools">
+              <img src="assets/icons/nav_refresh.png" width="13" height="13" class="schema-tool-icon" id="schema-refresh-btn" title="Refresh schemas">
+              <span class="schema-tool-icon" title="Collapse all">⤡</span>
+            </div>
+          </div>
+          <div class="schema-filter-row">
+            <svg class="filter-search-icon" viewBox="0 0 16 16" width="13" height="13">
+              <circle cx="6.5" cy="6.5" r="4" fill="none" stroke="#666" stroke-width="1.4"/>
+              <path d="M9.5 9.5L13.5 13.5" stroke="#666" stroke-width="1.6"/>
+            </svg>
+            <input type="text" placeholder="Filter objects" class="schema-search-input" id="schema-filter-input">
+          </div>
+
+          <ul class="schema-tree" id="schema-tree">
+            <!-- Dynamically populated by app.js (quickstartdb & sys) -->
+          </ul>
+        </div>
+      </div>
+
+      <!-- Information Pane at Bottom of Left Navigator (Matching left_navigator.png) -->
+      <div class="nav-info-pane">
+        <div class="info-header">
+          <span>Information</span>
+          <span class="splitter-grip-dots">::::::::::::::::::::</span>
+        </div>
+        <div class="info-content" id="info-content-box">
+          <div class="info-line" style="color:#666;">No object selected</div>
+        </div>
+        <div class="info-tabs">
+          <button class="info-tab active" id="tab-object-info">Object Info</button>
+          <button class="info-tab" id="tab-session-info">Session</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- COLUMN 2: CENTER MAIN WORKSPACE -->
+    <main class="wb-center">
+
+      <!-- Editor Tab Strip Header (Matching top_header.png) -->
+      <div class="wb-editor-tabs-bar" id="editor-tabs-bar">
+        <div class="editor-tab active" id="tab-sql-file-2" data-tab-id="sql-file-2">
+          <span class="tab-title">SQL File 2*</span>
+          <span class="tab-close" title="Close Tab">✕</span>
+        </div>
+        <button class="new-tab-btn" id="btn-add-tab" title="New Query Tab">+</button>
+      </div>
+
+      <!-- Query Editor Toolbar (Matching query_toolbar.png 1:1 with all 16 controls) -->
+      <div class="wb-query-toolbar">
+        <div class="qt-group">
+          <!-- 1. Open script -->
+          <button class="qt-btn" id="btn-qe-open" title="Open a script file in this editor">
+            <img src="assets/icons/qe_open.png" width="16" height="16" alt="Open">
+          </button>
+          <!-- 2. Save script -->
+          <button class="qt-btn" id="btn-qe-save" title="Save the script to a file">
+            <img src="assets/icons/qe_save.png" width="16" height="16" alt="Save">
+          </button>
+          <span class="qt-sep"></span>
+          <!-- 3. Execute (All or Selection) - Plain Lightning -->
+          <button class="qt-btn" id="btn-execute-all" title="Execute the selected portion of the script or everything, if there is no selection (Ctrl+Shift+Enter)">
+            <img src="assets/icons/qe_execute.png" width="16" height="16" alt="Execute">
+          </button>
+          <!-- 4. Execute Current Statement - Lightning with I-beam -->
+          <button class="qt-btn" id="btn-execute-selection" title="Execute the statement under the keyboard cursor (Ctrl+Enter)">
+            <img src="assets/icons/qe_execute_current.png" width="16" height="16" alt="Execute Current">
+          </button>
+          <!-- 5. Explain Command - Lightning with Magnifier -->
+          <button class="qt-btn" id="btn-explain" title="Execute the EXPLAIN command on the statement under the keyboard cursor">
+            <img src="assets/icons/output_explaindata.png" width="16" height="16" alt="Explain">
+          </button>
+          <!-- 6. Stop Execution -->
+          <button class="qt-btn disabled" id="btn-qe-stop" title="Stop the query being executed">
+            <img src="assets/icons/qe_stop.png" width="16" height="16" alt="Stop">
+          </button>
+          <span class="qt-sep"></span>
+          <!-- 7. Toggle Continue on Error -->
+          <button class="qt-btn toggle-box-btn" id="btn-toggle-err" title="Toggle whether execution of SQL script should continue after failed statements">
+            <svg viewBox="0 0 16 16" width="15" height="15">
+              <rect x="0.5" y="0.5" width="15" height="15" rx="2" fill="#f7f7f7" stroke="#999"/>
+              <circle cx="5.5" cy="5.5" r="3.5" fill="#d93025"/>
+              <path d="M4 4l3 3M7 4L4 7" stroke="#fff" stroke-width="1.2"/>
+              <circle cx="10.5" cy="10.5" r="3.5" fill="#e65100"/>
+              <rect x="9" y="9" width="3" height="3" fill="#fff"/>
+            </svg>
+          </button>
+          <span class="qt-sep"></span>
+          <!-- 8. Commit -->
+          <button class="qt-btn disabled" id="btn-qe-commit" title="Commit the current transaction">
+            <img src="assets/icons/qe_commit.png" width="16" height="16" alt="Commit">
+          </button>
+          <!-- 9. Rollback -->
+          <button class="qt-btn disabled" id="btn-qe-rollback" title="Rollback the current transaction">
+            <img src="assets/icons/qe_rollback.png" width="16" height="16" alt="Rollback">
+          </button>
+          <!-- 10. Auto-Commit Toggle -->
+          <button class="qt-btn toggle-box-btn active" id="btn-autocommit" title="Toggle Auto-Commit mode">
+            <svg viewBox="0 0 16 16" width="15" height="15">
+              <rect x="0.5" y="0.5" width="15" height="15" rx="2" fill="#e2ebf5" stroke="#7b9ebd"/>
+              <polygon points="8,2 4,8.5 7.5,8.5 6,14 11.5,7 8,7" fill="#f1c40f" stroke="#b7950b" stroke-width="0.6"/>
+              <circle cx="11.5" cy="11.5" r="3.2" fill="#2980b9"/>
+              <path d="M9.8 11.5l1.2 1.2 2.2-2.2" fill="none" stroke="#fff" stroke-width="1.2"/>
+            </svg>
+          </button>
+          <span class="qt-sep"></span>
+          <!-- 11. Limit Rows Dropdown -->
+          <div class="limit-dropdown">
+            <select id="limit-select" title="Limit number of rows returned">
+              <option value="1000">Limit to 1000 rows</option>
+              <option value="500">Limit to 500 rows</option>
+              <option value="100">Limit to 100 rows</option>
+              <option value="0">Don't Limit</option>
+            </select>
+          </div>
+          <span class="qt-sep"></span>
+          <!-- 12. Save Snippet (Star + Plus) -->
+          <button class="qt-btn" id="btn-qe-snippet" title="Save current script or selection to Snippets list">
+            <svg viewBox="0 0 16 16" width="15" height="15">
+              <polygon fill="#f4c430" stroke="#b8860b" stroke-width="0.8" points="7.5,1.5 9.3,5.2 13.5,5.8 10.4,8.8 11.2,13 7.5,11 3.8,13 4.6,8.8 1.5,5.8 5.7,5.2"/>
+              <circle cx="12" cy="12" r="3.2" fill="#5cb85c" stroke="#3d8b3d" stroke-width="0.6"/>
+              <path d="M12 10v4M10 12h4" stroke="#fff" stroke-width="1.3"/>
+            </svg>
+          </button>
+          <span class="qt-sep"></span>
+          <!-- 13. Beautify / Format SQL -->
+          <button class="qt-btn" id="btn-beautify" title="Beautify/reformat the SQL script (Ctrl+B)">
+            <img src="assets/icons/qe_beautifier.png" width="16" height="16" alt="Beautify">
+          </button>
+          <!-- 14. Find -->
+          <button class="qt-btn" id="btn-qe-find" title="Show the Find panel for the editor (Ctrl+F)">
+            <img src="assets/icons/qe_find.png" width="16" height="16" alt="Find">
+          </button>
+          <!-- 15. Toggle Invisible Characters (Pilcrow ¶) -->
+          <button class="qt-btn toggle-box-btn" id="btn-qe-pilcrow" title="Toggle display of invisible characters (spaces, tabs, newlines)">
+            <svg viewBox="0 0 16 16" width="15" height="15">
+              <rect x="0.5" y="0.5" width="15" height="15" rx="2" fill="#f7f7f7" stroke="#999"/>
+              <text x="4.5" y="12" font-family="Segoe UI, serif" font-size="11" font-weight="bold" fill="#555">¶</text>
+            </svg>
+          </button>
+          <!-- 16. Toggle Word Wrap -->
+          <button class="qt-btn toggle-box-btn" id="btn-qe-wrap" title="Toggle wrapping of long lines in SQL editor">
+            <svg viewBox="0 0 16 16" width="15" height="15">
+              <rect x="0.5" y="0.5" width="15" height="15" rx="2" fill="#f7f7f7" stroke="#999"/>
+              <path d="M3 5h8a2.5 2.5 0 0 1 0 5H7.5" fill="none" stroke="#555" stroke-width="1.3"/>
+              <polygon points="8,8 5,10 8,12" fill="#555"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- SQL Editor Area (Interactive with live syntax highlighting & blue execution dots) -->
+      <div class="wb-code-section" id="wb-code-section">
+        <div class="code-gutter" id="code-gutter"></div>
+        <div class="code-editor-wrap">
+          <pre class="sql-highlight-layer" id="sql-highlight-layer" aria-hidden="true"></pre>
+          <textarea class="sql-textarea" id="sql-textarea" spellcheck="false" aria-label="SQL Query Editor"></textarea>
+        </div>
+      </div>
+
+      <!-- LIVE RESULT GRID PANE -->
+      <div class="wb-result-pane" id="result-pane">
+        <!-- Result Grid Controls Toolbar -->
+        <div class="rg-toolbar">
+          <div class="rg-left">
+            <span class="rg-title">Result Grid</span>
+            <button class="rg-btn" title="Grid options">
+              <svg viewBox="0 0 16 16" width="13" height="13">
+                <rect x="1" y="2" width="14" height="11" fill="none" stroke="#555" stroke-width="1"/>
+                <line x1="1" y1="5.5" x2="15" y2="5.5" stroke="#555"/>
+                <line x1="5.5" y1="2" x2="5.5" y2="13" stroke="#555"/>
+              </svg>
+            </button>
+            <span class="qt-sep"></span>
+            <div class="rg-filter">
+              <span>Filter Rows:</span>
+              <input type="text" id="rg-filter-input" class="rg-filter-input" placeholder="Search rows...">
+            </div>
+            <span class="qt-sep"></span>
+            <div class="rg-edit-tools">
+              <span>Edit:</span>
+              <button class="rg-tool-btn" id="rg-btn-edit" title="Edit current row">
+                <img src="assets/icons/record_edit.png" width="15" height="15" alt="Edit">
+              </button>
+              <button class="rg-tool-btn" id="rg-btn-discard" title="Reset all unapplied changes">
+                <img src="assets/icons/record_discard.png" width="15" height="15" alt="Discard">
+              </button>
+              <button class="rg-tool-btn" id="rg-btn-add" title="Insert new row">
+                <img src="assets/icons/record_add.png" width="15" height="15" alt="Add">
+              </button>
+              <button class="rg-tool-btn" id="rg-btn-del" title="Delete selected rows">
+                <img src="assets/icons/record_del.png" width="15" height="15" alt="Delete">
+              </button>
+            </div>
+            <span class="qt-sep"></span>
+            <div class="rg-export-tools">
+              <span>Export/Import:</span>
+              <button class="rg-tool-btn" id="rg-btn-export" title="Export recordset to an external file">
+                <img src="assets/icons/record_export.png" width="15" height="15" alt="Export">
+              </button>
+            </div>
+            <span class="qt-sep"></span>
+            <label class="rg-wrap-label">
+              <input type="checkbox" id="wrap-cells"> Wrap Cell Content
+            </label>
+          </div>
+        </div>
+
+        <!-- Result Grid Table & Right Side Mode Tabs -->
+        <div class="rg-body-wrapper">
+          <div class="rg-table-container">
+            <table class="rg-table" id="result-grid-table">
+              <thead id="result-grid-thead">
+                <tr>
+                  <th class="col-num">#</th>
+                </tr>
+              </thead>
+              <tbody id="result-grid-tbody"></tbody>
+            </table>
+          </div>
+
+          <!-- Vertical Layout Toggle Tabs on Right Side of Grid -->
+          <div class="rg-side-tabs">
+            <button class="side-tab active" data-view="grid" title="Result Grid">
+              <img src="assets/icons/output_resultset.png" width="20" height="20" alt="">
+              <span>Result Grid</span>
+            </button>
+            <button class="side-tab" data-view="form" title="Form Editor">
+              <img src="assets/icons/output_formeditor.png" width="20" height="20" alt="">
+              <span>Form Editor</span>
+            </button>
+            <button class="side-tab" data-view="types" title="Field Types">
+              <img src="assets/icons/output_fieldtypes.png" width="20" height="20" alt="">
+              <span>Field Types</span>
+            </button>
+            <button class="side-tab" data-view="stats" title="Query Stats">
+              <img src="assets/icons/output_explaindata.png" width="20" height="20" alt="">
+              <span>Query Stats</span>
+            </button>
+            <button class="side-tab" data-view="plan" title="Execution Plan">
+              <img src="assets/icons/output_executionplan.png" width="20" height="20" alt="">
+              <span>Execution Plan</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Result Grid Bottom Sub-Tabs & Apply/Revert -->
+        <div class="rg-sub-footer">
+          <div class="rg-sub-tabs" id="rg-sub-tabs"></div>
+          <div class="rg-sub-actions">
+            <button class="rg-action-btn" id="btn-apply" disabled>Apply</button>
+            <button class="rg-action-btn" id="btn-revert" disabled>Revert</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- LIVE ACTION OUTPUT SECTION -->
+      <div class="wb-action-output" id="output-panel">
+        <div class="ao-header">
+          <div class="ao-header-left">
+            <span class="splitter-grip-dots">::::::::::::</span>
+            <span class="ao-title">Output</span>
+            <span class="splitter-grip-dots">::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::</span>
+          </div>
+          <div class="ao-toolbar-actions">
+            <select class="ao-view-select" id="ao-view-select">
+              <option value="action">Action Output</option>
+              <option value="text">Text Output</option>
+              <option value="history">History Output</option>
+            </select>
+            <button class="ao-tool-btn" id="ao-clear-btn" title="Clear Action Output">
+              <img src="assets/icons/clear_output.png" width="14" height="14" alt="Clear">
+            </button>
+          </div>
+        </div>
+        <div class="ao-table-container">
+          <table class="ao-table" id="action-output-table">
+            <thead>
+              <tr>
+                <th class="ao-col-status"></th>
+                <th class="ao-col-num">#</th>
+                <th class="ao-col-time">Time</th>
+                <th class="ao-col-action">Action</th>
+                <th class="ao-col-msg">Message</th>
+                <th class="ao-col-duration">Duration / Fetch</th>
+              </tr>
+            </thead>
+            <tbody id="action-output-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </main>
+
+    <!-- COLUMN 3: RIGHT SIDEBAR - SQL ADDITIONS (Matching top_header.png & right_additions.png 1:1) -->
+    <aside class="wb-right-sidebar" id="additions-panel">
+      <div class="panel-section-header">
+        <span class="header-title">SQL Additions</span>
+        <span class="splitter-grip-dots">::::::::::::::::::::::::::</span>
+      </div>
+
+      <!-- Snippets Toolbar -->
+      <div class="additions-toolbar">
+        <select class="snippets-cat-select" id="snippets-cat-select">
+          <option value="dml">SQL DML</option>
+          <option value="ddl">SQL DDL</option>
+          <option value="shared">My Snippets</option>
+        </select>
+        <div class="snippets-actions">
+          <button class="snip-act-btn" id="btn-snip-insert" title="Insert selected snippet at cursor">
+            <svg viewBox="0 0 16 16" width="14" height="14">
+              <polygon fill="#a0a8b0" points="7,1 8.8,4.8 13,5.4 10,8.2 10.7,12.2 7,10.3 3.3,12.2 4,8.2 1,5.4 5.2,4.8"/>
+              <path d="M11 9v5M8.5 11.5L11 9l2.5 2.5" fill="none" stroke="#555" stroke-width="1.3"/>
+            </svg>
+          </button>
+          <button class="snip-act-btn" id="btn-snip-replace" title="Replace editor content with selected snippet">
+            <svg viewBox="0 0 16 16" width="14" height="14">
+              <polygon fill="#a0a8b0" points="6.5,1 8.2,4.5 12,5 9.2,7.8 9.8,11.5 6.5,9.8 3.2,11.5 3.8,7.8 1,5 4.8,4.5"/>
+              <path d="M9 12h5M12 9.5l2.5 2.5-2.5 2.5" fill="none" stroke="#555" stroke-width="1.3"/>
+            </svg>
+          </button>
+          <button class="snip-act-btn" id="btn-snip-add" title="Save current selection as new snippet">
+            <svg viewBox="0 0 16 16" width="14" height="14">
+              <polygon fill="#a0a8b0" points="6.5,1 8.2,4.5 12,5 9.2,7.8 9.8,11.5 6.5,9.8 3.2,11.5 3.8,7.8 1,5 4.8,4.5"/>
+              <rect x="9.5" y="9.5" width="5.5" height="5.5" fill="#fff" stroke="#666"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Snippets List (Matching right_additions.png 1:1) -->
+      <div class="snippets-list" id="snippets-list">
+        <div class="snippet-card" data-sql="SELECT * FROM inventory;">
+          <div class="snippet-icon-badge">
+            <svg viewBox="0 0 32 22" width="32" height="22">
+              <rect x="0.5" y="0.5" width="31" height="21" rx="2" fill="#f7f7f7" stroke="#a0a0a0"/>
+              <polygon fill="#f4b400" stroke="#b8860b" stroke-width="0.7" points="8.5,3 10.2,6.8 14.3,7.3 11.3,10.1 12,14.2 8.5,12.2 5,14.2 5.7,10.1 2.7,7.3 6.8,6.8"/>
+              <rect x="12.5" y="10.5" width="17" height="9" fill="#ffffff" stroke="#888" stroke-width="0.7"/>
+              <text x="14" y="17.2" font-family="Segoe UI, Arial, sans-serif" font-size="6.8" font-weight="bold" fill="#444">SQL</text>
+            </svg>
+          </div>
+          <div class="snippet-text-col">
+            <div class="snippet-title">SELECT Syntax</div>
+            <div class="snippet-preview">SELECT     [ALL | DISTINCT | DISTINCTR...</div>
+          </div>
+        </div>
+
+        <div class="snippet-card" data-sql="SELECT * FROM inventory i JOIN inventory i2 ON i.id = i2.id;">
+          <div class="snippet-icon-badge">
+            <svg viewBox="0 0 32 22" width="32" height="22">
+              <rect x="0.5" y="0.5" width="31" height="21" rx="2" fill="#f7f7f7" stroke="#a0a0a0"/>
+              <polygon fill="#f4b400" stroke="#b8860b" stroke-width="0.7" points="8.5,3 10.2,6.8 14.3,7.3 11.3,10.1 12,14.2 8.5,12.2 5,14.2 5.7,10.1 2.7,7.3 6.8,6.8"/>
+              <rect x="12.5" y="10.5" width="17" height="9" fill="#ffffff" stroke="#888" stroke-width="0.7"/>
+              <text x="14" y="17.2" font-family="Segoe UI, Arial, sans-serif" font-size="6.8" font-weight="bold" fill="#444">SQL</text>
+            </svg>
+          </div>
+          <div class="snippet-text-col">
+            <div class="snippet-title">JOIN Syntax</div>
+            <div class="snippet-preview">table_references:    table_reference [, tabl...</div>
+          </div>
+        </div>
+
+        <div class="snippet-card" data-sql="INSERT INTO inventory (name, quantity) VALUES ('mango', 120);">
+          <div class="snippet-icon-badge">
+            <svg viewBox="0 0 32 22" width="32" height="22">
+              <rect x="0.5" y="0.5" width="31" height="21" rx="2" fill="#f7f7f7" stroke="#a0a0a0"/>
+              <polygon fill="#f4b400" stroke="#b8860b" stroke-width="0.7" points="8.5,3 10.2,6.8 14.3,7.3 11.3,10.1 12,14.2 8.5,12.2 5,14.2 5.7,10.1 2.7,7.3 6.8,6.8"/>
+              <rect x="12.5" y="10.5" width="17" height="9" fill="#ffffff" stroke="#888" stroke-width="0.7"/>
+              <text x="14" y="17.2" font-family="Segoe UI, Arial, sans-serif" font-size="6.8" font-weight="bold" fill="#444">SQL</text>
+            </svg>
+          </div>
+          <div class="snippet-text-col">
+            <div class="snippet-title">INSERT Syntax</div>
+            <div class="snippet-preview">INSERT [LOW_PRIORITY | DELAYED | HI...</div>
+          </div>
+        </div>
+
+        <div class="snippet-card" data-sql="UPDATE inventory SET quantity = 250 WHERE id = 1;">
+          <div class="snippet-icon-badge">
+            <svg viewBox="0 0 32 22" width="32" height="22">
+              <rect x="0.5" y="0.5" width="31" height="21" rx="2" fill="#f7f7f7" stroke="#a0a0a0"/>
+              <polygon fill="#f4b400" stroke="#b8860b" stroke-width="0.7" points="8.5,3 10.2,6.8 14.3,7.3 11.3,10.1 12,14.2 8.5,12.2 5,14.2 5.7,10.1 2.7,7.3 6.8,6.8"/>
+              <rect x="12.5" y="10.5" width="17" height="9" fill="#ffffff" stroke="#888" stroke-width="0.7"/>
+              <text x="14" y="17.2" font-family="Segoe UI, Arial, sans-serif" font-size="6.8" font-weight="bold" fill="#444">SQL</text>
+            </svg>
+          </div>
+          <div class="snippet-text-col">
+            <div class="snippet-title">UPDATE Syntax</div>
+            <div class="snippet-preview"># Single-table syntax: UPDATE [LOW_PRI...</div>
+          </div>
+        </div>
+
+        <div class="snippet-card" data-sql="DELETE FROM inventory WHERE id = 2;">
+          <div class="snippet-icon-badge">
+            <svg viewBox="0 0 32 22" width="32" height="22">
+              <rect x="0.5" y="0.5" width="31" height="21" rx="2" fill="#f7f7f7" stroke="#a0a0a0"/>
+              <polygon fill="#f4b400" stroke="#b8860b" stroke-width="0.7" points="8.5,3 10.2,6.8 14.3,7.3 11.3,10.1 12,14.2 8.5,12.2 5,14.2 5.7,10.1 2.7,7.3 6.8,6.8"/>
+              <rect x="12.5" y="10.5" width="17" height="9" fill="#ffffff" stroke="#888" stroke-width="0.7"/>
+              <text x="14" y="17.2" font-family="Segoe UI, Arial, sans-serif" font-size="6.8" font-weight="bold" fill="#444">SQL</text>
+            </svg>
+          </div>
+          <div class="snippet-text-col">
+            <div class="snippet-title">DELETE Syntax</div>
+            <div class="snippet-preview"># Single-table syntax: DELETE [LOW_PRI...</div>
+          </div>
+        </div>
+
+        <div class="snippet-card" data-sql="REPLACE INTO inventory (id, name, quantity) VALUES (1, 'banana', 300);">
+          <div class="snippet-icon-badge">
+            <svg viewBox="0 0 32 22" width="32" height="22">
+              <rect x="0.5" y="0.5" width="31" height="21" rx="2" fill="#f7f7f7" stroke="#a0a0a0"/>
+              <polygon fill="#f4b400" stroke="#b8860b" stroke-width="0.7" points="8.5,3 10.2,6.8 14.3,7.3 11.3,10.1 12,14.2 8.5,12.2 5,14.2 5.7,10.1 2.7,7.3 6.8,6.8"/>
+              <rect x="12.5" y="10.5" width="17" height="9" fill="#ffffff" stroke="#888" stroke-width="0.7"/>
+              <text x="14" y="17.2" font-family="Segoe UI, Arial, sans-serif" font-size="6.8" font-weight="bold" fill="#444">SQL</text>
+            </svg>
+          </div>
+          <div class="snippet-text-col">
+            <div class="snippet-title">REPLACE Syntax</div>
+            <div class="snippet-preview">REPLACE [LOW_PRIORITY | DELAYED]    ...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom Tabs of SQL Additions (Context Help | Snippets) -->
+      <div class="additions-bottom-tabs">
+        <button class="add-tab" data-add-tab="help">Context Help</button>
+        <button class="add-tab active" data-add-tab="snippets">Snippets</button>
+      </div>
+    </aside>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

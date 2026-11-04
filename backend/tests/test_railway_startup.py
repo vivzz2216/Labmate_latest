@@ -65,11 +65,11 @@ async def test_startup_retries_schema_before_workers_start():
          patch.object(main.asyncio, "sleep", new_callable=AsyncMock), \
          patch.object(main, "start_background_workers", side_effect=lambda **_: order.append("background")), \
          patch.object(main, "start_workflow_workers", side_effect=lambda: order.append("workflow")), \
-         patch.object(main, "stop_background_workers") as stop_background, \
+         patch.object(main, "stop_background_workers", new_callable=AsyncMock) as stop_background, \
          patch.object(main, "stop_workflow_workers", new_callable=AsyncMock) as stop_workflow:
         async with main.lifespan(main.app):
             assert order == ["database", "database", "background", "workflow"]
-        stop_background.assert_called_once()
+        stop_background.assert_awaited_once()
         stop_workflow.assert_awaited_once()
 
 

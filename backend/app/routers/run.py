@@ -115,76 +115,12 @@ async def run_tasks(
                 
                 # React requires project execution + multiple screenshots (routes).
                 if request.theme == "react":
-                    # IMPORTANT: Do not execute AI "setup guides" or partially-correct router snippets.
-                    # Always materialize a correct React Router v6 template so /, /about, /contact mount reliably.
-                    project_files = {
-                        "src/App.jsx": (
-                            "import React from 'react';\n"
-                            "import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';\n"
-                            "import Home from './components/Home.jsx';\n"
-                            "import About from './components/About.jsx';\n"
-                            "import Contact from './components/Contact.jsx';\n\n"
-                            "export default function App() {\n"
-                            "  return (\n"
-                            "    <BrowserRouter>\n"
-                            "      <div style={{ padding: '1.5rem', fontFamily: 'Inter, system-ui, sans-serif' }}>\n"
-                            "        <h1 style={{ marginTop: 0 }}>React Hello World</h1>\n"
-                            "        <nav style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>\n"
-                            "          <Link to='/'>Home</Link>\n"
-                            "          <Link to='/about'>About</Link>\n"
-                            "          <Link to='/contact'>Contact</Link>\n"
-                            "        </nav>\n"
-                            "        <div style={{ padding: '12px', border: '1px solid #e2e8f0', borderRadius: 8 }}>\n"
-                            "          <Routes>\n"
-                            "            <Route path='/' element={<Home />} />\n"
-                            "            <Route path='/about' element={<About />} />\n"
-                            "            <Route path='/contact' element={<Contact />} />\n"
-                            "          </Routes>\n"
-                            "        </div>\n"
-                            "      </div>\n"
-                            "    </BrowserRouter>\n"
-                            "  );\n"
-                            "}\n"
-                        ),
-                        "src/components/Home.jsx": (
-                            "import React from 'react';\n"
-                            "export default function Home(){\n"
-                            "  return <div><h2>Hello, World!</h2><p>This is the Home page.</p></div>;\n"
-                            "}\n"
-                        ),
-                        "src/components/About.jsx": (
-                            "import React from 'react';\n"
-                            "export default function About(){\n"
-                            "  return <div><h2>About</h2><p>React Router v6 route is working.</p></div>;\n"
-                            "}\n"
-                        ),
-                        "src/components/Contact.jsx": (
-                            "import React from 'react';\n"
-                            "export default function Contact(){\n"
-                            "  return <div><h2>Contact</h2><p>Multiple screenshots will be captured.</p></div>;\n"
-                            "}\n"
-                        ),
-                        "src/main.jsx": (
-                            "import React from 'react';\n"
-                            "import ReactDOM from 'react-dom/client';\n"
-                            "import App from './App.jsx';\n"
-                            "import './index.css';\n\n"
-                            "ReactDOM.createRoot(document.getElementById('root')).render(\n"
-                            "  <React.StrictMode>\n"
-                            "    <App />\n"
-                            "  </React.StrictMode>\n"
-                            ");\n"
-                        ),
-                        "src/index.css": (
-                            "body { margin: 0; font-family: Inter, system-ui, -apple-system, sans-serif; }\n"
-                            "a { color: #2563eb; text-decoration: none; }\n"
-                            "a:hover { text-decoration: underline; }\n"
-                        ),
-                    }
+                    # Execute the submitted component; never substitute a canned app.
+                    project_files = {"src/App.jsx": code_snippet}
 
                     success, out, logs, exit_code, screenshots_by_route = await executor_service.execute_react_project(
                         project_files=project_files,
-                        routes=settings.REACT_DEFAULT_ROUTES,
+                        routes=["/"],
                         job_id=str(job.id),
                         task_id=str(task_id),
                         username=username

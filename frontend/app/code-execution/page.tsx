@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import CreditStatus from '@/components/billing/CreditStatus';
 import AgentPlanPanel from '@/components/workflow/AgentPlanPanel';
+import ExecutionStatus from '@/components/workflow/ExecutionStatus';
 import { useRouter } from "next/navigation";
 
 const DotGrid = dynamic<any>(() => import("@/components/visual/DotGrid"), {
@@ -61,6 +62,9 @@ const languages: { value: LabLanguage; label: string }[] = [
   { value: "html", label: "HTML / CSS / JavaScript" },
   { value: "react", label: "React" },
   { value: "node", label: "Node.js" },
+  { value: "sql", label: "SQL (MySQL runtime)" },
+  { value: "colab", label: "Python Notebook" },
+  { value: "ubuntu", label: "Ubuntu (Bash + GNOME)" },
 ];
 const stages = [
   {
@@ -83,16 +87,20 @@ const stages = [
   },
   {
     title: "Create Word report",
-    description: "Combine your original file and results.",
+    description: "Arrange questions, screenshots and short captions.",
     icon: ImageIcon,
     key: "report",
   },
 ];
-const outputName = (name: string) =>
-  (name
-    .replace(/\.[^.]+$/, "")
-    .replace(/[^A-Za-z0-9_-]+/g, "_")
-    .slice(0, 60) || "lab_assignment") + "_completed";
+const STRIPPABLE_EXT_RE = /\.(?:pdf|docx?|txt|md|rtf|odt|sql|py|ipynb|c|cpp|cc|cxx|h|hpp|java|js|jsx|ts|tsx|html?|css|json|xml|csv|zip|tar|gz)(?=$|[\s_()[\].-])/gi;
+const sanitizeOutputName = (name: string, fallback = "lab_report") => {
+  let cleaned = (name || "").replace(/\\/g, "/").trim().split("/").pop() || "";
+  let prev = "";
+  while (prev !== cleaned) { prev = cleaned; cleaned = cleaned.replace(STRIPPABLE_EXT_RE, ""); }
+  cleaned = cleaned.replace(/[^A-Za-z0-9_-]+/g, "_").replace(/_+/g, "_").replace(/-+/g, "-").replace(/(?:_-|-_)+/g, "_").replace(/^[_-]+|[_-]+$/g, "").slice(0, 70).replace(/^[_-]+|[_-]+$/g, "");
+  return /[A-Za-z0-9]/.test(cleaned) ? cleaned : fallback;
+};
+const outputName = (name: string) => `${sanitizeOutputName(name, "lab_assignment").replace(/_completed$/i, "").slice(0, 58).replace(/^[_-]+|[_-]+$/g, "") || "lab_assignment"}_completed`;
 
 export default function AssignmentPage() {
   const { user, loading: authLoading } = useAuth();
@@ -103,6 +111,8 @@ export default function AssignmentPage() {
   const [questions, setQuestions] = useState<LabQuestion[]>([]);
   const [language, setLanguage] = useState<LabLanguage>("auto");
   const [screenshotStyle, setScreenshotStyle] = useState<string>("style_1");
+  const [colabTheme, setColabTheme] = useState<"light" | "dark">("dark");
+  const [browserTheme, setBrowserTheme] = useState<"edge" | "chrome">("edge");
   const [instructions, setInstructions] = useState("");
   const [filename, setFilename] = useState("lab_report");
   const [busy, setBusy] = useState(false);
@@ -112,6 +122,7 @@ export default function AssignmentPage() {
   const [showLogs, setShowLogs] = useState(false);
   const [preview, setPreview] = useState("");
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [manualMode, setManualMode] = useState<ManualMode>("code_only");
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -131,6 +142,11 @@ export default function AssignmentPage() {
   const warningCount =
     workflow?.results.filter((result) => result.status === "failed").length ||
     0;
+  const batchAlive = useRef(true);
+  useEffect(() => {
+    batchAlive.current = true;
+    return () => { batchAlive.current = false; };
+  }, []);
 
   const applyWorkflow = (data: LabWorkflow, restoreFields = false) => {
     setWorkflow(data);
@@ -138,8 +154,10 @@ export default function AssignmentPage() {
     if (data.status === "ready" || restoreFields) setQuestions(data.questions);
     if (restoreFields) {
       setLanguage(data.language);
+      setColabTheme(data.questions.find((question) => question.colab_theme)?.colab_theme || "dark");
+      setBrowserTheme(data.questions.find((question) => question.browser_theme)?.browser_theme || "edge");
       setInstructions(data.instructions);
-      setFilename(data.output_name);
+      setFilename(sanitizeOutputName(data.output_name));
     }
   };
 
@@ -207,7 +225,7 @@ export default function AssignmentPage() {
   }, [upload?.id, running]);
 
   useEffect(() => {
-    if (!upload || !complete || !workflow?.report) return;
+    if (!showPreview || !upload || !workflow?.report) return;
     let active = true;
     setPreviewLoading(true);
     workflowApi
@@ -224,7 +242,7 @@ export default function AssignmentPage() {
     return () => {
       active = false;
     };
-  }, [upload?.id, complete, workflow?.report?.id]);
+  }, [showPreview, upload?.id, workflow?.report?.id]);
 
   const extract = async (id: number) => {
     const state = await workflowApi.extract(id);
@@ -295,6 +313,7 @@ export default function AssignmentPage() {
 
     try {
       for (let i = 0; i < initialItems.length; i++) {
+        if (!batchAlive.current) return;
         const item = initialItems[i];
         if (!/\.(pdf|docx)$/i.test(item.file.name)) {
           setBatchItems((prev) =>
@@ -315,6 +334,7 @@ export default function AssignmentPage() {
 
         try {
           const uploaded = await apiService.uploadFile(item.file);
+          if (!batchAlive.current) return;
           setBatchItems((prev) =>
             prev.map((it, idx) =>
               idx === i
@@ -325,17 +345,20 @@ export default function AssignmentPage() {
 
           // Trigger extraction
           let wf = await workflowApi.extract(uploaded.id);
+          if (!batchAlive.current) return;
           let attempts = 0;
           while (
             (wf.status === "extracting" || (wf.status === "queued" && wf.stage === "extract")) &&
             attempts < 35
           ) {
             await new Promise((r) => setTimeout(r, 2000));
+            if (!batchAlive.current) return;
             wf = await workflowApi.status(uploaded.id);
             attempts++;
           }
 
           if (wf.status === "ready" && wf.questions && wf.questions.length > 0) {
+            if (!batchAlive.current) return;
             setBatchItems((prev) =>
               prev.map((it, idx) =>
                 idx === i
@@ -346,7 +369,7 @@ export default function AssignmentPage() {
 
             // Process with selected manualMode
             let runWf = await workflowApi.process(uploaded.id, {
-              questions: wf.questions,
+              questions: wf.questions.map((question) => ({ ...question, colab_theme: colabTheme, browser_theme: browserTheme })),
               language: "auto",
               instructions: "",
               output_name: outputName(item.file.name),
@@ -360,6 +383,7 @@ export default function AssignmentPage() {
               runAttempts < 180
             ) {
               await new Promise((r) => setTimeout(r, 3000));
+              if (!batchAlive.current) return;
               runWf = await workflowApi.status(uploaded.id);
               runAttempts++;
               setBatchItems((prev) =>
@@ -459,10 +483,10 @@ export default function AssignmentPage() {
     try {
       applyWorkflow(
         await workflowApi.process(upload.id, {
-          questions,
+          questions: questions.map((question) => ({ ...question, colab_theme: colabTheme, browser_theme: browserTheme })),
           language,
           instructions,
-          output_name: filename || "lab_report",
+          output_name: sanitizeOutputName(filename || "lab_report"),
           screenshot_style: screenshotStyle,
           mode: manualMode,
         }),
@@ -599,6 +623,8 @@ export default function AssignmentPage() {
         <aside className={styles.setupPanel}>
           <h2 className={styles.panelTitle}>Build your lab report</h2>
           <CreditStatus refreshKey={`${workflow?.status}-${workflow?.progress}`} />
+          {language !== "sql" && (language !== "auto" || questions.length === 0 ||
+            questions.some((question) => question.language !== "sql" && question.language !== "theory")) && <ExecutionStatus />}
           <p className={styles.setupIntro}>
             Configure the source, review the extracted questions, then run the execution and evidence checks.
           </p>
@@ -826,7 +852,29 @@ export default function AssignmentPage() {
                   </option>
                 ))}
               </select>
-              {(language === "python" || language === "auto") && (
+              {(language === "colab" || (language === "auto" && (!questions.length || questions.some((question) => question.language === "colab")))) && (
+                <div className={styles.colabThemeField}>
+                  <label className={styles.screenshotLabel} htmlFor="colab-theme">Colab screenshot theme</label>
+                  <select id="colab-theme" value={colabTheme} disabled={running || busy || batchProcessing}
+                    onChange={(event) => setColabTheme(event.target.value as "light" | "dark")}>
+                    <option value="dark">Dark</option>
+                    <option value="light">Light</option>
+                  </select>
+                  <p>Applies to every Colab code and output image.</p>
+                </div>
+              )}
+              {(['html', 'react', 'node'].includes(language) || questions.some(question => ['html', 'react', 'node'].includes(question.language) || /\bflask\b/i.test(question.text))) && (
+                <div className={styles.colabThemeField}>
+                  <label className={styles.screenshotLabel} htmlFor="browser-theme">Web output browser</label>
+                  <select id="browser-theme" value={browserTheme} disabled={running || busy || batchProcessing}
+                    onChange={event => setBrowserTheme(event.target.value as 'edge' | 'chrome')}>
+                    <option value="edge">Microsoft Edge (Windows)</option>
+                    <option value="chrome">Google Chrome (Windows)</option>
+                  </select>
+                  <p>The frame surrounds the captured page without changing its contents.</p>
+                </div>
+              )}
+              {(language === "python" || (language === "auto" && (!questions.length || questions.some((question) => question.language === "python")))) && (
                 <div style={{ marginTop: "12px" }}>
                   <label className={styles.screenshotLabel}>
                     Python IDLE Screenshot Style
@@ -907,7 +955,7 @@ export default function AssignmentPage() {
             <span className={styles.stepNumber}>6</span>
             <div>
               <h2>File settings</h2>
-              <p>Your original assignment plus answers and screenshots.</p>
+              <p>Question headings, screenshots and short captions.</p>
               <label className={styles.filenameLabel}>
                 File name
                 <div>
@@ -1040,6 +1088,15 @@ export default function AssignmentPage() {
                     <RefreshCw size={15} />
                     Retry {questions.length ? "processing" : "extraction"}
                   </button>
+                </div>
+              )}
+              {workflow?.report && (
+                <div className={styles.reportPreview}>
+                  <button type="button" className={styles.retryBtn} onClick={() => setShowPreview(value => !value)}>
+                    <FileText size={15} /> {showPreview ? 'Hide Word preview' : 'Preview Word report'}
+                  </button>
+                  {showPreview && (previewLoading ? <p role="status">Loading report…</p> :
+                    <iframe title="Word report preview" sandbox="" referrerPolicy="no-referrer" srcDoc={preview} />)}
                 </div>
               )}
             </div>

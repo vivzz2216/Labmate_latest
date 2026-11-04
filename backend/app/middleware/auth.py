@@ -6,10 +6,12 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from typing import Optional
 import logging
+import asyncio
 
 from ..database import get_db
 from ..models import User, Upload, AIJob, Report
 from ..security.jwt import verify_token, get_user_id_from_token
+from ..security.operator_access import is_admin_user
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +41,7 @@ async def get_current_user(
     
     try:
         # Verify token and get user ID
-        user_id = get_user_id_from_token(token)
+        user_id = await asyncio.to_thread(get_user_id_from_token, token)
         
         # Get user from database
         user = db.query(User).filter(User.id == user_id).first()
@@ -103,8 +105,8 @@ async def verify_upload_ownership(
             detail="Upload not found"
         )
     
-    # Check ownership (allow if user_id is None for backward compatibility, but log warning)
-    if upload.user_id is not None and upload.user_id != current_user.id:
+    # Only the configured operator can access another user's or an orphaned upload.
+    if upload.user_id != current_user.id and not is_admin_user(current_user):
         logger.warning(
             f"User {current_user.id} attempted to access upload {upload_id} owned by user {upload.user_id}"
         )
@@ -152,7 +154,7 @@ async def verify_job_ownership(
             detail="Associated upload not found"
         )
     
-    if upload.user_id is not None and upload.user_id != current_user.id:
+    if upload.user_id != current_user.id and not is_admin_user(current_user):
         logger.warning(
             f"User {current_user.id} attempted to access job {job_id} owned by user {upload.user_id}"
         )
@@ -200,7 +202,7 @@ async def verify_report_ownership(
             detail="Associated upload not found"
         )
     
-    if upload.user_id is not None and upload.user_id != current_user.id:
+    if upload.user_id != current_user.id and not is_admin_user(current_user):
         logger.warning(
             f"User {current_user.id} attempted to access report {report_id} owned by user {upload.user_id}"
         )
@@ -229,7 +231,7 @@ async def get_optional_user(
         return None
     
     try:
-        return await get_current_user(credentials, db)
+        return await get_current_user(request, credentials, db)
     except HTTPException:
         return None
 

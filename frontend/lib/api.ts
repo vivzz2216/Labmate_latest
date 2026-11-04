@@ -19,7 +19,179 @@ const api = axios.create({
   headers: DEFAULT_HEADERS,
 });
 
-// Credentials and uploaded documents must never be logged by request interceptors.
+// Ensure latest stored tokens are attached before every request
+api.interceptors.request.use((config) => {
+  // Metadata/session checks fail promptly; large report downloads keep their longer budget.
+  const download = config.responseType === 'blob' || config.responseType === 'arraybuffer';
+  if ((config.method?.toLowerCase() === 'get' && !download) || config.url?.includes('/basic-auth/')) {
+    config.timeout = 15000;
+  }
+  if (typeof window !== "undefined") {
+    if (!('_labmateUser' in config)) (config as any)._labmateUser = profileStorageKey();
+    const accessToken = localStorage.getItem("labmate_access_token");
+    const csrfToken = localStorage.getItem("labmate_csrf_token");
+    if (accessToken) {
+      config.headers.set("Authorization", `Bearer ${accessToken}`);
+    } else config.headers.delete('Authorization');
+    if (csrfToken) {
+      config.headers.set("X-CSRF-Token", csrfToken);
+    } else config.headers.delete('X-CSRF-Token');
+  }
+  return config;
+});
+
+// Automatically refresh access & CSRF tokens on 401 Unauthorized or 403 Invalid/Missing CSRF token
+let isRefreshing = false;
+let failedQueue: Array<{
+  resolve: (value?: any) => void;
+  reject: (reason?: any) => void;
+}> = [];
+
+const processQueue = (error: any, tokens: { accessToken: string; csrfToken?: string } | null = null) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(tokens);
+    }
+  });
+  failedQueue = [];
+};
+
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+    const status = error.response?.status;
+    const detail = String(error.response?.data?.detail || "");
+    const isCsrfError =
+      status === 403 && detail.toLowerCase().includes("csrf token");
+
+    if (
+      (status === 401 || isCsrfError) &&
+      originalRequest &&
+      !originalRequest._retry &&
+      !originalRequest.url?.includes("/basic-auth/login") &&
+      !originalRequest.url?.includes("/basic-auth/refresh")
+    ) {
+      originalRequest._retry = true;
+      if (typeof window !== 'undefined') {
+        if (originalRequest._labmateUser !== profileStorageKey()) return Promise.reject(new axios.CanceledError('Session changed.'));
+        const latestAccess = localStorage.getItem('labmate_access_token');
+        const latestCsrf = localStorage.getItem('labmate_csrf_token');
+        if (latestAccess && (originalRequest.headers?.Authorization !== `Bearer ${latestAccess}` ||
+            (isCsrfError && latestCsrf && originalRequest.headers?.['X-CSRF-Token'] !== latestCsrf))) {
+          return api(originalRequest);
+        }
+      }
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        })
+          .then((tokens: any) => {
+            if (tokens?.accessToken) {
+              originalRequest.headers["Authorization"] = `Bearer ${tokens.accessToken}`;
+            }
+            if (tokens?.csrfToken) {
+              originalRequest.headers["X-CSRF-Token"] = tokens.csrfToken;
+            }
+            return api(originalRequest);
+          })
+          .catch((err) => Promise.reject(err));
+      }
+
+      isRefreshing = true;
+
+      const refreshToken =
+        typeof window !== "undefined"
+          ? localStorage.getItem("labmate_refresh_token")
+          : null;
+
+      if (refreshToken) {
+        const refreshUser = profileStorageKey();
+        const rotateSession = async () => {
+        try {
+          const currentRefresh = localStorage.getItem('labmate_refresh_token');
+          let res: { data: any };
+          if (currentRefresh !== refreshToken) {
+            if (!refreshUser || profileStorageKey() !== refreshUser || !currentRefresh || !localStorage.getItem('labmate_access_token') || !localStorage.getItem('labmate_csrf_token')) {
+              throw new axios.CanceledError('Session changed while waiting to refresh.');
+            }
+            // Another tab already rotated this session while we waited for the lock.
+            res = {data: {access_token: localStorage.getItem('labmate_access_token'), refresh_token: currentRefresh, csrf_token: localStorage.getItem('labmate_csrf_token')}};
+          } else {
+            res = await axios.post("/api/basic-auth/refresh", { refresh_token: currentRefresh }, { timeout: 15000 });
+          }
+          if (localStorage.getItem("labmate_refresh_token") !== currentRefresh || profileStorageKey() !== refreshUser) {
+            throw new axios.CanceledError('Session changed while refreshing.');
+          }
+          const newAccessToken = res.data.access_token;
+          const newRefreshToken = res.data.refresh_token;
+          const newCsrfToken = res.data.csrf_token;
+          if (!newAccessToken || !newCsrfToken) {
+            throw new Error('Session refresh returned incomplete credentials. Please retry.');
+          }
+          if (newAccessToken) {
+            localStorage.setItem("labmate_access_token", newAccessToken);
+            api.defaults.headers.common["Authorization"] = `Bearer ${newAccessToken}`;
+            originalRequest.headers["Authorization"] = `Bearer ${newAccessToken}`;
+          }
+          if (newRefreshToken) {
+            localStorage.setItem("labmate_refresh_token", newRefreshToken);
+          }
+          if (newCsrfToken) {
+            localStorage.setItem("labmate_csrf_token", newCsrfToken);
+            api.defaults.headers.common["X-CSRF-Token"] = newCsrfToken;
+            originalRequest.headers["X-CSRF-Token"] = newCsrfToken;
+          }
+          if (res.data?.user && typeof window !== "undefined") {
+            try {
+              const prevRaw = localStorage.getItem("labmate_user");
+              const prev = prevRaw ? JSON.parse(prevRaw) : {};
+              localStorage.setItem(
+                "labmate_user",
+                JSON.stringify({
+                  ...prev,
+                  ...res.data.user,
+                  is_admin: res.data.user.is_admin === true,
+                }),
+              );
+            } catch {
+              // ignore storage errors
+            }
+          }
+          if (newAccessToken) {
+            processQueue(null, { accessToken: newAccessToken, csrfToken: newCsrfToken });
+            return api(originalRequest);
+          }
+        } catch (refreshErr) {
+          const refreshStatus = axios.isAxiosError(refreshErr) ? refreshErr.response?.status : undefined;
+          if (typeof window !== "undefined" && localStorage.getItem("labmate_refresh_token") === refreshToken && (refreshStatus === 401 || refreshStatus === 403)) {
+            localStorage.removeItem("labmate_access_token");
+            localStorage.removeItem("labmate_refresh_token");
+            localStorage.removeItem("labmate_csrf_token");
+          }
+          processQueue(refreshErr, null);
+          return Promise.reject(refreshErr);
+        } finally {
+          isRefreshing = false;
+        }
+        };
+        if (typeof navigator !== 'undefined' && navigator.locks) {
+          return navigator.locks.request('labmate-session-refresh', rotateSession).catch(refreshError => {
+            if (isRefreshing) { isRefreshing = false; processQueue(refreshError, null); }
+            throw refreshError;
+          });
+        }
+        return rotateSession();
+      } else {
+        processQueue(error, null);
+        isRefreshing = false;
+      }
+    }
+    return Promise.reject(error);
+  }
+);
 
 // Types
 export interface UploadResponse {
@@ -68,6 +240,9 @@ export interface ComposeResponse {
 }
 
 export type ThemeOption =
+  | "sql"
+  | "colab"
+  | "ubuntu"
   | "idle"
   | "notepad"
   | "codeblocks"
@@ -161,6 +336,7 @@ export interface ExecutionFile {
 }
 
 export interface BasicAuthUser {
+  is_admin?: boolean;
   id: number;
   email: string;
   name: string;
@@ -208,8 +384,105 @@ export interface CodeVariantRequest {
   review_id?: string;
 }
 
+// Client-side SWR cache & in-flight deduplication for instant page transitions
+const CACHE_TTL_MS = 20_000;
+const assignmentsCache = new Map<number, { data: any[]; ts: number }>();
+const assignmentsInflight = new Map<number, Promise<any[]>>();
+const workspaceCache = new Map<number, { data: any; ts: number }>();
+let profileCache: { data: any; ts: number } | null = null;
+let profileInflight: Promise<any> | null = null;
+let cacheEpoch = 0;
+let profileEpoch = 0;
+
+function profileStorageKey(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const id = JSON.parse(localStorage.getItem('labmate_user') || 'null')?.id;
+    return Number.isSafeInteger(id) && id > 0 ? `labmate_profile_${id}` : null;
+  } catch { return null; }
+}
+
+function normalizeAssignmentsList(raw: any): any[] {
+  const list = Array.isArray(raw) ? raw : (raw?.assignments ?? raw?.data ?? []);
+  return Array.isArray(list) ? list : [];
+}
+
 // API functions
 export const apiService = {
+  clearSessionCaches() {
+    cacheEpoch++;
+    profileEpoch++;
+    assignmentsCache.clear();
+    assignmentsInflight.clear();
+    workspaceCache.clear();
+    profileCache = null;
+    profileInflight = null;
+    if (typeof window !== 'undefined') {
+      try {
+        Object.keys(sessionStorage).filter(key => key.startsWith('labmate_')).forEach(key => sessionStorage.removeItem(key));
+      } catch { /* Storage can be disabled by the browser. */ }
+    }
+  },
+  invalidateAssignmentsCache(userId?: number) {
+    if (userId !== undefined) {
+      assignmentsCache.delete(userId);
+    } else {
+      assignmentsCache.clear();
+    }
+    workspaceCache.clear();
+  },
+
+  invalidateProfileCache() {
+    profileEpoch++;
+    profileCache = null;
+    profileInflight = null;
+    if (typeof window !== 'undefined') {
+      const key = profileStorageKey();
+      try { if (key) sessionStorage.removeItem(key); } catch { /* optional cache */ }
+    }
+  },
+
+  peekUserAssignments(userId?: number): any[] | null {
+    if (!userId) return null;
+    const hit = assignmentsCache.get(userId);
+    if (hit) return hit.data;
+    if (typeof window !== "undefined") {
+      try {
+        const raw = sessionStorage.getItem(`labmate_assignments_${userId}`);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            assignmentsCache.set(userId, { data: parsed, ts: 0 });
+            return parsed;
+          }
+        }
+      } catch {
+        // ignore storage errors
+      }
+    }
+    return null;
+  },
+
+  peekUserProfile(): any | null {
+    if (profileCache) return profileCache.data;
+    if (typeof window !== "undefined") {
+      try {
+        const key = profileStorageKey();
+        const raw = key ? sessionStorage.getItem(key) : null;
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === "object") {
+            profileCache = { data: parsed, ts: 0 };
+            return parsed;
+          }
+        }
+      } catch {
+        // ignore storage errors
+      }
+    }
+    return null;
+  },
+
   // Upload file
   async uploadFile(file: File, userId?: number): Promise<UploadResponse> {
     const formData = new FormData();
@@ -224,6 +497,7 @@ export const apiService = {
       },
     });
 
+    this.invalidateAssignmentsCache(userId);
     return response.data;
   },
 
@@ -236,21 +510,38 @@ export const apiService = {
   // Run code execution
   async runTasks(request: RunRequest): Promise<RunResponse> {
     const response = await api.post("/api/run", request);
+    this.invalidateAssignmentsCache();
     return response.data;
   },
 
   // Compose final report
   async composeReport(request: ComposeRequest): Promise<ComposeResponse> {
     const response = await api.post("/api/compose", request);
+    this.invalidateAssignmentsCache();
     return response.data;
   },
 
   // Download report
   async downloadReport(docId: number): Promise<Blob> {
-    const response = await api.get(`/api/download/${docId}`, {
-      responseType: "blob",
-    });
-    return response.data;
+    try {
+      const response = await api.get(`/api/download/${docId}`, {
+        responseType: "blob",
+      });
+      return response.data;
+    } catch (error: any) {
+      if (error?.response?.data instanceof Blob) {
+        try {
+          const text = await error.response.data.text();
+          const json = JSON.parse(text);
+          if (json?.detail) {
+            error.response.data = json;
+          }
+        } catch {
+          // ignore parsing error
+        }
+      }
+      throw error;
+    }
   },
 
   // Health check
@@ -274,6 +565,7 @@ export const apiService = {
   // Submit AI tasks
   async submitTasks(request: TasksSubmitRequest): Promise<TasksSubmitResponse> {
     const response = await api.post("/api/tasks/submit", request);
+    this.invalidateAssignmentsCache();
     return response.data;
   },
 
@@ -283,15 +575,54 @@ export const apiService = {
     return response.data;
   },
 
-  // Get user assignments
-  async getUserAssignments(userId: number): Promise<unknown> {
-    const response = await api.get(`/api/assignments/?user_id=${userId}`);
-    return response.data;
+  // Get user assignments (with in-flight deduplication and SWR cache)
+  async getUserAssignments(userId: number, options?: { force?: boolean }): Promise<any[]> {
+    const epoch = cacheEpoch;
+    const now = Date.now();
+    const cached = assignmentsCache.get(userId);
+    if (!options?.force && cached && now - cached.ts < CACHE_TTL_MS) {
+      return cached.data;
+    }
+
+    const existingPromise = assignmentsInflight.get(userId);
+    if (existingPromise) {
+      return existingPromise;
+    }
+
+    const fetchPromise = api
+      .get(`/api/assignments/?user_id=${userId}`)
+      .then((response) => {
+        if (epoch !== cacheEpoch) throw new axios.CanceledError('Session changed.');
+        const list = normalizeAssignmentsList(response.data);
+        assignmentsCache.set(userId, { data: list, ts: Date.now() });
+        if (typeof window !== "undefined") {
+          try {
+            sessionStorage.setItem(`labmate_assignments_${userId}`, JSON.stringify(list));
+          } catch {
+            // ignore storage quota errors
+          }
+        }
+        return list;
+      })
+      .finally(() => {
+        if (assignmentsInflight.get(userId) === fetchPromise) assignmentsInflight.delete(userId);
+      });
+
+    assignmentsInflight.set(userId, fetchPromise);
+    return fetchPromise;
   },
 
   // Get full assignment workspace details (questions, code, screenshots, report)
-  async getAssignmentWorkspace(assignmentId: number): Promise<any> {
+  async getAssignmentWorkspace(assignmentId: number, options?: { force?: boolean }): Promise<any> {
+    const epoch = cacheEpoch;
+    const now = Date.now();
+    const cached = workspaceCache.get(assignmentId);
+    if (!options?.force && cached && now - cached.ts < CACHE_TTL_MS) {
+      return cached.data;
+    }
     const response = await api.get(`/api/assignments/${assignmentId}/workspace`);
+    if (epoch !== cacheEpoch) throw new axios.CanceledError('Session changed.');
+    workspaceCache.set(assignmentId, { data: response.data, ts: Date.now() });
     return response.data;
   },
 
@@ -305,6 +636,7 @@ export const apiService = {
       upload_id: uploadId,
       filename,
     });
+    this.invalidateAssignmentsCache();
     return response.data;
   },
 
@@ -328,6 +660,18 @@ export const apiService = {
       password,
     });
     return response.data;
+  },
+
+  async refreshToken(refreshToken: string): Promise<TokenResponse> {
+    const response = await api.post("/api/basic-auth/refresh", {
+      refresh_token: refreshToken,
+    });
+    return response.data;
+  },
+
+  async logout(): Promise<void> {
+    const refreshToken = typeof window !== 'undefined' ? localStorage.getItem('labmate_refresh_token') : null;
+    await api.post('/api/basic-auth/logout', { refresh_token: refreshToken });
   },
 
   async getCurrentUser(userId: number): Promise<any> {
@@ -364,12 +708,39 @@ export const apiService = {
     profile_metadata?: Record<string, any>;
   }): Promise<any> {
     const response = await api.post("/api/basic-auth/profile", profileData);
+    this.invalidateProfileCache();
     return response.data;
   },
 
-  async getUserProfile(): Promise<any> {
-    const response = await api.get("/api/basic-auth/profile");
-    return response.data;
+  async getUserProfile(options?: { force?: boolean }): Promise<any> {
+    const epoch = cacheEpoch;
+    const revision = profileEpoch;
+    const storageKey = profileStorageKey();
+    const now = Date.now();
+    if (!options?.force && profileCache && now - profileCache.ts < CACHE_TTL_MS) {
+      return profileCache.data;
+    }
+    if (profileInflight) {
+      return profileInflight;
+    }
+    profileInflight = api
+      .get("/api/basic-auth/profile")
+      .then((response) => {
+        if (epoch !== cacheEpoch || revision !== profileEpoch || storageKey !== profileStorageKey()) throw new axios.CanceledError('Session changed.');
+        profileCache = { data: response.data, ts: Date.now() };
+        if (typeof window !== "undefined") {
+          try {
+            if (storageKey) sessionStorage.setItem(storageKey, JSON.stringify(response.data));
+          } catch {
+            // ignore storage errors
+          }
+        }
+        return response.data;
+      })
+      .finally(() => {
+        if (epoch === cacheEpoch && revision === profileEpoch) profileInflight = null;
+      });
+    return profileInflight;
   },
 
   // Get DOCX preview as HTML

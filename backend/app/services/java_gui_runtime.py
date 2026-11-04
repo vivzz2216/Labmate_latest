@@ -76,7 +76,7 @@ async def capture_java_gui(directory,config):
     source_paths=[directory/name for name in files if name.endswith('.java')]
     classes=directory/'_classes';classes.mkdir()
     harness=Path(__file__).parents[1]/'runtime/GuiHarness.java'
-    compile_result=await run_process([settings.JAVAC_COMMAND,'-J-Xmx256m','-encoding','UTF-8','-d',classes,harness,*source_paths],directory,timeout=settings.COMPILATION_TIMEOUT,resource_limits={'max_memory_bytes':0})
+    compile_result=await run_process([settings.JAVAC_COMMAND,'-J-Xmx256m','-encoding','UTF-8','-d',classes,harness,*source_paths],directory,timeout=settings.COMPILATION_TIMEOUT,resource_limits={'max_memory_bytes':0,'max_cpu_seconds':min(45,settings.COMPILATION_TIMEOUT)})
     if not compile_result.success:
         compile_result.error='Compilation error: '+compile_result.error;compile_result.stages={'compile':'failed','execution':'not_run'};return compile_result
     code=files[config['entrypoint']];name=java_class_name(code)

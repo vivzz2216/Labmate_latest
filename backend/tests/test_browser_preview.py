@@ -25,23 +25,38 @@ class BrowserPreviewTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="labmate-broken-image-") as folder:
             asyncio.run(capture(Path(folder)))
 
-    def test_real_page_capture_is_preserved_without_artificial_browser_frame(self):
+    def test_windows_frames_preserve_actual_page_pixels_and_localhost_origin(self):
         async def capture(root):
             with patch.object(settings, "SCREENSHOT_DIR", str(root / "screenshots")), \
                  patch.object(settings, "REACT_TEMP_DIR", str(root / "runtime")):
                 execution = await runtime_engine.execute(
-                    "<!doctype html><html><body><h1>Laboratory result</h1></body></html>",
+                    "<!doctype html><html><head><title>Laboratory result</title></head><body><h1>Laboratory result</h1></body></html>",
                     "html", "index.html")
                 self.assertTrue(execution.success, execution.error)
                 raw = next(iter(execution.screenshots.values()))
-                ok, path, width, height = await screenshot_service.generate_browser_preview_from_image(
-                    raw, "preview_test", "index.html")
-                self.assertTrue(ok, path)
-                self.assertGreaterEqual(width, 1100)
-                self.assertGreater(height, 700)
-                self.assertEqual(path, raw)
-                with Image.open(path) as image:
-                    self.assertEqual(image.size, (width, height))
+                metadata = execution.verification['captures'][0]
+                self.assertEqual(metadata['url'], 'http://localhost/')
+                self.assertEqual(metadata['title'], 'Laboratory result')
+                headers=[]
+                for theme in ['edge', 'chrome']:
+                    ok, path, width, height = await screenshot_service.generate_browser_preview_from_image(
+                        raw, "preview_test", "index.html", browser_theme=theme,
+                        page_url=metadata['url'], page_title=metadata['title'])
+                    self.assertTrue(ok, path)
+                    self.assertNotEqual(path, raw)
+                    with Image.open(path) as image, Image.open(raw) as content:
+                        self.assertEqual(image.size, (content.width, content.height + 88))
+                        self.assertEqual(image.crop((0,88,width,height)).tobytes(), content.convert('RGB').tobytes())
+                        headers.append(image.crop((0,0,width,88)).tobytes())
+                self.assertNotEqual(headers[0], headers[1])
 
         with tempfile.TemporaryDirectory(prefix="labmate-browser-preview-") as folder:
             asyncio.run(capture(Path(folder)))
+
+    def test_api_defaults_to_edge_and_rejects_unknown_frames(self):
+        from pydantic import ValidationError
+        from app.routers.workflows import QuestionInput
+        self.assertEqual(QuestionInput(id=1,text='Build a web page',language='html').browser_theme,'edge')
+        self.assertEqual(QuestionInput(id=1,text='Build a web page',language='react',browser_theme='chrome').browser_theme,'chrome')
+        with self.assertRaises(ValidationError):
+            QuestionInput(id=1,text='Build a web page',browser_theme='safari')
