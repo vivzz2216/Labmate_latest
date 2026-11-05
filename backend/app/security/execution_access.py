@@ -15,6 +15,7 @@ def check_execution_access(user):
     if is_admin_user(user):
         return
     allowed={email.strip().casefold() for email in settings.EXECUTION_ALLOWED_EMAILS.split(',') if email.strip()}
+    allowed.update(email.strip().casefold() for email in settings.BETA_TEST_EMAILS.split(',') if email.strip())
     if not allowed and not os.getenv('RAILWAY_ENVIRONMENT_ID'):
         return
     if not allowed:

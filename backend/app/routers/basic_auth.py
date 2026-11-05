@@ -62,7 +62,7 @@ class UserSignup(BaseModel):
         email = str(values.get('email', '')).strip().casefold()
         exceptions = {
             item.strip().casefold()
-            for item in settings.PASSWORD_POLICY_EXCEPTION_EMAILS.split(',')
+            for item in settings.BETA_TEST_EMAILS.split(',')
             if item.strip()
         }
         if email in exceptions:

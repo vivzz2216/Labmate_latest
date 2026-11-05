@@ -27,9 +27,9 @@ class Settings(BaseSettings):
     # Security
     BETA_KEY: str = os.getenv("BETA_KEY", "")
     EXECUTION_ALLOWED_EMAILS: str = ''
-    # Email-specific password-complexity exception for approved external test accounts.
-    # Keep empty by default; never use this to exempt ordinary users.
-    PASSWORD_POLICY_EXCEPTION_EMAILS: str = ''
+    # Explicit test accounts may use the requested test password and beta execution.
+    # Keep empty by default; never place ordinary users here.
+    BETA_TEST_EMAILS: str = ''
     # Development mode is an explicit opt-out for trusted local tests only.
     EXECUTION_ISOLATION: str = 'required'
     EXECUTION_BACKEND: str = 'ssh'

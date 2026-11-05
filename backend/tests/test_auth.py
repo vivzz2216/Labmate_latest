@@ -86,7 +86,7 @@ def test_signup_success(client, db):
 
 
 def test_password_policy_exception_is_scoped_to_configured_email(monkeypatch):
-    monkeypatch.setattr(settings, "PASSWORD_POLICY_EXCEPTION_EMAILS", "qa@example.org")
+    monkeypatch.setattr(settings, "BETA_TEST_EMAILS", "qa@example.org")
 
     # A weak test password is accepted only for the explicitly configured test email.
     assert str(UserSignup(email="QA@example.org", name="QA Student", password="weakpass123").email).casefold() == "qa@example.org"

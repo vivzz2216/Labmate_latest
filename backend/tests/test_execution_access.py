@@ -41,6 +41,13 @@ class ExecutionAccessTests(unittest.IsolatedAsyncioTestCase):
             for email in ['other@example.com','owner@example.com.attacker.test','notowner@example.com']:
                 with self.assertRaises(ValueError): check_execution_access(SimpleNamespace(email=email))
 
+    async def test_named_beta_test_account_gets_only_execution_admission(self):
+        with patch.dict('os.environ',{'RAILWAY_ENVIRONMENT_ID':'test-environment'}), \
+             patch.object(settings,'EXECUTION_ALLOWED_EMAILS','current-beta@example.com'), \
+             patch.object(settings,'BETA_TEST_EMAILS',' qa@example.org '):
+            self.assertEqual((await execution_user(SimpleNamespace(email='QA@example.org'))).email,'QA@example.org')
+            with self.assertRaises(ValueError): check_execution_access(SimpleNamespace(email='outsider@example.org'))
+
     async def test_unconfigured_local_development_remains_available(self):
         with patch.dict('os.environ',{},clear=True),patch.object(settings,'EXECUTION_ALLOWED_EMAILS',''):
             check_execution_access(SimpleNamespace(email='local@example.com'))
