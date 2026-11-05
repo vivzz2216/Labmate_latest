@@ -8,6 +8,8 @@ from sqlalchemy.orm import sessionmaker
 from app.main import app
 from app.database import Base, get_db
 from app.models import User
+from app.routers.basic_auth import UserSignup
+from app.config import settings
 from app.security.jwt import create_access_token
 import bcrypt
 
@@ -81,6 +83,15 @@ def test_signup_success(client, db):
     assert "refresh_token" in data
     assert "csrf_token" in data
     assert data["user"]["email"] == "newuser@example.com"
+
+
+def test_password_policy_exception_is_scoped_to_configured_email(monkeypatch):
+    monkeypatch.setattr(settings, "PASSWORD_POLICY_EXCEPTION_EMAILS", "qa@example.org")
+
+    # A weak test password is accepted only for the explicitly configured test email.
+    assert str(UserSignup(email="QA@example.org", name="QA Student", password="weakpass123").email).casefold() == "qa@example.org"
+    with pytest.raises(ValueError):
+        UserSignup(email="other@example.org", name="Other Student", password="weakpass123")
 
 
 def test_signup_duplicate_email(client, db, test_user):

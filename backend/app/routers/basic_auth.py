@@ -14,6 +14,7 @@ import asyncio
 import json
 from starlette.concurrency import run_in_threadpool
 
+from ..config import settings
 from ..database import get_db, get_db_transaction
 from ..models import User, UserProfile
 from ..security.jwt import create_access_token, create_refresh_token, verify_token, revoke_token
@@ -54,10 +55,18 @@ class UserSignup(BaseModel):
     password: str = Field(..., min_length=MIN_PASSWORD_LENGTH)
     
     @validator('password')
-    def validate_password_strength(cls, v):
-        """Ensure password meets minimum security requirements"""
+    def validate_password_strength(cls, v, values):
+        """Enforce strong passwords except for explicitly configured test accounts."""
         if len(v) < MIN_PASSWORD_LENGTH:
             raise ValueError(f'Password must be at least {MIN_PASSWORD_LENGTH} characters long')
+        email = str(values.get('email', '')).strip().casefold()
+        exceptions = {
+            item.strip().casefold()
+            for item in settings.PASSWORD_POLICY_EXCEPTION_EMAILS.split(',')
+            if item.strip()
+        }
+        if email in exceptions:
+            return v
         if not re.search(r'[A-Z]', v):
             raise ValueError('Password must contain at least one uppercase letter')
         if not re.search(r'[a-z]', v):
