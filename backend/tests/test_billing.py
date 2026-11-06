@@ -76,7 +76,10 @@ def webhook(env,kind='payment.captured',payload=None,bad=False):
 
 def test_catalogue_and_wallet_are_server_owned(env):
     data=env.client.get('/api/billing/plans').json()
-    assert [(p['amount'],p['credits']) for p in data['packs']]==[(2900,10),(7900,35),(14900,80)]
+    assert [(p['amount'],p['credits']) for p in data['packs'][:3]]==[(2900,10),(7900,35),(14900,80)]
+    college=next(p for p in data['packs'] if p['id']=='college-pack')
+    assert college['regular_amount']==59900 and college['credits']==300
+    assert college['amount'] in {39900,59900} and college['offer_active']==(college['amount']==39900)
     assert 'fixture-secret' not in json.dumps(data) and data['mode']=='test'
     assert credits(env)['available']==3
     assert credits(env)['available']==3

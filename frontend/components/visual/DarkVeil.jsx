@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useRef, useEffect } from 'react';
-import { Renderer, Program, Mesh, Triangle, Vec2 } from 'ogl';
+import { Renderer, Program, Mesh, Triangle, Transform, Vec2 } from 'ogl';
 import './DarkVeil.css';
 
 const vertex = `
@@ -135,6 +135,8 @@ export default function DarkVeil({
     });
 
     const mesh = new Mesh(gl, { geometry, program });
+    const scene = new Transform();
+    scene.addChild(mesh);
 
     const resize = () => {
       if (!parent) return;
@@ -150,8 +152,10 @@ export default function DarkVeil({
 
     const start = performance.now();
     let frame = 0;
+    let disposed = false;
 
     const loop = () => {
+      if (disposed) return;
       program.uniforms.uTime.value = ((performance.now() - start) / 1000) * speed;
       program.uniforms.uHueShift.value = hueShift;
       program.uniforms.uNoise.value = noiseIntensity;
@@ -159,18 +163,24 @@ export default function DarkVeil({
       program.uniforms.uScanFreq.value = scanlineFrequency;
       program.uniforms.uWarp.value = warpAmount;
       program.uniforms.uLightMode.value = lightMode ? 1 : 0;
-      renderer.render({ scene: mesh });
+      try {
+        renderer.render({ scene });
+      } catch (error) {
+        disposed = true;
+        console.warn('DarkVeil rendering stopped after a WebGL error.', error);
+        return;
+      }
       frame = requestAnimationFrame(loop);
     };
 
     loop();
 
     return () => {
+      disposed = true;
       cancelAnimationFrame(frame);
       window.removeEventListener('resize', resize);
       geometry.remove();
       program.remove();
-      gl.getExtension('WEBGL_lose_context')?.loseContext();
     };
   }, [hueShift, noiseIntensity, scanlineIntensity, speed, scanlineFrequency, warpAmount, resolutionScale, lightMode]);
 

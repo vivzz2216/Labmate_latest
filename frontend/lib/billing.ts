@@ -1,14 +1,15 @@
 import api from './api';
 import type {RazorpayFailure, checkoutMethods} from './razorpay-checkout';
 
-export interface Pack { id: string; name: string; amount: number; currency: string; credits: number; description: string; featured: boolean }
+export interface Pack { id: string; name: string; amount: number; regular_amount?: number; offer_active?: boolean; offer_ends_label?: string|null; offer_label?: string; admin_only?: boolean; currency: string; credits: number; description: string; featured: boolean }
 export interface Wallet { available: number; reserved: number; mode: string; billing_enabled: boolean; unlimited?: boolean }
 export interface Catalogue { packs: Pack[]; trial_credits: number; mode: string; checkout_available: boolean; billing_enabled: boolean }
 export interface Purchase { id: string; pack_id: string; pack_name: string; amount: number; currency: string; credits: number; status: string; gateway_order_id: string | null; key_id: string; mode: string; wallet: Wallet }
 export const rupees = (paise: number) => new Intl.NumberFormat('en-IN', {style:'currency', currency:'INR', maximumFractionDigits:0}).format(paise / 100);
 export const billingApi = {
-  catalogue: (signal?: AbortSignal) => api.get<Catalogue>('/api/billing/plans', {signal, timeout:15000}).then(r=>r.data),
-  wallet: (signal?: AbortSignal) => api.get<Wallet>('/api/billing/wallet', {signal, timeout:15000}).then(r=>r.data),
+  catalogue: (signal?: AbortSignal) => api.get<Catalogue>('/api/billing/plans', {signal, timeout:30000}).then(r=>r.data),
+  ownerCheck: (signal?: AbortSignal) => api.get<Pack>('/api/billing/plans/owner-check', {signal, timeout:30000}).then(r=>r.data),
+  wallet: (signal?: AbortSignal) => api.get<Wallet>('/api/billing/wallet', {signal, timeout:30000}).then(r=>r.data),
   order: (pack_id: string, request_key: string) => api.post<Purchase>('/api/billing/orders', {pack_id, request_key}, {timeout:30000}).then(r=>r.data),
   status: (id: string) => api.get<Purchase>(`/api/billing/orders/${id}`, {timeout:20000}).then(r=>r.data),
   reconcile: (id: string) => api.post<Purchase>(`/api/billing/orders/${id}/reconcile`, {}, {timeout:30000}).then(r=>r.data),
@@ -17,7 +18,7 @@ export const billingApi = {
 export interface RazorpayResponse { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }
 type RazorpayOptions = ReturnType<typeof checkoutMethods> & {
   key: string; amount: number; currency: string; name: string; description: string; order_id: string;
-  prefill: {name: string; email: string}; theme: {color: string};
+  prefill: {name: string; email: string}; image?: string; theme: {color: string; backdrop_color?: string};
   handler: (response: RazorpayResponse) => void; modal: {ondismiss: () => void};
 }
 interface RazorpayInstance {open: () => void; on: (event: 'payment.failed', handler: (response: RazorpayFailure) => void) => void}
