@@ -21,9 +21,13 @@ const api = axios.create({
 
 // Ensure latest stored tokens are attached before every request
 api.interceptors.request.use((config) => {
-  // Metadata/session checks fail promptly; large report downloads keep their longer budget.
+  // Billing bootstrap can include a Railway cold start; auth checks remain short.
   const download = config.responseType === 'blob' || config.responseType === 'arraybuffer';
-  if ((config.method?.toLowerCase() === 'get' && !download) || config.url?.includes('/basic-auth/')) {
+  const billingBootstrap = config.url?.includes('/billing/plans') || config.url?.includes('/billing/wallet');
+  const authBootstrap = config.url?.includes('/basic-auth/');
+  if ((billingBootstrap || authBootstrap) && !download) {
+    config.timeout = 30000;
+  } else if (config.method?.toLowerCase() === 'get' && !download) {
     config.timeout = 15000;
   }
   if (typeof window !== "undefined") {

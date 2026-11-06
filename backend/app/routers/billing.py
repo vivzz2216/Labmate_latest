@@ -16,6 +16,7 @@ from ..middleware.csrf import require_csrf_token
 from ..models import PackPurchase, PaymentWebhookEvent, User
 from ..security.execution_access import check_execution_access
 from ..services import billing_service as billing
+from ..security.operator_access import is_admin_user
 
 router = APIRouter(prefix='/billing', tags=['billing'])
 
@@ -35,10 +36,18 @@ class VerifyInput(BaseModel):
 
 @router.get('/plans')
 def plans():
-    return {'packs': [{**p, 'currency': 'INR'} for p in billing.PACKS],
+    return {'packs': [{**p, 'currency': 'INR'} for p in billing.public_packs()],
         'trial_credits': max(0, min(settings.BILLING_TRIAL_CREDITS, 100)),
-        'mode': settings.RAZORPAY_MODE, 'checkout_available': billing.configuration_ready(),
+        'mode': settings.RAZORPAY_MODE,
+        'checkout_available': billing.configuration_ready() and settings.RAZORPAY_MODE == 'live',
         'billing_enabled': settings.BILLING_ENABLED}
+
+
+@router.get('/plans/owner-check')
+def owner_payment_check(user: User = Depends(get_current_user)):
+    if not is_admin_user(user):
+        raise HTTPException(404, 'Payment pack not found.')
+    return {**billing.owner_payment_check_pack(), 'currency': 'INR'}
 
 
 @router.get('/wallet')

@@ -2,6 +2,7 @@
 import hashlib
 import hmac
 import math
+import os
 import re
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -14,6 +15,7 @@ from sqlalchemy.exc import IntegrityError
 from ..config import settings
 from ..models import (CreditWallet, CreditLedger, PackPurchase, WorkflowCreditHold, User)
 from ..security.operator_access import is_user_credit_exempt
+from ..security.operator_access import is_admin_user
 
 PACKS = (
     {'id': 'quick-lab', 'name': 'Quick Lab', 'amount': 2900, 'credits': 10,
@@ -22,10 +24,39 @@ PACKS = (
      'description': 'Room for a few lab manuals.', 'featured': True},
     {'id': 'semester-pack', 'name': 'Semester Pack', 'amount': 14900, 'credits': 80,
      'description': 'Keep several subjects moving.', 'featured': False},
+    {'id': 'college-pack', 'name': 'College Pack', 'amount': 59900, 'offer_amount': 39900,
+     'offer_ends_at': datetime(2026, 11, 16, 0, 0, tzinfo=timezone(timedelta(hours=5, minutes=30))),
+     'credits': 300, 'description': '300 credits for one student’s full term of practicals.',
+     'featured': False, 'offer_label': 'Diwali offer'},
 )
 PACK_BY_ID = {p['id']: p for p in PACKS}
+OWNER_PAYMENT_CHECK = {'id': 'owner-payment-check', 'name': 'Live Payment Check', 'amount': 100,
+    'credits': 1, 'description': 'One real ₹1 charge to verify live Razorpay checkout.',
+    'featured': False, 'admin_only': True}
+PACK_BY_ID[OWNER_PAYMENT_CHECK['id']] = OWNER_PAYMENT_CHECK
 GATEWAY = 'https://api.razorpay.com/v1'
 ID_PATTERN = r'^[A-Za-z0-9_]{5,64}$'
+
+
+def priced_pack(pack, now=None):
+    """Return public price fields; the offer cutoff is evaluated on the server."""
+    now = now or datetime.now(timezone(timedelta(hours=5, minutes=30)))
+    result = dict(pack)
+    end = result.pop('offer_ends_at', None)
+    offer_amount = result.pop('offer_amount', None)
+    result['regular_amount'] = result['amount']
+    result['offer_active'] = bool(end and offer_amount and now < end)
+    result['amount'] = offer_amount if result['offer_active'] else result['amount']
+    result['offer_ends_label'] = (end - timedelta(days=1)).strftime('%d %B %Y').lstrip('0') if result['offer_active'] else None
+    return result
+
+
+def public_packs():
+    return [priced_pack(pack) for pack in PACKS]
+
+
+def owner_payment_check_pack():
+    return priced_pack(OWNER_PAYMENT_CHECK)
 
 
 def configuration_ready():
@@ -154,6 +185,13 @@ async def create_order(db, user_id, pack_id, request_key):
     require_gateway()
     pack = PACK_BY_ID.get(pack_id)
     if not pack: raise HTTPException(400, 'Choose a valid LabMate pack.')
+    if os.getenv('RAILWAY_ENVIRONMENT_ID') and settings.RAZORPAY_MODE != 'live':
+        raise HTTPException(503, 'Live Razorpay payments are not configured yet.')
+    if pack.get('admin_only'):
+        if not is_admin_user(db.get(User, user_id)):
+            raise HTTPException(404, 'Payment pack not found.')
+        if settings.RAZORPAY_MODE != 'live':
+            raise HTTPException(503, 'The ₹1 payment check requires live Razorpay keys.')
     row = db.scalar(select(PackPurchase).where(PackPurchase.user_id == user_id,
         PackPurchase.mode == settings.RAZORPAY_MODE, PackPurchase.request_key == request_key))
     if row:
@@ -171,7 +209,7 @@ async def create_order(db, user_id, pack_id, request_key):
             PackPurchase.created_at >= since).count()
         if recent >= 15: raise HTTPException(429, 'Too many checkout attempts. Please try again later.')
         row = PackPurchase(id=str(uuid.uuid4()), user_id=user_id, mode=settings.RAZORPAY_MODE,
-            request_key=request_key, pack_id=pack_id, amount=pack['amount'], currency='INR',
+            request_key=request_key, pack_id=pack_id, amount=priced_pack(pack)['amount'], currency='INR',
             credits=pack['credits'], status='creating', key_id=settings.RAZORPAY_KEY_ID)
         db.add(row)
         try:

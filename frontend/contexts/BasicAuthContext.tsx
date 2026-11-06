@@ -185,7 +185,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     persistUser(sanitizedUserData)
 
     // Homepage actions can send the user directly to the upload studio after sign-in.
-    const destination = redirectTo === '/code-execution' || (redirectTo === '/admin/dashboard' && response.user.is_admin === true) || /^\/checkout\?pack=(quick-lab|lab-pack|semester-pack)$/.test(redirectTo || '') ? redirectTo! : '/dashboard'
+    const destination = redirectTo === '/code-execution' || (redirectTo === '/admin/dashboard' && response.user.is_admin === true) || /^\/checkout\?pack=(quick-lab|lab-pack|semester-pack|college-pack|owner-payment-check)$/.test(redirectTo || '') ? redirectTo! : '/dashboard'
     router.push(destination)
   }
 
