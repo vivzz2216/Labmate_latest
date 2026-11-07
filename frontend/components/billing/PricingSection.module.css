@@ -34,8 +34,11 @@
 .offerDate {font-size: 12px; white-space: nowrap;}
 .comparison {border: 1px solid var(--rule); border-radius: 14px; overflow: hidden;}
 .plans {display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));}
-.plan {min-width: 0; padding: 24px 25px 26px; display: flex; flex-direction: column; background: var(--surface);}
-.plan+.plan {border-left: 1px solid var(--rule);}
+.plans :global(.pixel-card) {display: block; width: 100%; height: 100%; border-radius: 0; box-shadow: none; background: var(--surface); user-select: auto;}
+.plans :global(.pixel-card[data-theme='light']) {background: #eae8e1;}
+.plans :global(.pixel-card)::after {display: none;}
+.pixelPlan + .pixelPlan {border-left: 1px solid var(--rule);}
+.plan {min-width: 0; height: 100%; padding: 24px 25px 26px; display: flex; flex-direction: column; background: transparent;}
 .planTop {display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 28px; margin-bottom: 10px;}
 .planMarker {font-size: 10px; font-weight: 500; color: var(--accent); white-space: nowrap;}
 .plan h3 {font-size: 19px; font-weight: 500; letter-spacing: -.02em; margin: 0 0 10px;}
@@ -54,7 +57,7 @@
 .choose {display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 46px; padding: 12px 14px; width: 100%; font-family: inherit; font-weight: 500; font-size: 12px; line-height: 1.5; background: transparent; color: var(--text); border: 1px solid #45474f; border-radius: 8px; margin-top: auto; transition: background 160ms ease, border-color 160ms ease;}
 .choose:hover {background: #202126; border-color: #a0a1aa;}
 .choose:disabled {opacity: .6; cursor: not-allowed;}
-.featured {background: #eae8e1; color: #1a1b1c; --muted: #4e5053; --subtle: #5e6063; --rule: #c5c3bd; --text: #1a1b1c;}
+.featured {background: transparent; color: #1a1b1c; --muted: #4e5053; --subtle: #5e6063; --rule: #c5c3bd; --text: #1a1b1c;}
 .featured .planMarker {color: #50504c;}
 .featured .choose {background: #1a1b1c; color: #faf9f5; border-color: #1a1b1c;}
 .featured .choose:hover {background: #343638;}
@@ -114,8 +117,8 @@
   .intro {flex: auto;}
   .plans {grid-template-columns: repeat(2,minmax(0,1fr));}
   .plan {padding: 26px;}
-  .plan:nth-child(3) {border-left: 0;}
-  .plan:nth-child(n+3) {border-top: 1px solid var(--rule);}
+  .pixelPlan:nth-child(3) {border-left: 0;}
+  .pixelPlan:nth-child(n+3) {border-top: 1px solid var(--rule);}
   .description {min-height: 44px;}
   .choose {font-size: 12px;}
   .included {display: block;}
@@ -134,7 +137,7 @@
   .offerDate {display: block; margin: 6px 0 0 27px; font-size: 11px;}
   .plans {grid-template-columns: minmax(0,1fr);}
   .plan {padding: 23px;}
-  .plan+.plan {border-left: 0; border-top: 1px solid var(--rule);}
+  .pixelPlan+.pixelPlan {border-left: 0; border-top: 1px solid var(--rule);}
   .description {min-height: 0; margin-bottom: 18px;}
   .amount strong {font-size: 48px;}
   .allowance {margin: 18px 0 20px; padding-top: 16px;}

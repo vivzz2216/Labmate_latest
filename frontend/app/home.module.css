@@ -843,6 +843,7 @@
   pointer-events: none;
   z-index: 0;
   border-radius: 32px;
+  background: radial-gradient(ellipse at 30% 25%, #283c5a 0%, transparent 55%), radial-gradient(ellipse at 75% 70%, #322547 0%, #080b13 70%);
 }
 
 .ctaVeilOverlay {

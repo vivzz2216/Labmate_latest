@@ -6,6 +6,7 @@ import {ArrowRight, Check, Flame, LockKeyhole, Plus, RefreshCw} from 'lucide-rea
 import {billingApi, Catalogue, Pack, rupees} from '@/lib/billing';
 import {useAuth} from '@/contexts/BasicAuthContext';
 import styles from './PricingSection.module.css';
+import PixelCard from '@/components/visual/PixelCard';
 
 const perExperiment = (pack: Pack) => new Intl.NumberFormat('en-IN', {
   style: 'currency', currency: 'INR', maximumFractionDigits: 2,
@@ -67,14 +68,15 @@ export default function PricingSection() {
 
       {catalogue && packs.length > 0 && <div className={styles.comparison}>
         <div className={styles.plans}>
-          {packs.map(pack => <article key={pack.id} className={`${styles.plan} ${pack.featured ? styles.featured : ''}`} aria-labelledby={`plan-${pack.id}`}>
+          {packs.map((pack, index) => <PixelCard key={pack.id} className={styles.pixelPlan} theme={pack.featured ? 'light' : 'dark'} colors={pack.featured ? ['#77736c', '#aca69a'] : ['#b3c7e8', '#d6d4f0', '#a7b6d2']} gap={12} pixelSize={2} speed={25} opacity={0.25} fade={0.8} glow={0.15} radius={0} introDelay={index * 100}>
+          <article className={`${styles.plan} ${pack.featured ? styles.featured : ''}`} aria-labelledby={`plan-${pack.id}`}>
             <div className={styles.planTop}><h3 id={`plan-${pack.id}`}>{pack.name}</h3>{(pack.featured || pack.offer_active) && <span className={styles.planMarker}>{pack.featured ? 'Recommended' : 'Diwali price'}</span>}</div>
             <p className={styles.description}>{pack.description}</p>
             <div className={styles.amount}><strong>{rupees(pack.amount)}</strong><span>one-time</span></div>
             <div className={styles.discount}>{pack.offer_active && pack.regular_amount && pack.regular_amount > pack.amount ? <><s>{rupees(pack.regular_amount)}</s><span>You save {rupees(pack.regular_amount - pack.amount)}</span></> : <span>No recurring charge</span>}</div>
             <div className={styles.allowance}><strong>{pack.credits}<span>experiment credits</span></strong><p>{perExperiment(pack)} per experiment</p></div>
             {checkoutLink(pack, `Choose ${pack.name}`, styles.choose)}
-          </article>)}
+          </article></PixelCard>)}
         </div>
         <div className={styles.included}>
           <span>Every pack includes</span>

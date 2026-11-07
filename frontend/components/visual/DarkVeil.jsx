@@ -104,6 +104,16 @@ export default function DarkVeil({
     const parent = canvas.parentElement;
     if (!parent) return;
 
+    // OGL logs an error before throwing if no context exists. Probe first so
+    // unsupported browsers keep the CSS background without a Next.js overlay.
+    let context;
+    try {
+      context = canvas.getContext('webgl2', { alpha: true }) || canvas.getContext('webgl', { alpha: true });
+    } catch {
+      return;
+    }
+    if (!context) return;
+
     let renderer;
     try {
       renderer = new Renderer({
@@ -153,6 +163,13 @@ export default function DarkVeil({
     const start = performance.now();
     let frame = 0;
     let disposed = false;
+    const contextLost = event => {
+      event.preventDefault();
+      disposed = true;
+      cancelAnimationFrame(frame);
+      canvas.style.visibility = 'hidden';
+    };
+    canvas.addEventListener('webglcontextlost', contextLost);
 
     const loop = () => {
       if (disposed) return;
@@ -167,6 +184,7 @@ export default function DarkVeil({
         renderer.render({ scene });
       } catch (error) {
         disposed = true;
+        canvas.style.visibility = 'hidden';
         console.warn('DarkVeil rendering stopped after a WebGL error.', error);
         return;
       }
@@ -179,6 +197,7 @@ export default function DarkVeil({
       disposed = true;
       cancelAnimationFrame(frame);
       window.removeEventListener('resize', resize);
+      canvas.removeEventListener('webglcontextlost', contextLost);
       geometry.remove();
       program.remove();
     };
