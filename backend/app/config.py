@@ -198,6 +198,7 @@ class Settings(BaseSettings):
     BILLING_ENABLED: bool = False
     BILLING_TRIAL_CREDITS: int = 3
     RAZORPAY_MODE: str = 'test'
+    RAZORPAY_PAYMENT_CHECK_ENABLED: bool = False
     RAZORPAY_KEY_ID: str = ''
     RAZORPAY_KEY_SECRET: str = ''
     RAZORPAY_WEBHOOK_SECRET: str = ''

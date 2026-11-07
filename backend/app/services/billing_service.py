@@ -34,6 +34,10 @@ OWNER_PAYMENT_CHECK = {'id': 'owner-payment-check', 'name': 'Live Payment Check'
     'credits': 1, 'description': 'One real ₹1 charge to verify live Razorpay checkout.',
     'featured': False, 'admin_only': True}
 PACK_BY_ID[OWNER_PAYMENT_CHECK['id']] = OWNER_PAYMENT_CHECK
+PAYMENT_CHECK = {'id': 'payment-check', 'name': '₹1 Payment Check', 'amount': 100,
+    'credits': 1, 'description': 'A real ₹1 payment to check checkout. Adds 1 experiment credit; lab access follows beta eligibility.',
+    'featured': False}
+PACK_BY_ID[PAYMENT_CHECK['id']] = PAYMENT_CHECK
 GATEWAY = 'https://api.razorpay.com/v1'
 ID_PATTERN = r'^[A-Za-z0-9_]{5,64}$'
 
@@ -52,7 +56,10 @@ def priced_pack(pack, now=None):
 
 
 def public_packs():
-    return [priced_pack(pack) for pack in PACKS]
+    packs = [priced_pack(pack) for pack in PACKS]
+    if settings.RAZORPAY_PAYMENT_CHECK_ENABLED and settings.RAZORPAY_MODE == 'live':
+        packs.insert(0, priced_pack(PAYMENT_CHECK))
+    return packs
 
 
 def owner_payment_check_pack():
@@ -79,6 +86,12 @@ def is_credit_exempt(db, user_id):
 
 def wallet(db, user_id, mode=None):
     mode = mode or settings.RAZORPAY_MODE
+    row = db.get(CreditWallet, (user_id, mode), populate_existing=True)
+    trial_exists = db.scalar(select(CreditLedger.id).where(CreditLedger.reference == f'trial:{mode}:{user_id}'))
+    if row is not None and trial_exists is not None:
+        exempt = is_credit_exempt(db, user_id)
+        return {'available': row.balance, 'reserved': row.reserved, 'mode': mode,
+                'billing_enabled': False if exempt else settings.BILLING_ENABLED, 'unlimited': exempt}
     # Both supported database dialects offer conflict-safe first-use provisioning.
     dialect = db.get_bind().dialect.name
     if dialect == 'postgresql':
@@ -185,6 +198,8 @@ async def create_order(db, user_id, pack_id, request_key):
     require_gateway()
     pack = PACK_BY_ID.get(pack_id)
     if not pack: raise HTTPException(400, 'Choose a valid LabMate pack.')
+    if pack_id == PAYMENT_CHECK['id'] and not (settings.RAZORPAY_PAYMENT_CHECK_ENABLED and settings.RAZORPAY_MODE == 'live'):
+        raise HTTPException(404, 'The ₹1 payment check is not currently available.')
     if os.getenv('RAILWAY_ENVIRONMENT_ID') and settings.RAZORPAY_MODE != 'live':
         raise HTTPException(503, 'Live Razorpay payments are not configured yet.')
     if pack.get('admin_only'):
@@ -230,13 +245,17 @@ async def create_order(db, user_id, pack_id, request_key):
 
 def apply_payment(db, purchase_id, payment):
     row = db.scalar(select(PackPurchase).where(PackPurchase.id == purchase_id).with_for_update())
+    if row is None:
+        raise HTTPException(404, 'Payment order not found.')
     if (payment.get('order_id') != row.gateway_order_id or payment.get('amount') != row.amount
         or payment.get('currency') != row.currency or not re.fullmatch(r'pay_[A-Za-z0-9]+', str(payment.get('id', '')))):
         raise HTTPException(400, 'Payment details do not match this order.')
     if payment.get('status') not in {'captured', 'refunded'}:
         return order_view(db, row)
+    if payment.get('captured') is not True:
+        raise HTTPException(400, 'Payment has not been captured. No credits were added.')
     refund = payment.get('amount_refunded', 0)
-    if not isinstance(refund, int) or not 0 <= refund <= row.amount:
+    if type(refund) is not int or not 0 <= refund <= row.amount:
         raise HTTPException(400, 'Invalid payment refund total.')
     wallet(db, row.user_id, row.mode)
     now = datetime.now(timezone.utc)
@@ -272,7 +291,7 @@ async def verify_checkout(db, user_id, purchase_id, returned_order, payment_id, 
     if not hmac.compare_digest(expected, signature):
         raise HTTPException(400, 'Payment signature verification failed. No credits were added.')
     payment = await gateway_request('GET', '/payments/' + payment_id)
-    if (payment.get('order_id') != row.gateway_order_id or payment.get('amount') != row.amount
+    if (payment.get('id') != payment_id or payment.get('order_id') != row.gateway_order_id or payment.get('amount') != row.amount
         or payment.get('currency') != 'INR'):
         raise HTTPException(400, 'Payment details do not match this order.')
     if payment.get('status') == 'authorized':

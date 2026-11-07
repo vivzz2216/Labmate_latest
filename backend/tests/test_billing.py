@@ -339,3 +339,75 @@ def test_owner_payment_check_requires_live_mode_and_charges_one_rupee(env, monke
     assert env.gateway.call_args.kwargs['payload']['amount'] == 100
 
 
+def enable_public_payment_check(monkeypatch):
+    monkeypatch.setattr(settings, 'RAZORPAY_PAYMENT_CHECK_ENABLED', True)
+    monkeypatch.setattr(settings, 'RAZORPAY_MODE', 'live')
+    monkeypatch.setattr(settings, 'RAZORPAY_KEY_ID', 'rzp_live_fixture')
+
+
+def test_public_payment_check_switch_and_regular_account(env, monkeypatch):
+    data = {'pack_id': 'payment-check', 'request_key': str(uuid.uuid4())}
+    monkeypatch.setattr(settings, 'RAZORPAY_PAYMENT_CHECK_ENABLED', False)
+    assert env.client.post('/api/billing/orders', json=data).status_code == 404
+    assert all(p['id'] != 'payment-check' for p in env.client.get('/api/billing/plans').json()['packs'])
+    enable_public_payment_check(monkeypatch)
+    monkeypatch.setattr(settings, 'EXECUTION_ALLOWED_EMAILS', 'invited@example.test')
+    pack = next(p for p in env.client.get('/api/billing/plans').json()['packs'] if p['id'] == 'payment-check')
+    assert pack['amount'] == 100 and pack['credits'] == 1
+    env.gateway.return_value = {'id': 'order_fixture', 'amount': 100, 'currency': 'INR'}
+    assert env.client.post('/api/billing/orders', json={**data, 'amount': 1}).status_code == 422
+    result = env.client.post('/api/billing/orders', json=data)
+    assert result.status_code == 200, result.text
+    assert result.json()['amount'] == 100
+    assert env.client.post('/api/billing/orders', json=data).json()['id'] == result.json()['id']
+    assert env.client.post('/api/billing/orders', json={**data, 'pack_id': 'quick-lab'}).status_code == 403
+    pid = result.json()['id']
+    env.gateway.return_value = payment(amount=100)
+    for _ in range(2):
+        assert env.client.post('/api/billing/orders/'+pid+'/verify', json=signed()).json()['status'] == 'paid'
+    assert credits(env)['available'] == 4
+    env.app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=2, email='other@example.test')
+    assert env.client.get('/api/billing/orders/'+pid).status_code == 404
+    assert credits(env)['available'] == 3
+
+
+@pytest.mark.parametrize('change', [{'captured': False}, {'id': 'pay_other'}, {'amount_refunded': True}])
+def test_inconsistent_provider_payment_never_grants_credits(env, change):
+    pid = purchase(env)
+    env.gateway.return_value = payment(**change)
+    assert env.client.post('/api/billing/orders/'+pid+'/verify', json=signed()).status_code == 400
+    assert credits(env)['available'] == 3
+
+
+def test_malformed_webhook_order_is_rejected(env):
+    response = webhook(env, 'order.paid', {'order': {'entity': {'id': ['invalid']}}})
+    assert response.status_code == 400
+    env.gateway.assert_not_called()
+
+
+def test_simultaneous_checkout_requests_create_one_gateway_order(env):
+    env.gateway.return_value = {'id': 'order_created', 'amount': 2900, 'currency': 'INR'}
+    data = {'pack_id': 'quick-lab', 'request_key': str(uuid.uuid4())}
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        results = list(pool.map(lambda _: env.client.post('/api/billing/orders', json=data), range(5)))
+    assert all(r.status_code in {200, 409} for r in results)
+    assert any(r.status_code == 200 for r in results)
+    assert sum(call.args[0] == 'POST' for call in env.gateway.await_args_list) == 1
+    with env.factory() as db:
+        assert db.query(PackPurchase).filter_by(request_key=data['request_key']).count() == 1
+
+
+def test_simultaneous_payment_callbacks_grant_credits_once(env):
+    pid = purchase(env)
+    env.gateway.return_value = payment()
+    with env.factory() as db:
+        billing.wallet(db, 1)
+        db.commit()
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        results = list(pool.map(lambda _: env.client.post('/api/billing/orders/'+pid+'/verify', json=signed()), range(5)))
+    assert all(r.status_code == 200 and r.json()['status'] == 'paid' for r in results)
+    assert credits(env)['available'] == 13
+    with env.factory() as db:
+        assert db.query(CreditLedger).filter_by(kind='pack_purchase').count() == 1
+
+
