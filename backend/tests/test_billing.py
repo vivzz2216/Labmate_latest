@@ -313,3 +313,29 @@ def test_gateway_failure_never_fabricates_a_test_order(env):
     assert credits(env)['available'] == 3
 
 
+def test_owner_payment_check_is_hidden_and_rejects_regular_users(env):
+    assert all(p['id'] != 'owner-payment-check' for p in env.client.get('/api/billing/plans').json()['packs'])
+    assert env.client.get('/api/billing/plans/owner-check').status_code == 404
+    response = env.client.post('/api/billing/orders', json={
+        'pack_id': 'owner-payment-check', 'request_key': str(uuid.uuid4())})
+    assert response.status_code == 404
+    env.gateway.assert_not_called()
+
+
+def test_owner_payment_check_requires_live_mode_and_charges_one_rupee(env, monkeypatch):
+    monkeypatch.setattr(settings, 'ADMIN_USERID', 'buyer@example.test')
+    monkeypatch.setattr(settings, 'ADMIN_PASSWORD', 'fixture-owner-password')
+    pack = env.client.get('/api/billing/plans/owner-check')
+    assert pack.status_code == 200 and pack.json()['amount'] == 100
+    data = {'pack_id': 'owner-payment-check', 'request_key': str(uuid.uuid4())}
+    assert env.client.post('/api/billing/orders', json=data).status_code == 503
+    env.gateway.assert_not_called()
+    monkeypatch.setattr(settings, 'RAZORPAY_MODE', 'live')
+    monkeypatch.setattr(settings, 'RAZORPAY_KEY_ID', 'rzp_live_fixture')
+    env.gateway.return_value = {'id': 'order_ownercheck', 'amount': 100, 'currency': 'INR'}
+    result = env.client.post('/api/billing/orders', json=data)
+    assert result.status_code == 200, result.text
+    assert result.json()['amount'] == 100 and result.json()['credits'] == 1
+    assert env.gateway.call_args.kwargs['payload']['amount'] == 100
+
+

@@ -21,12 +21,14 @@ const api = axios.create({
 
 // Ensure latest stored tokens are attached before every request
 api.interceptors.request.use((config) => {
-  // Billing bootstrap can include a Railway cold start; auth checks remain short.
+  // Allow billing cold starts while preserving longer payment-verification timeouts.
   const download = config.responseType === 'blob' || config.responseType === 'arraybuffer';
-  const billingBootstrap = config.url?.includes('/billing/plans') || config.url?.includes('/billing/wallet');
+  const billingBootstrap = config.url?.includes('/billing/');
   const authBootstrap = config.url?.includes('/basic-auth/');
   if ((billingBootstrap || authBootstrap) && !download) {
-    config.timeout = 30000;
+    config.timeout = billingBootstrap
+      ? Math.max(30000, config.timeout === api.defaults.timeout ? 30000 : config.timeout || 0)
+      : 30000;
   } else if (config.method?.toLowerCase() === 'get' && !download) {
     config.timeout = 15000;
   }

@@ -9,22 +9,17 @@ const sandbox = {exports: {}};
 vm.runInNewContext(output, sandbox);
 const {checkoutMethods, checkoutFailure} = sandbox.exports;
 
-test('test checkout offers card and mock bank without UPI or default QR blocks', () => {
-  const display = checkoutMethods('test').config.display;
-  assert.equal(display.preferences.show_default_blocks, false);
-  assert.equal(display.hide[0].method, 'upi');
-  assert.equal(display.blocks.test_methods.instruments.map(i => i.method).join(','), 'card,netbanking');
-  assert.equal(display.sequence.join(','), 'block.test_methods');
+test('checkout delegates available methods to the merchant gateway configuration', () => {
+  assert.equal(Object.keys(checkoutMethods()).length, 0);
 });
 test('live checkout keeps merchant-enabled payment methods unchanged', () => {
   assert.equal(Object.keys(checkoutMethods('live')).length, 0);
 });
-test('bank failure preserves the real cause and explains test-mode recovery', () => {
+test('bank failure preserves the real cause and gives live-payment recovery', () => {
   const message = checkoutFailure({error:{description:'Declined by the bank.'}}, 'test');
   assert.match(message, /Declined by the bank/);
-  assert.match(message, /domestic test card/);
-  assert.match(message, /Success on the mock bank page/);
-  assert.match(message, /cannot pay test QR/);
+  assert.match(message, /Try another payment method/);
+  assert.doesNotMatch(message, /test card|mock bank|test QR/);
   assert.match(message, /Check payment status/);
 });
 test('live failures do not recommend test credentials', () => {
