@@ -11,17 +11,18 @@ from ..middleware.auth import get_current_user
 from .operator_access import is_admin_user, is_user_credit_exempt
 
 
-def check_execution_access(user):
+def check_execution_access(user, *, require_profile=True):
     if is_admin_user(user):
         return
     allowed={email.strip().casefold() for email in settings.EXECUTION_ALLOWED_EMAILS.split(',') if email.strip()}
     allowed.update(email.strip().casefold() for email in settings.BETA_TEST_EMAILS.split(',') if email.strip())
-    if not allowed and not os.getenv('RAILWAY_ENVIRONMENT_ID'):
-        return
-    if not allowed:
+    if not allowed and os.getenv('RAILWAY_ENVIRONMENT_ID'):
         raise ValueError('Code execution is closed until the operator configures EXECUTION_ALLOWED_EMAILS for invited beta accounts.')
-    if not user or str(getattr(user,'email','')).casefold() not in allowed:
+    if allowed and (not user or str(getattr(user,'email','')).casefold() not in allowed):
         raise ValueError('Code execution is currently available to invited beta accounts only.')
+    if require_profile:
+        from ..services.profile_service import require_student_profile
+        require_student_profile(user)
 
 
 async def execution_user(user=Depends(get_current_user)):

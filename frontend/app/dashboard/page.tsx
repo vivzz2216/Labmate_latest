@@ -24,7 +24,6 @@ import DashboardShell, {
   getLanguage,
   getProgress,
 } from "@/components/dashboard/DashboardShell";
-import UserOnboarding from "@/components/auth/UserOnboarding";
 import { useAuth } from "@/contexts/BasicAuthContext";
 import { apiService } from "@/lib/api";
 import { errorMessage, saveReport } from "@/lib/workflow";
@@ -34,10 +33,8 @@ export default function DashboardPage() {
   const router = useRouter();
   const {
     user,
-    checkProfileComplete,
     loading: authLoading,
   } = useAuth();
-  const [showOnboarding, setShowOnboarding] = useState(false);
   const [assignments, setAssignments] = useState<Assignment[]>(
     () => (apiService.peekUserAssignments(user?.id) as Assignment[]) || [],
   );
@@ -67,12 +64,8 @@ export default function DashboardPage() {
       setLoadError("");
 
       try {
-        const [profileComplete, response] = await Promise.all([
-          checkProfileComplete(),
-          apiService.getUserAssignments(user.id),
-        ]);
+        const response = await apiService.getUserAssignments(user.id);
         if (!active) return;
-        setShowOnboarding(!profileComplete);
 
         const list = Array.isArray(response)
           ? response
@@ -144,13 +137,6 @@ export default function DashboardPage() {
 
   return (
     <>
-      <UserOnboarding
-        isOpen={showOnboarding}
-        onComplete={async () => {
-          await checkProfileComplete();
-          setShowOnboarding(false);
-        }}
-      />
       <DashboardShell
         title="Dashboard"
         subtitle="Overview of your lab manuals, execution progress, and reports"

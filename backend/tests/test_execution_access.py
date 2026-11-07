@@ -11,6 +11,12 @@ from app.database import get_db
 from app.middleware.auth import get_current_user
 
 
+def student(email):
+    return SimpleNamespace(email=email, name='Student', profile=SimpleNamespace(
+        institution='College', course='Computer Science',
+        profile_metadata={'roll_number':'CS01','year':'2nd Year','graduation_year':'2028'}))
+
+
 class ExecutionAccessTests(unittest.IsolatedAsyncioTestCase):
     def test_all_execution_submission_routes_reject_noninvited_users(self):
         from app.routers import run, tasks, workflows
@@ -37,7 +43,7 @@ class ExecutionAccessTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_invites_are_case_insensitive_exact_accounts(self):
         with patch.object(settings,'EXECUTION_ALLOWED_EMAILS',' owner@example.com, beta@example.com '):
-            self.assertEqual((await execution_user(SimpleNamespace(email='OWNER@example.com'))).email,'OWNER@example.com')
+            self.assertEqual((await execution_user(student('OWNER@example.com'))).email,'OWNER@example.com')
             for email in ['other@example.com','owner@example.com.attacker.test','notowner@example.com']:
                 with self.assertRaises(ValueError): check_execution_access(SimpleNamespace(email=email))
 
@@ -45,9 +51,9 @@ class ExecutionAccessTests(unittest.IsolatedAsyncioTestCase):
         with patch.dict('os.environ',{'RAILWAY_ENVIRONMENT_ID':'test-environment'}), \
              patch.object(settings,'EXECUTION_ALLOWED_EMAILS','current-beta@example.com'), \
              patch.object(settings,'BETA_TEST_EMAILS',' qa@example.org '):
-            self.assertEqual((await execution_user(SimpleNamespace(email='QA@example.org'))).email,'QA@example.org')
+            self.assertEqual((await execution_user(student('QA@example.org'))).email,'QA@example.org')
             with self.assertRaises(ValueError): check_execution_access(SimpleNamespace(email='outsider@example.org'))
 
     async def test_unconfigured_local_development_remains_available(self):
         with patch.dict('os.environ',{},clear=True),patch.object(settings,'EXECUTION_ALLOWED_EMAILS',''):
-            check_execution_access(SimpleNamespace(email='local@example.com'))
+            check_execution_access(student('local@example.com'))

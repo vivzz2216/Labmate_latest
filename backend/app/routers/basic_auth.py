@@ -21,6 +21,7 @@ from ..security.jwt import create_access_token, create_refresh_token, verify_tok
 from ..middleware.auth import get_current_user
 from ..middleware.csrf import generate_csrf_token, store_csrf_token, require_csrf_token
 from ..security.operator_access import admin_email, is_admin_user
+from ..services.profile_service import profile_is_complete
 
 # Set up logging for debugging
 logger = logging.getLogger(__name__)
@@ -492,10 +493,24 @@ class ProfileUpdateRequest(BaseModel):
             raise ValueError('Name must not be blank.')
         return value.strip() if value is not None else None
 
+    @validator('institution', 'course')
+    def trim_academic_field(cls, value):
+        if value is not None and not value.strip():
+            raise ValueError('Academic details must not be blank.')
+        return value.strip() if value is not None else None
+
     @validator('profile_metadata')
     def bound_profile_metadata(cls, value):
         if value is not None and len(json.dumps(value).encode('utf-8')) > 32768:
             raise ValueError('Profile metadata must be at most 32 KiB.')
+        if value is not None:
+            for key in ('year', 'graduation_year', 'roll_number', 'usn', 'roll_no'):
+                if key in value:
+                    if not isinstance(value[key], str) or not value[key].strip():
+                        raise ValueError(f'{key} must be a non-empty string.')
+                    value[key] = value[key].strip()
+            if 'graduation_year' in value and not re.fullmatch(r'(20\d{2}|2100)', value['graduation_year']):
+                raise ValueError('Graduation year must be between 2000 and 2100.')
         return value
 
 
@@ -533,6 +548,8 @@ async def update_user_profile(
             existing_metadata = dict(profile.profile_metadata or {})
             existing_metadata.update(request.profile_metadata)
             profile.profile_metadata = existing_metadata
+        if request.institution and request.course:
+            profile.profile_metadata = {key: value for key, value in (profile.profile_metadata or {}).items() if key != 'auto_generated'}
         
         db.commit()
         db.refresh(profile)
@@ -578,13 +595,7 @@ async def get_user_profile(
         }
     
     # Check if profile is complete
-    is_complete = bool(
-        profile.institution and 
-        profile.course and 
-        profile.profile_metadata and
-        profile.profile_metadata.get("year") and
-        profile.profile_metadata.get("graduation_year")
-    )
+    is_complete = profile_is_complete(current_user, profile)
     
     return {
         "name": current_user.name,

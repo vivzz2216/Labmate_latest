@@ -69,7 +69,7 @@ async def order(data: OrderInput, user: User = Depends(get_current_user),
     # A payment check does not grant admission to code execution.
     if data.pack_id != billing.PAYMENT_CHECK['id']:
         try:
-            check_execution_access(user)
+            check_execution_access(user, require_profile=False)
         except ValueError:
             raise HTTPException(403, 'Packs are currently available to invited beta accounts only.') from None
     return await billing_task(billing.create_order, db, user.id, data.pack_id, str(data.request_key))

@@ -8,6 +8,25 @@ from sqlalchemy.orm import Session
 from ..models import User, UserProfile
 
 
+def profile_is_complete(user, profile=None):
+    profile = profile if profile is not None else getattr(user, 'profile', None)
+    if profile is None or not str(getattr(user, 'name', '') or '').strip():
+        return False
+    meta = profile.profile_metadata or {}
+    graduation = str(meta.get('graduation_year') or '').strip()
+    roll = next((str(meta.get(key) or '').strip() for key in ('roll_number', 'usn', 'roll_no') if str(meta.get(key) or '').strip()), '')
+    return bool(not meta.get('auto_generated') and str(profile.institution or '').strip()
+                and str(profile.course or '').strip() and str(meta.get('year') or '').strip()
+                and roll and graduation.isdigit() and len(graduation) == 4 and 2000 <= int(graduation) <= 2100)
+
+
+def require_student_profile(user):
+    from fastapi import HTTPException
+    from ..security.operator_access import is_admin_user
+    if not is_admin_user(user) and not profile_is_complete(user):
+        raise HTTPException(428, 'Complete your student profile before lab execution. Your name, roll number, college, department and academic years are required.')
+
+
 @dataclass
 class UserProfileData:
     """Serializable view of a user's extended profile."""
@@ -48,6 +67,7 @@ class UserProfileService:
     }
 
     def get_or_create_profile(self, db: Session, user: User) -> UserProfileData:
+        require_student_profile(user)
         profile = user.profile
         if not profile:
             profile = db.query(UserProfile).filter(UserProfile.user_id == user.id).first()
@@ -55,12 +75,7 @@ class UserProfileService:
         if not profile:
             profile = UserProfile(
                 user_id=user.id,
-                age=self.DEFAULT_PROFILE["age"],
-                course=self.DEFAULT_PROFILE["course"],
-                institution=self.DEFAULT_PROFILE["institution"],
-                city=self.DEFAULT_PROFILE["city"],
-                bio=self.DEFAULT_PROFILE["bio"],
-                profile_metadata={"auto_generated": True},
+                profile_metadata={},
             )
             db.add(profile)
             db.commit()
