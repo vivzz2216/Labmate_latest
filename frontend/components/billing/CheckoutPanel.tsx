@@ -20,6 +20,8 @@ export default function CheckoutPanel({packId}: {packId: string}) {
   const [message, setMessage] = useState('');
   const [loginOpen, setLoginOpen] = useState(false);
   const [retry, setRetry] = useState(0);
+  const [packError, setPackError] = useState('');
+  const ownerCheck = packId === 'owner-payment-check';
   const confirming = useRef(false);
   const lastFailure = useRef('');
   const active = useRef(true);
@@ -35,20 +37,26 @@ export default function CheckoutPanel({packId}: {packId: string}) {
 
   useEffect(() => {
     const controller = new AbortController();
+    setCatalogue(null);
+    setPackError('');
+    if (ownerCheck && loading) return () => controller.abort();
     billingApi.catalogue(controller.signal)
       .then(async data => {
-        if (packId === 'owner-payment-check' && user?.is_admin) {
+        if (ownerCheck && user) {
           try {
             const ownerPack = await billingApi.ownerCheck(controller.signal);
             if (!controller.signal.aborted) setCatalogue({...data, packs: [...data.packs, ownerPack]});
             return;
-          } catch { /* The protected owner pack stays unavailable without an admin session. */ }
+          } catch (error: any) {
+            if (controller.signal.aborted) return;
+            if (error?.response?.status !== 404) setPackError(paymentError(error));
+          }
         }
         if (!controller.signal.aborted) setCatalogue(data);
       })
       .catch(e => { if (!controller.signal.aborted) setMessage(paymentError(e)); });
     return () => controller.abort();
-  }, [retry, packId, user?.is_admin]);
+  }, [retry, packId, ownerCheck, user?.id, loading]);
 
   useEffect(() => {
     setOrder(null);
@@ -247,7 +255,19 @@ export default function CheckoutPanel({packId}: {packId: string}) {
           </div>
 
           {!catalogue && !message && <p role="status" className={styles.loadingPack}>Loading your pack…</p>}
-          {catalogue && !pack && (
+          {catalogue && !pack && ownerCheck && (
+            <div className={styles.notFoundPack} role="alert">
+              <p>{packError || (user
+                ? 'The ₹1 live payment check is available only to the owner account. Sign in with your owner account to continue.'
+                : 'Sign in with your owner account to access the ₹1 live payment check.')}</p>
+              {packError ? (
+                <button className={styles.statusButton} onClick={() => setRetry(v => v + 1)}>Retry loading</button>
+              ) : (
+                <button className={styles.payButton} onClick={() => setLoginOpen(true)}>Sign in as owner</button>
+              )}
+            </div>
+          )}
+          {catalogue && !pack && !ownerCheck && (
             <div className={styles.notFoundPack} role="alert">
               <p>This pack could not be found.</p>
               <Link href="/#pricing" className={styles.returnLink}>Choose a pack</Link>
