@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 
 import httpx
 from fastapi import HTTPException
-from sqlalchemy import select, update
+from sqlalchemy import select, update, func
 from sqlalchemy.exc import IntegrityError
 
 from ..config import settings
@@ -83,12 +83,6 @@ def is_credit_exempt(db, user_id):
 
 def wallet(db, user_id, mode=None):
     mode = mode or settings.RAZORPAY_MODE
-    row = db.get(CreditWallet, (user_id, mode), populate_existing=True)
-    trial_exists = db.scalar(select(CreditLedger.id).where(CreditLedger.reference == f'trial:{mode}:{user_id}'))
-    if row is not None and trial_exists is not None:
-        exempt = is_credit_exempt(db, user_id)
-        return {'available': row.balance, 'reserved': row.reserved, 'mode': mode,
-                'billing_enabled': False if exempt else settings.BILLING_ENABLED, 'unlimited': exempt}
     # Both supported database dialects offer conflict-safe first-use provisioning.
     dialect = db.get_bind().dialect.name
     if dialect == 'postgresql':
@@ -101,7 +95,22 @@ def wallet(db, user_id, mode=None):
     db.execute(insert(CreditLedger).values(user_id=user_id, mode=mode,
         reference=f'trial:{mode}:{user_id}', kind='trial', delta=trial)
         .on_conflict_do_nothing(index_elements=['reference']))
-    row = db.get(CreditWallet, (user_id, mode), populate_existing=True)
+    # Serialize allowance upgrades with concurrent wallet reads and purchases.
+    row = db.scalar(select(CreditWallet).where(CreditWallet.user_id == user_id,
+        CreditWallet.mode == mode).with_for_update().execution_options(populate_existing=True))
+    granted = db.scalar(select(func.coalesce(func.sum(CreditLedger.delta), 0)).where(
+        CreditLedger.user_id == user_id, CreditLedger.mode == mode,
+        CreditLedger.kind.in_(['trial', 'trial_upgrade'])))
+    extra = max(0, trial - granted)
+    if extra:
+        awarded = db.execute(insert(CreditLedger).values(user_id=user_id, mode=mode,
+            reference=f'trial-upgrade:{mode}:{user_id}:{trial}', kind='trial_upgrade', delta=extra)
+            .on_conflict_do_nothing(index_elements=['reference']))
+        if awarded.rowcount == 1:
+            db.execute(update(CreditWallet).where(CreditWallet.user_id == user_id,
+                CreditWallet.mode == mode).values(balance=CreditWallet.balance + extra),
+                execution_options={'synchronize_session': False})
+            db.refresh(row)
     exempt = is_credit_exempt(db, user_id)
     return {'available': row.balance,
             'reserved': row.reserved,

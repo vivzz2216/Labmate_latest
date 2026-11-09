@@ -57,10 +57,16 @@
 .choose {display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 46px; padding: 12px 14px; width: 100%; font-family: inherit; font-weight: 500; font-size: 12px; line-height: 1.5; background: transparent; color: var(--text); border: 1px solid #45474f; border-radius: 8px; margin-top: auto; transition: background 160ms ease, border-color 160ms ease;}
 .choose:hover {background: #202126; border-color: #a0a1aa;}
 .choose:disabled {opacity: .6; cursor: not-allowed;}
-.featured {background: transparent; color: #1a1b1c; --muted: #4e5053; --subtle: #5e6063; --rule: #c5c3bd; --text: #1a1b1c;}
-.featured .planMarker {color: #50504c;}
-.featured .choose {background: #1a1b1c; color: #faf9f5; border-color: #1a1b1c;}
-.featured .choose:hover {background: #343638;}
+.featured {background: transparent; color: #f4f3ee; --muted: #b0b0b8; --subtle: #a0a1aa; --rule: #2b2d33; --text: #f4f3ee;}
+.featured .planMarker {color: #e2bb79;}
+.featured .choose {background: #f4f3ee; color: #17171c; border-color: #f4f3ee;}
+.featured .choose:hover {background: #deddd8; border-color: #deddd8;}
+.planIdentity {display: flex; align-items: center; gap: 12px; min-width: 0;}
+.iconTile {display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 38px; height: 38px; border: 1px solid #45434d; border-radius: 11px; background: #2b2932; color: #f4f3ee;}
+.featureList {list-style: none; padding: 0; margin: 20px 0 0; display: flex; flex-direction: column; gap: 14px;}
+.featureList li {display: flex; align-items: flex-start; gap: 10px; font-size: 13px; line-height: 1.6;}
+.featureList svg {flex-shrink: 0; margin-top: 3px; color: #a0a1aa;}
+.unitPrice {font-size: 12px; line-height: 1.6; color: var(--muted); margin: 18px 0 24px;}
 .included {border-top: 1px solid var(--rule); background: #0d0e11; display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 20px 25px;}
 .included>span {font-size: 11px; color: var(--subtle);}
 .included ul {display: flex; gap: 28px; list-style: none; padding: 0; margin: 0;}

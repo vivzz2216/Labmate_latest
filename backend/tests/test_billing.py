@@ -86,6 +86,38 @@ def test_catalogue_and_wallet_are_server_owned(env):
     with env.factory() as db:assert db.query(CreditLedger).filter_by(kind='trial').count()==1
 
 
+def test_existing_free_allowance_upgrades_once_and_preserves_purchased_credits(env, monkeypatch):
+    assert credits(env)['available'] == 3
+    with env.factory() as db:
+        row = db.get(CreditWallet, (1, 'test'))
+        row.balance += 10
+        db.commit()
+    monkeypatch.setattr(settings, 'BILLING_TRIAL_CREDITS', 100)
+    assert credits(env)['available'] == 110
+    assert credits(env)['available'] == 110
+    with env.factory() as db:
+        assert db.query(CreditLedger).filter_by(kind='trial_upgrade').one().delta == 97
+
+
+def test_new_users_get_one_hundred_free_credits_once(env, monkeypatch):
+    monkeypatch.setattr(settings, 'BILLING_TRIAL_CREDITS', 100)
+    assert credits(env)['available'] == 100
+    assert credits(env)['available'] == 100
+
+
+def test_concurrent_free_credit_upgrades_do_not_duplicate_grant(env, monkeypatch):
+    assert credits(env)['available'] == 3
+    monkeypatch.setattr(settings, 'BILLING_TRIAL_CREDITS', 100)
+    def read_wallet(_):
+        with env.factory() as db:
+            value = billing.wallet(db, 1)['available']
+            db.commit()
+            return value
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        assert list(pool.map(read_wallet, range(8))) == [100] * 8
+    assert credits(env)['available'] == 100
+
+
 def test_amount_and_credits_cannot_be_injected(env):
     for field in ['amount','credits','currency','user_id']:
         r=env.client.post('/api/billing/orders',json={'pack_id':'quick-lab','request_key':str(uuid.uuid4()),field:1})

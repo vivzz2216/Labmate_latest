@@ -43,7 +43,7 @@ export default function PricingSection() {
       <div className={styles.header}>
         <h2 id="pricing-heading">A little spend.<span>A lot less lab work.</span></h2>
         <div className={styles.intro}>
-          <p>Try <strong>{catalogue?.trial_credits ?? 3} experiments free.</strong><br />Pick a pack when you need more.</p>
+          <p>Try <strong>{catalogue?.trial_credits ?? 100} experiments free.</strong><br />Pick a pack when you need more.</p>
           <span>One-time payments. No auto-renewal.</span>
           <Link href="/code-execution">Start free <ArrowRight size={15} aria-hidden="true" /></Link>
         </div>

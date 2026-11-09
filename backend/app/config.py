@@ -198,7 +198,7 @@ class Settings(BaseSettings):
     JAVA_GUI_TOTAL_TIMEOUT: float = 90.0
     # One-time Razorpay packs. Test and live balances are separate.
     BILLING_ENABLED: bool = False
-    BILLING_TRIAL_CREDITS: int = 3
+    BILLING_TRIAL_CREDITS: int = 100
     RAZORPAY_MODE: str = 'test'
     RAZORPAY_PAYMENT_CHECK_ENABLED: bool = False
     RAZORPAY_KEY_ID: str = ''
