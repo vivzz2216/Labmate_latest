@@ -19,6 +19,7 @@ export interface LabQuestion {
   language: LabLanguage;
   datasets?: Record<string, string>;
   python_template?: "idle" | "jupyter";
+  jupyter_theme?: "light" | "dark";
   colab_theme?: "light" | "dark";
   browser_theme?: "edge" | "chrome";
 }

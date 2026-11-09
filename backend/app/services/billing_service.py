@@ -56,10 +56,7 @@ def priced_pack(pack, now=None):
 
 
 def public_packs():
-    packs = [priced_pack(pack) for pack in PACKS]
-    if settings.RAZORPAY_PAYMENT_CHECK_ENABLED and settings.RAZORPAY_MODE == 'live':
-        packs.insert(0, priced_pack(PAYMENT_CHECK))
-    return packs
+    return [priced_pack(pack) for pack in PACKS]
 
 
 def owner_payment_check_pack():
@@ -196,6 +193,8 @@ def order_view(db, row):
 
 async def create_order(db, user_id, pack_id, request_key):
     require_gateway()
+    if pack_id in {PAYMENT_CHECK['id'], OWNER_PAYMENT_CHECK['id']}:
+        raise HTTPException(404, 'Payment pack not found.')
     pack = PACK_BY_ID.get(pack_id)
     if not pack: raise HTTPException(400, 'Choose a valid LabMate pack.')
     if pack_id == PAYMENT_CHECK['id'] and not (settings.RAZORPAY_PAYMENT_CHECK_ENABLED and settings.RAZORPAY_MODE == 'live'):

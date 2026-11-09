@@ -2,9 +2,8 @@
 
 import {useEffect, useState} from 'react';
 import Link from 'next/link';
-import {ArrowRight, Check, Flame, LockKeyhole, Plus, RefreshCw} from 'lucide-react';
+import {ArrowRight, BookOpen, Check, Flame, GraduationCap, LockKeyhole, Plus, RefreshCw, Rocket, Sparkles} from 'lucide-react';
 import {billingApi, Catalogue, Pack, rupees} from '@/lib/billing';
-import {useAuth} from '@/contexts/BasicAuthContext';
 import styles from './PricingSection.module.css';
 import PixelCard from '@/components/visual/PixelCard';
 
@@ -12,10 +11,10 @@ const perExperiment = (pack: Pack) => new Intl.NumberFormat('en-IN', {
   style: 'currency', currency: 'INR', maximumFractionDigits: 2,
 }).format(pack.amount / 100 / pack.credits);
 
+const planIcons = [Sparkles, Rocket, BookOpen, GraduationCap];
+
 export default function PricingSection() {
-  const {user} = useAuth();
   const [catalogue, setCatalogue] = useState<Catalogue|null>(null);
-  const [ownerPack, setOwnerPack] = useState<Pack|null>(null);
   const [error, setError] = useState(false);
   const [retry, setRetry] = useState(0);
   const [count, setCount] = useState('10');
@@ -23,21 +22,14 @@ export default function PricingSection() {
   useEffect(() => {
     const controller = new AbortController();
     setError(false);
-    setOwnerPack(null);
     billingApi.catalogue(controller.signal).then(data => {
       if (!Array.isArray(data.packs)) throw new Error('Invalid pack catalogue');
       if (!controller.signal.aborted) setCatalogue(data);
     }).catch(() => {if (!controller.signal.aborted) setError(true)});
-    if (user?.is_admin) {
-      billingApi.ownerCheck(controller.signal).then(pack => {
-        if (!controller.signal.aborted) setOwnerPack(pack);
-      }).catch(() => {});
-    }
     return () => controller.abort();
-  }, [retry, user?.is_admin, user?.id]);
+  }, [retry]);
 
   const packs = catalogue?.packs.filter(pack => !pack.admin_only && !['payment-check', 'owner-payment-check'].includes(pack.id)) || [];
-  const paymentCheck = catalogue?.packs.find(pack => pack.id === 'payment-check');
   const offer = packs.find(pack => pack.offer_active);
   const experiments = /^[1-9]\d{0,3}$/.test(count) ? Number(count) : 0;
   const suggested = experiments ? [...packs].filter(pack => pack.credits >= experiments).sort((a, b) => a.amount - b.amount)[0] : undefined;
@@ -68,15 +60,16 @@ export default function PricingSection() {
 
       {catalogue && packs.length > 0 && <div className={styles.comparison}>
         <div className={styles.plans}>
-          {packs.map((pack, index) => <PixelCard key={pack.id} className={styles.pixelPlan} theme={pack.featured ? 'light' : 'dark'} colors={pack.featured ? ['#77736c', '#aca69a'] : ['#b3c7e8', '#d6d4f0', '#a7b6d2']} gap={12} pixelSize={2} speed={25} opacity={0.25} fade={0.8} glow={0.15} radius={0} introDelay={index * 100}>
+          {packs.map((pack, index) => { const Icon = planIcons[index % planIcons.length]; return <PixelCard key={pack.id} className={styles.pixelPlan} theme="dark" colors={['#a5a2ad', '#77747f', '#d0ccd5']} gap={9} pixelSize={2} speed={25} opacity={pack.featured ? 0.38 : 0.2} fade={0.35} glow={0.05} radius={24} trigger={pack.featured ? 'always' : 'hover'} introDelay={index * 100}>
           <article className={`${styles.plan} ${pack.featured ? styles.featured : ''}`} aria-labelledby={`plan-${pack.id}`}>
-            <div className={styles.planTop}><h3 id={`plan-${pack.id}`}>{pack.name}</h3>{(pack.featured || pack.offer_active) && <span className={styles.planMarker}>{pack.featured ? 'Recommended' : 'Diwali price'}</span>}</div>
-            <p className={styles.description}>{pack.description}</p>
+            <div className={styles.planTop}><div className={styles.planIdentity}><span className={styles.iconTile}><Icon size={19} strokeWidth={1.5} aria-hidden="true" /></span><h3 id={`plan-${pack.id}`}>{pack.name}</h3></div>{pack.featured && <span className={styles.planMarker}>Popular</span>}</div>
             <div className={styles.amount}><strong>{rupees(pack.amount)}</strong><span>one-time</span></div>
+            <p className={styles.description}>{pack.description}</p>
             <div className={styles.discount}>{pack.offer_active && pack.regular_amount && pack.regular_amount > pack.amount ? <><s>{rupees(pack.regular_amount)}</s><span>You save {rupees(pack.regular_amount - pack.amount)}</span></> : <span>No recurring charge</span>}</div>
-            <div className={styles.allowance}><strong>{pack.credits}<span>experiment credits</span></strong><p>{perExperiment(pack)} per experiment</p></div>
+            <ul className={styles.featureList}><li><Check size={16} aria-hidden="true" />{pack.credits} experiment credits</li><li><Check size={16} aria-hidden="true" />Source &amp; output screenshots</li><li><Check size={16} aria-hidden="true" />Word (.docx) report</li></ul>
+            <p className={styles.unitPrice}>{perExperiment(pack)} per experiment</p>
             {checkoutLink(pack, `Choose ${pack.name}`, styles.choose)}
-          </article></PixelCard>)}
+          </article></PixelCard>})}
         </div>
         <div className={styles.included}>
           <span>Every pack includes</span>
@@ -85,11 +78,6 @@ export default function PricingSection() {
       </div>}
       {catalogue && packs.length === 0 && !error && <p className={styles.notice}>No student packs are available right now. Please check back soon.</p>}
 
-      {paymentCheck && <div className={styles.testRail}>
-        <div><strong>Want to check checkout first?</strong><p>A real {rupees(paymentCheck.amount)} payment. Adds {paymentCheck.credits} experiment credit. Lab access follows beta eligibility.</p></div>
-        {checkoutLink(paymentCheck, `Try ${rupees(paymentCheck.amount)} checkout`, styles.textAction)}
-      </div>}
-      {ownerPack && user?.is_admin && <div className={styles.ownerRail}><span>Owner tools · Live payment check</span>{checkoutLink(ownerPack, `Run ${rupees(ownerPack.amount)} owner check`, styles.textAction)}</div>}
 
       {packs.length > 0 && <div className={styles.creditGuide}>
         <div className={styles.creditCopy}><h3>One credit.<br />One completed experiment.</h3><p>A manual with 10 experiments uses 10 credits. Failed or unfinished experiments return their reserved credits. Downloading an existing report is free.</p></div>

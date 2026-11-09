@@ -6,6 +6,7 @@ from pathlib import Path
 from zipfile import ZipFile
 
 from docx import Document
+from docx.enum.section import WD_ORIENT, WD_SECTION
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Inches, Length, Pt, RGBColor, Twips
 import docx.oxml.simpletypes as _docx_simpletypes
@@ -91,7 +92,63 @@ def embed_theory_block(document, question_text: str, answer_text: str, question_
 from PIL import Image
 
 
-def embed_screenshot(document, image_path, caption=None, reserved_height=0.8):
+def create_report_document(upload, landscape=False):
+    """Start a report with the complete uploaded manual, then a separate results section."""
+    file_type = str(getattr(upload, "file_type", "")).lower()
+    file_path = str(getattr(upload, "file_path", "") or "")
+    source_is_docx = file_type == "docx" and os.path.isfile(file_path)
+
+    if source_is_docx:
+        document = Document(file_path)
+        report_section = document.add_section(WD_SECTION.NEW_PAGE)
+    else:
+        document = Document()
+        source_section = document.sections[0]
+        source_section.orientation = WD_ORIENT.PORTRAIT
+        source_section.page_width = Inches(8.5)
+        source_section.page_height = Inches(11)
+        source_section.left_margin = source_section.right_margin = Inches(.55)
+        source_section.top_margin = source_section.bottom_margin = Inches(.5)
+
+        if file_type == "pdf" and os.path.isfile(file_path):
+            import pdfplumber
+
+            document.add_paragraph(f"Uploaded input: {getattr(upload, 'original_filename', '')}")
+            with pdfplumber.open(file_path) as pdf:
+                for index, page in enumerate(pdf.pages):
+                    image = page.to_image(resolution=130).original
+                    buffer = io.BytesIO()
+                    image.save(buffer, format="PNG")
+                    buffer.seek(0)
+                    available_width = source_section.page_width - source_section.left_margin - source_section.right_margin
+                    available_height = source_section.page_height - source_section.top_margin - source_section.bottom_margin - Inches(.35)
+                    scale = min(float(available_width) / image.width, float(available_height) / image.height)
+                    paragraph = document.add_paragraph()
+                    paragraph.paragraph_format.page_break_before = index > 0
+                    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    paragraph.add_run().add_picture(
+                        buffer,
+                        width=int(image.width * scale),
+                        height=int(image.height * scale),
+                    )
+            report_section = document.add_section(WD_SECTION.NEW_PAGE)
+        else:
+            report_section = source_section
+
+    if landscape:
+        report_section.orientation = WD_ORIENT.LANDSCAPE
+        report_section.page_width = Inches(11.7)
+        report_section.page_height = Inches(8.3)
+    else:
+        report_section.orientation = WD_ORIENT.PORTRAIT
+        report_section.page_width = Inches(8.5)
+        report_section.page_height = Inches(11)
+    report_section.left_margin = report_section.right_margin = Inches(.7 if landscape else .65)
+    report_section.top_margin = report_section.bottom_margin = Inches(.5 if landscape else .6)
+    return document, source_is_docx
+
+
+def embed_screenshot(document, image_path, caption=None, reserved_height=0.8, max_width=None):
     with Image.open(image_path) as image:
         pixels_w, pixels_h = image.size
         dpi = image.info.get("dpi", (96, 96))
@@ -103,6 +160,8 @@ def embed_screenshot(document, image_path, caption=None, reserved_height=0.8):
         page_height = max(Inches(1), section.page_height - section.top_margin - section.bottom_margin - Inches(reserved_height))
         natural_w = Inches(pixels_w / (dpi_x or 96))
         display_w = max(Inches(1), min(natural_w, page_width))
+        if max_width is not None:
+            display_w = min(display_w, Inches(max_width))
         max_slice_h = max(1, int(pixels_w * page_height / display_w))
 
         # If the screenshot is only slightly taller than page_height (within 25%),
@@ -153,6 +212,10 @@ def embed_screenshot(document, image_path, caption=None, reserved_height=0.8):
             paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
             paragraph.paragraph_format.keep_together = True
             paragraph.paragraph_format.keep_with_next = bool(caption)
+            if max_width is not None:
+                paragraph.paragraph_format.space_before = Pt(0)
+                paragraph.paragraph_format.space_after = Pt(2)
+                paragraph.paragraph_format.line_spacing = 1.0
 
             if s_top == 0 and s_bottom == pixels_h:
                 source = str(image_path)

@@ -2,6 +2,7 @@ import ast
 import asyncio
 import base64
 import os
+from pathlib import Path
 import uuid
 import textwrap
 import re
@@ -438,14 +439,16 @@ class ScreenshotService:
         if parsed.hostname in {"127.0.0.1", "localhost", "::1"} and parsed.scheme in {"http", "https"}:
             address = urlunsplit((parsed.scheme, "localhost" + (f":{parsed.port}" if parsed.port else ""), parsed.path or "/", parsed.query, parsed.fragment))
         else:
-            address = "about:blank"
+            # This is a rendered browser frame; show the supplied source name
+            # without inventing a file path or a network origin.
+            address = Path(str(filename or '').replace('\\', '/')).name or "Local page"
         directory = os.path.dirname(source)
         header_path = os.path.join(directory, f"browser_header_{uuid.uuid4().hex}.png")
         framed_path = os.path.join(directory, f"browser_{browser_theme}_{uuid.uuid4().hex}.png")
         template = Environment(loader=FileSystemLoader(self.template_dir), autoescape=True).get_template("browser_frame_theme.html")
         html = template.render(frame_width=width, browser_theme=browser_theme,
                                browser_name="Microsoft Edge" if browser_theme == "edge" else "Google Chrome",
-                               page_title=(page_title or filename or "Local page")[:160], address=address[:1500])
+                               page_title=(page_title or Path(str(filename or '').replace('\\', '/')).name or "Local page")[:160], address=address[:1500])
         try:
             ok, _, _ = await self._take_screenshot(html, header_path, width, 88)
             if not ok:
@@ -728,6 +731,7 @@ class ScreenshotService:
             end_line=end_line,
             source_code=source_code or "",
             jupyter_title=os.path.splitext(safe_filename)[0] + ".ipynb",
+            jupyter_theme="dark" if kwargs.get("palette") == "dark" else "light",
             collapse_input=view_mode in {"shell", "output"} and len((source_code or "").splitlines()) > 40,
         )
         

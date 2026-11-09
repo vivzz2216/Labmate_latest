@@ -16,6 +16,13 @@ def check_execution_access(user, *, require_profile=True):
         raise ValueError('Sign in with an active account to run labs.')
     if is_admin_user(user):
         return
+    if settings.LOCAL_OPEN_EXECUTION and not os.getenv('RAILWAY_ENVIRONMENT_ID'):
+        if not user or not getattr(user, 'is_active', True):
+            raise ValueError('Sign in with an active account to run labs.')
+        if require_profile:
+            from ..services.profile_service import require_student_profile
+            require_student_profile(user)
+        return
     allowed={email.strip().casefold() for email in settings.EXECUTION_ALLOWED_EMAILS.split(',') if email.strip()}
     allowed.update(email.strip().casefold() for email in settings.BETA_TEST_EMAILS.split(',') if email.strip())
     if not allowed and os.getenv('RAILWAY_ENVIRONMENT_ID'):

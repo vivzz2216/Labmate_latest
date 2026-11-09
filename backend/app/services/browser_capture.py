@@ -12,10 +12,13 @@ Provides managed Playwright browser pooling per event loop / thread:
 """
 
 import asyncio
+import atexit
 import contextlib
 import logging
 import os
 import threading
+import tempfile
+import shutil
 from typing import Any, AsyncIterator, Iterator, Optional
 from playwright.async_api import Browser as AsyncBrowser, BrowserContext as AsyncContext, Error as AsyncPlaywrightError, async_playwright
 from playwright.sync_api import Browser as SyncBrowser, BrowserContext as SyncContext, Error as SyncPlaywrightError, sync_playwright
@@ -23,6 +26,15 @@ from playwright.sync_api import Browser as SyncBrowser, BrowserContext as SyncCo
 from .resource_budget import browser_capture_budget
 
 logger = logging.getLogger(__name__)
+
+# Python falls back to a writable directory when Windows TEMP is inaccessible;
+# the Playwright Node driver does not. Set its environment before starting it.
+# Each launch still creates its own random profile below this process-owned root.
+if os.name == 'nt':
+    _capture_temp_root = tempfile.mkdtemp(prefix='labmate-browser-')
+    for _temp_key in ('TEMP', 'TMP', 'TMPDIR'):
+        os.environ[_temp_key] = _capture_temp_root
+    atexit.register(shutil.rmtree, _capture_temp_root, ignore_errors=True)
 
 # The venv-bundled Node driver is blocked from creating browser profiles on some
 # Windows installations. Use the installed vendor Node without overriding an
@@ -33,11 +45,15 @@ if os.name == 'nt' and not os.environ.get('PLAYWRIGHT_NODEJS_PATH'):
         os.environ['PLAYWRIGHT_NODEJS_PATH'] = system_node
 
 
+class CaptureBrowserUnavailable(RuntimeError):
+    """Capture infrastructure failed; changing student source cannot fix it."""
+
+
 def _launch_failure(original):
     detail = str(original).lower()
     if any(word in detail for word in ('eperm', 'eacces', 'permission denied', 'access is denied')):
-        return RuntimeError('Capture browser cannot access its temporary/profile directory. Configure writable TEMP and TMP directories for the backend process.')
-    return RuntimeError('No capture browser is available. Run python -m playwright install chromium.')
+        return CaptureBrowserUnavailable('Capture browser cannot access its temporary/profile directory. Configure writable TEMP and TMP directories for the backend process.')
+    return CaptureBrowserUnavailable('No capture browser is available. Run python -m playwright install chromium.')
 
 
 def launch_capture_browser_sync(playwright):

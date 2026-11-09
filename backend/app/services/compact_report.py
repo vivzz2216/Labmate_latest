@@ -3,13 +3,11 @@ import re
 import uuid
 from pathlib import Path
 
-from docx import Document
-from docx.enum.section import WD_ORIENT
 from docx.shared import Inches,Pt,RGBColor
 
 from ..config import settings
 from ..security.validators import normalize_output_name
-from .docx_layout import apply_student_metadata,embed_screenshot,save_document_atomic
+from .docx_layout import apply_student_metadata,create_report_document,embed_screenshot,save_document_atomic
 
 
 # These are intentionally small record layouts, not generated prose. The image
@@ -89,22 +87,19 @@ def diagnostic_text(result):
 
 
 def build_compact_report(upload,workflow):
-    document=Document()
-    section=document.sections[0]
     landscape=all(r.get('language')=='sql' for r in workflow.results)
-    if landscape:section.orientation=WD_ORIENT.LANDSCAPE
-    section.page_width=Inches(11.7 if landscape else 8.5)
-    section.page_height=Inches(8.3 if landscape else 11)
-    section.left_margin=section.right_margin=Inches(.7)
+    document,source_is_docx=create_report_document(upload,landscape=landscape)
+    section=document.sections[-1]
     section.top_margin=section.bottom_margin=Inches(.6)
     languages={r.get('language') for r in workflow.results}
     font=LAB_STYLES.get(next(iter(languages)), ('Calibri', '', ''))[0] if len(languages)==1 else 'Calibri'
-    for name in ('Normal','Title','Heading 1','Heading 2'):
-        style=document.styles[name]
-        style.font.name=font;style.font.color.rgb=RGBColor(0,0,0)
-        for border in style._element.xpath('.//w:pBdr'):border.getparent().remove(border)
-    document.styles['Normal'].font.size=Pt(11)
-    document.styles['Heading 2'].font.size=Pt(13)
+    if not source_is_docx:
+        for name in ('Normal','Title','Heading 1','Heading 2'):
+            style=document.styles[name]
+            style.font.name=font;style.font.color.rgb=RGBColor(0,0,0)
+            for border in style._element.xpath('.//w:pBdr'):border.getparent().remove(border)
+        document.styles['Normal'].font.size=Pt(11)
+        document.styles['Heading 2'].font.size=Pt(13)
     for index,result in enumerate(workflow.results):
         question=next((line.strip() for line in result.get('question','').splitlines() if line.strip()),'')
         heading=document.add_paragraph(short_text(question or f"Program {result['id']}",240),style='Heading 2')
@@ -124,12 +119,34 @@ def build_compact_report(upload,workflow):
         if not paths and result.get('status')=='completed':
             raise ValueError('Cannot export a completed exercise without its required screenshots.')
         captions=result.get('screenshot_captions') or []
+        if result.get('language') == 'sql':
+            frames=(result.get('verification') or {}).get('evidence_frames') or []
+            by_path={f['path']:f for f in frames if f.get('path')}
+            complete_results={f.get('result_statement_index') for f in frames if f.get('result_complete')}
+            # Show the entire script from line 1 before query close-ups. The
+            # capture receipt determines each page's actual SELECT result.
+            ordered=sorted(enumerate(paths),key=lambda item: (
+                by_path.get(item[1],{}).get('kind') != 'source_preview',
+                (by_path.get(item[1],{}).get('source_ranges') or [(0,0)])[0][0]
+                if by_path.get(item[1],{}).get('kind') == 'source_preview'
+                else by_path.get(item[1],{}).get('statement_index', 0), item[0]))
+            ordered=[(i,p) for i,p in ordered if not (
+                by_path.get(p,{}).get('kind')=='database' and by_path.get(p,{}).get('statement_index') in complete_results)]
+            # Full-script pages retain CREATE/DROP/INSERT source. Only actual
+            # query frames supply table results; setup needs no extra output page.
+            captions=[captions[i] if i<len(captions) else by_path.get(p,{}).get('caption','') for i,p in ordered]
+            paths=[p for _,p in ordered]
         for image_index,path in enumerate(paths):
             if not Path(path).is_file():raise ValueError('A required screenshot is missing: '+str(path))
             caption=evidence_caption(result.get('language'),captions[image_index] if image_index<len(captions) else '')
+            if result.get('language') == 'colab' and not re.search(r'\b(?:simulated|unverified|failed|diagnostic)\b', caption, re.I):
+                # The notebook screenshots already contain their content; avoid
+                # redundant per-slice labels and fit two readable frames per page.
+                caption = None
             # Leave room on the first page for the heading, aim and caption.
             reserve = min(3.0, 1.7 + max(0, len(aim) - 140) / 300) if image_index == 0 else .8
-            embed_screenshot(document,path,caption=caption,reserved_height=reserve)
+            embed_screenshot(document,path,caption=caption,reserved_height=reserve,
+                             max_width=6.25 if result.get('language') == 'colab' else None)
     name=normalize_output_name(workflow.output_name or 'lab_report',max_length=80)+'.docx'
     directory=Path(settings.REPORT_DIR)/'workflows'/str(workflow.id)
     directory.mkdir(parents=True,exist_ok=True)

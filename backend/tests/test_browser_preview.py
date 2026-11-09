@@ -12,6 +12,25 @@ from app.services.screenshot_service import screenshot_service
 
 
 class BrowserPreviewTests(unittest.TestCase):
+    def test_blank_capture_uses_source_filename_in_frame(self):
+        async def capture(root):
+            screenshots=root/'screenshots'; screenshots.mkdir()
+            raw=screenshots/'raw.png'; Image.new('RGB',(400,200),'white').save(raw)
+            rendered=[]
+            async def fake_header(html,path,width,height):
+                rendered.append(html);Image.new('RGB',(width,height),'white').save(path)
+                return True,width,height
+            with patch.object(settings,'SCREENSHOT_DIR',str(screenshots)), \
+                 patch.object(screenshot_service,'_take_screenshot',side_effect=fake_header):
+                ok,_,_,_=await screenshot_service.generate_browser_preview_from_image(
+                    str(raw),'test','folder/my_lab.html',page_url='about:blank')
+            self.assertTrue(ok)
+            self.assertIn('my_lab.html',rendered[0])
+            self.assertNotIn('about:blank',rendered[0])
+            self.assertNotIn('folder/my_lab.html',rendered[0])
+        with tempfile.TemporaryDirectory(prefix='labmate-browser-name-') as folder:
+            asyncio.run(capture(Path(folder)))
+
     def test_offline_browser_rejects_broken_external_images(self):
         async def capture(root):
             with patch.object(settings, "SCREENSHOT_DIR", str(root / "screenshots")), \
@@ -35,7 +54,7 @@ class BrowserPreviewTests(unittest.TestCase):
                 self.assertTrue(execution.success, execution.error)
                 raw = next(iter(execution.screenshots.values()))
                 metadata = execution.verification['captures'][0]
-                self.assertEqual(metadata['url'], 'http://localhost/')
+                self.assertEqual(metadata['url'], 'http://localhost/index.html')
                 self.assertEqual(metadata['title'], 'Laboratory result')
                 headers=[]
                 for theme in ['edge', 'chrome']:

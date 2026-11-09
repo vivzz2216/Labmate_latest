@@ -37,7 +37,7 @@ def test_code_reports_have_only_question_images_and_short_captions(tmp_path,monk
     assert len(doc.inline_shapes)==len(results)
     assert not doc.tables
     texts=[p.text for p in doc.paragraphs if p.text]
-    assert texts==[text for r in results for text in (r['question'].splitlines()[0],'Captured source and output.')]
+    assert texts==['Original manual cover and long instructions']+[text for r in results for text in ((r['question'].splitlines()[0],) if r['language']=='colab' else (r['question'].splitlines()[0],'Captured source and output.'))]
     assert source.read_bytes()==before
     for caption in [p for p in doc.paragraphs if p.text=='Captured source and output.']:
         assert caption._p.getprevious().xpath('.//w:drawing'),'Caption must follow its image'
@@ -49,9 +49,40 @@ def test_sql_default_uses_the_same_compact_structure(tmp_path,monkeypatch):
         answer='Do not add a conclusion or query summary table.',screenshot_paths=[str(image)],screenshot_captions=['MySQL join results.'])
     path,_=flow.build_word_report(upload,SimpleNamespace(id=1,output_name='sql',results=[result]))
     doc=Document(path)
-    assert [p.text for p in doc.paragraphs if p.text]==['Experiment 1 Joins','MySQL join results.']
+    assert [p.text for p in doc.paragraphs if p.text]==['Original manual cover and long instructions','Experiment 1 Joins','MySQL join results.']
     assert not doc.tables
-    assert doc.sections[0].page_width>doc.sections[0].page_height
+    assert doc.sections[-1].page_width>doc.sections[-1].page_height
+
+
+def test_pdf_manual_pages_precede_compact_output_and_screenshot(tmp_path,monkeypatch):
+    monkeypatch.setattr(settings,'REPORT_DIR',str(tmp_path/'reports'))
+    source=tmp_path/'manual.pdf'
+    Image.new('RGB',(300,400),'white').save(source,'PDF',append_images=[Image.new('RGB',(300,400),'lightblue')],save_all=True)
+    evidence=tmp_path/'output.png';Image.new('RGB',(600,300),'navy').save(evidence)
+    upload=SimpleNamespace(file_path=str(source),file_type='pdf',original_filename=source.name)
+    result=dict(id=1,language='python',status='completed',question='Experiment 1: Print a result',
+        screenshot_paths=[str(evidence)],screenshot_captions=['Execution output'])
+    path,_=flow.build_word_report(upload,SimpleNamespace(id=4,mode='code_only',output_name='pdf_input',results=[result]))
+    doc=Document(path)
+    assert len(doc.inline_shapes)==3
+    for shape in list(doc.inline_shapes)[:2]:
+        assert shape.width < doc.sections[0].page_width
+        assert shape.height < doc.sections[0].page_height
+    texts=[p.text for p in doc.paragraphs if p.text]
+    assert texts[0]=='Uploaded input: manual.pdf'
+    assert texts[-2:]==['Experiment 1: Print a result','Execution output']
+
+
+def test_colab_report_uses_compact_unlabelled_screenshots(tmp_path, monkeypatch):
+    _,image,upload=fixture_report(tmp_path,monkeypatch)
+    result=dict(id=1,language='colab',status='completed',question='Experiment 1 Notebook',
+        screenshot_paths=[str(image),str(image)],
+        screenshot_captions=['Colab code — cell 1, lines 1–18','Colab execution output — cell 1, part 1'])
+    path,_=flow.build_word_report(upload,SimpleNamespace(id=1,output_name='notebook',results=[result]))
+    doc=Document(path)
+    assert len(doc.inline_shapes)==2
+    assert all(shape.width <= 6.25 * 914400 for shape in doc.inline_shapes)
+    assert not any('Colab-style' in p.text or 'lines 1–18' in p.text for p in doc.paragraphs)
 
 
 def test_failed_report_keeps_a_short_diagnostic(tmp_path,monkeypatch):
@@ -59,10 +90,11 @@ def test_failed_report_keeps_a_short_diagnostic(tmp_path,monkeypatch):
     result=dict(id=1,language='java',status='failed',question='Compile a Java class',error='Compiler rejected the source.',screenshot_paths=[])
     path,_=flow.build_word_report(upload,SimpleNamespace(id=1,output_name='failed',results=[result]))
     texts=[p.text for p in Document(path).paragraphs if p.text]
-    assert len(texts)==2
-    assert 'has not passed verification' in texts[1] and 'Compiler rejected' in texts[1]
-    assert 'Execution evidence unavailable.' in texts[1]
-    assert 'Browser evidence unavailable.' not in texts[1]
+    assert texts[0]=='Original manual cover and long instructions'
+    assert len(texts)==3
+    assert 'has not passed verification' in texts[2] and 'Compiler rejected' in texts[2]
+    assert 'Execution evidence unavailable.' in texts[2]
+    assert 'Browser evidence unavailable.' not in texts[2]
 
 
 @pytest.mark.parametrize(('language','caption','expected'),[
@@ -89,6 +121,7 @@ def test_report_includes_only_the_supplied_aim_without_extra_prose(tmp_path,monk
     path,_=flow.build_word_report(upload,SimpleNamespace(id=1,output_name='student',results=[result]))
     doc=Document(path)
     assert [p.text for p in doc.paragraphs if p.text]==[
+        'Original manual cover and long instructions',
         'Experiment 1 Inheritance','Aim: Demonstrate inheritance using a class.',
         'Output (recorded console)']
     assert len(doc.inline_shapes)==1

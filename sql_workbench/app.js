@@ -798,13 +798,13 @@
         const outputPanelEl = document.getElementById('output-panel');
         if (codeSectionEl && resultPaneEl && outputPanelEl) {
           if (frameConfig.layoutMode === 'code') {
-            codeSectionEl.style.height = '425px';
-            codeSectionEl.style.flex = '0 0 425px';
-            codeSectionEl.style.minHeight = '425px';
-            resultPaneEl.style.height = '167px';
-            resultPaneEl.style.flex = '0 0 167px';
-            outputPanelEl.style.height = '155px';
-            outputPanelEl.style.flex = '0 0 155px';
+            codeSectionEl.style.height = '365px';
+            codeSectionEl.style.flex = '0 0 365px';
+            codeSectionEl.style.minHeight = '365px';
+            resultPaneEl.style.height = '286px';
+            resultPaneEl.style.flex = '0 0 286px';
+            outputPanelEl.style.height = '96px';
+            outputPanelEl.style.flex = '0 0 96px';
           } else if (frameConfig.layoutMode === 'result') {
             codeSectionEl.style.height = '200px';
             codeSectionEl.style.flex = '0 0 200px';

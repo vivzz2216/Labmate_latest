@@ -31,6 +31,30 @@ class JupyterScreenshotTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('ValueError: sample', html)
         self.assertNotIn('IDLE Shell', html)
 
+    async def test_dark_and_light_themes_keep_code_and_output(self):
+        code = 'print("Hello")'
+        for theme in ('light', 'dark'):
+            html = await screenshot_service._render_template(
+                screenshot_service._highlight_code(code, 'jupyter'), 'Hello\n', 'jupyter',
+                filename='demo.py', source_code=code, view_mode='output', input_echoed=True, palette=theme)
+            self.assertIn(f'<body class="{theme}">', html)
+            self.assertIn('Hello', html)
+            self.assertIn('JupyterLab', html)
+        with self.assertRaises(ValidationError):
+            QuestionInput(id=1, text='Python', jupyter_theme='invalid')
+
+    async def test_dark_theme_applies_to_source_and_output_images(self):
+        from PIL import Image
+        with tempfile.TemporaryDirectory() as directory, patch.object(settings, 'SCREENSHOT_DIR', directory), \
+             patch('app.services.storage_service.storage_service.sync_file'):
+            for view in ('editor', 'output'):
+                ok, path, _, _ = await screenshot_service.generate_screenshot(
+                    'print(25)', '25\n', 'jupyter', job_id='theme-test', filename='demo.py',
+                    view_mode=view, presentation='ide_evidence', input_echoed=True, palette='dark')
+                self.assertTrue(ok, path)
+                with Image.open(path).convert('RGB') as image:
+                    self.assertEqual(image.getpixel((10, 10)), (53, 53, 53))
+
     async def test_long_source_is_complete_across_notebook_pages(self):
         code = '\n'.join(f'print("Line {i}")' for i in range(1, 72))
         with tempfile.TemporaryDirectory() as directory, patch.object(settings, 'SCREENSHOT_DIR', directory), \

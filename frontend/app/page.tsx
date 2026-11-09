@@ -7,19 +7,17 @@ import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
 import {
   ArrowRight,
-  FolderOpen,
-  Laptop,
   CheckCircle2,
   FileText,
   Terminal,
   Sparkles,
-  Database,
-  BookOpen,
 } from "lucide-react";
 import LabMateLogo from "@/components/brand/LabMateLogo";
 import { useAuth } from "@/contexts/BasicAuthContext";
 import styles from "./home.module.css";
 import PricingSection from '@/components/billing/PricingSection';
+import LabShowcase from '@/components/home/LabShowcase';
+import StudentReviews from '@/components/home/StudentReviews';
 
 const LoginModal = dynamic(() => import("@/components/auth/LoginModal"), {
   ssr: false,
@@ -65,7 +63,8 @@ export default function HomePage() {
             <div className={styles.navLinks}>
               <a href="#how-it-works" className={styles.navLink}>How It Works</a>
               <a href="#features" className={styles.navLink}>Features</a>
-              <a href="#runtimes" className={styles.navLink}>Supported Languages</a>
+              <a href="#labs" className={styles.navLink}>Labs &amp; templates</a>
+              <a href="#reviews" className={styles.navLink}>Reviews</a>
               <a href="#pricing" className={styles.navLink}>Pricing</a>
               <Link href="/workspace" className={styles.navLink}>Workspace</Link>
             </div>
@@ -128,52 +127,6 @@ export default function HomePage() {
         <p className={styles.heroDescription}>
           Transform raw lab manuals into tested code, execution evidence, and formatted Word reports.
         </p>
-
-        <div className={styles.heroCtas}>
-          <SpecularButton
-            href="/workspace"
-            size="md"
-            radius={9999}
-            tint="#ffffff"
-            tintOpacity={0.16}
-            textColor="#ffffff"
-            lineColor="#60a5fa"
-            baseColor="#2563eb"
-            intensity={1.2}
-            glow={1.2}
-            autoAnimate
-          >
-            <FolderOpen size={16} /> Open Student Workspace
-          </SpecularButton>
-          <SpecularButton
-            href="/dashboard"
-            size="md"
-            radius={9999}
-            tint="#ffffff"
-            tintOpacity={0.06}
-            textColor="#f4f4f5"
-            lineColor="#c084fc"
-            baseColor="#52525b"
-            intensity={1}
-            glow={0.8}
-          >
-            <Laptop size={16} /> Launch Lab Studio
-          </SpecularButton>
-          <SpecularButton
-            href="#how-it-works"
-            size="md"
-            radius={9999}
-            tint="#ffffff"
-            tintOpacity={0.04}
-            textColor="#d4d4d8"
-            lineColor="#ffffff"
-            baseColor="#3f3f46"
-            intensity={0.8}
-            glow={0.6}
-          >
-            <ArrowRight size={15} /> See the 2 steps
-          </SpecularButton>
-        </div>
 
         <div className={styles.metricHighlights}>
           <div className={styles.metricItem}>
@@ -263,20 +216,6 @@ export default function HomePage() {
               <path d="M7 16.5c.5.8 1.4 1.3 2.4 1.3 1.3 0 2.1-.8 2.1-2.4v-6.2H9.8v6.2c0 .6-.3.9-.8.9-.4 0-.7-.3-.9-.6l-1.1.8zm6.5 1.3c1.5 0 2.4-.7 2.8-1.5l-1.4-.8c-.3.5-.7.8-1.4.8-.8 0-1.4-.4-1.4-1.1 0-.8.6-1.1 1.7-1.4 1.6-.4 2.7-1 2.7-2.4 0-1.4-1.1-2.3-2.6-2.3-1.4 0-2.3.6-2.8 1.6l1.3.8c.3-.5.7-.9 1.4-.9.7 0 1.2.4 1.2.9 0 .6-.5.9-1.4 1.2-1.7.5-2.9 1-2.9 2.5 0 1.6 1.2 2.6 2.7 2.6z" fill="#000000"/>
             </svg>
             <span>WebDev</span>
-          </div>
-
-          {/* Linux Shell */}
-          <div className={styles.langItem} title="Linux Shell Environment">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M12 2C9.5 2 8 4 8 7c0 1.2.2 2.6.5 3.8C7.2 11.4 6 13 6 15c0 2.8 2.2 5 5 5h2c2.8 0 5-2.2 5-5 0-2-1.2-3.6-2.5-4.2.3-1.2.5-2.6.5-3.8 0-3-1.5-5-4-5z" fill="#FCC624"/>
-              <path d="M12 3c-1.8 0-3 1.5-3 4 0 1.2.3 2.5.6 3.6.4-.1.9-.2 1.4-.2.9 0 1.7.3 2.4.7.4-.1.8-.1 1.2-.1.3 0 .7.1 1 .2.3-1.1.6-2.4.6-3.6 0-2.5-1.2-4-3.2-4z" fill="#18181b"/>
-              <circle cx="10.5" cy="6.5" r="1" fill="#ffffff"/>
-              <circle cx="13.5" cy="6.5" r="1" fill="#ffffff"/>
-              <circle cx="10.7" cy="6.5" r=".5" fill="#000000"/>
-              <circle cx="13.7" cy="6.5" r=".5" fill="#000000"/>
-              <path d="M11 8.5c0-.3.4-.5 1-.5s1 .2 1 .5l-.3 1h-1.4L11 8.5z" fill="#E67E22"/>
-            </svg>
-            <span>Linux Shell</span>
           </div>
 
           {/* Execution runner */}
@@ -372,135 +311,32 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section id="upcoming-labs" aria-labelledby="upcoming-heading" className={styles.upcomingSection}>
-        <div className={styles.upcomingHeader}>
-          <h2 id="upcoming-heading">More labs are on the way</h2>
-          <p>Coming soon to LabMate.</p>
-        </div>
-        <ul className={styles.upcomingGrid}>
-          <li className={styles.upcomingCard}>
-            <div className={styles.upcomingCardTop}>
-              <Terminal size={24} className={styles.ubuntuIcon} aria-hidden="true" />
-              <span className={styles.comingSoon}>Coming soon</span>
-            </div>
-            <div className={styles.upcomingPreview}>
-              <Image
-                src="/images/ubuntu-lab-ide.png"
-                alt="Ubuntu desktop with the GNOME Terminal open"
-                fill
-                sizes="(max-width: 640px) 100vw, (max-width: 1184px) 33vw, 364px"
-                className={styles.upcomingPreviewImage}
-              />
-            </div>
-            <div><h3>Ubuntu Lab</h3><p>Linux commands &amp; shell scripting.</p></div>
-          </li>
-          <li className={styles.upcomingCard}>
-            <div className={styles.upcomingCardTop}>
-              <Database size={24} className={styles.sqlIcon} aria-hidden="true" />
-              <span className={styles.comingSoon}>Coming soon</span>
-            </div>
-            <div className={styles.upcomingPreview}>
-              <Image
-                src="/images/mysql-workbench-ide.jpg"
-                alt="MySQL Workbench showing the SQL editor and query result grid"
-                fill
-                sizes="(max-width: 640px) 100vw, (max-width: 1184px) 33vw, 364px"
-                className={styles.upcomingPreviewImage}
-              />
-            </div>
-            <div><h3>SQL Lab</h3><p>MySQL Workbench &amp; SQL exercises.</p></div>
-          </li>
-          <li className={styles.upcomingCard}>
-            <div className={styles.upcomingCardTop}>
-              <BookOpen size={24} className={styles.colabIcon} aria-hidden="true" />
-              <span className={styles.comingSoon}>Coming soon</span>
-            </div>
-            <div className={styles.upcomingPreview}>
-              <Image
-                src="/images/colab-notebook-ide.jpg"
-                alt="Google Colab notebook showing Python code and a line chart"
-                fill
-                sizes="(max-width: 640px) 100vw, (max-width: 1184px) 33vw, 364px"
-                className={styles.upcomingPreviewImage}
-              />
-            </div>
-            <div><h3>Google Colab Lab</h3><p>Python notebooks &amp; data experiments.</p></div>
-          </li>
-        </ul>
-        <details className={styles.previewCredits}>
-          <summary>Preview image credits</summary>
-          <p>These are example interfaces for upcoming labs.</p>
-          <ul>
-            <li>
-              <a href="https://commons.wikimedia.org/wiki/File:Ubuntu-terminal-Screenshot20181112.png" target="_blank" rel="noreferrer">Ubuntu Terminal — GNOME Project / Pk0001</a>
-              {" · "}<a href="https://www.gnu.org/licenses/old-licenses/gpl-2.0.html" target="_blank" rel="noreferrer">GPL 2 or later</a>.
-            </li>
-            <li>
-              <a href="https://commons.wikimedia.org/wiki/File:MySQL_Workbench_editor_screenshot.jpg" target="_blank" rel="noreferrer">MySQL Workbench — MySQL</a>
-              {" · "}<a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noreferrer">CC BY-SA 4.0</a>.
-            </li>
-            <li>
-              <a href="https://colab.research.google.com/notebooks/charts.ipynb" target="_blank" rel="noreferrer">Google Colab — Charts in Colaboratory</a>. Screenshot captured from Google&apos;s public example notebook.
-            </li>
-          </ul>
-        </details>
-      </section>
+      <LabShowcase />
+      <StudentReviews />
 
       <PricingSection />
 
       {/* ========================================================
-          CALL TO ACTION (With Dynamic Gradient DarkVeil Background)
+          CALL TO ACTION
           ======================================================== */}
-      <section className={styles.ctaSection}>
+      <section className={styles.ctaSection} aria-labelledby="cta-heading">
         <div className={styles.ctaCard}>
-          <div className={styles.ctaVeilWrap}>
-            <DarkVeil
-              hueShift={125}
-              speed={0.4}
-              noiseIntensity={0.02}
-              scanlineIntensity={0.08}
-              scanlineFrequency={0.003}
-              warpAmount={0.06}
-              resolutionScale={1}
-            />
+          <div className={styles.ctaVeilWrap} aria-hidden="true">
+            <DarkVeil hueShift={125} speed={0.4} noiseIntensity={0.02} scanlineIntensity={0.08} scanlineFrequency={0.003} warpAmount={0.06} />
             <div className={styles.ctaVeilOverlay} />
           </div>
-
           <div className={styles.ctaContent}>
-            <h2 className={styles.ctaHeading}>Ready to finish your lab record?</h2>
+            <h2 id="cta-heading" className={styles.ctaHeading}>Ready to finish your lab record?</h2>
             <p className={styles.ctaDescription}>
-              Upload your manual, start execution, and download your finished Word report. The code and screenshots are handled automatically.
+              Upload your manual, run real execution in isolated sandboxes, and download your finished Word report with code and captured screenshots.
             </p>
             <div className={styles.ctaActions}>
-              <SpecularButton
-                href="/workspace"
-                size="lg"
-                radius={9999}
-                tint="#ffffff"
-                tintOpacity={0.18}
-                textColor="#ffffff"
-                lineColor="#60a5fa"
-                baseColor="#2563eb"
-                intensity={1.3}
-                glow={1.3}
-                autoAnimate
-              >
-                Open Workspace <ArrowRight size={16} />
-              </SpecularButton>
-              <SpecularButton
-                href="/dashboard"
-                size="lg"
-                radius={9999}
-                tint="#ffffff"
-                tintOpacity={0.06}
-                textColor="#f4f4f5"
-                lineColor="#c084fc"
-                baseColor="#52525b"
-                intensity={1}
-                glow={0.9}
-              >
-                Open Lab Studio
-              </SpecularButton>
+              <Link href="/code-execution" className={styles.ctaPrimaryBtn}>
+                Upload a manual <ArrowRight size={16} aria-hidden="true" />
+              </Link>
+              <Link href="/workspace" className={styles.ctaSecondaryBtn}>
+                Go to workspace
+              </Link>
             </div>
           </div>
         </div>

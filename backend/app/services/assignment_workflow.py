@@ -781,7 +781,7 @@ async def _process_assignment(workflow_id: int):
                         if requires_interaction:
                             verification = {"required": True, "status": "failed", "tests": [],
                                             "error": "The required browser interaction could not be verified."}
-                    if not is_web_project and not success and not language_mismatch and evidence_plan["supported"] and not (actual_language=='ubuntu' and execution_stages.get('execution')=='passed') and (
+                    if not is_web_project and not success and not language_mismatch and evidence_plan["supported"] and execution_stages.get('capture') != 'unavailable' and not (actual_language=='ubuntu' and execution_stages.get('execution')=='passed') and (
                             bool(error) or bool(verification and (verification.get("error") or verification.get("failures")))):
                         for repair_attempt in range(1 if actual_language=='ubuntu' else 2):
                             record(workflow, db, "execute", progress,
@@ -861,7 +861,7 @@ async def _process_assignment(workflow_id: int):
                     sources,source_errors=([], []) if actual_language in {'sql','ubuntu'} or category=='notebook' else await capture_source_evidence(
                         project_files,code,src_filename,theme=theme,group=group,username=username,
                         language=source_language,screenshot_style=screenshot_style,
-                        requested_files=(project_config or {}).get('source_capture_files'), policy=planned.get('source_policy','selected'))
+                        requested_files=(project_config or {}).get('source_capture_files'), policy=planned.get('source_policy','selected'), jupyter_theme=question.get('jupyter_theme','light'))
                     source_errors.extend(browser_frame_errors)
                     candidates.extend(sources)
                     source_plan=source_capture_plan(project_files,code,src_filename,source_language,(project_config or {}).get('source_capture_files'),policy=planned.get('source_policy','selected'))
@@ -889,7 +889,7 @@ async def _process_assignment(workflow_id: int):
                             screenshot_style=screenshot_style, error=error if not success else "",
                             stdin_data=stdin_data, input_echoed=input_echoed, view_mode=capture_view,
                             presentation="ide_evidence" if actual_language in {"python", "java", "c", "cpp"} and not actual_http else "evidence", language=actual_language,
-                            palette="dark" if screenshot_style == "style_2" else "light",
+                            palette=question.get("jupyter_theme", "light") if theme == "jupyter" else "dark" if screenshot_style == "style_2" else "light",
                             evidence_kind="http" if actual_http else "terminal",
                         )
                         if ok:
@@ -1050,8 +1050,7 @@ def build_word_report(upload, workflow):
         document.add_heading("Laboratory Manual & Problem Statements", 0)
         document.add_paragraph(upload.original_filename)
         with pdfplumber.open(upload.file_path) as pdf:
-            pages_to_embed = [p for p in pdf.pages if len([l for l in (p.extract_text() or '').splitlines() if l.strip()]) > 2 and len((p.extract_text() or '').strip()) >= 80]
-            for page in (pages_to_embed or pdf.pages):
+            for page in pdf.pages:
                 image = page.to_image(resolution=130).original
                 buffer = io.BytesIO()
                 image.save(buffer, format="PNG")

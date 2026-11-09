@@ -112,6 +112,7 @@ export default function AssignmentPage() {
   const [language, setLanguage] = useState<LabLanguage>("auto");
   const [screenshotStyle, setScreenshotStyle] = useState<string>("style_1");
   const [colabTheme, setColabTheme] = useState<"light" | "dark">("dark");
+  const [jupyterTheme, setJupyterTheme] = useState<"light" | "dark">("light");
   const [pythonTemplate, setPythonTemplate] = useState<"idle" | "jupyter">("idle");
   const [browserTheme, setBrowserTheme] = useState<"edge" | "chrome">("edge");
   const [instructions, setInstructions] = useState("");
@@ -156,6 +157,7 @@ export default function AssignmentPage() {
     if (restoreFields) {
       setLanguage(data.language);
       setColabTheme(data.questions.find((question) => question.colab_theme)?.colab_theme || "dark");
+      setJupyterTheme(data.questions.find((question) => question.jupyter_theme)?.jupyter_theme || "light");
       setPythonTemplate(data.questions.find((question) => question.python_template)?.python_template || "idle");
       setBrowserTheme(data.questions.find((question) => question.browser_theme)?.browser_theme || "edge");
       setInstructions(data.instructions);
@@ -371,7 +373,7 @@ export default function AssignmentPage() {
 
             // Process with selected manualMode
             let runWf = await workflowApi.process(uploaded.id, {
-              questions: wf.questions.map((question) => ({ ...question, colab_theme: colabTheme, browser_theme: browserTheme, python_template: pythonTemplate })),
+              questions: wf.questions.map((question) => ({ ...question, colab_theme: colabTheme, browser_theme: browserTheme, python_template: pythonTemplate, jupyter_theme: jupyterTheme })),
               language: "auto",
               instructions: "",
               output_name: outputName(item.file.name),
@@ -482,10 +484,13 @@ export default function AssignmentPage() {
     setBusy(true);
     setError("");
     setPreview("");
+    if (typeof window !== "undefined" && window.innerWidth <= 1024) {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
     try {
       applyWorkflow(
         await workflowApi.process(upload.id, {
-          questions: questions.map((question) => ({ ...question, colab_theme: colabTheme, browser_theme: browserTheme, python_template: pythonTemplate })),
+          questions: questions.map((question) => ({ ...question, colab_theme: colabTheme, browser_theme: browserTheme, python_template: pythonTemplate, jupyter_theme: jupyterTheme })),
           language,
           instructions,
           output_name: sanitizeOutputName(filename || "lab_report"),
@@ -532,6 +537,9 @@ export default function AssignmentPage() {
     setWorkflow(null);
     setQuestions([]);
     setPreview("");
+    if (typeof window !== "undefined" && window.innerWidth <= 1024) {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
     setError("");
     router.replace("/code-execution");
   };
@@ -621,8 +629,8 @@ export default function AssignmentPage() {
           </div>
         </header>
 
-        <main className={styles.layout}>
-        <aside className={styles.setupPanel}>
+        <main className={`${styles.layout} ${workflow || isProcessingActive ? styles.layoutActiveWorkflow : ""}`}>
+        <aside className={styles.setupPanel} id="assignment-setup">
           <h2 className={styles.panelTitle}>Build your lab report</h2>
           <CreditStatus refreshKey={`${workflow?.status}-${workflow?.progress}`} />
           {language !== "sql" && (language !== "auto" || questions.length === 0 ||
@@ -885,6 +893,13 @@ export default function AssignmentPage() {
                     <option value="jupyter">Jupyter Notebook</option>
                   </select>
                   <p style={{fontSize: "12px", color: "#a1a1aa", marginTop: "8px"}}>Choose the look of your Python code and output screenshots.</p>
+                  {pythonTemplate === "jupyter" && <>
+                    <label className={styles.screenshotLabel} htmlFor="jupyter-theme">Jupyter theme</label>
+                    <select id="jupyter-theme" value={jupyterTheme} disabled={running || busy || batchProcessing}
+                      onChange={event => setJupyterTheme(event.target.value as "light" | "dark")}>
+                      <option value="light">Light</option><option value="dark">Dark</option>
+                    </select>
+                  </>}
                   {pythonTemplate === "idle" && <>
                   <label className={styles.screenshotLabel}>Python IDLE screenshot layout</label>
                   <select
@@ -1060,18 +1075,23 @@ export default function AssignmentPage() {
               />
 
               {complete && (
-                <button
-                  className={styles.downloadDoneBtn}
-                  onClick={download}
-                  disabled={downloading}
-                >
-                  {downloading ? (
-                    <Loader2 className={styles.spin} size={16} />
-                  ) : (
-                    <Download size={16} />
-                  )}
-                  Download Word Report (.docx)
-                </button>
+                <>
+                  <button
+                    className={styles.downloadDoneBtn}
+                    onClick={download}
+                    disabled={downloading}
+                  >
+                    {downloading ? (
+                      <Loader2 className={styles.spin} size={16} />
+                    ) : (
+                      <Download size={16} />
+                    )}
+                    Download Word Report (.docx)
+                  </button>
+                  <a href="#assignment-setup" className={styles.mobileJumpLink}>
+                    View assignment details ↓
+                  </a>
+                </>
               )}
 
               {failed && (

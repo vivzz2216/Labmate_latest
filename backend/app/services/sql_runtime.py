@@ -1175,6 +1175,16 @@ def verify_sql_exercise(objective: str, code: str, execution_result: dict[str, A
     from .sql_result_checks import independent_checks
     for check in independent_checks(statements):
         add_check(check['name'], check['passed'], check['detail'])
+    if re.search(r'\bGROUP\s+BY\b|\bcomplex\s+queries\b', objective, re.I):
+        from .sql_result_checks import practical_table_checks
+        for check in practical_table_checks(statements):
+            add_check(check['name'], check['passed'], check['detail'])
+        names = [s.get('statement','') for s in statements if re.match(r'^CREATE\s+DATABASE\b', s.get('statement',''), re.I)]
+        add_check('Experiment database selected', bool(names) and any(s.get('type') == 'USE' and s.get('success') for s in statements),
+                  'Create an experiment-related database and select it using USE before creating tables.')
+        if not re.search(r'\bmini[ -]?project\b', objective, re.I):
+            add_check('Experiment database name', not any(re.search(r'\bmini_project(?:_demo)?\b', n, re.I) for n in names),
+                      'Use an experiment-related name such as grouped_queries_lab instead of mini_project_demo.')
     add_check('Complete query output', not any(s.get('truncated') for s in statements),
               'All result rows fit the execution limits.' if not any(s.get('truncated') for s in statements) else 'A query output exceeded the capture limits. Reduce sample size before claiming complete evidence.')
     if re.search(r'\btriggers?\b', objective, re.I) and not re.search(r'\bviews?\b', objective, re.I):

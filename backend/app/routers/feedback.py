@@ -1,7 +1,9 @@
 from typing import Optional, Dict, Any, List
+import re
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from sqlalchemy import func
+from sqlalchemy.orm import Session, joinedload
 
 from ..database import get_db
 from ..models import StudentFeedback
@@ -11,6 +13,31 @@ from ..models import User
 
 
 router = APIRouter()
+
+
+def anonymous_review_message(message, name=None):
+    text = message or ''
+    if name and len(name.strip().split()) > 1:
+        text = re.sub(r'(?<!\w)' + re.escape(name.strip()) + r'(?!\w)', '[student]', text, flags=re.I)
+    text = re.sub(r'[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}', '[email removed]', text, flags=re.I)
+    text = re.sub(r'(?<!\w)(?:\+?\d[\d ()-]{7,}\d)(?!\w)',
+                  lambda match: '[phone removed]' if len(re.sub(r'\D', '', match[0])) >= 10 else match[0], text)
+    return text[:1200]
+
+
+@router.get('/feedback/reviews')
+def public_reviews(response: Response, limit: int = Query(6, ge=1, le=12),
+                   offset: int = Query(0, ge=0, le=1000000), db: Session = Depends(get_db)):
+    """Public, anonymous display of rated feedback; unrated support feedback stays private."""
+    rated = db.query(StudentFeedback).filter(StudentFeedback.rating.between(1, 5),
+                                            func.length(func.trim(StudentFeedback.message)) > 0)
+    count, average = rated.with_entities(func.count(StudentFeedback.id), func.avg(StudentFeedback.rating)).one()
+    rows = rated.options(joinedload(StudentFeedback.user).load_only(User.name)).order_by(StudentFeedback.created_at.desc(), StudentFeedback.id.desc()).offset(offset).limit(limit).all()
+    response.headers['Cache-Control'] = 'public, max-age=60'
+    return {'total': count, 'average_rating': round(float(average), 1) if average is not None else None,
+            'reviews': [{'id': row.id, 'rating': row.rating,
+                         'message': anonymous_review_message(row.message, row.user.name if row.user else None),
+                         'created_at': row.created_at.isoformat() if row.created_at else None} for row in rows]}
 
 
 @router.post("/feedback")

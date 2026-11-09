@@ -524,7 +524,7 @@ class RuntimeEngine:
                 source.write_text(code, encoding="utf-8")
                 return await run_process([settings.NODE_COMMAND, source], directory, stdin or "", resource_limits={"max_memory_bytes": 0})
             return await self._web(code, language, directory, project_files, routes,
-                                   browser_tests=browser_tests, interaction_is_required=interaction_is_required, api_tests=api_tests)
+                                   browser_tests=browser_tests, interaction_is_required=interaction_is_required, api_tests=api_tests, filename=filename)
 
     async def _install_packages(self, language, directory):
         common_node_packages = {
@@ -603,7 +603,7 @@ class RuntimeEngine:
         result.pop("failed_step", None)
         result["status"] = "passed"
 
-    async def _capture_html(self, code, browser_tests, interaction_is_required, page_url=None):
+    async def _capture_html(self, code, browser_tests, interaction_is_required, page_url=None, filename=None):
         from .isolated_runtime import require_worker
         require_worker()
         started = time.perf_counter()
@@ -680,8 +680,13 @@ class RuntimeEngine:
                                         meta='<meta http-equiv="Content-Security-Policy" content="'+BROWSER_CSP+'">'
                                         insertion=re.search(r'<head(?:\s[^>]*)?>|<!doctype[^>]*>',code,re.I)
                                         rendered=code[:insertion.end()]+meta+code[insertion.end():] if insertion else meta+code
-                                        await page.route('http://localhost/', lambda route: route.fulfill(status=200, content_type='text/html', body=rendered))
-                                        await page.goto('http://localhost/', wait_until="load", timeout=5000)
+                                        from urllib.parse import quote
+                                        name = Path(str(filename or 'index.html').replace('\\', '/')).name
+                                        if not name.lower().endswith(('.html', '.htm')):
+                                            name = 'index.html'
+                                        local_url = 'http://localhost/' + quote(name)
+                                        await page.route(local_url, lambda route: route.fulfill(status=200, content_type='text/html', body=rendered))
+                                        await page.goto(local_url, wait_until="load", timeout=5000)
                                     if not required or v2 and not ui_actions:
                                         controls = await page.locator(
                                             'button:visible,input:not([type="hidden"]):visible,textarea:visible,'
@@ -792,9 +797,9 @@ class RuntimeEngine:
         return RuntimeResult(not errors, "\n".join(output), "\n".join(errors), 1 if errors else 0,
                              screenshots=screenshots, verification=verification, timings=metrics)
 
-    async def _capture(self, url=None, code=None, routes=None, browser_tests=None, interaction_is_required=False):
+    async def _capture(self, url=None, code=None, routes=None, browser_tests=None, interaction_is_required=False, filename=None):
         if code is not None:
-            return await self._capture_html(code, browser_tests, interaction_is_required)
+            return await self._capture_html(code, browser_tests, interaction_is_required, filename=filename)
         aggregate = RuntimeResult(True, verification={"required": False, "status": "not_required", "tests": []})
         for index, path in enumerate((routes or ["/"])[:10]):
             if not isinstance(path, str) or not path.startswith("/") or path.startswith("//") or "\\" in path:
@@ -865,7 +870,7 @@ class RuntimeEngine:
                                  "status": "passed" if success else "failed", "tests": results})
 
     async def _web(self, code, language, directory, project_files, routes, browser_tests=None,
-                   interaction_is_required=False, api_tests=None):
+                   interaction_is_required=False, api_tests=None, filename=None):
         if language == "html":
             if project_files:
                 try:
@@ -889,7 +894,7 @@ class RuntimeEngine:
                     server.server_close()
                     await task
             return await self._capture(code=code, browser_tests=browser_tests,
-                                       interaction_is_required=interaction_is_required)
+                                       interaction_is_required=interaction_is_required, filename=filename)
         error = await self._install_packages(language, directory)
         if error:
             return RuntimeResult(False, error=error, exit_code=127)

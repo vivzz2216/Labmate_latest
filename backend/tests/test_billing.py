@@ -322,21 +322,19 @@ def test_owner_payment_check_is_hidden_and_rejects_regular_users(env):
     env.gateway.assert_not_called()
 
 
-def test_owner_payment_check_requires_live_mode_and_charges_one_rupee(env, monkeypatch):
+def test_owner_payment_check_is_disabled_for_admin(env, monkeypatch):
     monkeypatch.setattr(settings, 'ADMIN_USERID', 'buyer@example.test')
     monkeypatch.setattr(settings, 'ADMIN_PASSWORD', 'fixture-owner-password')
     pack = env.client.get('/api/billing/plans/owner-check')
-    assert pack.status_code == 200 and pack.json()['amount'] == 100
+    assert pack.status_code == 404
     data = {'pack_id': 'owner-payment-check', 'request_key': str(uuid.uuid4())}
-    assert env.client.post('/api/billing/orders', json=data).status_code == 503
+    assert env.client.post('/api/billing/orders', json=data).status_code == 404
     env.gateway.assert_not_called()
     monkeypatch.setattr(settings, 'RAZORPAY_MODE', 'live')
     monkeypatch.setattr(settings, 'RAZORPAY_KEY_ID', 'rzp_live_fixture')
-    env.gateway.return_value = {'id': 'order_ownercheck', 'amount': 100, 'currency': 'INR'}
     result = env.client.post('/api/billing/orders', json=data)
-    assert result.status_code == 200, result.text
-    assert result.json()['amount'] == 100 and result.json()['credits'] == 1
-    assert env.gateway.call_args.kwargs['payload']['amount'] == 100
+    assert result.status_code == 404
+    env.gateway.assert_not_called()
 
 
 def enable_public_payment_check(monkeypatch):
@@ -351,24 +349,24 @@ def test_public_payment_check_switch_and_regular_account(env, monkeypatch):
     assert env.client.post('/api/billing/orders', json=data).status_code == 404
     assert all(p['id'] != 'payment-check' for p in env.client.get('/api/billing/plans').json()['packs'])
     enable_public_payment_check(monkeypatch)
-    monkeypatch.setattr(settings, 'EXECUTION_ALLOWED_EMAILS', 'invited@example.test')
-    pack = next(p for p in env.client.get('/api/billing/plans').json()['packs'] if p['id'] == 'payment-check')
-    assert pack['amount'] == 100 and pack['credits'] == 1
-    env.gateway.return_value = {'id': 'order_fixture', 'amount': 100, 'currency': 'INR'}
-    assert env.client.post('/api/billing/orders', json={**data, 'amount': 1}).status_code == 422
-    result = env.client.post('/api/billing/orders', json=data)
-    assert result.status_code == 200, result.text
-    assert result.json()['amount'] == 100
-    assert env.client.post('/api/billing/orders', json=data).json()['id'] == result.json()['id']
-    assert env.client.post('/api/billing/orders', json={**data, 'pack_id': 'quick-lab'}).status_code == 403
-    pid = result.json()['id']
+    assert all(p['id'] != 'payment-check' for p in env.client.get('/api/billing/plans').json()['packs'])
+    assert env.client.post('/api/billing/orders', json=data).status_code == 404
+    env.gateway.assert_not_called()
+
+
+def test_existing_one_rupee_order_can_still_be_verified(env):
+    pid = purchase(env)
+    with env.factory() as db:
+        row = db.get(PackPurchase, pid)
+        row.pack_id = 'payment-check'
+        row.amount = 100
+        row.credits = 1
+        db.commit()
     env.gateway.return_value = payment(amount=100)
-    for _ in range(2):
-        assert env.client.post('/api/billing/orders/'+pid+'/verify', json=signed()).json()['status'] == 'paid'
+    result = env.client.post('/api/billing/orders/'+pid+'/verify', json=signed())
+    assert result.status_code == 200, result.text
+    assert result.json()['status'] == 'paid'
     assert credits(env)['available'] == 4
-    env.app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=2, email='other@example.test')
-    assert env.client.get('/api/billing/orders/'+pid).status_code == 404
-    assert credits(env)['available'] == 3
 
 
 @pytest.mark.parametrize('change', [{'captured': False}, {'id': 'pay_other'}, {'amount_refunded': True}])

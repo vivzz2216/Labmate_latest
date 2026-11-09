@@ -67,7 +67,7 @@ def excerpt_ranges(text):
     return [[1,20],[count-19,count]] if count>48 else [[1,count]] if count else []
 
 
-async def capture_source_evidence(project_files,code,filename,*,theme,group,username,language,screenshot_style,requested_files=None,policy='selected'):
+async def capture_source_evidence(project_files,code,filename,*,theme,group,username,language,screenshot_style,requested_files=None,policy='selected',jupyter_theme='light'):
     plan=source_capture_plan(project_files,code,filename,language,requested_files,policy=policy)
     files=plan['files']
     candidates,failures=[],[]
@@ -85,7 +85,7 @@ async def capture_source_evidence(project_files,code,filename,*,theme,group,user
             ok,path,width,height=await screenshot_service.generate_screenshot(
                 text,'','notepad' if language=='java_gui' else theme,group,username,name,view_mode='editor',presentation='vscode_evidence' if web else 'ide_evidence' if ide else 'evidence',
                 language=language,screenshot_style=screenshot_style,
-                palette='dark' if web or screenshot_style=='style_2' else 'light',
+                palette=jupyter_theme if theme=='jupyter' else 'dark' if web or screenshot_style=='style_2' else 'light',
                 source_ranges=ranges if web or policy=='complete' else None,project_files=project_files)
             if not ok:
                 failures.append(f'Source screenshot could not be captured completely: {name}'+(f', page {page_index}' if policy=='complete' else ''))

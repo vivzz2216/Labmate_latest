@@ -33,6 +33,26 @@ def test_report_uses_receipt_counts_not_stale_model_description(tmp_path, monkey
     assert not doc.element.xpath('.//w:br[@w:type="page"]')
 
 
+def test_sql_report_preserves_uploaded_word_manual_before_workbench_evidence(tmp_path,monkeypatch):
+    monkeypatch.setattr(settings,'REPORT_DIR',str(tmp_path/'reports'))
+    source_path=tmp_path/'manual.docx'
+    source_doc=Document();source_doc.add_paragraph('Original SQL laboratory manual')
+    source_table=source_doc.add_table(rows=1,cols=1);source_table.cell(0,0).text='Original query requirement'
+    source_doc.save(source_path)
+    image=tmp_path/'capture.png';Image.new('RGB',(900,520),'white').save(image)
+    upload=SimpleNamespace(file_type='docx',file_path=str(source_path),original_filename='SQL_Exp_8.docx')
+    result={'id':8,'language':'sql','status':'completed','question':'Experiment 8: Joins',
+        'verification':{'verified':True,'engine':'MySQL 8','statements':[],
+            'evidence_frames':[{'path':str(image),'kind':'database','caption':'SELECT result'}]}}
+    path,_=clean_report(upload,SimpleNamespace(results=[result],output_name='sql',id=9),result['question'])
+    report=Document(path)
+    paragraphs='\n'.join(p.text for p in report.paragraphs)
+    assert 'Original SQL laboratory manual' in paragraphs
+    assert 'Original query requirement' in '\n'.join(c.text for t in report.tables for row in t.rows for c in row.cells)
+    assert len(report.inline_shapes)==1
+    assert report.sections[-1].page_width>report.sections[-1].page_height
+
+
 def test_join_verification_compares_values_and_duplicates():
     tables={'Orders':{'rows':[{'id':1,'emp':1},{'id':2,'emp':1}]},'Employees':{'rows':[{'id':1,'name':'A'},{'id':2,'name':'B'}]}}
     step={'index':1,'success':True,'statement':'SELECT o.id, e.name FROM Orders o RIGHT JOIN Employees e ON o.emp=e.id',

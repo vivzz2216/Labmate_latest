@@ -53,9 +53,7 @@ def plans():
 
 @router.get('/plans/owner-check')
 def owner_payment_check(user: User = Depends(get_current_user)):
-    if not is_admin_user(user):
-        raise HTTPException(404, 'Payment pack not found.')
-    return {**billing.owner_payment_check_pack(), 'currency': 'INR'}
+    raise HTTPException(404, 'Payment pack not found.')
 
 
 @router.get('/wallet')

@@ -1,6 +1,37 @@
 """Independent checks over stored input tables, never model-written row counts."""
 import re
 from collections import Counter
+import json
+
+
+def practical_table_checks(statements):
+    """Require a full input-table result after population, before topic queries."""
+    inserts = {}
+    for step in statements:
+        if step.get('success') and step.get('type') == 'INSERT':
+            inserts[(step.get('active_schema', 'lab'), step.get('tableName', '').lower())] = step
+    checks = []
+    for (schema, table), inserted in inserts.items():
+        if not table:
+            continue
+        displayed = False
+        for step in statements:
+            if step['index'] <= inserted['index'] or not step.get('success'):
+                continue
+            match = re.fullmatch(r'SELECT\s+\*\s+FROM\s+(?:(`?\w+`?)\.)?`?(\w+)`?\s*(?:ORDER\s+BY\s+[\w`, .]+)?\s*;?', step.get('statement', '').strip(), re.I)
+            if step.get('type') == 'SELECT' and not match:
+                break
+            if not match or match.group(2).lower() != table or (match.group(1) or step.get('active_schema', 'lab')).strip('`') != schema:
+                continue
+            snapshot = (inserted.get('schemas_snapshot') or {}).get(schema, {}).get('tables', {})
+            saved = next((v.get('rows', []) for k,v in snapshot.items() if k.lower() == table), [])
+            encode = lambda rows: Counter(json.dumps(r, sort_keys=True, default=str) for r in rows)
+            displayed = bool(saved) and not step.get('truncated') and encode(saved) == encode(step.get('rows', []))
+            if displayed:
+                break
+        checks.append({'name': f'Input table {table} displayed completely', 'passed': displayed,
+                       'detail': 'All inserted records are visible.' if displayed else f'After inserting records, run SELECT * FROM `{table}`; without WHERE or LIMIT, before experiment queries.'})
+    return checks
 
 
 def join_expected(statement, tables, mode=None):

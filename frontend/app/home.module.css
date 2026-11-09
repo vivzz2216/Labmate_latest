@@ -53,7 +53,7 @@
   gap: 32px;
 }
 
-@media (min-width: 900px) {
+@media (min-width: 1100px) {
   .navLinks {
     display: flex;
   }
@@ -89,6 +89,7 @@
   cursor: pointer;
   background: transparent;
   border: none;
+  white-space: nowrap;
 }
 
 .loginTextLink:hover {
@@ -282,7 +283,7 @@
   font-family: var(--font-heading);
   font-size: clamp(40px, 6.4vw, 86px);
   font-weight: 700;
-  letter-spacing: -0.045em;
+  letter-spacing: -0.035em;
   line-height: 1.04;
   margin: 0 auto 24px auto;
   max-width: 1080px;
@@ -337,6 +338,25 @@
 
 .metricDot {
   color: #52525b;
+}
+
+@media (max-width: 1099px) {
+  .metricHighlights { gap: 16px 24px; }
+  .metricDot { display: none; }
+}
+
+@media (max-width: 640px) {
+  .navContainer { padding: 0 16px; }
+  .navActions { gap: 4px; }
+  .navActions .pillBtnPrimary { padding: 10px 12px; }
+  .navActions .loginTextLink { padding: 8px; }
+  .metricHighlights { flex-direction: column; gap: 14px; }
+}
+
+@media (max-width: 360px) {
+  .navActions .pillBtnPrimary { padding: 10px 9px; font-size: 12px; }
+  .navActions .pillBtnPrimary svg { display: none; }
+  .navActions .loginTextLink { padding: 8px 4px; font-size: 12px; }
 }
 
 /* Hero Media Showcase Frame (NO Terminal) */
@@ -810,24 +830,21 @@
 }
 
 /* ========================================================
-   CALL TO ACTION (With Dynamic Gradient Veil)
+   CALL TO ACTION
    ======================================================== */
 .ctaSection {
-  max-width: 1440px;
-  margin: 0 auto 140px auto;
-  padding: 0 32px;
+  max-width: 1320px;
+  margin: 64px auto 96px auto;
+  padding: 0 40px;
   position: relative;
   z-index: 10;
 }
 
 .ctaCard {
   position: relative;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 32px;
-  padding: 80px 48px;
-  min-height: 420px;
-  box-shadow: 0 40px 100px rgba(0, 0, 0, 0.9), 0 0 100px rgba(70, 90, 50, 0.15);
-  background: #060807;
+  border-radius: 24px;
+  padding: 64px 48px;
+  background: #0b1c16;
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -837,47 +854,52 @@
 .ctaVeilWrap {
   position: absolute;
   inset: 0;
-  width: 100%;
-  height: 100%;
   overflow: hidden;
   pointer-events: none;
-  z-index: 0;
-  border-radius: 32px;
-  background: radial-gradient(ellipse at 30% 25%, #283c5a 0%, transparent 55%), radial-gradient(ellipse at 75% 70%, #322547 0%, #080b13 70%);
+  background: radial-gradient(ellipse at 30% 60%, #1b5239 0%, #103526 38%, #081c15 100%);
 }
 
 .ctaVeilOverlay {
   position: absolute;
   inset: 0;
-  width: 100%;
-  height: 100%;
-  background: radial-gradient(circle at 50% 50%, rgba(6, 8, 7, 0.45) 0%, rgba(4, 5, 5, 0.88) 85%);
-  pointer-events: none;
-  z-index: 1;
+  background: rgba(3, 14, 10, 0.48);
 }
 
 .ctaContent {
   position: relative;
   z-index: 2;
   text-align: center;
-  max-width: 760px;
+  max-width: 680px;
   margin: 0 auto;
+}
+
+.ctaBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #d4a347;
+  background: rgba(212, 163, 71, 0.12);
+  padding: 6px 14px;
+  border-radius: 20px;
+  margin-bottom: 20px;
 }
 
 .ctaHeading {
   font-family: var(--font-heading);
-  font-size: clamp(32px, 4vw, 52px);
+  font-size: clamp(32px, 3.8vw, 48px);
   font-weight: 700;
   letter-spacing: -0.03em;
   color: #ffffff;
-  margin-bottom: 18px;
+  margin-bottom: 16px;
   line-height: 1.15;
 }
 
 .ctaDescription {
-  font-size: 16.5px;
-  color: #d4d4d8;
-  max-width: 640px;
+  font-size: 16px;
+  color: #a1a1aa;
+  max-width: 580px;
   margin: 0 auto 36px auto;
   line-height: 1.6;
 }
@@ -888,6 +910,62 @@
   justify-content: center;
   gap: 16px;
   flex-wrap: wrap;
+}
+
+.ctaPrimaryBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #0c0d12;
+  background: #f4f4f6;
+  padding: 14px 28px;
+  border-radius: 12px;
+  text-decoration: none;
+  transition: background 160ms ease, transform 160ms ease;
+}
+
+.ctaPrimaryBtn:hover {
+  background: #e4e4e7;
+  transform: translateY(-1px);
+}
+
+.ctaSecondaryBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 500;
+  color: #dedee3;
+  background: #1c1d25;
+  padding: 14px 26px;
+  border-radius: 12px;
+  text-decoration: none;
+  transition: background 160ms ease;
+}
+
+.ctaSecondaryBtn:hover {
+  background: #272833;
+}
+
+@media (max-width: 768px) {
+  .ctaSection {
+    padding: 0 20px;
+    margin: 40px auto 64px auto;
+  }
+  .ctaCard {
+    padding: 48px 24px;
+  }
+  .ctaActions {
+    flex-direction: column;
+    width: 100%;
+  }
+  .ctaPrimaryBtn,
+  .ctaSecondaryBtn {
+    width: 100%;
+    justify-content: center;
+  }
 }
 
 /* Minimalist Runway Footer */
@@ -960,4 +1038,17 @@
   color: #52525b;
   flex-wrap: wrap;
   gap: 16px;
+}
+
+/* Homepage layout on compact screens. */
+@media (max-width: 700px) {
+  .heroSection { padding-top: 112px; padding-bottom: 8px; }
+  .heroHeading { font-size: clamp(36px, 8.7vw, 56px); line-height: 1.08; }
+  .heroDescription { margin-bottom: 30px; font-size: 16px; }
+  .metricHighlights { margin-bottom: 32px; align-items: flex-start; text-align: left; max-width: 310px; margin-inline: auto; font-size: 10px; }
+  .heroMediaSection { padding-inline: 16px; margin-bottom: 64px; }
+  .heroMediaCard { border-radius: 14px; }
+  .langTickerSection { margin-bottom: 64px; padding-inline: 20px; }
+  .footer { padding: 52px 20px 30px; }
+  .footerContainer { gap: 30px; margin-bottom: 36px; }
 }
