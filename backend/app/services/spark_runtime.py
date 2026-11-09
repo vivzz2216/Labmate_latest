@@ -41,6 +41,21 @@ finally:
 '''
 
 
+def clean_spark_stdout(text):
+    lines = []
+    skipping = False
+    for line in (text or '').splitlines():
+        if line.startswith('ERROR StatusConsoleListener'):
+            skipping = True
+            continue
+        if skipping:
+            if line.startswith((' ', '\t', 'Caused by:')):
+                continue
+            skipping = False
+        lines.append(line)
+    return '\n'.join(lines) + ('\n' if (text or '').endswith('\n') and lines else '')
+
+
 async def capture_spark(code, datasets=None, output_path=None, **metadata):
     from .isolated_runtime import worker_context
     from .runtime_engine import RuntimeResult, run_process
@@ -70,12 +85,13 @@ async def capture_spark(code, datasets=None, output_path=None, **metadata):
             runner = directory/'run_spark.py'; runner.write_text(RUNNER, encoding='utf-8')
             java = next(iter(sorted(Path('/usr/lib/jvm').glob('java-17-openjdk-*'))), None)
             extras = {'SPARK_LOCAL_IP':'127.0.0.1', 'PYSPARK_PYTHON':sys.executable,
-                'PYSPARK_SUBMIT_ARGS':'--driver-memory 512m --driver-java-options "-XX:ActiveProcessorCount=1" pyspark-shell',
+                'PYSPARK_SUBMIT_ARGS':'--driver-memory 512m --driver-java-options "-XX:ActiveProcessorCount=1 -Dlog4j2.statusLoggerLevel=OFF" pyspark-shell',
                 'SPARK_LOCAL_DIRS':str(directory/'spark-tmp')}
             if java: extras['JAVA_HOME'] = str(java)
             result = await run_process([sys.executable, '-I', str(runner), str(user_file)], directory,
                 timeout=90, extras=extras, resource_limits={'max_memory_bytes':0,
                     'max_cpu_seconds':90, 'max_procs':160})
+            result.output = clean_spark_stdout(result.output)
             receipt = [{'type':'code','code':source, 'stdout':result.output,
                 'error':result.error if not result.success else None, 'execCount':1}]
             target = Path(output_path) if output_path else Path(settings.SCREENSHOT_DIR)/('spark_'+uuid.uuid4().hex+'.png')

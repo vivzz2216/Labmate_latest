@@ -383,6 +383,8 @@ async def execute_solution(code, language, question, group_id, username, stdin_d
     if (project_config or {}).get('project_type')=='flask':
         from pathlib import PurePosixPath
         validate_generated_code(code,language,capability='flask',local_modules={PurePosixPath(n).stem for n in project_config['project_files'] if n.endswith('.py')})
+    elif language == 'python' and re.search(r'\bpyspark\b', code + '\n' + (question or ''), re.I):
+        validate_generated_code(code, language, capability='spark')
     else:validate_generated_code(code, language)
     success, output, errors, _, files = await executor_service.execute_code(
         code, language, filename, question, stdin_data=stdin_data,
@@ -649,7 +651,9 @@ async def _process_assignment(workflow_id: int):
                             )
                         else:
                             code_instruction += "\n8. Return browser_tests as an empty array for non-browser assignments."
-                        if language == 'python':
+                        if language == 'python' and re.search(r'\bpyspark\b', question['text'] + '\n' + (workflow.instructions or ''), re.I):
+                            code_instruction += '\nPYSPARK RUNTIME: Return Python source using pyspark (SparkSession / SparkContext). Do not import sys, os, subprocess or pathlib; these modules are unavailable in the restricted runner. Use every library explicitly required by the question; do not silently replace PySpark with another library.'
+                        elif language == 'python':
                             code_instruction += '\nPYTHON RUNTIME: Read standard input using input(), collecting lines or tokens as needed. Do not import sys, os, subprocess or pathlib; these modules are unavailable in the restricted runner. Algorithm helpers such as heapq, collections, itertools, functools, bisect and math are supported. Preserve the required input/output format.'
                         elif language=='sql':
                             from .sql_instructions import sql_instructions
@@ -732,7 +736,7 @@ async def _process_assignment(workflow_id: int):
                     evidence_plan['category'] = 'react'
                     evidence_plan['requirements'] = [{**r,'evidence':'browser'} if r['id']=='execution' else r for r in evidence_plan['requirements']]
                     evidence_plan['requirements'] += [{'id': 'backend_api', 'description': 'Captured backend HTTP requests and responses', 'evidence': 'http'}]
-                language_mismatch = actual_language != language
+                language_mismatch = actual_language != language and not ({actual_language, language} <= {'python', 'colab'} and evidence_plan['category'] == 'notebook')
                 screenshots = []
                 screenshot_captions = None
                 output, error, success = "", "", True
