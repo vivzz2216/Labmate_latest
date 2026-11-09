@@ -531,6 +531,9 @@ async def capture_notebook(code, datasets=None, output_path=None, **metadata):
         from .runtime_engine import runtime_engine
         config = dict(metadata, datasets=datasets, colab_theme=metadata.get('theme', 'dark'))
         return await runtime_engine.execute(code, 'colab', filename=metadata.get('source_filename', 'notebook.py'), project_config=config)
+    if re.search(r'\bpyspark\b', code, re.I):
+        from .spark_runtime import capture_spark
+        return await capture_spark(code, datasets=datasets, output_path=output_path, **metadata)
     from .colab_pipeline import capture_colab_evidence
     from .runtime_engine import RuntimeResult
 

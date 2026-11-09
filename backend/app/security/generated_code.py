@@ -11,6 +11,7 @@ def validate_generated_code(code: str, language: str, capability=None, local_mod
         tree = ast.parse(code)
         safe_modules = {"math", "random", "statistics", "decimal", "fractions", "collections", "itertools", "functools", "operator", "string", "re", "json", "csv", "datetime", "copy", "heapq", "bisect", "array", "typing", "dataclasses", "enum", "abc"}
         if capability=='flask':safe_modules.update({'flask','markupsafe',*local_modules})
+        if capability=='spark':safe_modules.add('pyspark')
         for node in ast.walk(tree):
             if capability=='flask':
                 if isinstance(node,ast.Call) and isinstance(node.func,ast.Attribute) and node.func.attr in {'send_file','send_from_directory','open_resource','open_instance_resource','from_pyfile'}:

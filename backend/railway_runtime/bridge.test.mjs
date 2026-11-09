@@ -1,9 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {run,fetchReadRetry} from './bridge.mjs';
+import {run,fetchReadRetry,template} from './bridge.mjs';
 
 process.env.RAILWAY_API_TOKEN='test-token-must-never-enter-vm';
 process.env.RAILWAY_ENVIRONMENT_ID='test-environment';
+
+test('Spark dependencies are installed only for Spark jobs',()=>{
+  for(const spark of [false,true]) {
+    const commands=[];const recipe={run(command){commands.push(command);return this}};
+    template({template(){return recipe}},Buffer.from('deps'),spark);
+    assert.equal(commands.some(c=>c.includes('pyspark==3.5.7')),spark);
+  }
+});
 
 test('network retries are bounded and only apply to read queries',async()=>{
   let calls=0;

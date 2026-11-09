@@ -3,6 +3,7 @@ import ast
 import re
 
 LIBRARIES = {
+    'pyspark': r'pyspark',
     'numpy': r'numpy', 'pandas': r'pandas', 'sklearn': r'scikit[ -]?learn|sklearn',
     'scipy': r'scipy', 'matplotlib': r'matplotlib', 'seaborn': r'seaborn',
     'nltk': r'nltk', 'skfuzzy': r'scikit[ -]?fuzzy|skfuzzy', 'pgmpy': r'pgmpy',
