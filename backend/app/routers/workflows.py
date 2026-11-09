@@ -38,6 +38,7 @@ class QuestionInput(BaseModel):
     datasets: dict[str,str] = Field(default_factory=dict,max_length=20)
     colab_theme: Literal["light", "dark"] = "dark"
     browser_theme: Literal["edge", "chrome"] = "edge"
+    python_template: Literal["idle", "jupyter"] = "idle"
 
 
 class ProcessInput(BaseModel):
@@ -331,6 +332,7 @@ async def process(upload_id: int, data: ProcessInput, request: Request, backgrou
         raise HTTPException(400, 'Question IDs must be unique; original experiment numbers are preserved.')
     questions = [{"id": q.id, "text": q.text.strip(), "language": "python" if q.language == "auto" else q.language,
                   **({'datasets':q.datasets} if q.datasets else {}),
+                  **({'python_template':q.python_template} if q.language in {'python','auto'} or data.language in {'python','auto'} else {}),
                   **({'colab_theme':q.colab_theme} if q.language=='colab' or data.language=='colab' else {}),
                   **({'browser_theme':q.browser_theme} if q.browser_theme == 'chrome' or q.language in {'html','react','node'} or data.language in {'html','react','node'} else {})} for q in data.questions]
     if sum(sum(len(name)+len(content) for name,content in q.datasets.items()) for q in data.questions)>8*1024*1024:

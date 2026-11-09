@@ -818,7 +818,7 @@ async def _process_assignment(workflow_id: int):
                         if class_name: src_filename = class_name + '.java'
                     record(workflow, db, "capture", progress, f"Capturing output for question {index + 1}.")
                     theme = {
-                        "python": "idle",
+                        "python": "jupyter" if question.get("python_template") == "jupyter" else "idle",
                         "java": "notepad",
                         "c": "codeblocks",
                         "cpp": "codeblocks",
@@ -896,7 +896,7 @@ async def _process_assignment(workflow_id: int):
                             kind = "source_preview" if capture_view == "editor" else "http" if actual_http else "terminal"
                             candidates.append({"path": path, "kind": kind, "caption": {
                                 "source_preview": "Rendered source preview", "http": "Captured HTTP request and response",
-                                "terminal": "Captured process transcript"}[kind]})
+                                "terminal": "Jupyter Notebook-style capture of actual Python output" if theme == "jupyter" else "Captured process transcript"}[kind]})
                         else:
                             success = False
                             error = (error + f"\n{capture_view.title()} evidence could not be captured.").strip()

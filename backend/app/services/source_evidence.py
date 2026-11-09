@@ -90,7 +90,7 @@ async def capture_source_evidence(project_files,code,filename,*,theme,group,user
             if not ok:
                 failures.append(f'Source screenshot could not be captured completely: {name}'+(f', page {page_index}' if policy=='complete' else ''))
                 continue
-            label='VS Code-style source excerpt' if web and len(ranges)>1 else 'VS Code-style source preview' if web else 'Rendered IDLE source preview' if language=='python' else 'Rendered Notepad source preview' if language in {'java','java_gui'} else 'Rendered Code::Blocks source preview' if language in {'c','cpp'} else 'Rendered source preview'
+            label='VS Code-style source excerpt' if web and len(ranges)>1 else 'VS Code-style source preview' if web else 'Rendered Jupyter Notebook source preview' if theme=='jupyter' else 'Rendered IDLE source preview' if language=='python' else 'Rendered Notepad source preview' if language in {'java','java_gui'} else 'Rendered Code::Blocks source preview' if language in {'c','cpp'} else 'Rendered source preview'
             if policy=='complete':
                 label=f'Complete source — {name} — lines {ranges[0][0]}–{ranges[-1][1]}, part {page_index}/{len(pages)}' if ranges else 'Complete source — '+name+' (empty file)'
             else:

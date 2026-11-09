@@ -62,6 +62,7 @@ class ScreenshotService:
             theme_map = {
                 'python': 'idle',
                 'idle': 'idle',
+                'jupyter': 'jupyter',
                 'java': 'notepad',
                 'notepad': 'notepad',
                 'c': 'codeblocks',
@@ -203,6 +204,8 @@ class ScreenshotService:
                     vp_width, min_height = 840, 520
                 else:
                     vp_width, min_height = 1000, 700
+            elif theme == 'jupyter':
+                vp_width, min_height = 1100, 440
             elif theme == 'notepad':
                 if view_mode == 'editor':
                     vp_width, min_height = 1040, 520
@@ -516,6 +519,9 @@ class ScreenshotService:
                     'class="n"': 'class="variable"',
                     'class="o"': 'class="operator"',
                 }
+            elif theme == 'jupyter':
+                # Keep Pygments token classes for the notebook's light syntax palette.
+                replacements = {}
             elif theme == 'notepad':
                 # Java Notepad colors
                 replacements = {
@@ -679,7 +685,7 @@ class ScreenshotService:
         # Render template
         template = Environment(loader=FileSystemLoader(self.template_dir), autoescape=True).get_template(os.path.basename(template_path))
         
-        if theme == "idle":
+        if theme in {"idle", "jupyter"}:
             output_content = output or ""
             if kwargs.get("input_echoed"):
                 # The runtime already captured a real, ordered input/output
@@ -721,6 +727,8 @@ class ScreenshotService:
             start_line=start_line,
             end_line=end_line,
             source_code=source_code or "",
+            jupyter_title=os.path.splitext(safe_filename)[0] + ".ipynb",
+            collapse_input=view_mode in {"shell", "output"} and len((source_code or "").splitlines()) > 40,
         )
         
         return html_content

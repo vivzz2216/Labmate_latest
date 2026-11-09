@@ -112,6 +112,7 @@ export default function AssignmentPage() {
   const [language, setLanguage] = useState<LabLanguage>("auto");
   const [screenshotStyle, setScreenshotStyle] = useState<string>("style_1");
   const [colabTheme, setColabTheme] = useState<"light" | "dark">("dark");
+  const [pythonTemplate, setPythonTemplate] = useState<"idle" | "jupyter">("idle");
   const [browserTheme, setBrowserTheme] = useState<"edge" | "chrome">("edge");
   const [instructions, setInstructions] = useState("");
   const [filename, setFilename] = useState("lab_report");
@@ -155,6 +156,7 @@ export default function AssignmentPage() {
     if (restoreFields) {
       setLanguage(data.language);
       setColabTheme(data.questions.find((question) => question.colab_theme)?.colab_theme || "dark");
+      setPythonTemplate(data.questions.find((question) => question.python_template)?.python_template || "idle");
       setBrowserTheme(data.questions.find((question) => question.browser_theme)?.browser_theme || "edge");
       setInstructions(data.instructions);
       setFilename(sanitizeOutputName(data.output_name));
@@ -369,7 +371,7 @@ export default function AssignmentPage() {
 
             // Process with selected manualMode
             let runWf = await workflowApi.process(uploaded.id, {
-              questions: wf.questions.map((question) => ({ ...question, colab_theme: colabTheme, browser_theme: browserTheme })),
+              questions: wf.questions.map((question) => ({ ...question, colab_theme: colabTheme, browser_theme: browserTheme, python_template: pythonTemplate })),
               language: "auto",
               instructions: "",
               output_name: outputName(item.file.name),
@@ -483,7 +485,7 @@ export default function AssignmentPage() {
     try {
       applyWorkflow(
         await workflowApi.process(upload.id, {
-          questions: questions.map((question) => ({ ...question, colab_theme: colabTheme, browser_theme: browserTheme })),
+          questions: questions.map((question) => ({ ...question, colab_theme: colabTheme, browser_theme: browserTheme, python_template: pythonTemplate })),
           language,
           instructions,
           output_name: sanitizeOutputName(filename || "lab_report"),
@@ -876,9 +878,15 @@ export default function AssignmentPage() {
               )}
               {(language === "python" || (language === "auto" && (!questions.length || questions.some((question) => question.language === "python")))) && (
                 <div style={{ marginTop: "12px" }}>
-                  <label className={styles.screenshotLabel}>
-                    Python IDLE Screenshot Style
-                  </label>
+                  <label className={styles.screenshotLabel} htmlFor="python-template">Python screenshot template</label>
+                  <select id="python-template" value={pythonTemplate} disabled={running || busy || batchProcessing}
+                    onChange={event => setPythonTemplate(event.target.value as "idle" | "jupyter")}>
+                    <option value="idle">Python IDLE (Windows)</option>
+                    <option value="jupyter">Jupyter Notebook</option>
+                  </select>
+                  <p style={{fontSize: "12px", color: "#a1a1aa", marginTop: "8px"}}>Choose the look of your Python code and output screenshots.</p>
+                  {pythonTemplate === "idle" && <>
+                  <label className={styles.screenshotLabel}>Python IDLE screenshot layout</label>
                   <select
                     aria-label="Python screenshot layout style"
                     value={screenshotStyle}
@@ -889,6 +897,7 @@ export default function AssignmentPage() {
                     <option value="style_2">Style 2: Output Side (Editor Left, Shell on Side)</option>
                     <option value="style_3">Style 3: Two Different Windows (Side by Side)</option>
                   </select>
+                  </>}
                 </div>
               )}
             </div>
