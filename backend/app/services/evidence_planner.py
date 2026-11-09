@@ -8,6 +8,7 @@ import hashlib
 import re
 
 from PIL import Image
+from .viewport_policy import responsive_requested
 
 
 TEMPLATE_CATEGORIES = {
@@ -82,7 +83,7 @@ def plan_experiment(objective, language, code=""):
                     {"id": "execution", "description": "Actual execution or rendered application", "evidence": config["result"]}]
     if interaction and category in {"browser", "react", "flask", "java_awt", "java_swing", "javafx", "tkinter"}:
         requirements.append({"id": "interaction", "description": "Required interaction changes the visible state", "evidence": config["result"]})
-    responsive = bool(re.search(r"\bresponsive\b|\bmobile\b.*\bdesktop\b", objective, re.I))
+    responsive = responsive_requested(objective)
     if responsive:
         requirements.append({"id": "responsive", "description": "Both mobile and desktop layout evidence", "evidence": "browser"})
     intermediate = intermediate_states_required(objective)

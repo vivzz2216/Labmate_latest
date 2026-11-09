@@ -74,6 +74,10 @@ def web_requirements(text, language):
     objective=lowered.split('\ngeneral requirements\n',1)[0]
     features = [{"id": name, "text": name.replace("_", " "), "kind": "behavior"}
                 for name, pattern in FEATURES.items() if re.search(pattern, objective)]
+    from .viewport_policy import responsive_requested
+    features = [feature for feature in features if feature['id'] != 'responsive']
+    if responsive_requested(objective):
+        features.append({'id': 'responsive', 'text': 'Mobile and desktop layout', 'kind': 'behavior'})
     if re.search(r'at least (?:eight|8)\b.*products', lowered):
         features.append({'id':'catalogue_items','text':'Assert at least eight actual product cards in the default catalogue','kind':'behavior','minimum_count':8})
     if language == "html" and re.search(r"external (?:css|stylesheet)", lowered):
