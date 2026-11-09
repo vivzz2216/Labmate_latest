@@ -5,6 +5,7 @@ from functools import lru_cache
 import io
 import json
 import os
+import logging
 from pathlib import Path
 import tarfile
 
@@ -91,7 +92,9 @@ async def execute(job):
     from .runtime_engine import RuntimeResult
     try:return import_receipt(await exchange(job),isolation='railway_microvm')
     except asyncio.CancelledError:raise
-    except Exception:
+    except Exception as error:
+        detail = str(error).replace(os.environ.get('RAILWAY_API_TOKEN') or '<unset>', '<redacted>')
+        logging.getLogger(__name__).warning('Sandbox execution failed (%s): %s', type(error).__name__, detail[-1600:])
         # No host fallback, provider error details or automatic code-repair loop.
         return RuntimeResult(False,error='Railway sandbox execution unavailable; completed results are saved.',exit_code=126,
                              stages={'execution':'not_run','isolation':'failed'})

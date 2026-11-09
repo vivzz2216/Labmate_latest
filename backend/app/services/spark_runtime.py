@@ -53,6 +53,7 @@ async def capture_spark(code, datasets=None, output_path=None, **metadata):
     source = '\n\n'.join(c.get('code', '') for c in cells if c.get('type') == 'code')
     try:
         validate_generated_code(source, 'python', capability='spark')
+        Path(settings.REACT_TEMP_DIR).mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(prefix='spark_', dir=settings.REACT_TEMP_DIR) as folder:
             directory = Path(folder)
             for name, content in (datasets or {}).items():

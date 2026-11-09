@@ -18,7 +18,9 @@ def missing_required_libraries(question, code):
             continue
         if re.search(r'\b(?:optional|may use|can use|if available)\b',sentence,re.I):
             continue
-        required.update(name for name,pattern in LIBRARIES.items() if re.search(r'\b(?:'+pattern+r')\b',sentence,re.I))
+        required.update(name for name,pattern in LIBRARIES.items()
+            if re.search(r'\b(?:'+pattern+r')\b',sentence,re.I)
+            and not re.search(r'\b(?:not|without|instead of|rather than)\s+(?:an?\s+)?(?:'+pattern+r')\b',sentence,re.I))
     if not required:return []
     try:tree=ast.parse(code)
     except SyntaxError:return sorted(required)

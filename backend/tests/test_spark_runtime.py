@@ -10,6 +10,7 @@ def test_spark_is_notebook_and_requires_explicit_capability():
     with pytest.raises(ValueError):validate_generated_code('import subprocess','python',capability='spark')
     from app.services.colab_requirements import missing_required_libraries
     assert missing_required_libraries('Use PySpark to calculate an average.', 'import pandas as pd\nprint(pd.DataFrame())') == ['pyspark']
+    assert missing_required_libraries('Use PySpark, not a pandas replacement.', code) == []
 
 @pytest.mark.asyncio
 async def test_spark_refuses_host_execution(monkeypatch):
