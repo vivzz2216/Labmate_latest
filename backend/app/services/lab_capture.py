@@ -591,6 +591,7 @@ async def capture_notebook(code, datasets=None, output_path=None, **metadata):
                 "width": width,
                 "height": height,
                 "runtime": "local-python",
+                "accelerator": "CPU",
                 "gpu": None,
                 "theme":theme,"source_lines":source_lines,"evidence_frames":frames,
             },

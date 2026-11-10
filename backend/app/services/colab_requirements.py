@@ -14,7 +14,7 @@ LIBRARIES = {
 def missing_required_libraries(question, code):
     required=set()
     for sentence in re.split(r'[\n.!?]+', question):
-        if not re.search(r'\b(?:use|using|import|with|require[sd]?)\b',sentence,re.I):
+        if not re.search(r'\b(?:use|using|import|with|require[sd]?|train|build|implement|fit|develop)\b',sentence,re.I):
             continue
         if re.search(r'\b(?:optional|may use|can use|if available)\b',sentence,re.I):
             continue
@@ -31,5 +31,11 @@ def missing_required_libraries(question, code):
             for alias in node.names:
                 if (alias.asname or alias.name.split('.')[0]) in used:present.add(alias.name.split('.')[0])
         elif isinstance(node,ast.ImportFrom) and node.module:
-            if any((alias.asname or alias.name) in used for alias in node.names):present.add(node.module.split('.')[0])
+            if any((alias.asname or alias.name) in used for alias in node.names):
+                present.add(node.module.split('.')[0])
+                if node.module.startswith('tensorflow.keras') or node.module == 'tensorflow' and any(a.name == 'keras' and (a.asname or a.name) in used for a in node.names):
+                    present.add('keras')
+    tensorflow_aliases={a.asname or a.name for n in ast.walk(tree) if isinstance(n,ast.Import) for a in n.names if a.name=='tensorflow'}
+    if any(isinstance(n,ast.Attribute) and n.attr=='keras' and isinstance(n.value,ast.Name) and n.value.id in tensorflow_aliases for n in ast.walk(tree)):
+        present.add('keras')
     return sorted(required-present)

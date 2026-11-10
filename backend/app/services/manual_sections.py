@@ -53,7 +53,7 @@ def section_language(title, content, default="python"):
     text = title + "\n" + content
     if re.search(r'\b(?:UNIX|Ubuntu|Bash|shell scripting)\b',title,re.I):return 'ubuntu'
     if re.search(r'\b(?:SQL|MySQL|SQLite)\b',title,re.I) and not re.search(r'\b(?:react|node|html|css|javascript|python|java|web|webpage|website|portfolio)\b',title,re.I):return 'sql'
-    if re.search(r'\b(?:Colab|Jupyter|PySpark|SparkSession|SparkContext|Data Science|Deep Learning|Neural Network|Machine Learning|LSTM|CNN|RNN|AdaBoost|Random Forest|Bayesian Network|Fuzzy Controller|Fuzzy Sets?|Classification Algorithms?)\b|\.ipynb\b', text, re.I): return 'colab'
+    if re.search(r'\b(?:Colab|Jupyter|PySpark|SparkSession|SparkContext|PyTorch|TensorFlow|Keras|Data Science|Deep Learning|Neural Network|Machine Learning|Perceptron|Autoencoder|Backpropagation|MLP|ANN|LSTM|CNN|RNN|AdaBoost|Random Forest|Bayesian Network|Fuzzy Controller|Fuzzy Sets?|Classification Algorithms?)\b|\.ipynb\b', text, re.I): return 'colab'
     if re.search(r"\b(?:node(?:\.js)?|express)\b", title, re.I): return "node"
     if re.search(r"\breact\b", title, re.I): return "react"
     if re.search(r"\b(?:java|swing|awt|javafx)\b",title,re.I):return 'java'
@@ -63,7 +63,7 @@ def section_language(title, content, default="python"):
     # Academic titles often name the concept rather than the language. Route
     # executable SQL and scientific Python to their actual supported runtimes.
     if re.search(r"\b(?:SELECT\s+.+\s+FROM|CREATE\s+(?:TABLE|VIEW|PROCEDURE|FUNCTION|TRIGGER)|(?:INNER|OUTER|LEFT|RIGHT)\s+JOIN)\b", content, re.I): return "sql"
-    if re.search(r"\b(?:from|import)\s+(?:sklearn|pandas|numpy|pyspark)\b", content): return "colab"
+    if re.search(r"\b(?:from|import)\s+(?:sklearn|pandas|numpy|pyspark|torch|tensorflow|keras)\b", content): return "colab"
     if re.search(r"\bc\+\+|\bcpp\b", text, re.I): return "cpp"
     if re.search(r"\bjava\b", text, re.I): return "java"
     if re.search(r"\bpython\b|\btkinter\b|\bflask\b", text, re.I): return "python"
@@ -118,7 +118,7 @@ def numbered_experiments(text):
         body = "\n".join(block)
         if is_handwritten_question(body): continue
         objective_lines = [line for line in block[1:] if not SECTION.match(line) or re.match(
-            r'^(?:aim|problem statement)\s*:\s*.*\b(?:write|build|create|implement|design|develop|print|execute|run|train|evaluate|analyze|analyse|query|count|calculate|compute|find|sort|search|use)\b',line,re.I)]
+            r'^(?:aim|problem statement)\s*:\s*.*\b(?:write|build|create|implement|design|develop|print|execute|run|train|fit|import|evaluate|analyze|analyse|query|count|calculate|compute|find|sort|search|use)\b',line,re.I)]
         if not objective_lines:
             raise ManualStructureError(f"Experiment {match.group(1)} has no problem statement or requirements.")
         title=match.group(2).strip() or (block[1] if len(block)>1 else '')

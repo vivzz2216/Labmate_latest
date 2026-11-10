@@ -67,7 +67,11 @@ def short_text(text,limit=180):
 
 
 def diagnostic_text(result):
-    lines=['Diagnostic report — this experiment has not passed verification. '+short_text(result.get('error') or 'Required execution evidence is missing.',300)]
+    raw_error = str(result.get('error') or 'Required execution evidence is missing.').strip()
+    error_lines = [line.strip() for line in raw_error.splitlines() if line.strip()]
+    if len(error_lines) > 1 and error_lines[0].startswith('Traceback'):
+        raw_error = error_lines[-1]
+    lines=['Diagnostic report — this experiment has not passed verification. '+short_text(raw_error,300)]
     verification=result.get('verification') or {}
     kind=verification.get('kind') or ('browser' if result.get('language') in {'html','react'} else 'console')
     if verification.get('status')=='failed':

@@ -3,7 +3,7 @@ import ctypes
 from ctypes import wintypes
 
 
-def attach_windows_job(process, memory_bytes=2*1024**3):
+def attach_windows_job(process, memory_bytes=4*1024**3):
     class Basic(ctypes.Structure):
         _fields_=[('process_time',ctypes.c_int64),('job_time',ctypes.c_int64),('flags',wintypes.DWORD),
             ('minimum',ctypes.c_size_t),('maximum',ctypes.c_size_t),('processes',wintypes.DWORD),
@@ -21,8 +21,8 @@ def attach_windows_job(process, memory_bytes=2*1024**3):
     kernel.CloseHandle.argtypes=[wintypes.HANDLE]
     handle=kernel.CreateJobObjectW(None,None)
     if not handle:raise RuntimeError('Could not create notebook resource limits.')
-    # Windows venv launchers may start one base-interpreter child.
-    limits=Extended();limits.basic.flags=0x2000|0x100|0x8;limits.basic.processes=2;limits.process_memory=memory_bytes
+    # Windows venv launchers may start one base-interpreter child; CPU DL libraries use bounded worker processes.
+    limits=Extended();limits.basic.flags=0x2000|0x100|0x8;limits.basic.processes=4;limits.process_memory=memory_bytes
     if not kernel.SetInformationJobObject(handle,9,ctypes.byref(limits),ctypes.sizeof(limits)) or not kernel.AssignProcessToJobObject(handle,wintypes.HANDLE(int(process._handle))):
         error=ctypes.get_last_error();kernel.CloseHandle(handle)
         raise RuntimeError(f'Could not apply notebook process/memory limits (Windows error {error}).')
@@ -35,7 +35,7 @@ def attach_windows_job(process, memory_bytes=2*1024**3):
         try:
             attached=wintypes.BOOL()
             if not kernel.IsProcessInJob(target,handle,ctypes.byref(attached)):raise RuntimeError('Cannot inspect notebook worker job.')
-            if not attached and not kernel.AssignProcessToJobObject(handle,target):raise RuntimeError('Cannot limit the notebook interpreter process.')
+            if not attached and not kernel.AssignProcessToJobObject(target_job:=handle,target):raise RuntimeError('Cannot limit the notebook interpreter process.')
         finally:kernel.CloseHandle(target)
     close.ensure_pid=ensure_pid
     return close

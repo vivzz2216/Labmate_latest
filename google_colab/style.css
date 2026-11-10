@@ -1286,3 +1286,14 @@ body.colab-expand-full .canvas-scrollbar-track {
     page-break-inside: avoid;
   }
 }
+
+.runtime-accel-badge {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background-color: rgba(138, 180, 248, 0.14);
+  color: var(--colab-secondary);
+  border: 1px solid var(--colab-border);
+}

@@ -63,7 +63,7 @@ def render_and_capture_colab(cells,screenshot_path,notebook_title=None,student_n
             'title':format_natural_notebook_title(student_name,subject,exp_no,notebook_title),
             'studentName':student_name,'subject':subject,'expNo':str(exp_no),
             'datasets':{name:True for name in (datasets or {})},'expandFull':expand_full,'unfocusCells':unfocus_cells,'theme':theme,
-            'runtime':{'engine':'local-python','gpu':None,'connected':kernel is not None}}})
+            'runtime':{'engine':'local-python','accelerator':'CPU','gpu':None,'connected':kernel is not None}}})
         if print_readable:
             page.add_style_tag(content='''
                 .notebook-surface {padding:14px 12px 18px 4px}

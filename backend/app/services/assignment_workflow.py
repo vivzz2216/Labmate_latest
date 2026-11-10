@@ -15,6 +15,7 @@ from types import SimpleNamespace
 
 import pdfplumber
 from docx import Document
+from fastapi import HTTPException
 from sqlalchemy import select, update, case
 from docx.shared import Inches, Pt
 
@@ -385,6 +386,8 @@ async def execute_solution(code, language, question, group_id, username, stdin_d
         validate_generated_code(code,language,capability='flask',local_modules={PurePosixPath(n).stem for n in project_config['project_files'] if n.endswith('.py')})
     elif language == 'python' and re.search(r'\bpyspark\b', code + '\n' + (question or ''), re.I):
         validate_generated_code(code, language, capability='spark')
+    elif language == 'colab' or plan_experiment(question or '', language, code).get('category') == 'notebook':
+        validate_generated_code(code, language, capability='notebook')
     else:validate_generated_code(code, language)
     success, output, errors, _, files = await executor_service.execute_code(
         code, language, filename, question, stdin_data=stdin_data,
@@ -662,7 +665,7 @@ async def _process_assignment(workflow_id: int):
                             display_number = report_number(upload.original_filename if len(questions)==1 else '', question['text'])
                             code_instruction += f' Label SQL comments Experiment {display_number}; the upload filename supplies the submission label. Do not copy conflicting class or department headers. '
                         elif language=='colab':
-                            code_instruction+='\nNOTEBOOK RUNTIME: Return Python source, using numpy, pandas, sklearn, scipy and matplotlib. Read only supplied workspace datasets; if no dataset was supplied, create self-contained inline sample/synthetic data or use built-in offline toy datasets (e.g. load_iris, make_classification). Never invent real training data or hardware capabilities. No os/subprocess imports, network, pip installs or Google Drive mounts. Do not download remote datasets or models (e.g. do not call fetch_20newsgroups or nltk.download). Use relative dataset paths or /content aliases. Prefer numeric_only=True explicitly when appropriate for mixed DataFrames. Capture plots with plt.show().'
+                            code_instruction+='\nNOTEBOOK RUNTIME (CPU ONLY): Return Python source using numpy, pandas, sklearn, scipy, matplotlib, and when requested for deep learning, torch (PyTorch), tensorflow, and keras. Execution runs on CPU only: never call .cuda(), .to("cuda"), or tf.device("/GPU:0"). Keep neural networks compact (<=64 hidden units/filters, 5..15 epochs, small batch sizes) so CPU training finishes quickly. Read only supplied workspace datasets; if no dataset was supplied, create self-contained inline sample/synthetic data or use built-in offline toy datasets (e.g. load_iris, load_digits, make_classification, never substitute synthetic data for MNIST, Fashion-MNIST or IMDB; require supplied data when the exact dataset is mandatory). Never invent real training data or hardware capabilities. No os/subprocess imports, network, pip installs or Google Drive mounts. Do not download remote datasets or models (e.g. do not call fetch_20newsgroups, nltk.download, torch.hub.load, or torchvision.datasets). Use relative dataset paths or /content aliases. Prefer numeric_only=True explicitly when appropriate for mixed DataFrames. Print training/evaluation metrics and sample predictions, and capture plots with plt.show().'
                             code_instruction+=' Use pandas Copy on Write compatible assignments: df[col] = df[col].fillna(value) or df.loc[mask, col] = value. Never use df[col].fillna(..., inplace=True) or other chained inplace updates. Do not suppress data correctness warnings. Check requested row counts and missing-value invariants after cleaning.'
                             code_instruction+=' Use every library explicitly required by the question; do not silently replace it with another implementation.'
                         elif language == 'ubuntu':
@@ -759,9 +762,11 @@ async def _process_assignment(workflow_id: int):
                 if evidence_plan['category'] == 'notebook':
                     exp_m = re.search(r'exp(?:eriment)?[\s_–-]*(\d+)', question['text'] + ' ' + (upload.original_filename or ''), re.I)
                     exp_no = f"{int(exp_m.group(1)):02d}" if exp_m else f"{index+1:02d}"
+                    is_dl = bool(re.search(r'\b(torch|pytorch|tensorflow|keras|deep\s+learning|neural\s+network|perceptron|autoencoder|backpropagation|cnn|rnn|lstm|mlp)\b', question['text'] + '\n' + (code or ''), re.I))
+                    nb_subject = 'DLLab' if is_dl else 'DSLab'
                     notebook_config = {'colab_theme': question.get('colab_theme','dark'), 'datasets': question.get('datasets'),
-                                       'exp_no': exp_no, 'student_name': student_name, 'subject': 'DSLab',
-                                       'notebook_title': f"DSLab_{student_name.split()[0]}_Exp{exp_no}.ipynb"}
+                                       'exp_no': exp_no, 'student_name': student_name, 'subject': nb_subject,
+                                       'notebook_title': f"{nb_subject}_{student_name.split()[0]}_Exp{exp_no}.ipynb"}
                 if code:
                     record(workflow, db, "execute", progress, f"Running question {index + 1} ({actual_language}).")
                     try:
@@ -995,6 +1000,11 @@ async def _process_assignment(workflow_id: int):
             workflow.lease_expires_at = None
             workflow.error = str(error)
             record(workflow, db, workflow.stage, workflow.progress, str(error))
+        except HTTPException as error:
+            workflow.status = "failed"
+            workflow.lease_expires_at = None
+            workflow.error = str(error.detail)
+            record(workflow, db, workflow.stage, workflow.progress, workflow.error)
         except Exception:
             logger.exception("Assignment processing failed for workflow %s", workflow_id)
             try:

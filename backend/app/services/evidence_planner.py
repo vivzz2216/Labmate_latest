@@ -32,8 +32,8 @@ def experiment_category(language, objective="", code=""):
     text = objective + "\n" + code
     if language in {'ubuntu','bash','shell','unix'}:return 'ubuntu'
     if language=='sql':return 'database'
-    if language in {'python', 'colab'} and re.search(r'\bpyspark\b', text, re.I):return 'notebook'
-    if language=='colab' or language=='python' and re.search(r'\bcolab\b|\bjupyter\b|\.ipynb\b',objective,re.I):return 'notebook'
+    if language in {'python', 'colab'} and re.search(r'\b(?:pyspark|torch|pytorch|tensorflow|keras)\b', text, re.I):return 'notebook'
+    if language=='colab' or language=='python' and re.search(r'\b(?:colab|jupyter|deep\s+learning|neural\s+network|perceptron|autoencoder|backpropagation|cnn|rnn|lstm|mlp)\b|\.ipynb\b',objective,re.I):return 'notebook'
     if language == "java":
         gui_terms=r'(?:graphical user interface|Java UI|GUI|JavaFX|Swing|AWT)'
         negated=r'\b(?:no|without|avoid|do\s+not\s+(?:use|create|build))\s+(?:an?\s+)?'+gui_terms+r'\b(?:\s*(?:,|or|and)\s*'+gui_terms+r'\b)*'

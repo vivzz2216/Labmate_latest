@@ -34,7 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (isConnected) {
       if (connectLabel) connectLabel.style.display = 'none';
       if (connectedMeters) connectedMeters.style.display = 'flex';
-      if (footerRuntimeStatus) footerRuntimeStatus.textContent = statusLabel || 'Python 3 • Connected';
+      if (footerRuntimeStatus) footerRuntimeStatus.textContent = statusLabel || 'Python 3 (CPU) • Connected';
     } else {
       if (connectLabel) {
         connectLabel.style.display = 'inline';
@@ -55,7 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (callback) callback(true);
       return;
     }
-    setConnectedUi(true, 'Python 3 • Connected');
+    setConnectedUi(true, 'Python 3 (CPU) • Connected');
     if (callback) callback(true);
   }
 
@@ -982,7 +982,7 @@ document.addEventListener('DOMContentLoaded', () => {
       pySession.vars = {};
       pySession.types = {};
       Object.keys(uploadedDatasets).forEach(k => delete uploadedDatasets[k]);
-      setConnectedUi(hasRealColabBridge(), hasRealColabBridge() ? 'Python 3 • Connected' : 'Connect');
+      setConnectedUi(hasRealColabBridge(), hasRealColabBridge() ? 'Python 3 (CPU) • Connected' : 'Connect');
     },
     setTitle(title) {
       const titleInput = document.getElementById('notebook-title-input');
@@ -1058,7 +1058,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return createCodeCell(code, true);
     },
     addExecutedCell(code, outputObj = {}, execNum = null, execTime = '0s') {
-      setConnectedUi(true, 'Python 3 • Connected');
+      setConnectedUi(true, 'Python 3 (CPU) • Connected');
 
       const cell = createCodeCell(code, false);
       const num = execNum !== null ? execNum : (++executionCounter);
@@ -1114,7 +1114,10 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       if (options.runtime && typeof options.runtime === 'object') {
         const isConn = options.runtime.connected !== undefined ? Boolean(options.runtime.connected) : hasRealColabBridge();
-        setConnectedUi(isConn, isConn ? 'Python 3 • Connected' : 'Runtime not connected');
+        const accel = (options.runtime.accelerator || 'CPU').toUpperCase();
+        const accelBadge = document.getElementById('runtime-accel-badge');
+        if (accelBadge) accelBadge.textContent = accel;
+        setConnectedUi(isConn, isConn ? `Python 3 (${accel}) • Connected` : 'Runtime not connected');
       }
       if (options.unfocusCells && lastCell) {
         lastCell.classList.remove('focused');

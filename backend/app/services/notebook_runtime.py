@@ -13,8 +13,19 @@ import time
 from pathlib import Path
 
 
+def _notebook_python_executable():
+    override = os.environ.get('LABMATE_NOTEBOOK_PYTHON')
+    if override and Path(override).is_file():
+        return override
+    if os.name == 'nt' and sys.version_info >= (3, 14):
+        py312 = Path.home() / 'AppData' / 'Local' / 'labmate-py312' / 'Scripts' / 'python.exe'
+        if py312.is_file():
+            return str(py312)
+    return sys.executable
+
+
 class ColabPythonKernel:
-    def __init__(self, work_dir=None, teacher_datasets=None, timeout_sec=45, allow_synthetic=False, theme='dark'):
+    def __init__(self, work_dir=None, teacher_datasets=None, timeout_sec=90, allow_synthetic=False, theme='dark'):
         from .isolated_runtime import require_worker
         require_worker()
         if theme not in {'light','dark'}:raise ValueError('Invalid Colab theme.')
@@ -37,15 +48,19 @@ class ColabPythonKernel:
         allowed={'PATH','PATHEXT','SYSTEMROOT','WINDIR','COMSPEC','LANG','LC_ALL'}
         environment={k:v for k,v in os.environ.items() if k.upper() in allowed}
         environment.update(LABMATE_NOTEBOOK_THEME=self.theme,TMP=self.work_dir,TEMP=self.work_dir,TMPDIR=self.work_dir,
-            HOME=self.work_dir,
-            MPLCONFIGDIR=str(Path(self.work_dir)/'.matplotlib'),PYTHONIOENCODING='utf-8',
-            OPENBLAS_NUM_THREADS='1',OMP_NUM_THREADS='1',MKL_NUM_THREADS='1',NUMEXPR_NUM_THREADS='1')
+            HOME=self.work_dir,USERPROFILE=self.work_dir,KERAS_HOME=str(Path(self.work_dir)/'.keras'),
+            TORCH_HOME=str(Path(self.work_dir)/'.torch'),
+            MPLCONFIGDIR=str(Path(self.work_dir)/'.matplotlib'),PYTHONIOENCODING='utf-8',PYTHONDONTWRITEBYTECODE='1',
+            OPENBLAS_NUM_THREADS='1',OMP_NUM_THREADS='1',MKL_NUM_THREADS='1',NUMEXPR_NUM_THREADS='1',
+            CUDA_VISIBLE_DEVICES='',TF_CPP_MIN_LOG_LEVEL='2',TF_ENABLE_ONEDNN_OPTS='0',
+            TF_NUM_INTRAOP_THREADS='1',TF_NUM_INTEROP_THREADS='1',TORCH_CPP_LOG_LEVEL='ERROR')
         flags={'creationflags':subprocess.CREATE_NO_WINDOW} if os.name=='nt' else {'start_new_session':True}
         if os.name!='nt' and os.geteuid()==0:
             # Drop root privileges in the image; local non-root callers retain their UID.
             os.chown(self.work_dir,65534,65534)
             flags.update(user=65534,group=65534,extra_groups=[],umask=0o077)
-        self._process=subprocess.Popen([sys.executable,'-I','-u',str(Path(__file__).with_name('colab_worker.py'))],
+        python_exe = _notebook_python_executable()
+        self._process=subprocess.Popen([python_exe,'-I','-B','-u',str(Path(__file__).with_name('colab_worker.py'))],
             stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,text=True,encoding='utf-8',
             cwd=self.work_dir,env=environment,**flags)
         if os.name=='nt':
