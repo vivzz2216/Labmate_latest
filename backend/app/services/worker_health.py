@@ -77,7 +77,8 @@ class WorkerHealth:
             nonce=secrets.token_hex(16)
             available=False
             try:
-                receipt=await exchange({'operation':'health','nonce':nonce})
+                receipt=await asyncio.wait_for(exchange({'operation':'health','nonce':nonce}),
+                                               max(1, settings.WORKER_HEALTH_TIMEOUT))
                 available=(isinstance(receipt,dict) and receipt.get('protocol')==1 and receipt.get('nonce')==nonce
                            and receipt.get('status')=='healthy' and receipt.get('isolation')=='railway_microvm')
             except (OSError,ValueError,RuntimeError,TimeoutError) as error:

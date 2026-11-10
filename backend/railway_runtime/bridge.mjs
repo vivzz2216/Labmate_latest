@@ -21,10 +21,10 @@ export function template(sdk, requirements, spark=false) {
   const encodedDeps = Buffer.from(JSON.stringify(deps)).toString('base64');
   let runtime = sdk.template()
     .run('apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends gcc g++ default-jdk bubblewrap xvfb xauth libmagic1 fonts-dejavu-core')
-    .run(`mkdir -p /opt/labmate-runtime && echo '${requirements.toString('base64')}' | base64 -d > /opt/labmate-runtime/requirements.txt && UV_PYTHON_INSTALL_DIR=/opt/labmate-runtime/python uv python install 3.11 && UV_PYTHON_INSTALL_DIR=/opt/labmate-runtime/python uv venv --python 3.11 --seed /opt/labmate-runtime/venv && /opt/labmate-runtime/venv/bin/pip install -r /opt/labmate-runtime/requirements.txt`)
+    .run(`mkdir -p /opt/labmate-runtime && echo '${requirements.toString('base64')}' | base64 -d > /opt/labmate-runtime/requirements.txt && UV_PYTHON_INSTALL_DIR=/opt/labmate-runtime/python uv python install 3.11 && UV_PYTHON_INSTALL_DIR=/opt/labmate-runtime/python uv venv --python 3.11 --seed /opt/labmate-runtime/venv && uv pip install --python /opt/labmate-runtime/venv -r /opt/labmate-runtime/requirements.txt`)
     .run('PLAYWRIGHT_BROWSERS_PATH=/opt/labmate-runtime/browsers /opt/labmate-runtime/venv/bin/python -m playwright install --with-deps chromium')
     .run(`for kind in node react; do mkdir -p /opt/labmate-runtime/node_cache/$kind; echo '${encodedDeps}' | base64 -d > /opt/labmate-runtime/node_cache/$kind/package.json; (cd /opt/labmate-runtime/node_cache/$kind && npm install --ignore-scripts --no-audit --no-fund) || exit 1; done`);
-  if (spark) runtime = runtime.run('apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends openjdk-17-jre-headless && /opt/labmate-runtime/venv/bin/pip install pyspark==3.5.7');
+  if (spark) runtime = runtime.run('apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends openjdk-17-jre-headless && uv pip install --python /opt/labmate-runtime/venv pyspark==3.5.7');
   return runtime;
 }
 
