@@ -27,10 +27,16 @@ class WorkerHealth:
     def invalidate(self):
         self._expires = 0.0
 
-    async def check(self, force=False):
+    async def check(self, force=False, wait_timeout=None):
         if not isolation_required():
             return {'status': 'not_required', 'available': True, 'checked_at': None}
         if settings.EXECUTION_BACKEND == 'railway_sandbox':
+            if wait_timeout is not None and self._lock.locked():
+                return dict(self._result)
+            if wait_timeout is not None and (force or time.monotonic() >= self._expires):
+                if not self._lock.locked():
+                    asyncio.create_task(self._railway_check(force))
+                return dict(self._result)
             return await self._railway_check(force)
         identity = (settings.SANDBOX_SSH_HOST, settings.SANDBOX_SSH_PORT,
                     settings.SANDBOX_SSH_USER, settings.SANDBOX_SSH_KEY, settings.SANDBOX_KNOWN_HOSTS)
@@ -76,14 +82,14 @@ class WorkerHealth:
                 return dict(self._result)
             nonce=secrets.token_hex(16)
             available=False
+            timeout=max(60.0, float(settings.RAILWAY_SANDBOX_TIMEOUT)) if getattr(settings, 'RAILWAY_SANDBOX_TIMEOUT', None) else 60.0
             try:
-                receipt=await asyncio.wait_for(exchange({'operation':'health','nonce':nonce}),
-                                               max(1, settings.WORKER_HEALTH_TIMEOUT))
+                receipt=await asyncio.wait_for(exchange({'operation':'health','nonce':nonce}), timeout)
                 available=(isinstance(receipt,dict) and receipt.get('protocol')==1 and receipt.get('nonce')==nonce
                            and receipt.get('status')=='healthy' and receipt.get('isolation')=='railway_microvm')
             except (OSError,ValueError,RuntimeError,TimeoutError) as error:
                 # Transport errors are scrubbed by the adapter before logging.
-                logger.warning('Railway sandbox health probe failed: %s',error)
+                logger.warning('Railway sandbox health probe failed (%s): %s', type(error).__name__, error)
             self._identity=('railway_sandbox',)
             self._expires=time.monotonic()+max(1,settings.RAILWAY_SANDBOX_HEALTH_TTL if available else settings.WORKER_HEALTH_TTL)
             self._result={'status':'healthy' if available else 'unavailable','available':bool(available),

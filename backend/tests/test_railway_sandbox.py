@@ -54,3 +54,35 @@ async def test_railway_health_executes_nonce_probe_and_caches(monkeypatch,valid)
     assert (await probe.check())['available'] is valid
     assert (await probe.check())['available'] is valid
     exchange.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_railway_health_nonblocking_refresh(monkeypatch):
+    import asyncio
+    monkeypatch.setattr(settings, 'EXECUTION_BACKEND', 'railway_sandbox')
+    monkeypatch.setattr(health, 'isolation_required', lambda: True)
+    started = asyncio.Event()
+
+    async def slow_reply(job):
+        started.set()
+        await asyncio.sleep(0.05)
+        return {'protocol': 1, 'nonce': job['nonce'], 'status': 'healthy', 'isolation': 'railway_microvm'}
+
+    exchange = AsyncMock(side_effect=slow_reply)
+    monkeypatch.setattr(adapter, 'exchange', exchange)
+
+    probe = health.WorkerHealth()
+    # First call with wait_timeout: returns immediately with 'checking' and starts background probe
+    res = await probe.check(wait_timeout=2.0)
+    assert res['status'] == 'checking'
+    assert res['available'] is False
+
+    # Wait for the background probe to complete
+    await asyncio.wait_for(started.wait(), timeout=1.0)
+    await asyncio.sleep(0.1)
+
+    # Subsequent call returns cached healthy status immediately
+    res2 = await probe.check(wait_timeout=2.0)
+    assert res2['status'] == 'healthy'
+    assert res2['available'] is True
+

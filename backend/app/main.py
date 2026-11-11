@@ -87,6 +87,8 @@ async def lifespan(app: FastAPI):
     await performance_monitor.start_monitoring()
     start_background_workers(num_workers=3)
     start_workflow_workers()
+    from .services.worker_health import worker_health
+    asyncio.create_task(worker_health.check(force=True))
     try:
         yield
     finally:
@@ -158,7 +160,7 @@ async def liveness_check():
 async def health_check(response: Response):
     # Database and Redis clients are synchronous; probes must not stall login/polling.
     from .services.worker_health import worker_health
-    result, worker = await asyncio.gather(asyncio.to_thread(_health_check_sync, response), worker_health.check())
+    result, worker = await asyncio.gather(asyncio.to_thread(_health_check_sync, response), worker_health.check(wait_timeout=2.0))
     result['services']['execution_worker'] = worker['status']
     result['execution_ready'] = worker['available']
     return result
