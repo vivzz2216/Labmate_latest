@@ -2,13 +2,22 @@
 
 import { useState, type CSSProperties } from "react";
 import Image from "next/image";
-import { ArrowUpRight, Check, Code2, Database, FileCode2, BookOpen, Terminal, ZoomIn, ZoomOut, MoveHorizontal } from "lucide-react";
+import Link from "next/link";
+import { ArrowUpRight, Check, Code2, Database, FileCode2, BookOpen, Terminal, ZoomIn, ZoomOut, MoveHorizontal, Cpu, Network } from "lucide-react";
 import styles from "./HomepageSections.module.css";
 import previewImages from "@/public/images/labs/preview-images.json";
 
 const previews: Record<string, {src: string; width: number; height: number; displayWidth: number}> = previewImages;
 
 const labs = [
+  { id: "deep-learning", name: "Deep Learning", icon: Cpu, description: "Neural networks, PyTorch, TensorFlow and Keras practicals. Generates training loss plots, model metrics, and Colab notebook reports.", templates: [
+    { name: "Colab · Dark", image: "colab-dark", caption: "Deep learning training & loss curves · Colab dark theme" },
+    { name: "Colab · Light", image: "colab-light", caption: "Neural network architecture and evaluation · Colab light theme" },
+  ] },
+  { id: "distributed", name: "Distributed Computing", icon: Network, description: "Multi-process Java topologies, TCP/UDP sockets, Java RMI, and consensus algorithms. Captures synchronized multi-terminal outputs.", templates: [
+    { name: "Server & Client", image: "java-output", caption: "Concurrent Server and Client execution · Windows Command Prompt" },
+    { name: "Java Source", image: "java", caption: "Distributed RMI / Socket implementation · Windows Notepad" },
+  ] },
   { id: "python", name: "Python", icon: Terminal, description: "Functions, OOP and programming practicals. Choose the editor you use in class.", templates: [
     { name: "IDLE editor", image: "idle", caption: "Python IDLE editor · Windows" },
     { name: "IDLE shell", image: "idle-shell", caption: "Python IDLE shell · Windows" },
@@ -49,7 +58,7 @@ export default function LabShowcase() {
     <section id="labs" className={styles.section} aria-labelledby="labs-heading">
       <div className={styles.sectionHeader}>
         <h2 id="labs-heading">Your lab.<br /><span>Your familiar workspace.</span></h2>
-        <p>See the labs available today and the screenshot styles that go into your Word report.</p>
+        <p>See the labs available today and the screenshot styles that go into your Word report. <Link href="/labs" style={{ color: "#60a5fa", textDecoration: "underline", marginLeft: "6px" }}>Explore full lab catalog →</Link></p>
       </div>
       <div className={styles.gallery}>
         <div className={styles.labList} role="group" aria-label="Available labs">
@@ -63,7 +72,29 @@ export default function LabShowcase() {
           })}
         </div>
         <div className={styles.galleryDetail} aria-live="polite" aria-atomic="true">
-          <div className={styles.detailHeading}><h3>{lab.name}</h3><span className={styles.available}><Check size={13} aria-hidden="true" /> Available</span></div>
+          <div className={styles.detailHeading}>
+            <h3>{lab.name}</h3>
+            <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+              <Link
+                href={lab.id === "distributed" ? "/labs/distributed-computing" : `/labs/${lab.id}`}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  fontSize: "0.82rem",
+                  color: "#93c5fd",
+                  textDecoration: "none",
+                  padding: "3px 8px",
+                  borderRadius: "6px",
+                  background: "rgba(59, 130, 246, 0.12)",
+                  border: "1px solid rgba(59, 130, 246, 0.25)"
+                }}
+              >
+                Open Lab Section <ArrowUpRight size={13} />
+              </Link>
+              <span className={styles.available}><Check size={13} aria-hidden="true" /> Available</span>
+            </div>
+          </div>
           <p className={styles.labDescription}>{lab.description}</p>
           <div className={styles.templateChoices} role="group" aria-label={`${lab.name} screenshot templates`}>
             {lab.templates.map((item, index) => <button key={item.name} type="button"

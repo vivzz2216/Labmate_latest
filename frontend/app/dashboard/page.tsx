@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   FolderGit2,
   FileText,
@@ -14,6 +15,8 @@ import {
   ArrowUpRight,
   FileCheck2,
   Sparkles,
+  Cpu,
+  Network,
 } from "lucide-react";
 import DashboardShell, {
   type Assignment,
@@ -313,8 +316,84 @@ export default function DashboardPage() {
             )}
           </section>
 
-          {/* Right Rail: Continue Working & Recent Reports */}
+          {/* Right Rail: Continue Working, Lab Tracks & Recent Reports */}
           <aside className={styles.rightRail}>
+            {/* Lab Sections & Expanded Tracks */}
+            <section className={styles.panel}>
+              <div className={styles.panelHeader}>
+                <div>
+                  <h2 style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <Sparkles size={16} color="#8b5cf6" />
+                    <span>Specialized Lab Tracks</span>
+                  </h2>
+                  <p>Dedicated academic tracks with real execution</p>
+                </div>
+                <Link
+                  href="/labs"
+                  className={styles.linkButton}
+                  style={{ display: "inline-flex", alignItems: "center", gap: "2px" }}
+                >
+                  All Labs <ChevronRight size={13} />
+                </Link>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "4px" }}>
+                <Link
+                  href="/labs/deep-learning"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "10px 12px",
+                    borderRadius: "8px",
+                    background: "rgba(168, 85, 247, 0.08)",
+                    border: "1px solid rgba(168, 85, 247, 0.25)",
+                    textDecoration: "none",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <Cpu size={18} color="#c084fc" />
+                    <div>
+                      <strong style={{ fontSize: "0.85rem", color: "#f4f4f5", display: "block" }}>
+                        Deep Learning Labs
+                      </strong>
+                      <span style={{ fontSize: "0.75rem", color: "#a1a1aa" }}>
+                        PyTorch, TensorFlow &amp; Colab
+                      </span>
+                    </div>
+                  </div>
+                  <ChevronRight size={14} color="#a1a1aa" />
+                </Link>
+
+                <Link
+                  href="/labs/distributed-computing"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "10px 12px",
+                    borderRadius: "8px",
+                    background: "rgba(14, 165, 233, 0.08)",
+                    border: "1px solid rgba(14, 165, 233, 0.25)",
+                    textDecoration: "none",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <Network size={18} color="#38bdf8" />
+                    <div>
+                      <strong style={{ fontSize: "0.85rem", color: "#f4f4f5", display: "block" }}>
+                        Distributed Computing Labs
+                      </strong>
+                      <span style={{ fontSize: "0.75rem", color: "#a1a1aa" }}>
+                        Java RMI, TCP/UDP &amp; Sockets
+                      </span>
+                    </div>
+                  </div>
+                  <ChevronRight size={14} color="#a1a1aa" />
+                </Link>
+              </div>
+            </section>
+
             <section className={styles.panel}>
               <div className={styles.panelHeader}>
                 <div>

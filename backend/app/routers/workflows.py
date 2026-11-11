@@ -5,7 +5,7 @@ import os
 import re
 import uuid
 from datetime import datetime, timezone
-from typing import Literal
+from typing import Literal, Optional
 
 import mammoth
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Request, UploadFile
@@ -28,13 +28,14 @@ from ..services.billing_service import reserve_workflow_credits, settle_workflow
 from ..services.workflow_batch import archive_chunks, create_batch_archive, stage_batch_file
 
 router = APIRouter(prefix="/workflows")
-Language = Literal["auto", "python", "java", "c", "cpp", "html", "react", "node", "sql", "colab", "ubuntu", "theory"]
+Language = Literal["auto", "python", "java", "c", "cpp", "html", "react", "node", "sql", "colab", "ubuntu", "theory", "distributed"]
 
 
 class QuestionInput(BaseModel):
     id: int = Field(gt=0)
     text: str = Field(min_length=1, max_length=15000)
     language: Language = "python"
+    track: Optional[str] = None
     datasets: dict[str,str] = Field(default_factory=dict,max_length=20)
     colab_theme: Literal["light", "dark"] = "dark"
     browser_theme: Literal["edge", "chrome"] = "edge"
@@ -45,6 +46,7 @@ class QuestionInput(BaseModel):
 class ProcessInput(BaseModel):
     questions: list[QuestionInput] = Field(min_length=1, max_length=100)
     language: Language = "auto"
+    track: Optional[str] = None
     instructions: str = Field(default="", max_length=5000)
     output_name: str = Field(default="lab_report", min_length=1, max_length=80, pattern=r"^[A-Za-z0-9_-]+$")
     screenshot_style: str = Field(default="style_1", max_length=40)
@@ -332,6 +334,7 @@ async def process(upload_id: int, data: ProcessInput, request: Request, backgrou
     if len({q.id for q in data.questions}) != len(data.questions):
         raise HTTPException(400, 'Question IDs must be unique; original experiment numbers are preserved.')
     questions = [{"id": q.id, "text": q.text.strip(), "language": "python" if q.language == "auto" else q.language,
+                  **({'track': q.track or data.track} if (q.track or data.track) else {}),
                   **({'datasets':q.datasets} if q.datasets else {}),
                   **({'python_template':q.python_template, 'jupyter_theme':q.jupyter_theme} if q.language in {'python','auto'} or data.language in {'python','auto'} else {}),
                   **({'colab_theme':q.colab_theme} if q.language=='colab' or data.language=='colab' else {}),

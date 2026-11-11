@@ -12,11 +12,13 @@ export type LabLanguage =
   | "sql"
   | "colab"
   | "ubuntu"
-  | "theory";
+  | "theory"
+  | "distributed";
 export interface LabQuestion {
   id: number;
   text: string;
   language: LabLanguage;
+  track?: string;
   datasets?: Record<string, string>;
   python_template?: "idle" | "jupyter";
   jupyter_theme?: "light" | "dark";
@@ -129,6 +131,7 @@ export const workflowApi = {
       output_name: string;
       screenshot_style?: string;
       mode?: ManualMode;
+      track?: string;
     },
   ): Promise<LabWorkflow> {
     return (await api.post(`/api/workflows/${uploadId}/process`, data)).data;

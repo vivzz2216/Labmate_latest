@@ -21,6 +21,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   ShieldCheck,
+  Layers,
 } from "lucide-react";
 import { SiC, SiCplusplus, SiHtml5, SiPython } from "react-icons/si";
 import { FaJava } from "react-icons/fa";
@@ -59,6 +60,10 @@ export const languageMeta: Record<
   node: { label: "Node.js (Web Dev)", icon: SiHtml5, className: styles.html },
   sql: { label: "SQL", icon: Terminal, className: styles.c },
   ubuntu: { label: "Ubuntu / Linux", icon: Terminal, className: styles.fileIcon },
+  deep_learning: { label: "Deep Learning", icon: SiPython, className: styles.python },
+  "deep-learning": { label: "Deep Learning", icon: SiPython, className: styles.python },
+  distributed: { label: "Distributed Computing", icon: FaJava, className: styles.java },
+  "distributed-computing": { label: "Distributed Computing", icon: FaJava, className: styles.java },
 };
 
 export function formatDate(value?: string) {
@@ -174,6 +179,7 @@ export function EmptyState({
 
 export const dashboardNavItems = [
   { label: "Dashboard", icon: LayoutDashboard, href: "/dashboard", matchPrefix: "/dashboard" },
+  { label: "Lab Sections", icon: Layers, href: "/labs", matchPrefix: "/labs" },
   { label: "Workspace", icon: FolderGit2, href: "/workspace", matchPrefix: "/workspace" },
   { label: "My Labs", icon: Terminal, href: "/code-execution", matchPrefix: "/code-execution" },
   { label: "Reports", icon: FileText, href: "/reports", matchPrefix: "/reports" },

@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, Suspense } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import CreditStatus from '@/components/billing/CreditStatus';
 import AgentPlanPanel from '@/components/workflow/AgentPlanPanel';
 import ExecutionStatus from '@/components/workflow/ExecutionStatus';
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 const DotGrid = dynamic<any>(() => import("@/components/visual/DotGrid"), {
   ssr: false,
@@ -55,6 +55,8 @@ import styles from "./processing.module.css";
 
 const languages: { value: LabLanguage; label: string }[] = [
   { value: "auto", label: "Use detected languages" },
+  { value: "colab", label: "Deep Learning / Colab Notebook" },
+  { value: "distributed", label: "Distributed Computing (Java Sockets / RMI)" },
   { value: "python", label: "Python" },
   { value: "java", label: "Java" },
   { value: "c", label: "C" },
@@ -63,7 +65,6 @@ const languages: { value: LabLanguage; label: string }[] = [
   { value: "react", label: "React" },
   { value: "node", label: "Node.js" },
   { value: "sql", label: "SQL (MySQL runtime)" },
-  { value: "colab", label: "Python Notebook" },
   { value: "ubuntu", label: "Ubuntu (Bash + GNOME)" },
 ];
 const stages = [
@@ -103,8 +104,26 @@ const sanitizeOutputName = (name: string, fallback = "lab_report") => {
 const outputName = (name: string) => `${sanitizeOutputName(name, "lab_assignment").replace(/_completed$/i, "").slice(0, 58).replace(/^[_-]+|[_-]+$/g, "") || "lab_assignment"}_completed`;
 
 export default function AssignmentPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-zinc-400">
+          Loading lab environment...
+        </div>
+      }
+    >
+      <AssignmentContent />
+    </Suspense>
+  );
+}
+
+function AssignmentContent() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const trackParam = searchParams.get("track") || "";
+  const expParam = searchParams.get("exp") || "";
+  const promptParam = searchParams.get("prompt") || "";
   const inputRef = useRef<HTMLInputElement>(null);
   const [upload, setUpload] = useState<UploadResponse | null>(null);
   const [workflow, setWorkflow] = useState<LabWorkflow | null>(null);
@@ -149,6 +168,36 @@ export default function AssignmentPage() {
     batchAlive.current = true;
     return () => { batchAlive.current = false; };
   }, []);
+
+  useEffect(() => {
+    if (trackParam === "deep_learning" || trackParam === "deep-learning") {
+      setLanguage("colab");
+      setColabTheme("dark");
+    } else if (trackParam === "distributed" || trackParam === "distributed-computing") {
+      setLanguage("distributed");
+    } else if (trackParam && ["python", "java", "c", "cpp", "html", "react", "node", "sql", "colab"].includes(trackParam)) {
+      setLanguage(trackParam as LabLanguage);
+    }
+
+    if (promptParam && questions.length === 0) {
+      const targetLang: LabLanguage =
+        trackParam === "deep_learning" || trackParam === "deep-learning"
+          ? "colab"
+          : trackParam === "distributed" || trackParam === "distributed-computing"
+          ? "distributed"
+          : (trackParam as LabLanguage) || "python";
+
+      setQuestions([
+        {
+          id: 1,
+          text: promptParam,
+          language: targetLang,
+          track: trackParam || undefined,
+        },
+      ]);
+      setShowQuestions(true);
+    }
+  }, [trackParam, promptParam]);
 
   const applyWorkflow = (data: LabWorkflow, restoreFields = false) => {
     setWorkflow(data);
@@ -373,12 +422,20 @@ export default function AssignmentPage() {
 
             // Process with selected manualMode
             let runWf = await workflowApi.process(uploaded.id, {
-              questions: wf.questions.map((question) => ({ ...question, colab_theme: colabTheme, browser_theme: browserTheme, python_template: pythonTemplate, jupyter_theme: jupyterTheme })),
+              questions: wf.questions.map((question) => ({
+                ...question,
+                track: question.track || trackParam || undefined,
+                colab_theme: colabTheme,
+                browser_theme: browserTheme,
+                python_template: pythonTemplate,
+                jupyter_theme: jupyterTheme,
+              })),
               language: "auto",
               instructions: "",
               output_name: outputName(item.file.name),
               screenshot_style: screenshotStyle,
               mode: manualMode,
+              track: trackParam || undefined,
             });
 
             let runAttempts = 0;
@@ -490,12 +547,20 @@ export default function AssignmentPage() {
     try {
       applyWorkflow(
         await workflowApi.process(upload.id, {
-          questions: questions.map((question) => ({ ...question, colab_theme: colabTheme, browser_theme: browserTheme, python_template: pythonTemplate, jupyter_theme: jupyterTheme })),
+          questions: questions.map((question) => ({
+            ...question,
+            track: question.track || trackParam || undefined,
+            colab_theme: colabTheme,
+            browser_theme: browserTheme,
+            python_template: pythonTemplate,
+            jupyter_theme: jupyterTheme,
+          })),
           language,
           instructions,
           output_name: sanitizeOutputName(filename || "lab_report"),
           screenshot_style: screenshotStyle,
           mode: manualMode,
+          track: trackParam || undefined,
         }),
       );
     } catch (requestError) {
@@ -633,6 +698,52 @@ export default function AssignmentPage() {
         <aside className={styles.setupPanel} id="assignment-setup">
           <h2 className={styles.panelTitle}>Build your lab report</h2>
           <CreditStatus refreshKey={`${workflow?.status}-${workflow?.progress}`} />
+          {trackParam && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                padding: "8px 12px",
+                borderRadius: "8px",
+                marginTop: "10px",
+                marginBottom: "10px",
+                fontSize: "0.8rem",
+                fontWeight: 500,
+                background:
+                  trackParam.includes("deep")
+                    ? "rgba(168, 85, 247, 0.15)"
+                    : trackParam.includes("distrib")
+                    ? "rgba(14, 165, 233, 0.15)"
+                    : "rgba(59, 130, 246, 0.15)",
+                border: `1px solid ${
+                  trackParam.includes("deep")
+                    ? "rgba(168, 85, 247, 0.35)"
+                    : trackParam.includes("distrib")
+                    ? "rgba(14, 165, 233, 0.35)"
+                    : "rgba(59, 130, 246, 0.35)"
+                }`,
+                color:
+                  trackParam.includes("deep")
+                    ? "#c084fc"
+                    : trackParam.includes("distrib")
+                    ? "#38bdf8"
+                    : "#93c5fd",
+              }}
+            >
+              <Sparkles size={14} className="shrink-0" />
+              <span>
+                Active Track:{" "}
+                <strong>
+                  {trackParam === "deep_learning" || trackParam === "deep-learning"
+                    ? "Deep Learning Labs"
+                    : trackParam === "distributed" || trackParam === "distributed-computing"
+                    ? "Distributed Computing Labs"
+                    : trackParam.toUpperCase()}
+                </strong>
+              </span>
+            </div>
+          )}
           {language !== "sql" && (language !== "auto" || questions.length === 0 ||
             questions.some((question) => question.language !== "sql" && question.language !== "theory")) && <ExecutionStatus />}
           <p className={styles.setupIntro}>

@@ -63,6 +63,7 @@ export default function HomePage() {
             <div className={styles.navLinks}>
               <a href="#how-it-works" className={styles.navLink}>How It Works</a>
               <a href="#features" className={styles.navLink}>Features</a>
+              <Link href="/labs" className={styles.navLink}>Lab Sections</Link>
               <a href="#labs" className={styles.navLink}>Labs &amp; templates</a>
               <a href="#reviews" className={styles.navLink}>Reviews</a>
               <a href="#pricing" className={styles.navLink}>Pricing</a>
@@ -356,6 +357,7 @@ export default function HomePage() {
           <div>
             <div className={styles.footerColTitle}>Product</div>
             <ul className={styles.footerNavList}>
+              <li><Link href="/labs" className={styles.footerLink}>All Lab Sections</Link></li>
               <li><Link href="/workspace" className={styles.footerLink}>Student Workspace</Link></li>
               <li><Link href="/dashboard" className={styles.footerLink}>Lab Studio IDE</Link></li>
               <li><Link href="/reports" className={styles.footerLink}>Download Reports</Link></li>
@@ -375,9 +377,10 @@ export default function HomePage() {
           <div>
             <div className={styles.footerColTitle}>Supported Runtimes</div>
             <ul className={styles.footerNavList}>
-              <li><a href="#runtimes" className={styles.footerLink}>Python 3</a></li>
-              <li><a href="#runtimes" className={styles.footerLink}>Java OpenJDK</a></li>
-              <li><a href="#runtimes" className={styles.footerLink}>C &amp; C++ (GCC)</a></li>
+              <li><Link href="/labs/deep-learning" className={styles.footerLink}>Deep Learning (PyTorch/TF)</Link></li>
+              <li><Link href="/labs/distributed-computing" className={styles.footerLink}>Distributed Computing (Java)</Link></li>
+              <li><a href="#runtimes" className={styles.footerLink}>Python 3 &amp; Colab</a></li>
+              <li><a href="#runtimes" className={styles.footerLink}>Java OpenJDK &amp; C/C++</a></li>
               <li><a href="#runtimes" className={styles.footerLink}>HTML5 &amp; WebDev</a></li>
             </ul>
           </div>

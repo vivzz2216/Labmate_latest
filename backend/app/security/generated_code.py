@@ -44,8 +44,13 @@ def validate_generated_code(code: str, language: str, capability=None, local_mod
                     name = node.args[0].value
                     if name in {".", ".."} or any(char in name for char in "/\\:"):
                         raise ValueError("File access must stay inside the lab working directory.")
-    elif language in {"java", "c", "cpp", "node"}:
+    elif language in {"java", "c", "cpp", "node", "distributed"}:
         stripped = re.sub(r'//[^\n]*|/\*.*?\*/|"(?:\\.|[^"\\])*"', '', code, flags=re.S)
         guarded_code = re.sub(r"process\.env\.PORT\b", "runtime_port", stripped)
-        if re.search(r"ProcessBuilder|Runtime\s*\.\s*getRuntime|\b(system|popen|exec|fork|socket|spawn|execSync|getenv)\s*\(|child_process|process\.env|/etc/|/proc/|cmd\.exe|powershell\.exe", guarded_code, re.I):
+        forbidden_pattern = (
+            r"ProcessBuilder|Runtime\s*\.\s*getRuntime|\b(system|popen|exec|fork|spawn|execSync|getenv)\s*\(|child_process|process\.env|/etc/|/proc/|cmd\.exe|powershell\.exe"
+            if language == "distributed" else
+            r"ProcessBuilder|Runtime\s*\.\s*getRuntime|\b(system|popen|exec|fork|socket|spawn|execSync|getenv)\s*\(|child_process|process\.env|/etc/|/proc/|cmd\.exe|powershell\.exe"
+        )
+        if re.search(forbidden_pattern, guarded_code, re.I):
             raise ValueError("This program requests system access outside the lab runtime.")

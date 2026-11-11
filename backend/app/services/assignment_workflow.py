@@ -101,7 +101,7 @@ def fence_claim(db):
 def commit_fenced(db):
     fence_claim(db)
     db.commit()
-LANGUAGES = ["python", "java", "c", "cpp", "html", "react", "node", "sql", "colab", "ubuntu"]
+LANGUAGES = ["python", "java", "c", "cpp", "html", "react", "node", "sql", "colab", "ubuntu", "distributed"]
 QUESTION_SCHEMA = {
     "type": "OBJECT",
     "properties": {"questions": {"type": "ARRAY", "items": {
@@ -349,7 +349,7 @@ def student_friendly_filename(question_text: str, language: str, index: int) -> 
         "html": ".html",
         "react": ".jsx",
         "node": ".js",
-        "sql": ".sql", "colab": ".py", "ubuntu": ".sh"
+        "sql": ".sql", "colab": ".py", "ubuntu": ".sh", "distributed": ".java"
     }
     ext = ext_map.get(language, ".py")
     cleaned = re.sub(r'[^a-zA-Z0-9\s]', ' ', question_text.lower())
@@ -668,6 +668,10 @@ async def _process_assignment(workflow_id: int):
                             code_instruction+='\nNOTEBOOK RUNTIME (CPU ONLY): Return Python source using numpy, pandas, sklearn, scipy, matplotlib, and when requested for deep learning, torch (PyTorch), tensorflow, and keras. Execution runs on CPU only: never call .cuda(), .to("cuda"), or tf.device("/GPU:0"). Keep neural networks compact (<=64 hidden units/filters, 5..15 epochs, small batch sizes) so CPU training finishes quickly. Read only supplied workspace datasets; if no dataset was supplied, create self-contained inline sample/synthetic data or use built-in offline toy datasets (e.g. load_iris, load_digits, make_classification, never substitute synthetic data for MNIST, Fashion-MNIST or IMDB; require supplied data when the exact dataset is mandatory). Never invent real training data or hardware capabilities. No os/subprocess imports, network, pip installs or Google Drive mounts. Do not download remote datasets or models (e.g. do not call fetch_20newsgroups, nltk.download, torch.hub.load, or torchvision.datasets). Use relative dataset paths or /content aliases. Prefer numeric_only=True explicitly when appropriate for mixed DataFrames. Print training/evaluation metrics and sample predictions, and capture plots with plt.show().'
                             code_instruction+=' Use pandas Copy on Write compatible assignments: df[col] = df[col].fillna(value) or df.loc[mask, col] = value. Never use df[col].fillna(..., inplace=True) or other chained inplace updates. Do not suppress data correctness warnings. Check requested row counts and missing-value invariants after cleaning.'
                             code_instruction+=' Use every library explicitly required by the question; do not silently replace it with another implementation.'
+                            if question.get('track') == 'deep_learning' or re.search(r'\b(?:perceptron|mlp|cnn|rnn|lstm|deep learning|neural network|backpropagation|keras|pytorch|torch|tensorflow)\b', question['text'], re.I):
+                                code_instruction+=' DEEP LEARNING GUIDELINES: Strictly use the framework requested (torch or tensorflow/keras). Plot training loss/accuracy across epochs with plt.plot() and call plt.show(). Print epoch loss progression and test evaluation metrics.'
+                        elif language == 'distributed':
+                            code_instruction += '\nDISTRIBUTED COMPUTING RUNTIME (Java 17 Multi-Process): Return complete Java source code. For client-server or distributed systems (Sockets, Java RMI, Election Algorithms, Lamport Clocks, Token Ring), write clean, robust, executable Java code coordinating on localhost (127.0.0.1) with dynamic ports (5000-8000). Print informative execution logs with timestamps and status indicators.'
                         elif language == 'ubuntu':
                             from .ubuntu_runtime import ubuntu_instructions
                             code_instruction += ubuntu_instructions()
@@ -821,7 +825,7 @@ async def _process_assignment(workflow_id: int):
                             except Exception as repair_error:
                                 error = (error + '\nRepair failed: ' + str(repair_error)).strip()
                     # Capture exactly what the runtime returned, including failures.
-                    if actual_language == 'java':
+                    if actual_language in {'java', 'distributed'}:
                         from .runtime_engine import java_class_name
                         class_name = java_class_name(code)
                         if class_name: src_filename = class_name + '.java'
@@ -829,6 +833,7 @@ async def _process_assignment(workflow_id: int):
                     theme = {
                         "python": "jupyter" if question.get("python_template") == "jupyter" else "idle",
                         "java": "notepad",
+                        "distributed": "notepad",
                         "c": "codeblocks",
                         "cpp": "codeblocks",
                         "node": "vscode",
