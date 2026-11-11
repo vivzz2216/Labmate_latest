@@ -754,7 +754,7 @@ async def _process_assignment(workflow_id: int):
                 
                 # Build student-like filename for IDE and runtime
                 src_filename = student_friendly_filename(question["text"], actual_language, index)
-                if actual_language == 'java':
+                if actual_language in {'java', 'distributed'}:
                     from .runtime_engine import java_class_name
                     class_name = java_class_name(code)
                     if class_name: src_filename = class_name + '.java'
@@ -902,7 +902,7 @@ async def _process_assignment(workflow_id: int):
                             code, display_output, theme, group, username, src_filename,
                             screenshot_style=screenshot_style, error=error if not success else "",
                             stdin_data=stdin_data, input_echoed=input_echoed, view_mode=capture_view,
-                            presentation="ide_evidence" if actual_language in {"python", "java", "c", "cpp"} and not actual_http else "evidence", language=actual_language,
+                            presentation="ide_evidence" if actual_language in {"python", "java", "c", "cpp", "distributed"} and not actual_http else "evidence", language=actual_language,
                             palette=question.get("jupyter_theme", "light") if theme == "jupyter" else "dark" if screenshot_style == "style_2" else "light",
                             evidence_kind="http" if actual_http else "terminal",
                         )

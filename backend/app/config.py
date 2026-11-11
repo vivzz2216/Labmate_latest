@@ -187,6 +187,7 @@ class Settings(BaseSettings):
     GLM_RPM_LIMIT: int = 30
     GLM_TPM_LIMIT: int = 60000
     EXECUTION_TIMEOUT: float = 30.0
+    RUN_TIMEOUT: float = 30.0
     COMPILATION_TIMEOUT: float = 30.0
     EXECUTION_MAX_OUTPUT_BYTES: int = 1048576
     JAVA_COMMAND: str = "java"

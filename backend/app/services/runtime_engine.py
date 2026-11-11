@@ -480,7 +480,8 @@ class RuntimeEngine:
                 return result
             if language == "distributed":
                 from .dc_runtime import execute_distributed_java
-                return await execute_distributed_java(code, directory, stdin=stdin, timeout=float(settings.RUN_TIMEOUT))
+                timeout_val = float(getattr(settings, "RUN_TIMEOUT", getattr(settings, "EXECUTION_TIMEOUT", 30.0)))
+                return await execute_distributed_java(code, directory, stdin=stdin, timeout=timeout_val)
             if language == "java":
                 name = java_class_name(code)
                 if not name:
