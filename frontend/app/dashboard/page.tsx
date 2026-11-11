@@ -75,8 +75,10 @@ export default function DashboardPage() {
           : ((response as any)?.assignments ?? (response as any)?.data ?? []);
 
         setAssignments(Array.isArray(list) ? list : []);
-      } catch (error) {
-        console.error("Failed to load dashboard data:", error);
+      } catch (error: any) {
+        if (error?.response?.status !== 401 && error?.response?.status !== 403) {
+          console.error("Failed to load dashboard data:", error);
+        }
         if (active && !cached) {
           setAssignments([]);
           setLoadError(

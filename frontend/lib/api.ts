@@ -176,6 +176,7 @@ api.interceptors.response.use(
             localStorage.removeItem("labmate_access_token");
             localStorage.removeItem("labmate_refresh_token");
             localStorage.removeItem("labmate_csrf_token");
+            localStorage.removeItem("labmate_user");
           }
           processQueue(refreshErr, null);
           return Promise.reject(refreshErr);
@@ -191,6 +192,12 @@ api.interceptors.response.use(
         }
         return rotateSession();
       } else {
+        if (typeof window !== "undefined" && (status === 401 || status === 403)) {
+          localStorage.removeItem("labmate_access_token");
+          localStorage.removeItem("labmate_refresh_token");
+          localStorage.removeItem("labmate_csrf_token");
+          localStorage.removeItem("labmate_user");
+        }
         processQueue(error, null);
         isRefreshing = false;
       }

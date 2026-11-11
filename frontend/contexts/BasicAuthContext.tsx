@@ -161,12 +161,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       return isComplete
     } catch (error) {
-      console.error('Failed to check profile:', error)
       const status = (error as any)?.response?.status
-      if (status === 401) {
+      if (status === 401 || status === 403) {
         clearStoredSession()
         setUser(null)
+        setProfileComplete(false)
+        return false
       }
+      console.error('Failed to check profile:', error)
       return false
     }
   }

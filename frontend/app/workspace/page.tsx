@@ -140,8 +140,10 @@ export default function WorkspacePage() {
       } else if (list.length > 0 && selectedId === null) {
         setSelectedId(list[0].id);
       }
-    } catch (err) {
-      console.error("Failed to load user assignments", err);
+    } catch (err: any) {
+      if (err?.response?.status !== 401 && err?.response?.status !== 403) {
+        console.error("Failed to load user assignments", err);
+      }
     } finally {
       setLoadingList(false);
     }
@@ -161,8 +163,10 @@ export default function WorkspacePage() {
         if (active) {
           setWorkspace(data);
         }
-      } catch (err) {
-        console.error("Failed to fetch assignment workspace", err);
+      } catch (err: any) {
+        if (err?.response?.status !== 401 && err?.response?.status !== 403) {
+          console.error("Failed to fetch assignment workspace", err);
+        }
         if (active) setWorkspaceError('This workspace could not be loaded. Select it again to retry.');
       } finally {
         if (active) setLoadingWorkspace(false);

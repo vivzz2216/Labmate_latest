@@ -239,7 +239,9 @@ export default function UserDashboard() {
           err instanceof Error ? err.message : "Failed to fetch assignments",
         );
       }
-      console.error("Error fetching assignments:", err);
+      if ((err as any)?.response?.status !== 401 && (err as any)?.response?.status !== 403) {
+        console.error("Error fetching assignments:", err);
+      }
     } finally {
       setLoading(false);
     }
@@ -277,7 +279,9 @@ export default function UserDashboard() {
         );
       }
     } catch (err) {
-      console.error("Failed to load profile settings:", err);
+      if ((err as any)?.response?.status !== 401 && (err as any)?.response?.status !== 403) {
+        console.error("Failed to load profile settings:", err);
+      }
     } finally {
       setProfileLoading(false);
     }

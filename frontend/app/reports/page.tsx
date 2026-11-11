@@ -143,8 +143,10 @@ export default function ReportsPage() {
           : (response?.assignments ?? response?.data ?? []);
         if (active) setAssignments(Array.isArray(list) ? list : []);
       })
-      .catch((cause) => {
-        console.error("Failed to load reports", cause);
+      .catch((cause: any) => {
+        if (cause?.response?.status !== 401 && cause?.response?.status !== 403) {
+          console.error("Failed to load reports", cause);
+        }
         if (active && !cached) setError(errorMessage(cause));
       })
       .finally(() => {
