@@ -1,7 +1,6 @@
 'use client'
 
 import React, { createContext, useContext, useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import api, { apiService, TokenResponse, BasicAuthUser } from '@/lib/api'
 
 interface User {
@@ -85,7 +84,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [profileComplete, setProfileComplete] = useState(true)
-  const router = useRouter()
 
   const persistTokens = (tokens: TokenResponse) => {
     if (typeof window === 'undefined') return
@@ -186,7 +184,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Homepage actions can send the user directly to the upload studio after sign-in.
     const destination = redirectTo === '/code-execution' || (redirectTo === '/admin/dashboard' && response.user.is_admin === true) || /^\/checkout\?pack=(quick-lab|lab-pack|semester-pack|college-pack|owner-payment-check|payment-check)$/.test(redirectTo || '') ? redirectTo! : '/dashboard'
-    router.push(destination)
+    if (typeof window !== 'undefined') {
+      window.location.assign(destination)
+    }
   }
 
   useEffect(() => {
@@ -305,7 +305,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       clearStoredSession()
       setUser(null)
-      router.push('/')
+      if (typeof window !== 'undefined') {
+        window.location.assign('/')
+      }
       setLoading(false)
     }
   }
