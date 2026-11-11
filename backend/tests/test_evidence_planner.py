@@ -53,6 +53,12 @@ class EvidencePlannerTests(unittest.TestCase):
             self.assertEqual(verification_summary(plan, True, output)["status"], "failed")
         self.assertEqual(verification_summary(plan, True, "5\n")["status"], "verified")
 
+    def test_descriptive_expected_output_accepts_successful_execution(self):
+        plan = plan_experiment("Java class hierarchy. Expected output: Circle area and Rectangle area printed accurately from subclass overrides.", "java")
+        summary = verification_summary(plan, True, "Circle area: 78.54\nRectangle area: 24.0\n")
+        self.assertEqual(summary["checks"]["output"], "passed")
+        self.assertEqual(summary["status"], "verified")
+
     def test_database_evidence_cannot_be_replaced_by_a_screenshot(self):
         plan = plan_experiment("Create a Node.js API that inserts a row into a database", "node")
         self.assertEqual(verification_summary(plan, True, "saved")["checks"]["database"], "unverified")

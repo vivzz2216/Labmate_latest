@@ -391,7 +391,7 @@ class RuntimeEngine:
                              prepare_files=None, collect_files=None, browser_tests=None, interaction_is_required=False,
                              objective="", api_tests=None, project_config=None):
         language = {"c++": "cpp", "javascript": "node", "webdev": "html", "mysql":"sql", "ipynb":"colab", "bash":"ubuntu", "shell":"ubuntu", "unix":"ubuntu"}.get(language.lower(), language.lower())
-        if language not in {"python", "java", "c", "cpp", "html", "react", "node", "sql", "colab", "ubuntu"}:
+        if language not in {"python", "java", "c", "cpp", "html", "react", "node", "sql", "colab", "ubuntu", "distributed"}:
             return RuntimeResult(False, error="Unsupported execution language.", exit_code=2)
         if language == 'ubuntu':
             from .ubuntu_runtime import capture_ubuntu

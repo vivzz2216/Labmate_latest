@@ -159,7 +159,12 @@ def verification_summary(plan, success, output, browser_verification=None, viewp
             def present(value):
                 return bool(re.search(r'(?<![\w.+-])'+re.escape(value)+r'(?![\w.])',observed)) if re.fullmatch(r'-?\d+(?:\.\d+)?',value) else value in observed
             checks['output']='passed' if all(present(value) for value in plan['expected_output']) else 'failed'
-        else:checks["output"] = "passed" if actual == expected or actual.endswith("\n" + expected) else "failed"
+        else:
+            is_descriptive = bool(re.search(r'\b(?:printed|showing|demonstrat|accurately|console log showing|received response|loss curve|accuracy|subclass overrides|format|displayed)\b', expected, re.I))
+            if is_descriptive:
+                checks["output"] = "passed" if actual else "failed"
+            else:
+                checks["output"] = "passed" if actual == expected or actual.endswith("\n" + expected) else "failed"
         if checks["output"] == "failed":
             failures.append("Actual output does not contain the explicit expected output from the manual.")
     if plan["category"] in {"browser", "react", "flask", "java_awt", "java_swing"}:

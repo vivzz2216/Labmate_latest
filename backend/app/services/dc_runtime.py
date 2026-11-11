@@ -307,3 +307,4 @@ async def _run_server_client(
                 server_proc.kill()
             except Exception:
                 pass
+

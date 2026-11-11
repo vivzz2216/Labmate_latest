@@ -31,3 +31,14 @@ def test_fit_aim_is_preserved():
 
 def test_python_deep_learning_uses_notebook():
     assert experiment_category('python', 'Train a neural network', 'import torch') == 'notebook'
+
+
+def test_disjunctive_framework_requirements():
+    prompt = 'Implement a Multilayer Perceptron with PyTorch or Keras to classify XOR.'
+    # PyTorch implementation satisfies 'PyTorch or Keras'
+    assert missing_required_libraries(prompt, 'import torch\nimport torch.nn as nn\nx = torch.tensor([1.0])') == []
+    # Keras implementation satisfies 'PyTorch or Keras'
+    assert missing_required_libraries(prompt, 'import keras\nmodel = keras.Sequential()') == []
+    # Neither satisfies 'PyTorch or Keras'
+    missing = missing_required_libraries(prompt, 'import numpy as np\nx = np.array([1])')
+    assert len(missing) == 1 and ('torch' in missing[0] and 'keras' in missing[0])

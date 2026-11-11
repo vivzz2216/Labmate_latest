@@ -75,9 +75,9 @@ export interface LabWorkflow {
   agent_plan?: {
     revision?: number;
     status?: string;
-    answers?: Record<string,string>;
-    questions?: {id:string;prompt:string;options:string[];source_excerpt:string}[];
-    tasks?: {id:number;topic:string;reason:string;features:string[];source_policy:string;report_policy:string}[];
+    answers?: Record<string, string>;
+    questions?: { id: string; prompt: string; options: string[]; source_excerpt: string }[];
+    tasks?: { id: number; topic: string; reason: string; features: string[]; source_policy: string; report_policy: string }[];
   };
   queue_position: number | null;
   stage: string;
@@ -113,8 +113,8 @@ export interface BatchItem {
 }
 
 export const workflowApi = {
-  async clarify(uploadId:number, revision:number, answers:Record<string,string>):Promise<LabWorkflow> {
-    return (await api.post(`/api/workflows/${uploadId}/clarify`,{revision,answers})).data;
+  async clarify(uploadId: number, revision: number, answers: Record<string, string>): Promise<LabWorkflow> {
+    return (await api.post(`/api/workflows/${uploadId}/clarify`, { revision, answers })).data;
   },
   async extract(uploadId: number): Promise<LabWorkflow> {
     return (await api.post(`/api/workflows/${uploadId}/extract`)).data;

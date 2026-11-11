@@ -152,3 +152,4 @@ async def get_lab_detail(slug: str) -> Dict[str, Any]:
         if category["slug"] == normalized or category["track"].replace("_", "-") == normalized:
             return category
     raise HTTPException(status_code=404, detail=f"Lab category '{slug}' not found.")
+

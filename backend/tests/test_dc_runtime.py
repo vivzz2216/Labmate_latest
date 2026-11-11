@@ -108,3 +108,4 @@ def test_detect_topology_single_driver():
     }
     server_class, client_class, mains = detect_topology(files)
     assert mains == ["BullyElection"]
+
