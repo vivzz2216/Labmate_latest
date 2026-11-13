@@ -16,6 +16,8 @@ from types import SimpleNamespace
 import pdfplumber
 from docx import Document
 from fastapi import HTTPException
+from .notebook_magics import neutralize_magics
+from .notebook_runtime import compute_budget_instruction
 from sqlalchemy import select, update, case
 from docx.shared import Inches, Pt
 
@@ -665,7 +667,7 @@ async def _process_assignment(workflow_id: int):
                             display_number = report_number(upload.original_filename if len(questions)==1 else '', question['text'])
                             code_instruction += f' Label SQL comments Experiment {display_number}; the upload filename supplies the submission label. Do not copy conflicting class or department headers. '
                         elif language=='colab':
-                            code_instruction+='\nNOTEBOOK RUNTIME (CPU ONLY): Return Python source using numpy, pandas, sklearn, scipy, matplotlib, and when requested for deep learning, torch (PyTorch), tensorflow, and keras. Execution runs on CPU only: never call .cuda(), .to("cuda"), or tf.device("/GPU:0"). Keep neural networks compact (<=64 hidden units/filters, 5..15 epochs, small batch sizes) so CPU training finishes quickly. Read only supplied workspace datasets; if no dataset was supplied, create self-contained inline sample/synthetic data or use built-in offline toy datasets (e.g. load_iris, load_digits, make_classification, never substitute synthetic data for MNIST, Fashion-MNIST or IMDB; require supplied data when the exact dataset is mandatory). Never invent real training data or hardware capabilities. No os/subprocess imports, network, pip installs or Google Drive mounts. Do not download remote datasets or models (e.g. do not call fetch_20newsgroups, nltk.download, torch.hub.load, or torchvision.datasets). Use relative dataset paths or /content aliases. Prefer numeric_only=True explicitly when appropriate for mixed DataFrames. Print training/evaluation metrics and sample predictions, and capture plots with plt.show().'
+                            code_instruction+='\nNOTEBOOK RUNTIME (CPU ONLY): Return Python source using numpy, pandas, sklearn, scipy, matplotlib, and when requested for deep learning, torch (PyTorch), tensorflow, and keras. Execution runs on CPU only: never call .cuda(), .to("cuda"), or tf.device("/GPU:0"). ' + compute_budget_instruction() + 'Read only supplied workspace datasets; if no dataset was supplied, create self-contained inline sample/synthetic data or use built-in offline toy datasets (e.g. load_iris, load_digits, make_classification, never substitute synthetic data for MNIST, Fashion-MNIST or IMDB; require supplied data when the exact dataset is mandatory). Never invent real training data or hardware capabilities. No os/subprocess imports, network, pip installs or Google Drive mounts. Do not download remote datasets or models (e.g. do not call fetch_20newsgroups, nltk.download, torch.hub.load, or torchvision.datasets). Use relative dataset paths or /content aliases. Prefer numeric_only=True explicitly when appropriate for mixed DataFrames. Print training/evaluation metrics and sample predictions, and capture plots with plt.show().'
                             code_instruction+=' Use pandas Copy on Write compatible assignments: df[col] = df[col].fillna(value) or df.loc[mask, col] = value. Never use df[col].fillna(..., inplace=True) or other chained inplace updates. Do not suppress data correctness warnings. Check requested row counts and missing-value invariants after cleaning.'
                             code_instruction+=' Use every library explicitly required by the question; do not silently replace it with another implementation.'
                             if question.get('track') == 'deep_learning' or re.search(r'\b(?:perceptron|mlp|cnn|rnn|lstm|deep learning|neural network|backpropagation|keras|pytorch|torch|tensorflow)\b', question['text'], re.I):
@@ -777,6 +779,7 @@ async def _process_assignment(workflow_id: int):
                         if language_mismatch:
                             raise ValueError(f"Generated language {actual_language} does not match requested language {language}; execution was not attempted.")
                         if evidence_plan['category'] == 'notebook':
+                            code = neutralize_magics(code)
                             from .colab_requirements import missing_required_libraries
                             missing = missing_required_libraries(question['text'], code)
                             if missing: raise ValueError('Required notebook libraries missing from solution: '+', '.join(missing))
@@ -803,6 +806,7 @@ async def _process_assignment(workflow_id: int):
                                 repaired = await repair_generated_code(question["text"], actual_language, code, error or output)
                                 code = repaired
                                 if evidence_plan['category'] == 'notebook':
+                                    code = neutralize_magics(code)
                                     from .colab_requirements import missing_required_libraries
                                     missing = missing_required_libraries(question['text'], code)
                                     if missing: raise ValueError('Required notebook libraries missing from solution: '+', '.join(missing))

@@ -16,6 +16,7 @@ from playwright.async_api import async_playwright
 from ..config import settings
 from .browser_capture import CaptureBrowserUnavailable, acquire_capture_context, launch_capture_browser
 from .lab_resources import allowed_resource, resource_file
+from .notebook_magics import neutralize_magics
 from .notebook_runtime import ColabPythonKernel
 from .sql_runtime import SQLSession, verify_sql_exercise
 
@@ -55,12 +56,12 @@ def notebook_cells(code):
                 if not isinstance(source, str):
                     raise ValueError("Invalid notebook source.")
                 result.append(
-                    {"type": cell["cell_type"], "code": source}
+                    {"type": cell["cell_type"], "code": neutralize_magics(source)}
                     if cell["cell_type"] == "code"
                     else {"type": "markdown", "content": source}
                 )
             return result
-    return [{"type": "code", "code": code}]
+    return [{"type": "code", "code": neutralize_magics(code)}]
 
 
 def _summarize_sql_statement(stmt: str, leading_comment: str = "") -> str:
@@ -292,8 +293,8 @@ async def capture_sql(
                         "kind": "source_preview",
                         "source_file": src_filename,
                         "source_ranges": [(start_line, end_line)],
-                        "result_statement_index": page_target_st['index'] if page_target_st and page_target_st.get('type')=='SELECT' else None,
-                        "result_complete": bool(page_target_st and page_target_st.get('type')=='SELECT' and page_target_st.get('start_line',0)>=start_line and not page_target_st.get('truncated') and len(page_target_st.get('rows',[]))<=RESULT_ROWS_PER_PAGE),
+                        "result_statement_index": page_target_st['index'] if page_target_st and page_target_st.get('success') and page_target_st.get('type')=='SELECT' else None,
+                        "result_complete": bool(page_target_st and page_target_st.get('success') and page_target_st.get('type')=='SELECT' and page_target_st.get('start_line',0)>=start_line and not page_target_st.get('truncated') and len(page_target_st.get('rows',[]))<=RESULT_ROWS_PER_PAGE),
                         "active_result_title": active_page_tab["title"] if active_page_tab else None,
                         "active_result_table": active_page_tab["tableName"] if active_page_tab else None,
                         "active_result_columns": active_page_tab["columns"] if active_page_tab else [],

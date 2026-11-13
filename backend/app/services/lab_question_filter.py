@@ -9,8 +9,10 @@ PROGRAM = re.compile(r"\b(?:program(?:ming)?|code|script|function|application|ap
 EXPLICIT_PROGRAM = re.compile(r"\b(?:write|create|develop|implement|build)\s+(?:a\s+|an\s+)?(?:(?:python|java|c\+\+|c|html|react|node)\s+)?(?:program|code|script|application|web\s+page)\b", re.I)
 
 
+_HANDWRITTEN_SUBJECT = r"(?!\s+(?:digits?|characters?|letters?|numerals?|text|images?|signatures?|data(?:set)?s?|recognition)\b)"
 HANDWRITTEN_REGEX = re.compile(
-    r"\b(handwritten|hand[- ]written|by hand|write by hand|draw by hand|draw neatly|sketch|manual drawing)\b",
+    r"\b(handwritten" + _HANDWRITTEN_SUBJECT + r"|hand[- ]written" + _HANDWRITTEN_SUBJECT
+    + r"|by hand|write by hand|draw by hand|draw neatly|sketch|manual drawing)\b",
     re.I
 )
 
@@ -18,6 +20,19 @@ HANDWRITTEN_REGEX = re.compile(
 def is_handwritten_question(text: str) -> bool:
     """Detect if a question or instruction explicitly requests handwritten work."""
     return bool(HANDWRITTEN_REGEX.search(str(text or "")))
+
+
+def practical_text(text: str) -> str:
+    """The part of an experiment a student has to program.
+
+    A lab manual puts Theory, Learning Objectives and Viva-Voce sections around the program. Those headings
+    describe the manual's layout; they must not make the whole experiment look theoretical.
+    """
+    lines = str(text or "").splitlines()
+    if len(lines) < 2:
+        return str(text or "")
+    kept = programming_lines(lines)
+    return chr(10).join(kept) if kept else str(text or "")
 
 
 def is_actionable_lab_question(text: str, language: str = "", excluded_section: bool = False) -> bool:
@@ -29,8 +44,9 @@ def is_actionable_lab_question(text: str, language: str = "", excluded_section: 
         return False
     if SECTION.match(question):
         return False
-    # A request to explain concepts does not become actionable just because it mentions code.
-    if THEORETICAL.search(question):
+    # A request to explain concepts does not become actionable just because it mentions code. Judge the
+    # practical part only: a manual's "Viva-Voce Questions" section must not reject its programming task.
+    if THEORETICAL.search(practical_text(question)):
         return False
     # A known lab language supplies context that valid UI task prose may omit.
     known_language = language.lower() in {"html", "react", "node", "python", "java", "c", "cpp", "sql", "colab", "ubuntu"}

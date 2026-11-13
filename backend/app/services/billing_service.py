@@ -15,7 +15,6 @@ from sqlalchemy.exc import IntegrityError
 from ..config import settings
 from ..models import (CreditWallet, CreditLedger, PackPurchase, WorkflowCreditHold, User)
 from ..security.operator_access import is_user_credit_exempt
-from ..security.operator_access import is_admin_user
 
 PACKS = (
     {'id': 'quick-lab', 'name': 'Quick Lab', 'amount': 2900, 'credits': 10,
@@ -202,19 +201,13 @@ def order_view(db, row):
 
 async def create_order(db, user_id, pack_id, request_key):
     require_gateway()
+    # Both ₹1 check packs are retired; they stay in PACK_BY_ID so old orders still render.
     if pack_id in {PAYMENT_CHECK['id'], OWNER_PAYMENT_CHECK['id']}:
         raise HTTPException(404, 'Payment pack not found.')
     pack = PACK_BY_ID.get(pack_id)
     if not pack: raise HTTPException(400, 'Choose a valid LabMate pack.')
-    if pack_id == PAYMENT_CHECK['id'] and not (settings.RAZORPAY_PAYMENT_CHECK_ENABLED and settings.RAZORPAY_MODE == 'live'):
-        raise HTTPException(404, 'The ₹1 payment check is not currently available.')
     if os.getenv('RAILWAY_ENVIRONMENT_ID') and settings.RAZORPAY_MODE != 'live':
         raise HTTPException(503, 'Live Razorpay payments are not configured yet.')
-    if pack.get('admin_only'):
-        if not is_admin_user(db.get(User, user_id)):
-            raise HTTPException(404, 'Payment pack not found.')
-        if settings.RAZORPAY_MODE != 'live':
-            raise HTTPException(503, 'The ₹1 payment check requires live Razorpay keys.')
     row = db.scalar(select(PackPurchase).where(PackPurchase.user_id == user_id,
         PackPurchase.mode == settings.RAZORPAY_MODE, PackPurchase.request_key == request_key))
     if row:

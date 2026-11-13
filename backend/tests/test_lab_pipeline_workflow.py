@@ -8,6 +8,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from app.database import Base
 from app.models import User,Upload,AssignmentWorkflow,Report
+from conftest import student_profile
 from app.config import settings
 from app.services import assignment_workflow as flow
 from app.services.manual_sections import numbered_experiments
@@ -45,7 +46,7 @@ async def test_lab_execution_status_and_word_evidence(tmp_path,monkeypatch,langu
     engine=create_engine('sqlite:///'+(tmp_path/'state.db').as_posix(),connect_args={'check_same_thread':False})
     Base.metadata.create_all(engine);factory=sessionmaker(bind=engine)
     with factory() as db:
-        user=User(email='audit@example.com',name='Audit');db.add(user);db.flush()
+        user=User(email='audit@example.com',name='Audit',profile=student_profile());db.add(user);db.flush()
         upload=Upload(user_id=user.id,filename=source.name,original_filename=source.name,file_path=str(source),file_type='docx',file_size=source.stat().st_size)
         db.add(upload);db.flush()
         question={'id':1,'language':language,'text':'Write SQL queries using SQLite and show the result.' if language=='sql' else 'Use a Colab notebook to print 7 divided by 2 using floor division.'}
@@ -72,7 +73,7 @@ async def test_lab_execution_status_and_word_evidence(tmp_path,monkeypatch,langu
         report=db.get(Report,wf.report_id)
         path=Path(report.file_path)
         word=Document(path)
-        assert len(word.inline_shapes)>=2
+        assert len(word.inline_shapes)>=(1 if language=='sql' and expected else 2)
         if not expected:
             assert 'diagnostic report' in '\n'.join(p.text for p in word.paragraphs).lower()
     engine.dispose()

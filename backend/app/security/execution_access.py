@@ -17,8 +17,6 @@ def check_execution_access(user, *, require_profile=True):
     if is_admin_user(user):
         return
     if settings.LOCAL_OPEN_EXECUTION and not os.getenv('RAILWAY_ENVIRONMENT_ID'):
-        if not user or not getattr(user, 'is_active', True):
-            raise ValueError('Sign in with an active account to run labs.')
         if require_profile:
             from ..services.profile_service import require_student_profile
             require_student_profile(user)

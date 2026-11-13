@@ -48,7 +48,7 @@ export const LAB_CATEGORIES: LabCategory[] = [
       "Automated convergence and metric plotting (Loss, Accuracy, Confusion Matrix)",
       "Strict framework validation — guarantees requested models are trained without silent fallback",
       "Dark & Light Colab high-resolution notebook captures",
-      "Integrated dataset synthetic generators & standard benchmark loaders (MNIST, CIFAR-10, Iris)",
+      "Built-in offline datasets (scikit-learn digits, Iris, synthetic generators) and your own dataset files",
     ],
     environmentSpecs: [
       { label: "Engine", value: "Railway MicroVM Sandboxed Kernel" },
@@ -141,21 +141,21 @@ export const LAB_CATEGORIES: LabCategory[] = [
         id: "dl-5",
         number: 5,
         title: "Convolutional Neural Network (CNN) for Image Classification",
-        aim: "Design a Convolutional Neural Network with Conv2D, MaxPooling, and Dense layers for image classification on the MNIST/Fashion-MNIST dataset.",
+        aim: "Design a Convolutional Neural Network with Conv2D, MaxPooling, and Dense layers to classify handwritten digit images.",
         category: "Computer Vision",
         difficulty: "Intermediate",
         frameworks: ["TensorFlow/Keras", "PyTorch", "Matplotlib"],
         runtime: "colab",
         track: "deep_learning",
         description:
-          "Construct feature extraction pipelines with spatial convolutions and pooling filters to classify 2D handwritten digits or clothing items.",
+          "Construct feature extraction pipelines with spatial convolutions and pooling filters to classify the 8x8 handwritten digit images of the scikit-learn digits dataset. Datasets such as MNIST can be supplied as files with the experiment.",
         expectedOutputs: [
           "Conv2D feature map dimensions & parameter summary",
           "Sample predictions grid with ground-truth vs predicted labels",
-          "Test set accuracy exceeding 95%",
+          "Test set accuracy on held-out digit images",
         ],
         starterPrompt:
-          "Build and evaluate a Convolutional Neural Network (CNN) for MNIST handwritten digit recognition. Include Convolution, MaxPool, Flatten, and Dense layers. Train for 5 epochs and display sample predictions with accuracy.",
+          "Build and evaluate a Convolutional Neural Network (CNN) for handwritten digit recognition using the scikit-learn digits dataset of 8x8 images. Include Convolution, MaxPool, Flatten, and Dense layers. Train for 5 epochs and display sample predictions with accuracy.",
       },
       {
         id: "dl-6",
@@ -180,22 +180,22 @@ export const LAB_CATEGORIES: LabCategory[] = [
       {
         id: "dl-7",
         number: 7,
-        title: "Transfer Learning with Pretrained Vision Models",
-        aim: "Fine-tune a pretrained deep network (MobileNetV2 or ResNet50) using feature extraction and fine-tuning for custom classification tasks.",
+        title: "Transfer Learning with a Pretrained Feature Extractor",
+        aim: "Pretrain a network on one set of classes, freeze its feature extractor, and train a new classification head on different classes.",
         category: "Transfer Learning",
         difficulty: "Advanced",
-        frameworks: ["PyTorch / Keras Applications", "PIL", "Matplotlib"],
+        frameworks: ["PyTorch / Keras", "scikit-learn", "Matplotlib"],
         runtime: "colab",
         track: "deep_learning",
         description:
-          "Freeze base convolutional weights, add custom classification heads, and unfreeze top layers for fine-tuning with low learning rates.",
+          "Freeze the pretrained layers, attach a fresh classification head, and train only the head to measure how well learned features transfer. Downloading ImageNet weights is not possible in the offline sandbox, so the source task is pretrained inside the experiment.",
         expectedOutputs: [
-          "Transfer learning feature extractor accuracy benchmark",
-          "Fine-tuning epoch progression logs",
-          "Prediction confidence scores on test images",
+          "Source-task pretraining loss",
+          "Head-only training loss on the new classes",
+          "Frozen-feature transfer accuracy on held-out samples",
         ],
         starterPrompt:
-          "Implement Transfer Learning using a pretrained MobileNetV2 model. Freeze base weights, train a custom classification head on a multi-class dataset, and report accuracy.",
+          "Implement Transfer Learning with the scikit-learn digits dataset. Pretrain a small neural network on digits 0 to 4, freeze its feature layers, train a new classification head on digits 5 to 9, and report the held-out accuracy.",
       },
       {
         id: "dl-8",

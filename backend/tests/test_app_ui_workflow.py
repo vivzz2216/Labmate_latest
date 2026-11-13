@@ -13,6 +13,7 @@ from sqlalchemy.orm import sessionmaker
 from app.database import Base,get_db
 from app.middleware.auth import get_current_user
 from app.models import AssignmentWorkflow,Report,Upload,User
+from conftest import student_profile
 from app.services.assignment_workflow import process_assignment
 from fixtures.app_ui_cases import FLASK_FILES,FLASK_TESTS,SWING_SOURCE,GUI_TESTS
 
@@ -28,7 +29,7 @@ async def test_real_app_ui_workflow_word_preview_and_owned_download(tmp_path,lan
     engine=create_engine('sqlite:///'+str(tmp_path/'state.db'),connect_args={'check_same_thread':False})
     Base.metadata.create_all(engine);factory=sessionmaker(bind=engine)
     with factory() as db:
-        user=User(email='app-ui@example.test',name='UI Student');db.add(user);db.flush();user_id=user.id
+        user=User(email='app-ui@example.test',name='UI Student',profile=student_profile());db.add(user);db.flush();user_id=user.id
         upload=Upload(user_id=user_id,filename='manual.docx',original_filename='manual.docx',file_path=str(manual),file_type='docx',file_size=manual.stat().st_size)
         db.add(upload);db.flush();upload_id=upload.id
         workflow=AssignmentWorkflow(upload_id=upload.id,status='processing',stage='generate',language='auto',

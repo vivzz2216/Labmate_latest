@@ -13,6 +13,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
 from app.models import AssignmentWorkflow, Report, Upload, User
+from conftest import student_profile
 from app.security.generated_code import validate_generated_code
 from app.services.runtime_engine import runtime_engine
 from app.services.assignment_workflow import SolutionExecution, process_assignment
@@ -99,7 +100,7 @@ class FailedReportGateTests(unittest.IsolatedAsyncioTestCase):
             Base.metadata.create_all(engine)
             factory = sessionmaker(bind=engine)
             with factory() as db:
-                user = User(email="evidence@example.test", name="Evidence Student")
+                user = User(email="evidence@example.test", name="Evidence Student", profile=student_profile())
                 db.add(user)
                 db.flush()
                 upload = Upload(user_id=user.id, filename="manual.docx", original_filename="manual.docx",
@@ -152,7 +153,7 @@ class FailedReportGateTests(unittest.IsolatedAsyncioTestCase):
             Base.metadata.create_all(engine)
             factory = sessionmaker(bind=engine)
             with factory() as db:
-                user = User(email="webdiag@example.test", name="Web Test Student")
+                user = User(email="webdiag@example.test", name="Web Test Student", profile=student_profile())
                 db.add(user)
                 db.flush()
                 upload = Upload(user_id=user.id, filename="manual.docx", original_filename="manual.docx",
@@ -227,7 +228,7 @@ class WorkflowInterleaveRegressionTests(unittest.IsolatedAsyncioTestCase):
             Base.metadata.create_all(engine)
             factory = sessionmaker(bind=engine)
             with factory() as db:
-                user = User(email="c_student@example.test", name="C Student")
+                user = User(email="c_student@example.test", name="C Student", profile=student_profile())
                 db.add(user)
                 db.flush()
                 upload = Upload(user_id=user.id, filename="manual.docx", original_filename="manual.docx",

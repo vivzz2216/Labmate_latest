@@ -35,7 +35,7 @@ def attach_windows_job(process, memory_bytes=4*1024**3):
         try:
             attached=wintypes.BOOL()
             if not kernel.IsProcessInJob(target,handle,ctypes.byref(attached)):raise RuntimeError('Cannot inspect notebook worker job.')
-            if not attached and not kernel.AssignProcessToJobObject(target_job:=handle,target):raise RuntimeError('Cannot limit the notebook interpreter process.')
+            if not attached and not kernel.AssignProcessToJobObject(handle,target):raise RuntimeError('Cannot limit the notebook interpreter process.')
         finally:kernel.CloseHandle(target)
     close.ensure_pid=ensure_pid
     return close

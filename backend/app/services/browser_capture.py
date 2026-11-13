@@ -12,13 +12,11 @@ Provides managed Playwright browser pooling per event loop / thread:
 """
 
 import asyncio
-import atexit
 import contextlib
 import logging
 import os
 import threading
 import tempfile
-import shutil
 from typing import Any, AsyncIterator, Iterator, Optional
 from playwright.async_api import Browser as AsyncBrowser, BrowserContext as AsyncContext, Error as AsyncPlaywrightError, async_playwright
 from playwright.sync_api import Browser as SyncBrowser, BrowserContext as SyncContext, Error as SyncPlaywrightError, sync_playwright
@@ -29,12 +27,16 @@ logger = logging.getLogger(__name__)
 
 # Python falls back to a writable directory when Windows TEMP is inaccessible;
 # the Playwright Node driver does not. Set its environment before starting it.
-# Each launch still creates its own random profile below this process-owned root.
+# Each launch still creates its own random profile below this root. The root is one
+# stable directory shared by every start: a fresh mkdtemp per process left a
+# directory behind whenever the backend was killed or reloaded before atexit ran.
 if os.name == 'nt':
-    _capture_temp_root = tempfile.mkdtemp(prefix='labmate-browser-')
+    _capture_temp_root = tempfile.gettempdir()
+    if os.path.basename(_capture_temp_root) != 'labmate-browser-tmp':
+        _capture_temp_root = os.path.join(_capture_temp_root, 'labmate-browser-tmp')
+    os.makedirs(_capture_temp_root, exist_ok=True)
     for _temp_key in ('TEMP', 'TMP', 'TMPDIR'):
         os.environ[_temp_key] = _capture_temp_root
-    atexit.register(shutil.rmtree, _capture_temp_root, ignore_errors=True)
 
 # The venv-bundled Node driver is blocked from creating browser profiles on some
 # Windows installations. Use the installed vendor Node without overriding an

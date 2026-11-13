@@ -161,6 +161,67 @@ def batch_status(batch_id, user, db):
     }
 
 
+class PromptStartInput(BaseModel):
+    questions: list[QuestionInput] = Field(min_length=1, max_length=20)
+    title: str = Field(default="Lab experiment", min_length=1, max_length=120)
+
+
+def _write_prompt_manual(path, title, questions):
+    from docx import Document
+    document = Document()
+    document.add_heading(title, level=1)
+    for question in questions:
+        document.add_heading(f"Experiment {question['id']}", level=2)
+        document.add_paragraph(question["text"])
+    document.save(path)
+
+
+@router.post("/from-prompt")
+async def start_from_prompt(data: PromptStartInput, user: User = Depends(get_current_user),
+                            db: Session = Depends(get_db), csrf: bool = Depends(require_csrf_token)):
+    """Start a lab from typed experiment text (a lab catalogue launch) with no uploaded manual.
+
+    The text is saved as a small Word manual, so review, execution and the report
+    treat it exactly like an upload whose questions are already extracted.
+    """
+    if len({q.id for q in data.questions}) != len(data.questions):
+        raise HTTPException(400, "Question IDs must be unique.")
+    questions = [{"id": q.id, "text": q.text.strip(), "language": "python" if q.language == "auto" else q.language,
+                  **({"track": q.track} if q.track else {})} for q in data.questions]
+    if any(not question["text"] for question in questions):
+        raise HTTPException(400, "Every question needs some text.")
+    title = re.sub(r"\s+", " ", data.title).strip() or "Lab experiment"
+    name = normalize_output_name(title, default="lab_experiment", max_length=60)
+    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+    stored = os.path.join(settings.UPLOAD_DIR, f"{uuid.uuid4().hex}.docx")
+    try:
+        await asyncio.to_thread(_write_prompt_manual, stored, title, questions)
+        os.chmod(stored, 0o600)
+        from ..services.storage_service import storage_service
+        storage_service.sync_file(stored)
+        upload = Upload(user_id=user.id, filename=os.path.basename(stored), original_filename=name + ".docx",
+                        file_path=stored, file_type="docx", file_size=os.path.getsize(stored),
+                        language=next((q["language"] for q in questions if q["language"] != "theory"), "theory"))
+        db.add(upload)
+        db.flush()
+        workflow = AssignmentWorkflow(upload_id=upload.id, status="ready", stage="review", progress=20, language="auto",
+                                      output_name=name, questions=questions, results=[], logs=[])
+        db.add(workflow)
+        db.commit()
+    except Exception:
+        db.rollback()
+        if os.path.exists(stored):
+            os.unlink(stored)
+        raise
+    db.refresh(upload)
+    db.refresh(workflow)
+    return {"upload": {"id": upload.id, "filename": upload.filename, "original_filename": upload.original_filename,
+                       "file_type": upload.file_type, "file_size": upload.file_size,
+                       "uploaded_at": upload.uploaded_at.isoformat() if upload.uploaded_at else None,
+                       "language": upload.language},
+            "workflow": workflow_response(workflow, db)}
+
+
 @router.post("/batch-upload")
 async def batch_upload(
     files: list[UploadFile] = File(...),
@@ -336,7 +397,7 @@ async def process(upload_id: int, data: ProcessInput, request: Request, backgrou
     questions = [{"id": q.id, "text": q.text.strip(), "language": "python" if q.language == "auto" else q.language,
                   **({'track': q.track or data.track} if (q.track or data.track) else {}),
                   **({'datasets':q.datasets} if q.datasets else {}),
-                  **({'python_template':q.python_template, 'jupyter_theme':q.jupyter_theme} if q.language in {'python','auto'} or data.language in {'python','auto'} else {}),
+                  **({'python_template':q.python_template, 'jupyter_theme':q.jupyter_theme} if q.python_template == 'jupyter' and (q.language in {'python','auto'} or data.language in {'python','auto'}) else {}),
                   **({'colab_theme':q.colab_theme} if q.language=='colab' or data.language=='colab' else {}),
                   **({'browser_theme':q.browser_theme} if q.browser_theme == 'chrome' or q.language in {'html','react','node'} or data.language in {'html','react','node'} else {})} for q in data.questions]
     if sum(sum(len(name)+len(content) for name,content in q.datasets.items()) for q in data.questions)>8*1024*1024:

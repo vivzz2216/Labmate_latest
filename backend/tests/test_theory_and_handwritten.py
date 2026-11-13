@@ -16,6 +16,9 @@ class TheoryAndHandwrittenFilterTests(unittest.TestCase):
         self.assertTrue(is_handwritten_question("This experiment must be handwritten on A4 sheets."))
         self.assertTrue(is_handwritten_question("Hand-written viva questions with diagrams."))
         self.assertTrue(is_handwritten_question("Draw by hand the state machine diagram."))
+        # The data a program classifies is not an instruction to write by hand.
+        self.assertFalse(is_handwritten_question("Build a CNN for MNIST handwritten digit recognition."))
+        self.assertFalse(is_handwritten_question("Train a model on a hand-written characters dataset."))
         self.assertTrue(is_handwritten_question("Draw neatly the architecture of 8086."))
         self.assertTrue(is_handwritten_question("Sketch the layout of the website."))
 

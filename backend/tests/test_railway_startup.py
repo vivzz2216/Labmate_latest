@@ -40,6 +40,9 @@ def test_explicit_directory_override_is_preserved(tmp_path, monkeypatch):
 
 def test_railway_requires_postgres_and_a_stable_secret(monkeypatch):
     monkeypatch.setenv("RAILWAY_ENVIRONMENT_ID", "test-environment")
+    # backend/.env is loaded into the environment on import; a developer's local "development" isolation
+    # must not turn this into an isolation error before the settings under test are reached.
+    monkeypatch.setenv("EXECUTION_ISOLATION", "required")
     with pytest.raises(ValidationError, match="DATABASE_URL"):
         Settings(_env_file=None, DATABASE_URL="sqlite://", SECRET_KEY="s" * 64)
     with pytest.raises(ValidationError, match="SECRET_KEY"):

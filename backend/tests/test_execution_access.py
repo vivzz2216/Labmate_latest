@@ -54,6 +54,16 @@ class ExecutionAccessTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual((await execution_user(student('QA@example.org'))).email,'QA@example.org')
             with self.assertRaises(ValueError): check_execution_access(SimpleNamespace(email='outsider@example.org'))
 
+    async def test_runtime_gate_agrees_with_admission(self):
+        from app.security.operator_access import execution_opted_in
+        with patch.object(settings,'EXECUTION_ALLOWED_EMAILS',''),patch.object(settings,'BETA_TEST_EMAILS',''):
+            with patch.dict('os.environ',{},clear=True):
+                self.assertTrue(execution_opted_in())  # an open local install runs notebook and Ubuntu labs too
+            with patch.dict('os.environ',{'RAILWAY_ENVIRONMENT_ID':'production'}):
+                self.assertFalse(execution_opted_in())
+        with patch.dict('os.environ',{'RAILWAY_ENVIRONMENT_ID':'production'}),patch.object(settings,'EXECUTION_ALLOWED_EMAILS','*'):
+            self.assertTrue(execution_opted_in())
+
     async def test_unconfigured_local_development_remains_available(self):
         with patch.dict('os.environ',{},clear=True),patch.object(settings,'EXECUTION_ALLOWED_EMAILS',''):
             check_execution_access(student('local@example.com'))

@@ -9,6 +9,7 @@ from app.database import Base, get_db
 from app.main import app
 from app.middleware.csrf import require_csrf_token
 from app.models import User
+from conftest import student_profile
 from app.security.jwt import create_access_token
 import bcrypt
 
@@ -49,7 +50,8 @@ def client():
 @pytest.fixture(scope="function")
 def auth_headers(db):
     hashed_password = bcrypt.hashpw("SecurePass123!".encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-    user = User(email="reviewer@example.com", name="Vivek Pillai", password_hash=hashed_password)
+    user = User(email="reviewer@example.com", name="Vivek Pillai", password_hash=hashed_password,
+                profile=student_profile())
     db.add(user)
     db.commit()
     db.refresh(user)

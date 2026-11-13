@@ -23,6 +23,7 @@ class WorkerHealth:
         self._expires = 0.0
         self._identity = None
         self._result = {'status': 'checking', 'available': False, 'checked_at': None}
+        self._probe = None  # The loop keeps only weak references to tasks.
 
     def invalidate(self):
         self._expires = 0.0
@@ -35,7 +36,7 @@ class WorkerHealth:
                 return dict(self._result)
             if wait_timeout is not None and (force or time.monotonic() >= self._expires):
                 if not self._lock.locked():
-                    asyncio.create_task(self._railway_check(force))
+                    self._probe = asyncio.create_task(self._railway_check(force))
                 return dict(self._result)
             return await self._railway_check(force)
         identity = (settings.SANDBOX_SSH_HOST, settings.SANDBOX_SSH_PORT,

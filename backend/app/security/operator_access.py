@@ -1,5 +1,19 @@
 """Operator identity is configured on the server, never by a browser flag."""
+import os
+
 from ..config import settings
+
+
+def execution_opted_in():
+    """Whether lab execution is enabled on this installation at all.
+
+    Mirrors check_execution_access: Railway needs a configured allowlist, while a
+    local install with none is open to every signed-in student. Runtimes that add
+    their own gate (notebooks, Ubuntu) use this so they agree with admission.
+    """
+    if settings.EXECUTION_ALLOWED_EMAILS.strip() or settings.BETA_TEST_EMAILS.strip():
+        return True
+    return not os.getenv('RAILWAY_ENVIRONMENT_ID')
 
 
 def admin_email():

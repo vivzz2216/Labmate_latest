@@ -102,7 +102,7 @@ def clean_notebook_text(text: str, is_stderr: bool = False) -> str:
             parts = [p for p in raw_line.split("\r") if p.strip()]
             raw_line = parts[-1] if parts else ""
         if is_stderr and re.search(
-            r"(?:^[IW]0000\s|oneDNN custom operations|This TensorFlow binary is optimized|cpu_feature_guard\.cc|cuda_dnn\.cc|cuda_blas\.cc)",
+            r"(?:^[IW]0000\s|oneDNN custom operations|This TensorFlow binary is optimized|cpu_feature_guard\.cc|cuda_dnn\.cc|cuda_blas\.cc|TensorFlow GPU support is not available)",
             raw_line,
         ):
             continue
@@ -513,7 +513,7 @@ def restrict_runtime(root):
             except OSError:
                 pass
     if os.environ.get('SYSTEMROOT'):
-        reads.append(Path(os.environ['SYSTEMROOT']).resolve())
+        reads.append((Path(os.environ['SYSTEMROOT'])/'Fonts').resolve())
 
     immutable_read_prefixes = tuple(
         os.path.normcase(str(p)).rstrip('\\/') + os.sep

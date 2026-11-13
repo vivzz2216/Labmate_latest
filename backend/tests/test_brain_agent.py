@@ -13,6 +13,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
 from app.models import User, Upload, AssignmentWorkflow
+from conftest import student_profile
 from app.services.brain_agent import make_plan, fingerprint, TOOLS, topic_choices
 from app.services.generation_service import GenerationError, GenerationUnavailableError, invalid_answer
 from app.services.source_evidence import capture_source_evidence, source_capture_plan
@@ -146,7 +147,7 @@ class BrainTests(unittest.IsolatedAsyncioTestCase):
             engine=create_engine('sqlite:///'+folder.replace('\\','/')+'/test.db')
             Base.metadata.create_all(engine);factory=sessionmaker(bind=engine)
             with factory() as db:
-                user=User(email='brain@example.com',name='Student');db.add(user);db.flush()
+                user=User(email='brain@example.com',name='Student',profile=student_profile());db.add(user);db.flush()
                 upload=Upload(user_id=user.id,filename='x.docx',original_filename='x.docx',file_path='unused',file_type='docx',file_size=1);db.add(upload);db.flush()
                 wf=AssignmentWorkflow(upload_id=upload.id,questions=[{**QUESTION,'text':QUESTION['text']+' Ask me which topic.'}],status='processing');db.add(wf);db.commit();wid=wf.id
             with patch('app.services.assignment_workflow.SessionLocal',factory),patch('app.services.assignment_workflow.settings.EXECUTION_ALLOWED_EMAILS','brain@example.com'),\

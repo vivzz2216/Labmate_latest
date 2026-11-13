@@ -7,6 +7,7 @@ from pydantic import BaseModel, EmailStr, Field, validator
 from typing import Optional
 from datetime import datetime, timedelta, timezone
 import bcrypt
+import functools
 import secrets
 import re
 import logging
@@ -128,6 +129,16 @@ def verify_password(password: str, hashed: str) -> bool:
         return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
     except Exception:
         return False
+
+@functools.lru_cache(maxsize=1)
+def _timing_hash() -> str:
+    return hash_password(secrets.token_urlsafe(24))
+
+
+def burn_password_check(password: str) -> None:
+    """Spend one bcrypt check on an unknown email so timing does not reveal which emails exist."""
+    verify_password(password, _timing_hash())
+
 
 def check_account_lockout(user: User) -> bool:
     """Check if account is locked due to failed login attempts"""
@@ -306,6 +317,7 @@ async def login(request: UserLogin, db: Session = Depends(get_db)):
         # Use constant-time comparison to prevent timing attacks
         # Return same error message whether user exists or password is wrong
         if not user:
+            await password_work(burn_password_check, request.password)
             logger.warning(f"Login failed: User not found for email {request.email}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,

@@ -403,7 +403,8 @@ class RuntimeEngine:
             return await capture_sql(code, filename=filename, objective=objective)
         if capability['category']=='notebook':
             # Native process restrictions are defense in depth, not an OS sandbox.
-            if not settings.EXECUTION_ALLOWED_EMAILS.strip():
+            from ..security.operator_access import execution_opted_in
+            if not execution_opted_in():
                 return RuntimeResult(False,error='Notebook execution requires an explicit beta execution allowlist.',exit_code=126)
             from .lab_capture import capture_notebook
             cfg = project_config or {}

@@ -21,6 +21,7 @@ from app.database import Base, get_db
 from app.middleware.auth import get_current_user
 from app.middleware.csrf import require_csrf_token
 from app.models import AssignmentWorkflow, Report, User, WorkflowBatchItem
+from conftest import student_profile
 from app.routers import workflows
 from app.services.assignment_workflow import extract_assignment
 from app.services.generation_service import GenerationUnavailableError
@@ -38,7 +39,7 @@ class BatchWorkflowTests(unittest.TestCase):
         Base.metadata.create_all(self.engine)
         self.factory = sessionmaker(bind=self.engine)
         with self.factory() as db:
-            user = User(email="batch@example.test", name="Batch Student")
+            user = User(email="batch@example.test", name="Batch Student", profile=student_profile())
             db.add(user)
             db.commit()
             self.user_id = user.id
@@ -50,7 +51,8 @@ class BatchWorkflowTests(unittest.TestCase):
                 yield db
 
         app.dependency_overrides[get_db] = session
-        app.dependency_overrides[get_current_user] = lambda: User(id=self.user_id, email="batch@example.test", name="Batch Student")
+        app.dependency_overrides[get_current_user] = lambda: User(
+            id=self.user_id, email="batch@example.test", name="Batch Student", is_active=True, profile=student_profile())
         app.dependency_overrides[require_csrf_token] = lambda: True
         self.client = TestClient(app)
         self.patches = [
@@ -150,6 +152,31 @@ class BatchWorkflowTests(unittest.TestCase):
         self.user_id += 100
         self.assertEqual(self.client.get(f"/api/workflows/batch/{batch_id}").status_code, 404)
         self.assertEqual(self.client.get(f"/api/workflows/batch/{batch_id}/download-zip").status_code, 404)
+
+    def test_lab_launch_starts_from_typed_text_without_an_upload(self):
+        prompt = "Create a responsive student portfolio website using semantic HTML5 and CSS Grid."
+        response = self.client.post("/api/workflows/from-prompt", json={
+            "title": "Responsive Web Layout", "questions": [{"id": 1, "text": prompt, "language": "html", "track": "web"}]})
+        self.assertEqual(response.status_code, 200, response.text)
+        state = response.json()
+        self.assertEqual(state["upload"]["original_filename"], "Responsive_Web_Layout.docx")
+        self.assertEqual(state["workflow"]["status"], "ready")
+        self.assertEqual(state["workflow"]["questions"], [{"id": 1, "text": prompt, "language": "html", "track": "web"}])
+        stored = list((self.root / "uploads").glob("*.docx"))
+        self.assertEqual(len(stored), 1)
+        self.assertIn(prompt, "\n".join(p.text for p in Document(stored[0]).paragraphs))
+        # The saved workflow is the one the status endpoint returns for this upload.
+        status = self.client.get(f"/api/workflows/{state['upload']['id']}")
+        self.assertEqual(status.json()["id"], state["workflow"]["id"])
+        # It runs like an extracted upload: processing queues the typed experiment.
+        queued = self.client.post(f"/api/workflows/{state['upload']['id']}/process", json={
+            "questions": state["workflow"]["questions"], "language": "html", "output_name": "Responsive_Web_Layout", "track": "web"})
+        self.assertEqual(queued.status_code, 200, queued.text)
+        self.assertEqual((queued.json()["status"], queued.json()["stage"]), ("queued", "generate"))
+        for invalid in ({"questions": []}, {"questions": [{"id": 1, "text": "x", "language": "web"}]},
+                        {"questions": [{"id": 1, "text": "a", "language": "python"}, {"id": 1, "text": "b", "language": "python"}]}):
+            self.assertIn(self.client.post("/api/workflows/from-prompt", json=invalid).status_code, {400, 422})
+        self.assertEqual(len(list((self.root / "uploads").glob("*.docx"))), 1)
 
     def test_limit_and_capacity_do_not_leave_uploaded_files(self):
         too_many = [("files", (f"{index}.docx", self.docx, "application/octet-stream")) for index in range(11)]

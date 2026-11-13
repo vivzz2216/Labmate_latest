@@ -51,6 +51,7 @@ import {
   type ManualMode,
   type BatchItem,
 } from "@/lib/workflow";
+import { getLabCategory } from "@/lib/labCatalog";
 import styles from "./processing.module.css";
 
 const languages: { value: LabLanguage; label: string }[] = [
@@ -67,6 +68,20 @@ const languages: { value: LabLanguage; label: string }[] = [
   { value: "sql", label: "SQL (MySQL runtime)" },
   { value: "ubuntu", label: "Ubuntu (Bash + GNOME)" },
 ];
+// A lab page links here with its section's track (for example "web" or
+// "deep_learning"), which is not always a runtime language. Resolve the language
+// from the catalogue: the launched experiment's runtime, else the section default.
+const labLanguage = (track: string, experimentId: string): LabLanguage | null => {
+  if (!track) return null;
+  const category = getLabCategory(track);
+  if (category) {
+    return category.experiments.find((experiment) => experiment.id === experimentId)?.runtime || category.defaultLanguage;
+  }
+  return languages.some((item) => item.value === track) ? (track as LabLanguage) : null;
+};
+const labTitle = (track: string, experimentId: string) =>
+  getLabCategory(track)?.experiments.find((experiment) => experiment.id === experimentId)?.title || "Lab experiment";
+
 const stages = [
   {
     title: "Read document",
@@ -170,34 +185,25 @@ function AssignmentContent() {
   }, []);
 
   useEffect(() => {
-    if (trackParam === "deep_learning" || trackParam === "deep-learning") {
-      setLanguage("colab");
-      setColabTheme("dark");
-    } else if (trackParam === "distributed" || trackParam === "distributed-computing") {
-      setLanguage("distributed");
-    } else if (trackParam && ["python", "java", "c", "cpp", "html", "react", "node", "sql", "colab"].includes(trackParam)) {
-      setLanguage(trackParam as LabLanguage);
+    const trackLanguage = labLanguage(trackParam, expParam);
+    if (trackLanguage) {
+      setLanguage(trackLanguage);
+      if (trackParam === "deep_learning" || trackParam === "deep-learning") setColabTheme("dark");
     }
 
     if (promptParam && questions.length === 0) {
-      const targetLang: LabLanguage =
-        trackParam === "deep_learning" || trackParam === "deep-learning"
-          ? "colab"
-          : trackParam === "distributed" || trackParam === "distributed-computing"
-          ? "distributed"
-          : (trackParam as LabLanguage) || "python";
-
       setQuestions([
         {
           id: 1,
           text: promptParam,
-          language: targetLang,
+          language: trackLanguage || "python",
           track: trackParam || undefined,
         },
       ]);
+      setFilename(sanitizeOutputName(labTitle(trackParam, expParam), "lab_report"));
       setShowQuestions(true);
     }
-  }, [trackParam, promptParam]);
+  }, [trackParam, promptParam, expParam]);
 
   const applyWorkflow = (data: LabWorkflow, restoreFields = false) => {
     setWorkflow(data);
@@ -531,7 +537,7 @@ function AssignmentContent() {
   };
 
   const process = async () => {
-    if (!upload || !questions.length || busy || running) return;
+    if (!questions.length || busy || running) return;
     if (questions.some((question) => !question.text.trim())) {
       setError("Every question needs some text.");
       setShowQuestions(true);
@@ -545,8 +551,25 @@ function AssignmentContent() {
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
     try {
+      let target = upload;
+      if (!target) {
+        // Launched from a lab page: there is no manual, so the typed experiment
+        // becomes one before it runs.
+        const started = await workflowApi.startFromPrompt(
+          questions.map(({ id, text, language: questionLanguage, track }) => ({
+            id,
+            text,
+            language: questionLanguage,
+            track: track || trackParam || undefined,
+          })),
+          labTitle(trackParam, expParam),
+        );
+        target = started.upload;
+        setUpload(target);
+        router.replace(`/code-execution?assignment=${target.id}`, { scroll: false });
+      }
       applyWorkflow(
-        await workflowApi.process(upload.id, {
+        await workflowApi.process(target.id, {
           questions: questions.map((question) => ({
             ...question,
             track: question.track || trackParam || undefined,

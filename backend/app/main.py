@@ -88,7 +88,8 @@ async def lifespan(app: FastAPI):
     start_background_workers(num_workers=3)
     start_workflow_workers()
     from .services.worker_health import worker_health
-    asyncio.create_task(worker_health.check(force=True))
+    # Held on app.state: the loop keeps only weak references to tasks.
+    app.state.worker_health_probe = asyncio.create_task(worker_health.check(force=True))
     try:
         yield
     finally:

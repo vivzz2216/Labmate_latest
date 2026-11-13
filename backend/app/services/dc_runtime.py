@@ -5,6 +5,7 @@ Server-Client topologies or single-driver distributed simulations.
 """
 
 import asyncio
+import bisect
 import os
 import re
 import signal
@@ -54,10 +55,32 @@ def split_java_files(code: str) -> Dict[str, str]:
     # 3. Multiple public classes in one text
     public_classes = list(re.finditer(r"public\s+(?:final\s+|abstract\s+)?(?:class|interface|enum)\s+(\w+)", code))
     if len(public_classes) > 1:
-        starts = [m.start() for m in public_classes] + [len(code)]
+        lines = code.splitlines(keepends=True)
+        offsets, position = [], 0
+        for line in lines:
+            offsets.append(position)
+            position += len(line)
+        # A file begins at the import/comment/annotation lines directly above its
+        # public type, so nothing a class needs is cut off or left in its neighbour.
+        starts = []
+        for index, match in enumerate(public_classes):
+            line_no = bisect.bisect_right(offsets, match.start()) - 1
+            floor = 0 if index == 0 else bisect.bisect_right(offsets, public_classes[index - 1].start())
+            while line_no > floor and re.match(r"\s*(?:import\s|package\s|//|/\*|\*|@\w|$)", lines[line_no - 1]):
+                line_no -= 1
+            starts.append(0 if index == 0 else max(line_no, floor))
+        starts.append(len(lines))
+        # Imports are usually written once at the top; every split file needs them.
+        imports = list(dict.fromkeys(m.group(0).strip() for m in re.finditer(
+            r"^[ \t]*import\s+(?:static\s+)?[\w.*]+\s*;", code, re.M)))
         for i in range(len(public_classes)):
             cname = public_classes[i].group(1)
-            segment = code[starts[i]:starts[i+1]].strip()
+            segment = "".join(lines[starts[i]:starts[i + 1]]).strip()
+            missing = [line for line in imports if line not in segment]
+            if missing:
+                package = re.match(r"\s*package\s+[\w.]+\s*;[^\n]*\n?", segment)
+                head = segment[:package.end()] if package else ""
+                segment = head + "\n".join(missing) + "\n" + segment[len(head):]
             files[f"{cname}.java"] = segment
         return files
 
@@ -107,6 +130,29 @@ def detect_topology(files: Dict[str, str]) -> Tuple[Optional[str], Optional[str]
     return server_class, client_class, mains
 
 
+async def _stop(proc) -> None:
+    """Kill a child that is still running, so a timeout never leaves a JVM behind."""
+    if proc is None or proc.returncode is not None:
+        return
+    try:
+        proc.kill()
+    except ProcessLookupError:
+        return
+    try:
+        await asyncio.wait_for(proc.wait(), timeout=5.0)
+    except Exception:
+        pass
+
+
+async def _drain(stream, limit: int) -> bytes:
+    """Read a pipe to EOF so the writer never blocks; keep only the first `limit` bytes."""
+    data = bytearray()
+    while chunk := await stream.read(65536):
+        if len(data) < limit:
+            data.extend(chunk[:limit - len(data)])
+    return bytes(data)
+
+
 async def execute_distributed_java(
     code: str,
     directory: Path,
@@ -137,6 +183,7 @@ async def execute_distributed_java(
         *java_files,
     ]
 
+    proc = None
     try:
         proc = await asyncio.create_subprocess_exec(
             *compile_cmd,
@@ -149,6 +196,8 @@ async def execute_distributed_java(
         return RuntimeResult(False, error="Compilation timed out.", exit_code=124, stages={"compile": "failed", "execution": "not_run"})
     except Exception as e:
         return RuntimeResult(False, error=f"Compilation launch failed: {e}", exit_code=1, stages={"compile": "failed", "execution": "not_run"})
+    finally:
+        await _stop(proc)
 
     if proc.returncode != 0:
         err = c_stderr.decode("utf-8", errors="replace") or c_stdout.decode("utf-8", errors="replace")
@@ -179,6 +228,7 @@ async def _run_single_process(directory: Path, main_class: str, stdin: Optional[
         main_class,
     ]
 
+    proc = None
     try:
         proc = await asyncio.create_subprocess_exec(
             *cmd,
@@ -203,6 +253,8 @@ async def _run_single_process(directory: Path, main_class: str, stdin: Optional[
         return RuntimeResult(False, error="Execution timed out.", exit_code=124, stages={"compile": "passed", "execution": "failed"})
     except Exception as e:
         return RuntimeResult(False, error=f"Execution failed: {e}", exit_code=1, stages={"compile": "passed", "execution": "failed"})
+    finally:
+        await _stop(proc)
 
 
 async def _run_server_client(
@@ -230,6 +282,9 @@ async def _run_server_client(
     ]
 
     server_proc = None
+    client_proc = None
+    server_output = None
+    output_cap = int(getattr(settings, "EXECUTION_MAX_OUTPUT_BYTES", 1048576))
     try:
         # 1. Start Server
         server_proc = await asyncio.create_subprocess_exec(
@@ -238,13 +293,17 @@ async def _run_server_client(
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
+        # Read the server's pipes for the whole run. Left unread, a server that logs
+        # more than the pipe buffer blocks on print and stops answering the client.
+        server_output = asyncio.gather(_drain(server_proc.stdout, output_cap),
+                                       _drain(server_proc.stderr, output_cap))
 
         # 2. Allow server to bind socket or initialize RMI
         await asyncio.sleep(1.8)
 
         # 3. Check if server died prematurely
         if server_proc.returncode is not None:
-            s_out, s_err = await server_proc.communicate()
+            s_out, s_err = await server_output
             err_msg = s_err.decode("utf-8", errors="replace") or s_out.decode("utf-8", errors="replace")
             return RuntimeResult(
                 False,
@@ -270,12 +329,12 @@ async def _run_server_client(
         if server_proc.returncode is None:
             try:
                 server_proc.terminate()
-                s_stdout, s_stderr = await asyncio.wait_for(server_proc.communicate(), timeout=3.0)
+                s_stdout, s_stderr = await asyncio.wait_for(asyncio.shield(server_output), timeout=3.0)
             except Exception:
-                server_proc.kill()
-                s_stdout, s_stderr = await server_proc.communicate()
+                await _stop(server_proc)
+                s_stdout, s_stderr = await server_output
         else:
-            s_stdout, s_stderr = await server_proc.communicate()
+            s_stdout, s_stderr = await server_output
 
         s_out_text = s_stdout.decode("utf-8", errors="replace").strip()
         c_out_text = c_stdout.decode("utf-8", errors="replace").strip()
@@ -302,9 +361,12 @@ async def _run_server_client(
     except Exception as e:
         return RuntimeResult(False, error=f"Distributed execution failed: {e}", exit_code=1, stages={"compile": "passed", "execution": "failed"})
     finally:
-        if server_proc and server_proc.returncode is None:
+        # A client that timed out is still running; stop it along with the server.
+        await _stop(client_proc)
+        await _stop(server_proc)
+        if server_output is not None:
             try:
-                server_proc.kill()
+                await asyncio.wait_for(asyncio.gather(server_output, return_exceptions=True), timeout=5.0)
             except Exception:
                 pass
 

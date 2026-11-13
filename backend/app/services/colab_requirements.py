@@ -2,6 +2,13 @@
 import ast
 import re
 
+from .notebook_magics import neutralize_magics
+
+# A line that is only an import statement is the manual's own sample code, not an instruction to the student.
+CODE_IMPORT = re.compile(
+    r'^\s*(?:import\s+[\w.]+(?:\s+as\s+\w+)?(?:\s*,\s*[\w.]+(?:\s+as\s+\w+)?)*'
+    r'|from\s+[\w.]+\s+import\s+[\w.*, ()]+)\s*;?\s*$')
+
 LIBRARIES = {
     'pyspark': r'pyspark',
     'numpy': r'numpy', 'pandas': r'pandas', 'sklearn': r'scikit[ -]?learn|sklearn',
@@ -13,7 +20,10 @@ LIBRARIES = {
 
 def missing_required_libraries(question, code):
     groups = []
-    for sentence in re.split(r'[\n.!?]+', question):
+    # Requirements come from the prose. A manual that prints its own program lists its imports as code
+    # (import numpy as np), and those lines must not turn every imported library into a requirement.
+    prose = '\n'.join(line for line in question.splitlines() if not CODE_IMPORT.match(line))
+    for sentence in re.split(r'[\n.!?]+', prose):
         if not re.search(r'\b(?:use|using|import|with|require[sd]?|train|build|implement|fit|develop)\b', sentence, re.I):
             continue
         if re.search(r'\b(?:optional|may use|can use|if available)\b', sentence, re.I):
@@ -53,10 +63,13 @@ def missing_required_libraries(question, code):
     if not groups:
         return []
 
+    # IPython magics (%pip, !pip) are not Python; they are skipped at run time, so they must not break parsing here.
     try:
-        tree = ast.parse(code)
+        tree = ast.parse(neutralize_magics(code))
     except SyntaxError:
-        return sorted({name for g in groups for name in g})
+        # A real syntax error is reported by the run itself, with its traceback. Claiming that every
+        # requested library is missing would hide the actual cause.
+        return []
 
     used = {node.id for node in ast.walk(tree) if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)}
     present = set()
