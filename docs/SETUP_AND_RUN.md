@@ -78,7 +78,7 @@ ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 # =============================================================================
 # REDIS CONFIGURATION
 # =============================================================================
-REDIS_URL=redis://default:hkIdOTA6qPbssm2aHVzjEjr7Ml1jPTi1@redis-19706.c281.us-east-1-2.ec2.cloud.redislabs.com:19706
+REDIS_URL=redis://default:<password>@<host>:<port>
 REDIS_CACHE_TTL=3600
 
 # =============================================================================

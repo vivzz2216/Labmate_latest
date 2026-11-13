@@ -6,7 +6,7 @@ Your Redis Labs instance is configured and ready to use:
 
 **Connection String:**
 ```
-redis://default:hkIdOTA6qPbssm2aHVzjEjr7Ml1jPTi1@redis-19706.c281.us-east-1-2.ec2.cloud.redislabs.com:19706
+redis://default:<password>@<host>:<port>
 ```
 
 ## 🔧 Setup Instructions
@@ -16,13 +16,13 @@ redis://default:hkIdOTA6qPbssm2aHVzjEjr7Ml1jPTi1@redis-19706.c281.us-east-1-2.ec
 Add this to your `.env` file:
 
 ```bash
-REDIS_URL=redis://default:hkIdOTA6qPbssm2aHVzjEjr7Ml1jPTi1@redis-19706.c281.us-east-1-2.ec2.cloud.redislabs.com:19706
+REDIS_URL=redis://default:<password>@<host>:<port>
 ```
 
 Or set it as an environment variable:
 
 ```bash
-export REDIS_URL=redis://default:hkIdOTA6qPbssm2aHVzjEjr7Ml1jPTi1@redis-19706.c281.us-east-1-2.ec2.cloud.redislabs.com:19706
+export REDIS_URL=redis://default:<password>@<host>:<port>
 ```
 
 ### 2. For Docker Compose
@@ -31,7 +31,7 @@ The `docker-compose.yml` is already configured to use the `REDIS_URL` environmen
 
 ```bash
 # In your .env file or export before running docker-compose
-export REDIS_URL=redis://default:hkIdOTA6qPbssm2aHVzjEjr7Ml1jPTi1@redis-19706.c281.us-east-1-2.ec2.cloud.redislabs.com:19706
+export REDIS_URL=redis://default:<password>@<host>:<port>
 
 # Then start services
 docker-compose up --build
@@ -47,7 +47,7 @@ docker-compose logs backend | grep Redis
 
 You should see:
 ```
-✓ Redis connection established: redis-19706.c281.us-east-1-2.ec2.cloud.redislabs.com:19706
+✓ Redis connection established: <host>:<port>
 ```
 
 Or check the health endpoint:
@@ -71,7 +71,7 @@ The response should show:
 You can test the connection directly using redis-cli:
 
 ```bash
-redis-cli -u redis://default:hkIdOTA6qPbssm2aHVzjEjr7Ml1jPTi1@redis-19706.c281.us-east-1-2.ec2.cloud.redislabs.com:19706
+redis-cli -u redis://default:<password>@<host>:<port>
 ```
 
 Then try:

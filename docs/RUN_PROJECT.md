@@ -13,7 +13,7 @@ Make sure Docker Desktop is running on your Windows machine.
 ### Step 2: Verify Environment
 Your `.env` file should contain:
 ```bash
-REDIS_URL=redis://default:hkIdOTA6qPbssm2aHVzjEjr7Ml1jPTi1@redis-19706.c281.us-east-1-2.ec2.cloud.redislabs.com:19706
+REDIS_URL=redis://default:<password>@<host>:<port>
 ```
 
 ### Step 3: Start Services
@@ -48,7 +48,7 @@ docker-compose logs backend | grep -i redis
 
 You should see:
 ```
-✓ Redis connection established: redis-19706.c281.us-east-1-2.ec2.cloud.redislabs.com:19706
+✓ Redis connection established: <host>:<port>
 ```
 
 **Check All Services:**
@@ -141,7 +141,7 @@ docker stats
 1. Check your Redis URL in `.env` file
 2. Verify Redis Labs instance is running
 3. Check network connectivity
-4. Try testing connection: `redis-cli -u redis://default:hkIdOTA6qPbssm2aHVzjEjr7Ml1jPTi1@redis-19706.c281.us-east-1-2.ec2.cloud.redislabs.com:19706`
+4. Try testing connection: `redis-cli -u redis://default:<password>@<host>:<port>`
 
 ### Database Connection Issues
 **Error**: Database connection failed

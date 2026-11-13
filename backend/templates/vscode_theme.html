@@ -1159,7 +1159,7 @@
           </div>
         </div>
         <div class="vs-term-body">
-{% if output_content %}{{ output_content | safe }}{% else %}<span class="tc-prompt">PS C:\Users\{{ username or 'Student' }}\{{ project_name }}&gt;</span> <span class="term-cursor"></span>{% endif %}
+{% if output_content %}{{ output_content }}{% else %}<span class="tc-prompt">PS C:\Users\{{ username or 'Student' }}\{{ project_name }}&gt;</span> <span class="term-cursor"></span>{% endif %}
         </div>
       </div><!-- end vs-terminal -->
 
