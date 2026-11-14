@@ -5,7 +5,7 @@ from urllib.parse import unquote, urlsplit
 
 
 def resource_file(lab, name):
-    if lab not in {'google_colab','sql_workbench'}:raise ValueError('Unknown lab resource.')
+    if lab not in {'google_colab','sql_workbench','rstudio'}:raise ValueError('Unknown lab resource.')
     roots=[Path(os.environ['LAB_RESOURCES_DIR'])] if os.environ.get('LAB_RESOURCES_DIR') else []
     roots.extend([Path(__file__).resolve().parents[3],Path('/app/lab_resources')])
     for root in roots:

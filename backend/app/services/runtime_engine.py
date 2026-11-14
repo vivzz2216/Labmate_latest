@@ -3,6 +3,7 @@
 import asyncio
 import ast
 import json
+import logging
 import os
 import re
 import shutil
@@ -20,7 +21,6 @@ from urllib.parse import urlparse
 import httpx
 from functools import partial
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
-from playwright.async_api import async_playwright
 
 try:
     import resource
@@ -28,8 +28,10 @@ except ImportError:
     resource = None
 
 from ..config import settings
-from .browser_capture import acquire_capture_context, launch_capture_browser
+from .browser_capture import acquire_capture_context
 from .resource_budget import heavy_execution_budget
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -53,6 +55,8 @@ def runtime_environment(directory: Path, extras=None):
     environment["PATH"] = os.pathsep.join(tool_directories + [environment.get("PATH", "")])
     environment.update({"TMP": str(directory), "TEMP": str(directory), "TMPDIR": str(directory), "PYTHONIOENCODING": "utf-8"})
     environment['HOME'] = str(directory)
+    # A neutral user name: getpass.getuser() fails on Windows without one (torch calls it at import).
+    environment.update({"USERNAME": "student", "LOGNAME": "student"})
     environment.update(extras or {})
     return environment
 
@@ -87,7 +91,7 @@ def make_resource_limiter(resource_limits=None):
         if hasattr(os, "setsid"):
             try:
                 os.setsid()
-            except Exception:
+            except OSError:
                 pass
 
         if resource is None:
@@ -104,7 +108,7 @@ def make_resource_limiter(resource_limits=None):
                 resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
             if max_procs and hasattr(resource, "RLIMIT_NPROC"):
                 resource.setrlimit(resource.RLIMIT_NPROC, (max_procs, max_procs))
-        except Exception:
+        except (OSError, ValueError):
             pass
 
     return preexec
@@ -368,7 +372,7 @@ class RuntimeEngine:
                       prepare_files=None, collect_files=None, browser_tests=None, interaction_is_required=False,
                       objective="", api_tests=None, project_config=None):
         language = {'c++':'cpp', 'javascript':'node', 'webdev':'html', 'mysql':'sql', 'ipynb':'colab',
-                    'bash':'ubuntu', 'shell':'ubuntu', 'unix':'ubuntu'}.get(language.lower(), language.lower())
+                    'bash':'ubuntu', 'shell':'ubuntu', 'unix':'ubuntu', 'rstudio':'r', 'rlang':'r'}.get(language.lower(), language.lower())
         async with heavy_execution_budget.slot():
             from .isolated_runtime import isolation_required, execute_isolated
             from .evidence_planner import plan_experiment
@@ -390,12 +394,15 @@ class RuntimeEngine:
     async def _execute_direct(self, code, language="python", filename=None, stdin=None, project_files=None, routes=None,
                              prepare_files=None, collect_files=None, browser_tests=None, interaction_is_required=False,
                              objective="", api_tests=None, project_config=None):
-        language = {"c++": "cpp", "javascript": "node", "webdev": "html", "mysql":"sql", "ipynb":"colab", "bash":"ubuntu", "shell":"ubuntu", "unix":"ubuntu"}.get(language.lower(), language.lower())
-        if language not in {"python", "java", "c", "cpp", "html", "react", "node", "sql", "colab", "ubuntu"}:
+        language = {"c++": "cpp", "javascript": "node", "webdev": "html", "mysql":"sql", "ipynb":"colab", "bash":"ubuntu", "shell":"ubuntu", "unix":"ubuntu", "rstudio":"r", "rlang":"r"}.get(language.lower(), language.lower())
+        if language not in {"python", "java", "c", "cpp", "html", "react", "node", "sql", "colab", "ubuntu", "distributed", "r"}:
             return RuntimeResult(False, error="Unsupported execution language.", exit_code=2)
         if language == 'ubuntu':
             from .ubuntu_runtime import capture_ubuntu
             return await capture_ubuntu(code,filename,stdin,objective)
+        if language == 'r':
+            from .r_runtime import capture_r
+            return await capture_r(code,filename,stdin,objective,theme=(project_config or {}).get('rstudio_theme','light'))
         from .evidence_planner import plan_experiment
         capability = plan_experiment(objective, language, code)
         if capability['category']=='database':
@@ -403,7 +410,8 @@ class RuntimeEngine:
             return await capture_sql(code, filename=filename, objective=objective)
         if capability['category']=='notebook':
             # Native process restrictions are defense in depth, not an OS sandbox.
-            if not settings.EXECUTION_ALLOWED_EMAILS.strip():
+            from ..security.operator_access import execution_opted_in
+            if not execution_opted_in():
                 return RuntimeResult(False,error='Notebook execution requires an explicit beta execution allowlist.',exit_code=126)
             from .lab_capture import capture_notebook
             cfg = project_config or {}
@@ -478,6 +486,10 @@ class RuntimeEngine:
                 if collect_files:
                     result.files = collect_files(directory, context, name)
                 return result
+            if language == "distributed":
+                from .dc_runtime import execute_distributed_java
+                timeout_val = float(getattr(settings, "RUN_TIMEOUT", getattr(settings, "EXECUTION_TIMEOUT", 30.0)))
+                return await execute_distributed_java(code, directory, stdin=stdin, timeout=timeout_val)
             if language == "java":
                 name = java_class_name(code)
                 if not name:
@@ -524,7 +536,7 @@ class RuntimeEngine:
                 source.write_text(code, encoding="utf-8")
                 return await run_process([settings.NODE_COMMAND, source], directory, stdin or "", resource_limits={"max_memory_bytes": 0})
             return await self._web(code, language, directory, project_files, routes,
-                                   browser_tests=browser_tests, interaction_is_required=interaction_is_required, api_tests=api_tests)
+                                   browser_tests=browser_tests, interaction_is_required=interaction_is_required, api_tests=api_tests, filename=filename)
 
     async def _install_packages(self, language, directory):
         common_node_packages = {
@@ -603,7 +615,7 @@ class RuntimeEngine:
         result.pop("failed_step", None)
         result["status"] = "passed"
 
-    async def _capture_html(self, code, browser_tests, interaction_is_required, page_url=None):
+    async def _capture_html(self, code, browser_tests, interaction_is_required, page_url=None, filename=None):
         from .isolated_runtime import require_worker
         require_worker()
         started = time.perf_counter()
@@ -680,8 +692,13 @@ class RuntimeEngine:
                                         meta='<meta http-equiv="Content-Security-Policy" content="'+BROWSER_CSP+'">'
                                         insertion=re.search(r'<head(?:\s[^>]*)?>|<!doctype[^>]*>',code,re.I)
                                         rendered=code[:insertion.end()]+meta+code[insertion.end():] if insertion else meta+code
-                                        await page.route('http://localhost/', lambda route: route.fulfill(status=200, content_type='text/html', body=rendered))
-                                        await page.goto('http://localhost/', wait_until="load", timeout=5000)
+                                        from urllib.parse import quote
+                                        name = Path(str(filename or 'index.html').replace('\\', '/')).name
+                                        if not name.lower().endswith(('.html', '.htm')):
+                                            name = 'index.html'
+                                        local_url = 'http://localhost/' + quote(name)
+                                        await page.route(local_url, lambda route: route.fulfill(status=200, content_type='text/html', body=rendered))
+                                        await page.goto(local_url, wait_until="load", timeout=5000)
                                     if not required or v2 and not ui_actions:
                                         controls = await page.locator(
                                             'button:visible,input:not([type="hidden"]):visible,textarea:visible,'
@@ -721,7 +738,7 @@ class RuntimeEngine:
                                         try:
                                             await page.wait_for_function('Array.from(document.images).every(image=>image.complete)',timeout=2500)
                                         except Exception:
-                                            pass
+                                            logger.debug("Timed out waiting for image load completion", exc_info=True)
                                     broken_images = await page.evaluate(
                                         "Array.from(document.images).filter(image => !image.complete || image.naturalWidth === 0).length")
                                     if broken_images:
@@ -749,7 +766,7 @@ class RuntimeEngine:
                                 if v2 and result is not None:
                                     result['http_observations'] = observations[-80:]
                             except Exception:
-                                pass
+                                logger.debug("Diagnostic collection skipped on closed or hung page", exc_info=True)
                             try:
                                 async def screenshot():
                                     height = max(viewport["height"], await page.evaluate("document.documentElement.scrollHeight"))
@@ -792,9 +809,9 @@ class RuntimeEngine:
         return RuntimeResult(not errors, "\n".join(output), "\n".join(errors), 1 if errors else 0,
                              screenshots=screenshots, verification=verification, timings=metrics)
 
-    async def _capture(self, url=None, code=None, routes=None, browser_tests=None, interaction_is_required=False):
+    async def _capture(self, url=None, code=None, routes=None, browser_tests=None, interaction_is_required=False, filename=None):
         if code is not None:
-            return await self._capture_html(code, browser_tests, interaction_is_required)
+            return await self._capture_html(code, browser_tests, interaction_is_required, filename=filename)
         aggregate = RuntimeResult(True, verification={"required": False, "status": "not_required", "tests": []})
         for index, path in enumerate((routes or ["/"])[:10]):
             if not isinstance(path, str) or not path.startswith("/") or path.startswith("//") or "\\" in path:
@@ -865,7 +882,7 @@ class RuntimeEngine:
                                  "status": "passed" if success else "failed", "tests": results})
 
     async def _web(self, code, language, directory, project_files, routes, browser_tests=None,
-                   interaction_is_required=False, api_tests=None):
+                   interaction_is_required=False, api_tests=None, filename=None):
         if language == "html":
             if project_files:
                 try:
@@ -889,7 +906,7 @@ class RuntimeEngine:
                     server.server_close()
                     await task
             return await self._capture(code=code, browser_tests=browser_tests,
-                                       interaction_is_required=interaction_is_required)
+                                       interaction_is_required=interaction_is_required, filename=filename)
         error = await self._install_packages(language, directory)
         if error:
             return RuntimeResult(False, error=error, exit_code=127)

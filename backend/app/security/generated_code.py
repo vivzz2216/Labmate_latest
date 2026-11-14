@@ -7,10 +7,18 @@ def validate_generated_code(code: str, language: str, capability=None, local_mod
     """Restrict generated lab programs before the existing local execution fallback."""
     if len(code) > 50000:
         raise ValueError("Generated code exceeds the supported size.")
+    if language == "r":
+        from .r_code import validate_r_code
+        return validate_r_code(code)
+    if capability == 'notebook':
+        from ..services.notebook_magics import neutralize_magics
+        code = neutralize_magics(code)
     if language == "python":
         tree = ast.parse(code)
         safe_modules = {"math", "random", "statistics", "decimal", "fractions", "collections", "itertools", "functools", "operator", "string", "re", "json", "csv", "datetime", "copy", "heapq", "bisect", "array", "typing", "dataclasses", "enum", "abc"}
         if capability=='flask':safe_modules.update({'flask','markupsafe',*local_modules})
+        if capability=='spark':safe_modules.add('pyspark')
+        if capability=='notebook':safe_modules.update({'numpy','pandas','sklearn','scipy','matplotlib','seaborn','nltk','skfuzzy','pgmpy','torch','tensorflow','keras','time','warnings','io','pprint'})
         for node in ast.walk(tree):
             if capability=='flask':
                 if isinstance(node,ast.Call) and isinstance(node.func,ast.Attribute) and node.func.attr in {'send_file','send_from_directory','open_resource','open_instance_resource','from_pyfile'}:
@@ -28,9 +36,10 @@ def validate_generated_code(code: str, language: str, capability=None, local_mod
                 isinstance(node, ast.Attribute) and node.attr == "__init__"
                 and isinstance(node.value, ast.Call)
                 and isinstance(node.value.func, ast.Name)
-                and node.value.func.id == "super" and not node.value.args and not node.value.keywords
+                and node.value.func.id == "super" and not node.value.keywords
+                and (not node.value.args or (len(node.value.args) == 2 and all(isinstance(a, ast.Name) for a in node.value.args)))
             )
-            if isinstance(node, ast.Attribute) and node.attr.startswith("__") and not safe_parent_initializer:
+            if isinstance(node, ast.Attribute) and node.attr.startswith("__") and node.attr != "__version__" and not safe_parent_initializer:
                 raise ValueError("Runtime introspection is not supported in lab execution.")
             if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
                 if node.func.id in {"eval", "exec", "compile", "__import__", "getattr", "setattr", "globals", "locals", "vars", "breakpoint"}:
@@ -41,8 +50,14 @@ def validate_generated_code(code: str, language: str, capability=None, local_mod
                     name = node.args[0].value
                     if name in {".", ".."} or any(char in name for char in "/\\:"):
                         raise ValueError("File access must stay inside the lab working directory.")
-    elif language in {"java", "c", "cpp", "node"}:
+    elif language in {"java", "c", "cpp", "node", "distributed"}:
         stripped = re.sub(r'//[^\n]*|/\*.*?\*/|"(?:\\.|[^"\\])*"', '', code, flags=re.S)
         guarded_code = re.sub(r"process\.env\.PORT\b", "runtime_port", stripped)
-        if re.search(r"ProcessBuilder|Runtime\s*\.\s*getRuntime|\b(system|popen|exec|fork|socket|spawn|execSync|getenv)\s*\(|child_process|process\.env|/etc/|/proc/|cmd\.exe|powershell\.exe", guarded_code, re.I):
+        forbidden_pattern = (
+            r"ProcessBuilder|Runtime\s*\.\s*getRuntime|\b(system|popen|exec|fork|spawn|execSync|getenv)\s*\(|child_process|process\.env|/etc/|/proc/|cmd\.exe|powershell\.exe"
+            if language == "distributed" else
+            r"ProcessBuilder|Runtime\s*\.\s*getRuntime|\b(system|popen|exec|fork|socket|spawn|execSync|getenv)\s*\(|child_process|process\.env|/etc/|/proc/|cmd\.exe|powershell\.exe"
+        )
+        if re.search(forbidden_pattern, guarded_code, re.I):
             raise ValueError("This program requests system access outside the lab runtime.")
+

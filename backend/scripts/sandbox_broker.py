@@ -58,7 +58,7 @@ def validate_resources():
     """Reject stale report/screenshot files before exposing resources to a job."""
     allowed = {'assets', 'index.html', 'app.js', 'style.css'}
     extensions = {'.svg', '.png', '.jpg', '.jpeg', '.webp', '.json', '.woff', '.woff2', '.ttf'}
-    for name in ('google_colab', 'sql_workbench'):
+    for name in ('google_colab', 'sql_workbench', 'rstudio'):
         folder = ROOT / 'resources' / name
         if folder.is_symlink() or not folder.is_dir():
             raise ValueError('Worker lab resources are missing or unsafe.')
@@ -75,14 +75,20 @@ def validate_resources():
 
 def command(work, unit, *, managed_vm=False):
     validate_resources()
+    import re
+    import socket
     system = ROOT / 'system'
     system.mkdir(exist_ok=True)
+    hostname = re.sub(r'[^A-Za-z0-9._-]', '', socket.gethostname()) or 'localhost'
+    hosts_text = f'127.0.0.1 localhost {hostname}\n::1 localhost {hostname}\n' if hostname != 'localhost' else '127.0.0.1 localhost\n::1 localhost\n'
     for name, text in {'passwd':'labmate:x:65534:65534:LabMate Runtime:/work:/usr/sbin/nologin\n',
-                       'group':'labmate:x:65534:\n', 'hosts':'127.0.0.1 localhost\n::1 localhost\n'}.items():
+                       'group':'labmate:x:65534:\n', 'hosts':hosts_text}.items():
         try:
             with (system / name).open('x') as file: file.write(text)
-        except FileExistsError: pass
+        except FileExistsError:
+            if name == 'hosts': (system / name).write_text(text)
     env = {'PATH': '/opt/labmate-runtime/venv/bin:/usr/local/bin:/usr/bin:/bin', 'HOME': '/work',
+           'KERAS_HOME': '/work/.keras', 'TORCH_HOME': '/work/.torch',
            'LABMATE_SANDBOX_WORKER': '1', 'EXECUTION_ISOLATION': 'required',
            'EXECUTION_ALLOWED_EMAILS': 'worker@localhost', 'USE_DOCKER': 'false',
            'DATA_DIR': '/work', 'LAB_RESOURCES_DIR': str(ROOT / 'resources'),
@@ -90,14 +96,16 @@ def command(work, unit, *, managed_vm=False):
            'NODE_RUNTIME_CACHE': str(ROOT / 'node_cache'),
            'COMPILATION_TIMEOUT': '60',
            'REDIS_URL': 'redis://127.0.0.1:6379', 'REDIS_REQUIRED': 'true',
-           'OPENBLAS_NUM_THREADS': '1', 'OMP_NUM_THREADS': '1', 'LANG': 'C.UTF-8'}
+           'OPENBLAS_NUM_THREADS': '1', 'OMP_NUM_THREADS': '1', 'MKL_NUM_THREADS': '1',
+           'CUDA_VISIBLE_DEVICES': '', 'TF_CPP_MIN_LOG_LEVEL': '2', 'TF_ENABLE_ONEDNN_OPTS': '0',
+           'TF_NUM_INTRAOP_THREADS': '1', 'TF_NUM_INTEROP_THREADS': '1', 'LANG': 'C.UTF-8'}
     if managed_vm:
         env['PATH'] = str(ROOT / 'tools') + ':' + env['PATH']
         env['NODE_COMMAND'] = str(ROOT / 'tools/node')
     prefix = [] if managed_vm else ['systemd-run', '--quiet', '--scope', '--unit=' + unit,
-            '-p', 'MemoryMax=1536M', '-p', 'MemorySwapMax=0', '-p', 'TasksMax=160', '-p', 'CPUQuota=100%']
+            '-p', 'MemoryMax=2048M', '-p', 'MemorySwapMax=0', '-p', 'TasksMax=256', '-p', 'CPUQuota=100%']
     args = prefix + ['bwrap', '--die-with-parent', '--new-session', '--unshare-user', '--unshare-pid', '--as-pid-1', '--unshare-net',
-            '--unshare-ipc', '--unshare-uts', '--unshare-cgroup-try', '--uid', '65534', '--gid', '65534',
+            '--unshare-ipc', '--unshare-uts', '--hostname', 'localhost', '--unshare-cgroup-try', '--uid', '65534', '--gid', '65534',
             '--cap-drop', 'ALL', '--clearenv', '--ro-bind', '/usr', '/usr', '--symlink', 'usr/bin', '/bin',
             '--symlink', 'usr/lib', '/lib', '--symlink', 'usr/lib64', '/lib64',
             '--ro-bind', str(ROOT), str(ROOT), '--size', str(512 * 1024**2), '--tmpfs', '/work',

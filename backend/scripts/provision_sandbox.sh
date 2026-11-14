@@ -3,7 +3,7 @@
 set -eu
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
-apt-get install -y -qq python3-venv bubblewrap gcc g++ default-jdk nodejs npm xvfb xauth fonts-dejavu-core libmagic1
+apt-get install -y -qq python3-venv bubblewrap gcc g++ default-jdk nodejs npm xvfb xauth fonts-dejavu-core libmagic1 r-base-core r-recommended r-cran-ggplot2 r-cran-dplyr r-cran-tidyr r-cran-tibble r-cran-scales r-cran-reshape2 r-cran-e1071 r-cran-randomforest
 python3 -m venv /opt/labmate-runtime/venv
 /opt/labmate-runtime/venv/bin/pip install -r /opt/labmate-runtime/requirements.txt > /var/log/labmate-runtime-pip.log 2>&1
 # Keep the known base numerical versions; install CPU-only notebook extensions.

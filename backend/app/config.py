@@ -1,6 +1,5 @@
 from pydantic_settings import BaseSettings
 from pydantic import ConfigDict, field_validator, model_validator
-from typing import Optional
 import os
 from dotenv import load_dotenv
 
@@ -27,6 +26,9 @@ class Settings(BaseSettings):
     # Security
     BETA_KEY: str = os.getenv("BETA_KEY", "")
     EXECUTION_ALLOWED_EMAILS: str = ''
+    # Local installs only: admit every signed-in student even when an allowlist is set.
+    # With no allowlist a local install is already open. Never overrides Railway admission.
+    LOCAL_OPEN_EXECUTION: bool = False
     # Explicit test accounts may use the requested test password and beta execution.
     # Keep empty by default; never place ordinary users here.
     BETA_TEST_EMAILS: str = ''
@@ -185,6 +187,7 @@ class Settings(BaseSettings):
     GLM_RPM_LIMIT: int = 30
     GLM_TPM_LIMIT: int = 60000
     EXECUTION_TIMEOUT: float = 30.0
+    RUN_TIMEOUT: float = 30.0
     COMPILATION_TIMEOUT: float = 30.0
     EXECUTION_MAX_OUTPUT_BYTES: int = 1048576
     JAVA_COMMAND: str = "java"
@@ -192,12 +195,15 @@ class Settings(BaseSettings):
     C_COMPILER: str = "gcc"
     CPP_COMPILER: str = "g++"
     NODE_COMMAND: str = "node"
+    R_COMMAND: str = "Rscript"
+    R_LIBS: str = ""  # extra library directory for R packages (system packages need none)
     JAVA_GUI_TEST_TIMEOUT: float = 30.0
     JAVA_GUI_TOTAL_TIMEOUT: float = 90.0
     # One-time Razorpay packs. Test and live balances are separate.
     BILLING_ENABLED: bool = False
-    BILLING_TRIAL_CREDITS: int = 3
+    BILLING_TRIAL_CREDITS: int = 100
     RAZORPAY_MODE: str = 'test'
+    RAZORPAY_PAYMENT_CHECK_ENABLED: bool = False
     RAZORPAY_KEY_ID: str = ''
     RAZORPAY_KEY_SECRET: str = ''
     RAZORPAY_WEBHOOK_SECRET: str = ''
@@ -231,6 +237,11 @@ class Settings(BaseSettings):
     RATE_LIMIT_ENABLED: bool = True
     RATE_LIMIT_PER_MINUTE: int = 180
     AUTH_RATE_LIMIT_PER_MINUTE: int = 20
+    # Signed-in requests are counted per user, not per IP, so a campus behind one public address
+    # does not share one bucket. The IP ceiling still bounds many accounts behind one address
+    # (0 disables it). Login, signup and refresh stay per-IP.
+    USER_RATE_LIMIT_PER_MINUTE: int = 180
+    AUTHENTICATED_IP_RATE_LIMIT_PER_MINUTE: int = 3000
 
     # MySQL SQL-Lab Runtime Settings
     MYSQL_URL: str = os.getenv("MYSQL_URL", "")
@@ -248,6 +259,16 @@ class Settings(BaseSettings):
                              ("REPORT_DIR", "reports"), ("REACT_TEMP_DIR", "react_temp"), ("LOG_DIR", "logs")):
             if name not in self.model_fields_set:
                 setattr(self, name, os.path.join(self.DATA_DIR, folder))
+        return self
+
+    @model_validator(mode="after")
+    def warn_unusable_concurrency_limits(self):
+        # The SSH broker runs one job at a time and rejects a second with "worker is busy", so a
+        # higher admission limit only turns waiting into failures. Only Railway sandboxes scale out.
+        if (self.EXECUTION_BACKEND == 'ssh' and self.EXECUTION_ISOLATION == 'required'
+                and self.HEAVY_EXECUTION_LOCAL_LIMIT > 1):
+            print("[WARNING] HEAVY_EXECUTION_LOCAL_LIMIT > 1 with EXECUTION_BACKEND=ssh: the SSH worker runs "
+                  "one job at a time, so concurrent jobs will fail as 'busy'. Use railway_sandbox or keep it at 1.")
         return self
 
     @model_validator(mode="after")

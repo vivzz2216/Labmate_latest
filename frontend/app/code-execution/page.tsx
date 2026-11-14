@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, Suspense } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import CreditStatus from '@/components/billing/CreditStatus';
 import AgentPlanPanel from '@/components/workflow/AgentPlanPanel';
 import ExecutionStatus from '@/components/workflow/ExecutionStatus';
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 const DotGrid = dynamic<any>(() => import("@/components/visual/DotGrid"), {
   ssr: false,
@@ -51,10 +51,13 @@ import {
   type ManualMode,
   type BatchItem,
 } from "@/lib/workflow";
+import { getLabCategory } from "@/lib/labCatalog";
 import styles from "./processing.module.css";
 
 const languages: { value: LabLanguage; label: string }[] = [
   { value: "auto", label: "Use detected languages" },
+  { value: "colab", label: "Google Colab (Deep Learning Notebook)" },
+  { value: "distributed", label: "Java (Distributed Computing · VS Code)" },
   { value: "python", label: "Python" },
   { value: "java", label: "Java" },
   { value: "c", label: "C" },
@@ -63,9 +66,222 @@ const languages: { value: LabLanguage; label: string }[] = [
   { value: "react", label: "React" },
   { value: "node", label: "Node.js" },
   { value: "sql", label: "SQL (MySQL runtime)" },
-  { value: "colab", label: "Python Notebook" },
   { value: "ubuntu", label: "Ubuntu (Bash + GNOME)" },
+  { value: "r", label: "R (RStudio)" },
 ];
+
+const TRACK_LANGUAGE_MAP: Record<string, LabLanguage[]> = {
+  deep_learning: ["auto", "colab", "python"],
+  "deep-learning": ["auto", "colab", "python"],
+  colab: ["auto", "colab", "python"],
+  distributed: ["distributed"],
+  "distributed-computing": ["distributed"],
+  python: ["auto", "python", "colab"],
+  java: ["auto", "java"],
+  cpp: ["auto", "cpp", "c"],
+  "c-cpp": ["auto", "cpp", "c"],
+  c: ["auto", "c", "cpp"],
+  web: ["auto", "html", "react", "node"],
+  "web-development": ["auto", "html", "react", "node"],
+  sql: ["auto", "sql"],
+  ubuntu: ["auto", "ubuntu"],
+  r: ["auto", "r"],
+};
+
+interface PlatformGuideRow {
+  platform: string;
+  usage: string;
+  support: string;
+  recommendation: string;
+  top?: boolean;
+  targetLanguage?: LabLanguage;
+  targetTemplate?: "idle" | "jupyter";
+}
+
+interface TrackPlatformGuide {
+  title: string;
+  supportHeading: string;
+  rows: PlatformGuideRow[];
+}
+
+const TRACK_PLATFORM_GUIDES: Record<string, TrackPlatformGuide> = {
+  deep_learning: {
+    title: "Deep Learning Platforms & IDEs",
+    supportHeading: "Deep Learning support",
+    rows: [
+      {
+        platform: "Google Colab",
+        usage: "Cloud-based notebooks",
+        support: "TensorFlow, PyTorch, Keras",
+        recommendation: "⭐ Excellent",
+        top: true,
+        targetLanguage: "colab",
+      },
+      {
+        platform: "Jupyter Notebook",
+        usage: "Interactive Python development",
+        support: "TensorFlow, PyTorch, Keras",
+        recommendation: "⭐ Excellent",
+        top: true,
+        targetLanguage: "python",
+        targetTemplate: "jupyter",
+      },
+      {
+        platform: "VS Code",
+        usage: "Full development environment",
+        support: "TensorFlow, PyTorch",
+        recommendation: "⭐ Excellent",
+        top: true,
+        targetLanguage: "python",
+        targetTemplate: "idle",
+      },
+      {
+        platform: "Kaggle Notebooks",
+        usage: "Cloud-based ML/DL experiments",
+        support: "TensorFlow, PyTorch",
+        recommendation: "Excellent",
+        targetLanguage: "colab",
+      },
+      {
+        platform: "PyCharm",
+        usage: "Python development",
+        support: "TensorFlow, PyTorch",
+        recommendation: "Excellent",
+        targetLanguage: "python",
+        targetTemplate: "idle",
+      },
+    ],
+  },
+  distributed: {
+    title: "Distributed Computing IDE",
+    supportHeading: "Java Runtime",
+    rows: [
+      {
+        platform: "VS Code",
+        usage: "Default IDE & integrated terminal",
+        support: "Java 17 · Sockets, RMI, Threads",
+        recommendation: "⭐ Default",
+        top: true,
+        targetLanguage: "distributed",
+      },
+    ],
+  },
+  python: {
+    title: "Python Platforms & IDEs",
+    supportHeading: "Python support",
+    rows: [
+      {
+        platform: "Python IDLE",
+        usage: "Standard Windows lab environment",
+        support: "Python 3.11+ Stdlib",
+        recommendation: "⭐ Excellent",
+        top: true,
+        targetLanguage: "python",
+        targetTemplate: "idle",
+      },
+      {
+        platform: "Jupyter Notebook",
+        usage: "Interactive notebook cells",
+        support: "NumPy, Pandas, Matplotlib",
+        recommendation: "⭐ Excellent",
+        top: true,
+        targetLanguage: "python",
+        targetTemplate: "jupyter",
+      },
+      {
+        platform: "Google Colab",
+        usage: "Cloud-based notebooks",
+        support: "Data Science & ML Stack",
+        recommendation: "⭐ Excellent",
+        top: true,
+        targetLanguage: "colab",
+      },
+      {
+        platform: "VS Code / PyCharm",
+        usage: "Full Python IDE",
+        support: "Scripts, OOP, Modules",
+        recommendation: "Excellent",
+        targetLanguage: "python",
+        targetTemplate: "idle",
+      },
+    ],
+  },
+  web: {
+    title: "Web Development Platforms",
+    supportHeading: "Web stack support",
+    rows: [
+      {
+        platform: "VS Code + Browser",
+        usage: "Live DOM & multi-file projects",
+        support: "HTML5, CSS3, JavaScript",
+        recommendation: "⭐ Excellent",
+        top: true,
+        targetLanguage: "html",
+      },
+      {
+        platform: "React Studio",
+        usage: "Component & SPA applications",
+        support: "React 18, JSX, Hooks",
+        recommendation: "⭐ Excellent",
+        top: true,
+        targetLanguage: "react",
+      },
+      {
+        platform: "Node.js Runtime",
+        usage: "Backend APIs & Express",
+        support: "Node.js, Express, REST",
+        recommendation: "⭐ Excellent",
+        top: true,
+        targetLanguage: "node",
+      },
+    ],
+  },
+  sql: {
+    title: "SQL Database Environments",
+    supportHeading: "SQL support",
+    rows: [
+      {
+        platform: "MySQL Workbench",
+        usage: "Visual queries & schema grids",
+        support: "MySQL 8.0, Joins, Views",
+        recommendation: "⭐ Excellent",
+        top: true,
+        targetLanguage: "sql",
+      },
+    ],
+  },
+};
+
+function getTrackPlatformGuide(track: string): TrackPlatformGuide | null {
+  if (!track) return null;
+  const key = track.toLowerCase().replace(/-/g, "_");
+  if (key === "distributed_computing") return TRACK_PLATFORM_GUIDES.distributed;
+  if (key === "web_development") return TRACK_PLATFORM_GUIDES.web;
+  if (key === "colab") return TRACK_PLATFORM_GUIDES.deep_learning;
+  return TRACK_PLATFORM_GUIDES[key] || null;
+}
+
+function getAllowedLanguages(track: string) {
+  if (!track) return languages;
+  const normalized = track.toLowerCase();
+  const allowed = TRACK_LANGUAGE_MAP[normalized] || TRACK_LANGUAGE_MAP[normalized.replace(/-/g, "_")];
+  if (!allowed) return languages;
+  return languages.filter((item) => allowed.includes(item.value));
+}
+// A lab page links here with its section's track (for example "web" or
+// "deep_learning"), which is not always a runtime language. Resolve the language
+// from the catalogue: the launched experiment's runtime, else the section default.
+const labLanguage = (track: string, experimentId: string): LabLanguage | null => {
+  if (!track) return null;
+  const category = getLabCategory(track);
+  if (category) {
+    return category.experiments.find((experiment) => experiment.id === experimentId)?.runtime || category.defaultLanguage;
+  }
+  return languages.some((item) => item.value === track) ? (track as LabLanguage) : null;
+};
+const labTitle = (track: string, experimentId: string) =>
+  getLabCategory(track)?.experiments.find((experiment) => experiment.id === experimentId)?.title || "Lab experiment";
+
 const stages = [
   {
     title: "Read document",
@@ -103,15 +319,43 @@ const sanitizeOutputName = (name: string, fallback = "lab_report") => {
 const outputName = (name: string) => `${sanitizeOutputName(name, "lab_assignment").replace(/_completed$/i, "").slice(0, 58).replace(/^[_-]+|[_-]+$/g, "") || "lab_assignment"}_completed`;
 
 export default function AssignmentPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-zinc-400">
+          Loading lab environment...
+        </div>
+      }
+    >
+      <AssignmentContent />
+    </Suspense>
+  );
+}
+
+function AssignmentContent() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const trackParam = searchParams.get("track") || "";
+  const expParam = searchParams.get("exp") || "";
+  const promptParam = searchParams.get("prompt") || "";
+  const isDistributedTrack = ["distributed", "distributed-computing", "distributed_computing"].includes(
+    trackParam.toLowerCase(),
+  );
+  const availableLanguages = getAllowedLanguages(trackParam);
   const inputRef = useRef<HTMLInputElement>(null);
   const [upload, setUpload] = useState<UploadResponse | null>(null);
   const [workflow, setWorkflow] = useState<LabWorkflow | null>(null);
   const [questions, setQuestions] = useState<LabQuestion[]>([]);
   const [language, setLanguage] = useState<LabLanguage>("auto");
+  const isDistributedMode = isDistributedTrack || language === "distributed";
+  const platformGuide =
+    getTrackPlatformGuide(trackParam) ||
+    (language === "distributed" ? TRACK_PLATFORM_GUIDES.distributed : null);
   const [screenshotStyle, setScreenshotStyle] = useState<string>("style_1");
   const [colabTheme, setColabTheme] = useState<"light" | "dark">("dark");
+  const [jupyterTheme, setJupyterTheme] = useState<"light" | "dark">("light");
+  const [pythonTemplate, setPythonTemplate] = useState<"idle" | "jupyter">("idle");
   const [browserTheme, setBrowserTheme] = useState<"edge" | "chrome">("edge");
   const [instructions, setInstructions] = useState("");
   const [filename, setFilename] = useState("lab_report");
@@ -148,22 +392,57 @@ export default function AssignmentPage() {
     return () => { batchAlive.current = false; };
   }, []);
 
-  const applyWorkflow = (data: LabWorkflow, restoreFields = false) => {
+  const promptSeededRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const trackLanguage = labLanguage(trackParam, expParam);
+    if (trackLanguage) {
+      setLanguage(trackLanguage);
+      if (trackParam === "deep_learning" || trackParam === "deep-learning") setColabTheme("dark");
+    }
+
+    if (promptParam && promptSeededRef.current !== promptParam) {
+      promptSeededRef.current = promptParam;
+      setQuestions((prev) =>
+        prev.length > 0
+          ? prev
+          : [
+              {
+                id: 1,
+                text: promptParam,
+                language: trackLanguage || "python",
+                track: trackParam || undefined,
+              },
+            ],
+      );
+      setFilename(sanitizeOutputName(labTitle(trackParam, expParam), "lab_report"));
+      setShowQuestions(true);
+    }
+  }, [trackParam, promptParam, expParam]);
+
+  const applyWorkflow = useCallback((data: LabWorkflow, restoreFields = false) => {
     setWorkflow(data);
     if(!['queued','extracting','processing'].includes(data.status))setProcessingTriggered(false);
     if (data.status === "ready" || restoreFields) setQuestions(data.questions);
     if (restoreFields) {
-      setLanguage(data.language);
+      setLanguage(isDistributedTrack ? "distributed" : data.language);
       setColabTheme(data.questions.find((question) => question.colab_theme)?.colab_theme || "dark");
+      setJupyterTheme(data.questions.find((question) => question.jupyter_theme)?.jupyter_theme || "light");
+      setPythonTemplate(data.questions.find((question) => question.python_template)?.python_template || "idle");
       setBrowserTheme(data.questions.find((question) => question.browser_theme)?.browser_theme || "edge");
       setInstructions(data.instructions);
       setFilename(sanitizeOutputName(data.output_name));
     }
-  };
+  }, [isDistributedTrack]);
+
+  const userId = user?.id;
+  const uploadId = upload?.id;
+  const workflowStatus = workflow?.status;
+  const reportKey = workflow?.report?.id ?? (workflow?.report ? "ready" : null);
 
   useEffect(() => {
     if (authLoading) return;
-    if (!user) {
+    if (!userId) {
       router.replace("/");
       return;
     }
@@ -199,15 +478,15 @@ export default function AssignmentPage() {
     return () => {
       active = false;
     };
-  }, [authLoading, user?.id, router]);
+  }, [authLoading, userId, router, applyWorkflow]);
 
   useEffect(() => {
-    if (!upload || !running) return;
+    if (!uploadId || !running) return;
     let active = true;
     let timer: ReturnType<typeof setTimeout>;
     const poll = async () => {
       try {
-        const state = await workflowApi.status(upload.id);
+        const state = await workflowApi.status(uploadId);
         if (active) {
           applyWorkflow(state);
           setError("");
@@ -215,21 +494,21 @@ export default function AssignmentPage() {
       } catch (requestError) {
         if (active) setError(errorMessage(requestError));
       }
-      if (active) timer = setTimeout(poll, workflow?.status === "queued" ? 5000 : 3000);
+      if (active) timer = setTimeout(poll, workflowStatus === "queued" ? 5000 : 3000);
     };
     timer = setTimeout(poll, 1000);
     return () => {
       active = false;
       clearTimeout(timer);
     };
-  }, [upload?.id, running]);
+  }, [uploadId, running, workflowStatus, applyWorkflow]);
 
   useEffect(() => {
-    if (!showPreview || !upload || !workflow?.report) return;
+    if (!showPreview || !uploadId || reportKey === null) return;
     let active = true;
     setPreviewLoading(true);
     workflowApi
-      .preview(upload.id)
+      .preview(uploadId)
       .then((html) => {
         if (active) setPreview(html);
       })
@@ -242,7 +521,7 @@ export default function AssignmentPage() {
     return () => {
       active = false;
     };
-  }, [showPreview, upload?.id, workflow?.report?.id]);
+  }, [showPreview, uploadId, reportKey]);
 
   const extract = async (id: number) => {
     const state = await workflowApi.extract(id);
@@ -268,7 +547,8 @@ export default function AssignmentPage() {
       const uploaded = await apiService.uploadFile(file);
       setUpload(uploaded);
       setFilename(outputName(uploaded.original_filename));
-      router.replace(`/code-execution?assignment=${uploaded.id}`, {
+      const trackQuery = trackParam ? `&track=${encodeURIComponent(trackParam)}` : "";
+      router.replace(`/code-execution?assignment=${uploaded.id}${trackQuery}`, {
         scroll: false,
       });
       await extract(uploaded.id);
@@ -369,12 +649,21 @@ export default function AssignmentPage() {
 
             // Process with selected manualMode
             let runWf = await workflowApi.process(uploaded.id, {
-              questions: wf.questions.map((question) => ({ ...question, colab_theme: colabTheme, browser_theme: browserTheme })),
-              language: "auto",
+              questions: wf.questions.map((question) => ({
+                ...question,
+                language: isDistributedMode && question.language !== "theory" ? "distributed" : question.language,
+                track: question.track || trackParam || undefined,
+                colab_theme: colabTheme,
+                browser_theme: browserTheme,
+                python_template: pythonTemplate,
+                jupyter_theme: jupyterTheme,
+              })),
+              language: isDistributedMode ? "distributed" : "auto",
               instructions: "",
               output_name: outputName(item.file.name),
               screenshot_style: screenshotStyle,
               mode: manualMode,
+              track: trackParam || undefined,
             });
 
             let runAttempts = 0;
@@ -470,7 +759,7 @@ export default function AssignmentPage() {
   };
 
   const process = async () => {
-    if (!upload || !questions.length || busy || running) return;
+    if (!questions.length || busy || running) return;
     if (questions.some((question) => !question.text.trim())) {
       setError("Every question needs some text.");
       setShowQuestions(true);
@@ -480,15 +769,46 @@ export default function AssignmentPage() {
     setBusy(true);
     setError("");
     setPreview("");
+    if (typeof window !== "undefined" && window.innerWidth <= 1024) {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
     try {
+      let target = upload;
+      if (!target) {
+        // Launched from a lab page: there is no manual, so the typed experiment
+        // becomes one before it runs.
+        const started = await workflowApi.startFromPrompt(
+          questions.map(({ id, text, language: questionLanguage, track }) => ({
+            id,
+            text,
+            language: isDistributedMode && questionLanguage !== "theory" ? "distributed" : questionLanguage,
+            track: track || trackParam || undefined,
+          })),
+          labTitle(trackParam, expParam),
+        );
+        target = started.upload;
+        setUpload(target);
+        const trackQuery = trackParam ? `&track=${encodeURIComponent(trackParam)}` : "";
+        router.replace(`/code-execution?assignment=${target.id}${trackQuery}`, { scroll: false });
+      }
+      const effectiveLanguage: LabLanguage = isDistributedMode ? "distributed" : language;
       applyWorkflow(
-        await workflowApi.process(upload.id, {
-          questions: questions.map((question) => ({ ...question, colab_theme: colabTheme, browser_theme: browserTheme })),
-          language,
+        await workflowApi.process(target.id, {
+          questions: questions.map((question) => ({
+            ...question,
+            language: isDistributedMode && question.language !== "theory" ? "distributed" : question.language,
+            track: question.track || trackParam || undefined,
+            colab_theme: colabTheme,
+            browser_theme: browserTheme,
+            python_template: pythonTemplate,
+            jupyter_theme: jupyterTheme,
+          })),
+          language: effectiveLanguage,
           instructions,
           output_name: sanitizeOutputName(filename || "lab_report"),
           screenshot_style: screenshotStyle,
           mode: manualMode,
+          track: trackParam || undefined,
         }),
       );
     } catch (requestError) {
@@ -530,8 +850,11 @@ export default function AssignmentPage() {
     setWorkflow(null);
     setQuestions([]);
     setPreview("");
+    if (typeof window !== "undefined" && window.innerWidth <= 1024) {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
     setError("");
-    router.replace("/code-execution");
+    router.replace(trackParam ? `/code-execution?track=${encodeURIComponent(trackParam)}` : "/code-execution");
   };
   const stageIndex = complete
     ? 4
@@ -619,10 +942,56 @@ export default function AssignmentPage() {
           </div>
         </header>
 
-        <main className={styles.layout}>
-        <aside className={styles.setupPanel}>
+        <main className={`${styles.layout} ${workflow || isProcessingActive ? styles.layoutActiveWorkflow : ""}`}>
+        <aside className={styles.setupPanel} id="assignment-setup">
           <h2 className={styles.panelTitle}>Build your lab report</h2>
           <CreditStatus refreshKey={`${workflow?.status}-${workflow?.progress}`} />
+          {trackParam && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                padding: "8px 12px",
+                borderRadius: "8px",
+                marginTop: "10px",
+                marginBottom: "10px",
+                fontSize: "0.8rem",
+                fontWeight: 500,
+                background:
+                  trackParam.includes("deep")
+                    ? "rgba(168, 85, 247, 0.15)"
+                    : trackParam.includes("distrib")
+                    ? "rgba(14, 165, 233, 0.15)"
+                    : "rgba(59, 130, 246, 0.15)",
+                border: `1px solid ${
+                  trackParam.includes("deep")
+                    ? "rgba(168, 85, 247, 0.35)"
+                    : trackParam.includes("distrib")
+                    ? "rgba(14, 165, 233, 0.35)"
+                    : "rgba(59, 130, 246, 0.35)"
+                }`,
+                color:
+                  trackParam.includes("deep")
+                    ? "#c084fc"
+                    : trackParam.includes("distrib")
+                    ? "#38bdf8"
+                    : "#93c5fd",
+              }}
+            >
+              <Sparkles size={14} className="shrink-0" />
+              <span>
+                Active Track:{" "}
+                <strong>
+                  {trackParam === "deep_learning" || trackParam === "deep-learning"
+                    ? "Deep Learning Labs"
+                    : trackParam === "distributed" || trackParam === "distributed-computing"
+                    ? "Distributed Computing Labs"
+                    : trackParam.toUpperCase()}
+                </strong>
+              </span>
+            </div>
+          )}
           {language !== "sql" && (language !== "auto" || questions.length === 0 ||
             questions.some((question) => question.language !== "sql" && question.language !== "theory")) && <ExecutionStatus />}
           <p className={styles.setupIntro}>
@@ -837,22 +1206,75 @@ export default function AssignmentPage() {
             <span className={styles.stepNumber}>3</span>
             <div>
               <h2>Programming language</h2>
-              <p>Use the detected language or choose one.</p>
+              <p>
+                {isDistributedMode
+                  ? "Java is enforced with VS Code as the default IDE."
+                  : "Use the detected language or choose one."}
+              </p>
               <select
                 aria-label="Programming language"
-                value={language}
-                disabled={running || busy}
+                value={isDistributedTrack ? "distributed" : language}
+                disabled={running || busy || isDistributedTrack}
                 onChange={(event) =>
                   setLanguage(event.target.value as LabLanguage)
                 }
               >
-                {languages.map((option) => (
+                {availableLanguages.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>
                 ))}
               </select>
-              {(language === "colab" || (language === "auto" && (!questions.length || questions.some((question) => question.language === "colab")))) && (
+              {platformGuide && (
+                <div className={styles.platformTableWrap}>
+                  <div className={styles.platformTableHeader}>
+                    <span>{platformGuide.title}</span>
+                  </div>
+                  <div className={styles.platformTableScroll}>
+                    <table className={styles.platformTable}>
+                      <thead>
+                        <tr>
+                          <th>Platform / IDE</th>
+                          <th>Usage</th>
+                          <th>{platformGuide.supportHeading}</th>
+                          <th>Recommendation</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {platformGuide.rows.map((row) => {
+                          const isSelected =
+                            row.targetLanguage === language &&
+                            (!row.targetTemplate || row.targetTemplate === pythonTemplate);
+                          return (
+                            <tr
+                              key={row.platform}
+                              className={`${row.targetLanguage && !(running || busy) ? styles.platformRowClickable : ""} ${isSelected ? styles.platformRowActive : ""}`}
+                              onClick={() => {
+                                if (running || busy || !row.targetLanguage) return;
+                                setLanguage(row.targetLanguage);
+                                if (row.targetTemplate) setPythonTemplate(row.targetTemplate);
+                              }}
+                              title={row.targetLanguage ? `Select ${row.platform}` : undefined}
+                            >
+                              <td className={styles.platformName}>{row.platform}</td>
+                              <td>{row.usage}</td>
+                              <td>{row.support}</td>
+                              <td>
+                                <span
+                                  className={`${styles.platformRecBadge} ${row.top ? styles.platformRecTop : ""}`}
+                                >
+                                  {row.recommendation}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+              {(language === "colab" || (language === "auto" && availableLanguages.some((item) => item.value === "colab") && (!questions.length || questions.some((question) => question.language === "colab")))) && (
                 <div className={styles.colabThemeField}>
                   <label className={styles.screenshotLabel} htmlFor="colab-theme">Colab screenshot theme</label>
                   <select id="colab-theme" value={colabTheme} disabled={running || busy || batchProcessing}
@@ -863,7 +1285,7 @@ export default function AssignmentPage() {
                   <p>Applies to every Colab code and output image.</p>
                 </div>
               )}
-              {(['html', 'react', 'node'].includes(language) || questions.some(question => ['html', 'react', 'node'].includes(question.language) || /\bflask\b/i.test(question.text))) && (
+              {(['html', 'react', 'node'].includes(language) || (language === "auto" && availableLanguages.some((item) => ['html', 'react', 'node'].includes(item.value)) && questions.some(question => ['html', 'react', 'node'].includes(question.language) || /\bflask\b/i.test(question.text)))) && (
                 <div className={styles.colabThemeField}>
                   <label className={styles.screenshotLabel} htmlFor="browser-theme">Web output browser</label>
                   <select id="browser-theme" value={browserTheme} disabled={running || busy || batchProcessing}
@@ -874,11 +1296,24 @@ export default function AssignmentPage() {
                   <p>The frame surrounds the captured page without changing its contents.</p>
                 </div>
               )}
-              {(language === "python" || (language === "auto" && (!questions.length || questions.some((question) => question.language === "python")))) && (
+              {(language === "python" || (language === "auto" && availableLanguages.some((item) => item.value === "python") && !trackParam.includes("deep") && (!questions.length || questions.some((question) => question.language === "python")))) && (
                 <div style={{ marginTop: "12px" }}>
-                  <label className={styles.screenshotLabel}>
-                    Python IDLE Screenshot Style
-                  </label>
+                  <label className={styles.screenshotLabel} htmlFor="python-template">Python screenshot template</label>
+                  <select id="python-template" value={pythonTemplate} disabled={running || busy || batchProcessing}
+                    onChange={event => setPythonTemplate(event.target.value as "idle" | "jupyter")}>
+                    <option value="idle">Python IDLE (Windows)</option>
+                    <option value="jupyter">Jupyter Notebook</option>
+                  </select>
+                  <p style={{fontSize: "12px", color: "#a1a1aa", marginTop: "8px"}}>Choose the look of your Python code and output screenshots.</p>
+                  {pythonTemplate === "jupyter" && <>
+                    <label className={styles.screenshotLabel} htmlFor="jupyter-theme">Jupyter theme</label>
+                    <select id="jupyter-theme" value={jupyterTheme} disabled={running || busy || batchProcessing}
+                      onChange={event => setJupyterTheme(event.target.value as "light" | "dark")}>
+                      <option value="light">Light</option><option value="dark">Dark</option>
+                    </select>
+                  </>}
+                  {pythonTemplate === "idle" && <>
+                  <label className={styles.screenshotLabel}>Python IDLE screenshot layout</label>
                   <select
                     aria-label="Python screenshot layout style"
                     value={screenshotStyle}
@@ -889,6 +1324,7 @@ export default function AssignmentPage() {
                     <option value="style_2">Style 2: Output Side (Editor Left, Shell on Side)</option>
                     <option value="style_3">Style 3: Two Different Windows (Side by Side)</option>
                   </select>
+                  </>}
                 </div>
               )}
             </div>
@@ -914,7 +1350,7 @@ export default function AssignmentPage() {
                   {questions.map((question, index) => (
                     <label key={question.id}>
                       <strong>
-                        Question {index + 1} · {question.language}
+                        Question {index + 1} · {isDistributedMode && question.language !== "theory" ? "Java (VS Code)" : question.language}
                       </strong>
                       <textarea
                         value={question.text}
@@ -1051,18 +1487,23 @@ export default function AssignmentPage() {
               />
 
               {complete && (
-                <button
-                  className={styles.downloadDoneBtn}
-                  onClick={download}
-                  disabled={downloading}
-                >
-                  {downloading ? (
-                    <Loader2 className={styles.spin} size={16} />
-                  ) : (
-                    <Download size={16} />
-                  )}
-                  Download Word Report (.docx)
-                </button>
+                <>
+                  <button
+                    className={styles.downloadDoneBtn}
+                    onClick={download}
+                    disabled={downloading}
+                  >
+                    {downloading ? (
+                      <Loader2 className={styles.spin} size={16} />
+                    ) : (
+                      <Download size={16} />
+                    )}
+                    Download Word Report (.docx)
+                  </button>
+                  <a href="#assignment-setup" className={styles.mobileJumpLink}>
+                    View assignment details ↓
+                  </a>
+                </>
               )}
 
               {failed && (

@@ -5,7 +5,7 @@ import os
 import re
 import uuid
 from datetime import datetime, timezone
-from typing import Literal
+from typing import Literal, Optional
 
 import mammoth
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Request, UploadFile
@@ -24,25 +24,30 @@ from ..models import AssignmentWorkflow, Report, Upload, User, WorkflowBatch, Wo
 from ..config import settings
 from ..security.html_preview import PREVIEW_HEADERS
 from ..services.lab_question_filter import filter_lab_tasks
-from ..services.billing_service import reserve_workflow_credits, settle_workflow_credits
+from ..services.billing_service import check_workflow_credits_available, reserve_workflow_credits, settle_workflow_credits
 from ..services.workflow_batch import archive_chunks, create_batch_archive, stage_batch_file
 
 router = APIRouter(prefix="/workflows")
-Language = Literal["auto", "python", "java", "c", "cpp", "html", "react", "node", "sql", "colab", "ubuntu", "theory"]
+Language = Literal["auto", "python", "java", "c", "cpp", "html", "react", "node", "sql", "colab", "ubuntu", "theory", "distributed", "r"]
 
 
 class QuestionInput(BaseModel):
     id: int = Field(gt=0)
     text: str = Field(min_length=1, max_length=15000)
     language: Language = "python"
+    track: Optional[str] = None
     datasets: dict[str,str] = Field(default_factory=dict,max_length=20)
     colab_theme: Literal["light", "dark"] = "dark"
+    rstudio_theme: Literal["light", "dark"] = "light"
     browser_theme: Literal["edge", "chrome"] = "edge"
+    python_template: Literal["idle", "jupyter"] = "idle"
+    jupyter_theme: Literal["light", "dark"] = "light"
 
 
 class ProcessInput(BaseModel):
     questions: list[QuestionInput] = Field(min_length=1, max_length=100)
     language: Language = "auto"
+    track: Optional[str] = None
     instructions: str = Field(default="", max_length=5000)
     output_name: str = Field(default="lab_report", min_length=1, max_length=80, pattern=r"^[A-Za-z0-9_-]+$")
     screenshot_style: str = Field(default="style_1", max_length=40)
@@ -155,6 +160,67 @@ def batch_status(batch_id, user, db):
         "ready_to_download": terminal and any(row["report_id"] for row in states),
         "files": states,
     }
+
+
+class PromptStartInput(BaseModel):
+    questions: list[QuestionInput] = Field(min_length=1, max_length=20)
+    title: str = Field(default="Lab experiment", min_length=1, max_length=120)
+
+
+def _write_prompt_manual(path, title, questions):
+    from docx import Document
+    document = Document()
+    document.add_heading(title, level=1)
+    for question in questions:
+        document.add_heading(f"Experiment {question['id']}", level=2)
+        document.add_paragraph(question["text"])
+    document.save(path)
+
+
+@router.post("/from-prompt")
+async def start_from_prompt(data: PromptStartInput, user: User = Depends(get_current_user),
+                            db: Session = Depends(get_db), csrf: bool = Depends(require_csrf_token)):
+    """Start a lab from typed experiment text (a lab catalogue launch) with no uploaded manual.
+
+    The text is saved as a small Word manual, so review, execution and the report
+    treat it exactly like an upload whose questions are already extracted.
+    """
+    if len({q.id for q in data.questions}) != len(data.questions):
+        raise HTTPException(400, "Question IDs must be unique.")
+    questions = [{"id": q.id, "text": q.text.strip(), "language": "python" if q.language == "auto" else q.language,
+                  **({"track": q.track} if q.track else {})} for q in data.questions]
+    if any(not question["text"] for question in questions):
+        raise HTTPException(400, "Every question needs some text.")
+    title = re.sub(r"\s+", " ", data.title).strip() or "Lab experiment"
+    name = normalize_output_name(title, default="lab_experiment", max_length=60)
+    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+    stored = os.path.join(settings.UPLOAD_DIR, f"{uuid.uuid4().hex}.docx")
+    try:
+        await asyncio.to_thread(_write_prompt_manual, stored, title, questions)
+        os.chmod(stored, 0o600)
+        from ..services.storage_service import storage_service
+        storage_service.sync_file(stored)
+        upload = Upload(user_id=user.id, filename=os.path.basename(stored), original_filename=name + ".docx",
+                        file_path=stored, file_type="docx", file_size=os.path.getsize(stored),
+                        language=next((q["language"] for q in questions if q["language"] != "theory"), "theory"))
+        db.add(upload)
+        db.flush()
+        workflow = AssignmentWorkflow(upload_id=upload.id, status="ready", stage="review", progress=20, language="auto",
+                                      output_name=name, questions=questions, results=[], logs=[])
+        db.add(workflow)
+        db.commit()
+    except Exception:
+        db.rollback()
+        if os.path.exists(stored):
+            os.unlink(stored)
+        raise
+    db.refresh(upload)
+    db.refresh(workflow)
+    return {"upload": {"id": upload.id, "filename": upload.filename, "original_filename": upload.original_filename,
+                       "file_type": upload.file_type, "file_size": upload.file_size,
+                       "uploaded_at": upload.uploaded_at.isoformat() if upload.uploaded_at else None,
+                       "language": upload.language},
+            "workflow": workflow_response(workflow, db)}
 
 
 @router.post("/batch-upload")
@@ -330,8 +396,11 @@ async def process(upload_id: int, data: ProcessInput, request: Request, backgrou
     if len({q.id for q in data.questions}) != len(data.questions):
         raise HTTPException(400, 'Question IDs must be unique; original experiment numbers are preserved.')
     questions = [{"id": q.id, "text": q.text.strip(), "language": "python" if q.language == "auto" else q.language,
+                  **({'track': q.track or data.track} if (q.track or data.track) else {}),
                   **({'datasets':q.datasets} if q.datasets else {}),
+                  **({'python_template':q.python_template, 'jupyter_theme':q.jupyter_theme} if q.python_template == 'jupyter' and (q.language in {'python','auto'} or data.language in {'python','auto'}) else {}),
                   **({'colab_theme':q.colab_theme} if q.language=='colab' or data.language=='colab' else {}),
+                  **({'rstudio_theme':q.rstudio_theme} if q.language=='r' or data.language=='r' else {}),
                   **({'browser_theme':q.browser_theme} if q.browser_theme == 'chrome' or q.language in {'html','react','node'} or data.language in {'html','react','node'} else {})} for q in data.questions]
     if sum(sum(len(name)+len(content) for name,content in q.datasets.items()) for q in data.questions)>8*1024*1024:
         raise HTTPException(400,'Dataset upload exceeds 8 MiB.')
@@ -362,6 +431,8 @@ async def process(upload_id: int, data: ProcessInput, request: Request, backgrou
     from ..services.brain_agent import needs_planning
     if not needs_planning(questions, data.instructions):
         reserve_workflow_credits(db, workflow, user.id)
+    else:
+        check_workflow_credits_available(db, workflow, user.id)
     workflow.error, workflow.report_id = None, None
     workflow.status, workflow.stage = "queued", 'resume' if continue_pending else 'generate'
     workflow.progress = 20 + int(65 * len(workflow.results) / len(questions))
@@ -401,6 +472,7 @@ async def clarify(upload_id: int, data: ClarificationInput, user: User = Depends
         execution_options={'synchronize_session':False})
     if changed.rowcount!=1:
         raise HTTPException(409,'Another response already changed this assignment. Refresh before continuing.')
+    reserve_workflow_credits(db, workflow, user.id)
     db.commit()
     db.refresh(workflow)
     return workflow_response(workflow, db)
@@ -421,8 +493,14 @@ async def preview(upload_id: int, user: User = Depends(get_current_user), db: Se
     owned_upload(upload_id, user, db)
     workflow = db.query(AssignmentWorkflow).filter_by(upload_id=upload_id).first()
     report = db.query(Report).get(workflow.report_id) if workflow and workflow.report_id else None
-    if not report or not os.path.isfile(report.file_path):
+    if not report:
         raise HTTPException(404, "The Word document is not ready yet.")
-    html_value = await asyncio.to_thread(_convert_docx_to_html, report.file_path)
+    # A worker on another machine built the report; fetch it from object storage when not on this disk.
+    from ..services.storage_service import storage_service
+    try:
+        report_path = str(await asyncio.to_thread(storage_service.ensure_local, report.file_path))
+    except FileNotFoundError:
+        raise HTTPException(404, "The Word document is not ready yet.") from None
+    html_value = await asyncio.to_thread(_convert_docx_to_html, report_path)
     # Browser sandbox plus restrictive CSP protect previews of user-supplied documents.
     return HTMLResponse(f'''<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'"><title>{html.escape(report.filename)}</title><style>body{{max-width:780px;margin:24px auto;padding:28px;background:white;color:#172747;font:14px/1.6 Arial,sans-serif}}img{{max-width:100%;height:auto}}table{{border-collapse:collapse;width:100%}}td,th{{border:1px solid #ccd5e3;padding:8px}}pre{{white-space:pre-wrap}}h1,h2,h3{{line-height:1.3}}a{{color:#075cf7;pointer-events:none}}</style></head><body>{html_value}</body></html>''', headers=PREVIEW_HEADERS)

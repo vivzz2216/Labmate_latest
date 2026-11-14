@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>RStudio</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="theme-light">
+<div id="window">
+  <div id="titlebar">
+    <img class="app-icon" src="assets/icons/r_logo.svg" alt="">
+    <span id="window-title">RStudio</span>
+    <span class="win-controls"><i>&#8211;</i><i>&#9744;</i><i>&#10005;</i></span>
+  </div>
+  <div id="menubar">
+    <span>File</span><span>Edit</span><span>Code</span><span>View</span><span>Plots</span><span>Session</span><span>Build</span><span>Debug</span><span>Profile</span><span>Tools</span><span>Help</span>
+  </div>
+  <div id="toolbar">
+    <span class="tb-ico">&#128196;<small>&#9662;</small></span>
+    <span class="tb-ico blue">&#9679;</span>
+    <span class="tb-sep"></span>
+    <span class="tb-ico">&#128194;</span><span class="tb-ico">&#128190;</span><span class="tb-ico">&#128424;</span>
+    <span class="tb-sep"></span>
+    <span class="goto">&#128269; Go to file/function</span>
+    <span class="tb-sep"></span>
+    <span class="tb-text">Addins <small>&#9662;</small></span>
+    <span class="spacer"></span>
+    <span class="tb-text project"><svg viewBox="0 0 16 16" width="14" height="14"><path d="M2 3h5l1.5 1.5H14v8H2z" fill="#8a9bb0"/></svg> Project: (None) <small>&#9662;</small></span>
+  </div>
+  <div id="panes">
+    <div id="left">
+      <section class="pane" id="source-pane">
+        <div class="tabbar" id="source-tabs"></div>
+        <div class="pane-toolbar" id="source-toolbar">
+          <span class="ico">&#128190;</span><span class="chk"><i></i> Source on Save</span>
+          <span class="ico">&#128269;</span><span class="ico">&#10024;</span>
+          <span class="spacer"></span>
+          <span class="btn">&#9654;|&nbsp;Run</span><span class="btn">&#8630;</span>
+          <span class="btn">&#9660;|</span><span class="btn">&#9654; Source <small>&#9662;</small></span><span class="ico">&#9776;</span>
+        </div>
+        <div id="editor"><div id="gutter"></div><pre id="code"></pre></div>
+        <div id="viewer" hidden></div>
+        <div class="statusbar"><span id="cursor-pos">1:1</span><span class="spacer"></span><span>(Top Level) &#8661;</span><span class="rscript">R Script &#8661;</span></div>
+      </section>
+      <section class="pane" id="console-pane">
+        <div class="tabbar"><span class="tab active">Console <b>&#10005;</b></span><span class="tab">Terminal <b>&#10005;</b></span><span class="tab">Background Jobs <b>&#10005;</b></span></div>
+        <div class="pane-toolbar"><span id="r-ver" class="rver">R 4.4.0</span><span class="dot">&middot;</span><span id="wd">~/</span><span class="ico">&#8680;</span><span class="spacer"></span><span class="ico">&#9776;</span></div>
+        <div id="console"></div>
+      </section>
+    </div>
+    <div id="right">
+      <section class="pane" id="env-pane">
+        <div class="tabbar" id="env-tabs"><span class="tab active" data-t="environment">Environment</span><span class="tab" data-t="history">History</span><span class="tab">Connections</span><span class="tab">Tutorial</span></div>
+        <div class="pane-toolbar" id="env-toolbar">
+          <span class="btn">&#128194; Import Dataset <small>&#9662;</small></span><span class="ico">&#128190;</span>
+          <span class="spacer"></span><span class="btn">&#9776; List <small>&#9662;</small></span><span class="ico">&#8635;</span>
+        </div>
+        <div class="pane-toolbar sub"><span class="ico">&#9729;</span><span class="ico">&#9654;</span><span class="btn wide">R <small>&#9662;</small></span><span class="btn wide" style="margin-left:6px">Global Environment <small>&#9662;</small></span><span class="spacer"></span><span class="search">&#128269;</span></div>
+        <div id="env-body"></div>
+      </section>
+      <section class="pane" id="files-pane">
+        <div class="tabbar" id="files-tabs"><span class="tab" data-t="files">Files</span><span class="tab" data-t="plots">Plots</span><span class="tab" data-t="packages">Packages</span><span class="tab">Help</span><span class="tab">Viewer</span><span class="tab">Presentation</span></div>
+        <div class="pane-toolbar" id="files-toolbar"></div>
+        <div id="files-body"></div>
+      </section>
+    </div>
+  </div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

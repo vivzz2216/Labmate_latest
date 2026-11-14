@@ -15,8 +15,11 @@ from types import SimpleNamespace
 
 import pdfplumber
 from docx import Document
+from fastapi import HTTPException
+from .notebook_magics import neutralize_magics
+from .notebook_runtime import compute_budget_instruction
 from sqlalchemy import select, update, case
-from docx.shared import Inches, Pt
+from docx.shared import Inches
 
 from ..config import settings
 from ..database import SessionLocal
@@ -100,7 +103,7 @@ def fence_claim(db):
 def commit_fenced(db):
     fence_claim(db)
     db.commit()
-LANGUAGES = ["python", "java", "c", "cpp", "html", "react", "node", "sql", "colab", "ubuntu"]
+LANGUAGES = ["python", "java", "c", "cpp", "html", "react", "node", "sql", "colab", "ubuntu", "distributed", "r"]
 QUESTION_SCHEMA = {
     "type": "OBJECT",
     "properties": {"questions": {"type": "ARRAY", "items": {
@@ -139,9 +142,21 @@ THEORY_ANSWER_SCHEMA = {
 }
 
 
+def local_upload_path(file_path) -> str:
+    """Path of the uploaded manual on this machine.
+
+    Workflow workers can run as a separate service with no shared volume. Uploads are copied to
+    object storage when saved, so fetch the file when it is not on this disk. Blocking: call from
+    a worker thread. When the file is already local this returns immediately.
+    """
+    from .storage_service import storage_service
+    return str(storage_service.ensure_local(file_path))
+
+
 def document_text(upload: Upload) -> str:
+    file_path = local_upload_path(upload.file_path)
     if upload.file_type == "docx":
-        doc = Document(upload.file_path)
+        doc = Document(file_path)
         chunks = []
         # Include tables in document order rather than losing questions inside cells.
         from docx.table import Table
@@ -162,14 +177,14 @@ def document_text(upload: Upload) -> str:
                             seen_cells.add(cell._tc)
         text = "\n".join(chunks)
     else:
-        with pdfplumber.open(upload.file_path) as pdf:
+        with pdfplumber.open(file_path) as pdf:
             if len(pdf.pages) > 100:
                 raise ValueError("Please upload an assignment of 100 pages or fewer.")
             page_text = [page.extract_text() or "" for page in pdf.pages]
         scanned = [i+1 for i,value in enumerate(page_text) if len(value.strip()) < 20]
         if scanned:
             from .pdf_ocr import ocr_pdf_pages
-            recognized = ocr_pdf_pages(upload.file_path, scanned)
+            recognized = ocr_pdf_pages(file_path, scanned)
             page_text = [recognized.get(i+1,value) for i,value in enumerate(page_text)]
         text = "\n".join(page_text)
     if not text.strip():
@@ -229,6 +244,25 @@ def store_workflow_result(workflow,index,result):
     elif index==len(rows): rows.append(result)
     else: raise ValueError('Workflow result order is incomplete.')
     workflow.results=rows
+
+
+def _record_failed_question(workflow, db, index, question, language, reason, progress, stage="generate", code="", answer=None):
+    """Store a single-question failure checkpoint without aborting the workflow."""
+    plan = plan_experiment(question["text"], language, code)
+    store_workflow_result(workflow, index, {
+        "id": question["id"],
+        "question": question["text"],
+        "language": language,
+        "answer": answer if answer is not None else reason,
+        "code": code,
+        "output": "",
+        "error": reason,
+        "status": "failed",
+        "screenshot_paths": [],
+        "evidence_plan": plan,
+        "verification_summary": verification_summary(plan, False, reason),
+    })
+    record(workflow, db, stage, progress, reason)
 
 
 async def extract_assignment(workflow_id: int, claim_token: str | None = None):
@@ -304,7 +338,8 @@ async def _extract_assignment(workflow_id: int):
             try:
                 if workflow.mode == "theory_and_code":
                     raise ValueError("Local parser cannot reliably extract theory questions.")
-                local_tasks = await parser_service.parse_file(upload.file_path, upload.file_type)
+                local_tasks = await parser_service.parse_file(
+                    await asyncio.to_thread(local_upload_path, upload.file_path), upload.file_type)
                 local_tasks = filter_lab_tasks(local_tasks or [], mode="code_only")
                 if local_tasks:
                     clean = []
@@ -348,7 +383,7 @@ def student_friendly_filename(question_text: str, language: str, index: int) -> 
         "html": ".html",
         "react": ".jsx",
         "node": ".js",
-        "sql": ".sql", "colab": ".py", "ubuntu": ".sh"
+        "sql": ".sql", "colab": ".py", "ubuntu": ".sh", "distributed": ".java", "r": ".R"
     }
     ext = ext_map.get(language, ".py")
     cleaned = re.sub(r'[^a-zA-Z0-9\s]', ' ', question_text.lower())
@@ -383,6 +418,12 @@ async def execute_solution(code, language, question, group_id, username, stdin_d
     if (project_config or {}).get('project_type')=='flask':
         from pathlib import PurePosixPath
         validate_generated_code(code,language,capability='flask',local_modules={PurePosixPath(n).stem for n in project_config['project_files'] if n.endswith('.py')})
+    elif language == 'python' and re.search(r'\bpyspark\b', code + '\n' + (question or ''), re.I):
+        validate_generated_code(code, language, capability='spark')
+    elif language == 'r':
+        validate_generated_code(code, 'r')
+    elif language == 'colab' or plan_experiment(question or '', language, code).get('category') == 'notebook':
+        validate_generated_code(code, language, capability='notebook')
     else:validate_generated_code(code, language)
     success, output, errors, _, files = await executor_service.execute_code(
         code, language, filename, question, stdin_data=stdin_data,
@@ -649,7 +690,9 @@ async def _process_assignment(workflow_id: int):
                             )
                         else:
                             code_instruction += "\n8. Return browser_tests as an empty array for non-browser assignments."
-                        if language == 'python':
+                        if language == 'python' and re.search(r'\bpyspark\b', question['text'] + '\n' + (workflow.instructions or ''), re.I):
+                            code_instruction += '\nPYSPARK RUNTIME: Return Python source using pyspark (SparkSession / SparkContext). Do not import sys, os, subprocess or pathlib; these modules are unavailable in the restricted runner. Use every library explicitly required by the question; do not silently replace PySpark with another library.'
+                        elif language == 'python':
                             code_instruction += '\nPYTHON RUNTIME: Read standard input using input(), collecting lines or tokens as needed. Do not import sys, os, subprocess or pathlib; these modules are unavailable in the restricted runner. Algorithm helpers such as heapq, collections, itertools, functools, bisect and math are supported. Preserve the required input/output format.'
                         elif language=='sql':
                             from .sql_instructions import sql_instructions
@@ -658,12 +701,19 @@ async def _process_assignment(workflow_id: int):
                             display_number = report_number(upload.original_filename if len(questions)==1 else '', question['text'])
                             code_instruction += f' Label SQL comments Experiment {display_number}; the upload filename supplies the submission label. Do not copy conflicting class or department headers. '
                         elif language=='colab':
-                            code_instruction+='\nNOTEBOOK RUNTIME: Return Python source, using numpy, pandas, sklearn, scipy and matplotlib. Read only supplied workspace datasets; if no dataset was supplied, create self-contained inline sample/synthetic data or use built-in offline toy datasets (e.g. load_iris, make_classification). Never invent real training data or hardware capabilities. No os/subprocess imports, network, pip installs or Google Drive mounts. Do not download remote datasets or models (e.g. do not call fetch_20newsgroups or nltk.download). Use relative dataset paths or /content aliases. Prefer numeric_only=True explicitly when appropriate for mixed DataFrames. Capture plots with plt.show().'
+                            code_instruction+='\nNOTEBOOK RUNTIME (CPU ONLY): Return Python source using numpy, pandas, sklearn, scipy, matplotlib, and when requested for deep learning, torch (PyTorch), tensorflow, and keras. Execution runs on CPU only: never call .cuda(), .to("cuda"), or tf.device("/GPU:0"). ' + compute_budget_instruction() + 'Read only supplied workspace datasets; if no dataset was supplied, create self-contained inline sample/synthetic data or use built-in offline toy datasets (e.g. load_iris, load_digits, make_classification, never substitute synthetic data for MNIST, Fashion-MNIST or IMDB; require supplied data when the exact dataset is mandatory). Never invent real training data or hardware capabilities. No os/subprocess imports, network, pip installs or Google Drive mounts. Do not download remote datasets or models (e.g. do not call fetch_20newsgroups, nltk.download, torch.hub.load, or torchvision.datasets). Use relative dataset paths or /content aliases. Prefer numeric_only=True explicitly when appropriate for mixed DataFrames. Print training/evaluation metrics and sample predictions, and capture plots with plt.show().'
                             code_instruction+=' Use pandas Copy on Write compatible assignments: df[col] = df[col].fillna(value) or df.loc[mask, col] = value. Never use df[col].fillna(..., inplace=True) or other chained inplace updates. Do not suppress data correctness warnings. Check requested row counts and missing-value invariants after cleaning.'
                             code_instruction+=' Use every library explicitly required by the question; do not silently replace it with another implementation.'
+                            if question.get('track') == 'deep_learning' or re.search(r'\b(?:perceptron|mlp|cnn|rnn|lstm|deep learning|neural network|backpropagation|keras|pytorch|torch|tensorflow)\b', question['text'], re.I):
+                                code_instruction+=' DEEP LEARNING GUIDELINES: Strictly use the framework requested (torch or tensorflow/keras). Plot training loss/accuracy across epochs with plt.plot() and call plt.show(). Print epoch loss progression and test evaluation metrics.'
+                        elif language == 'distributed':
+                            code_instruction += '\nDISTRIBUTED COMPUTING RUNTIME (Java 17 Multi-Process): Return complete executable Java 17 stdlib source code (no removed CORBA/rmic/external dependencies). Never exit on missing CLI arguments — run a complete localhost demonstration with sensible defaults when args is empty. For Client-Server/RMI/DSM topologies, prefer separate "// File: ...Server.java" and "// File: ...Client.java" blocks, or a single top-level driver class whose main(String[] args) executes the full distributed workflow on localhost (127.0.0.1) using dynamic ports (5000-8000). Print informative execution logs with timestamps and status indicators.'
                         elif language == 'ubuntu':
                             from .ubuntu_runtime import ubuntu_instructions
                             code_instruction += ubuntu_instructions()
+                        elif language == 'r':
+                            from .r_runtime import r_instructions
+                            code_instruction += r_instructions()
                         solution = await generation_service.generate_json(
                             code_instruction,
                             f"Language: {language}\n{personalization_prompt}\nAdditional requirements: {workflow.instructions}\nProject brief: {planned.get('brief','')}\n"
@@ -679,6 +729,8 @@ async def _process_assignment(workflow_id: int):
                             from .sql_report import label_sql_comments, report_number
                             code = label_sql_comments(code, report_number(upload.original_filename if len(questions)==1 else '', question['text']))
                         actual_language = solution.get("language", language)
+                        if language == "distributed" and actual_language == "java":
+                            actual_language = "distributed"
                         stdin_data = str(solution.get("stdin", ""))[:10000] or None
                         browser_tests = solution.get("browser_tests", []) if actual_language in {"html", "react"} else []
                     except GenerationUnavailableError:
@@ -688,43 +740,17 @@ async def _process_assignment(workflow_id: int):
                     except GenerationError as ai_err:
                         logger.warning(f"AI generation failed for question {index + 1} ({ai_err}). No unverified substitute will be executed.")
                         reason = f"AI code generation failed for question {index + 1}: {ai_err}"
-                        summary = verification_summary(plan_experiment(question["text"], language, ""), False, reason)
-                        store_workflow_result(workflow, index, {
-                            "id": question["id"],
-                            "question": question["text"],
-                            "language": language,
-                            "answer": reason,
-                            "code": "",
-                            "output": "",
-                            "error": reason,
-                            "status": "failed",
-                            "screenshot_paths": [],
-                            "evidence_plan": plan_experiment(question["text"], language, ""),
-                            "verification_summary": summary,
-                        })
-                        record(workflow, db, "generate", progress, reason)
+                        _record_failed_question(workflow, db, index, question, language, reason, progress)
                         continue
                 
                     if actual_language not in LANGUAGES or not answer or not code:
                         reason = f"AI generation returned an incomplete solution for question {index + 1} (language={actual_language}); no unverified substitute was executed."
-                        summary = verification_summary(plan_experiment(question["text"], language, ""), False, reason)
-                        store_workflow_result(workflow, index, {
-                            "id": question["id"],
-                            "question": question["text"],
-                            "language": language,
-                            "answer": reason,
-                            "code": "",
-                            "output": "",
-                            "error": reason,
-                            "status": "failed",
-                            "screenshot_paths": [],
-                            "evidence_plan": plan_experiment(question["text"], language, ""),
-                            "verification_summary": summary,
-                        })
-                        record(workflow, db, "generate", progress, reason)
+                        _record_failed_question(workflow, db, index, question, language, reason, progress)
                         continue
                 if actual_language == "python" and re.search(r"\binput\s*\(", code) and not stdin_data:
-                    raise ValueError(f"Question {index + 1} needs explicit sample input before it can be verified.")
+                    reason = f"Question {index + 1} needs explicit sample input before it can be verified."
+                    _record_failed_question(workflow, db, index, question, language, reason, progress, stage="execute", code=code, answer=answer)
+                    continue
                 requires_interaction = bool((web_execution.verification or {}).get('required')) if is_web_project and web_execution is not None else actual_language in {"html", "react"} and bool(
                     browser_tests or interaction_required(question["text"] + " " + (workflow.instructions or "")))
                 evidence_plan = plan_experiment(question["text"] + "\n" + (workflow.instructions or ""), language, code)
@@ -732,7 +758,7 @@ async def _process_assignment(workflow_id: int):
                     evidence_plan['category'] = 'react'
                     evidence_plan['requirements'] = [{**r,'evidence':'browser'} if r['id']=='execution' else r for r in evidence_plan['requirements']]
                     evidence_plan['requirements'] += [{'id': 'backend_api', 'description': 'Captured backend HTTP requests and responses', 'evidence': 'http'}]
-                language_mismatch = actual_language != language
+                language_mismatch = actual_language != language and not ({actual_language, language} <= {'python', 'colab'} and evidence_plan['category'] == 'notebook') and not ({actual_language, language} <= {'distributed', 'java'})
                 screenshots = []
                 screenshot_captions = None
                 output, error, success = "", "", True
@@ -743,7 +769,7 @@ async def _process_assignment(workflow_id: int):
                 
                 # Build student-like filename for IDE and runtime
                 src_filename = student_friendly_filename(question["text"], actual_language, index)
-                if actual_language == 'java':
+                if actual_language in {'java', 'distributed'}:
                     from .runtime_engine import java_class_name
                     class_name = java_class_name(code)
                     if class_name: src_filename = class_name + '.java'
@@ -755,15 +781,20 @@ async def _process_assignment(workflow_id: int):
                 if evidence_plan['category'] == 'notebook':
                     exp_m = re.search(r'exp(?:eriment)?[\s_–-]*(\d+)', question['text'] + ' ' + (upload.original_filename or ''), re.I)
                     exp_no = f"{int(exp_m.group(1)):02d}" if exp_m else f"{index+1:02d}"
+                    is_dl = bool(re.search(r'\b(torch|pytorch|tensorflow|keras|deep\s+learning|neural\s+network|perceptron|autoencoder|backpropagation|cnn|rnn|lstm|mlp)\b', question['text'] + '\n' + (code or ''), re.I))
+                    nb_subject = 'DLLab' if is_dl else 'DSLab'
                     notebook_config = {'colab_theme': question.get('colab_theme','dark'), 'datasets': question.get('datasets'),
-                                       'exp_no': exp_no, 'student_name': student_name, 'subject': 'DSLab',
-                                       'notebook_title': f"DSLab_{student_name.split()[0]}_Exp{exp_no}.ipynb"}
+                                       'exp_no': exp_no, 'student_name': student_name, 'subject': nb_subject,
+                                       'notebook_title': f"{nb_subject}_{student_name.split()[0]}_Exp{exp_no}.ipynb"}
+                elif evidence_plan['category'] == 'rstudio':
+                    notebook_config = {'rstudio_theme': question.get('rstudio_theme', 'light')}
                 if code:
                     record(workflow, db, "execute", progress, f"Running question {index + 1} ({actual_language}).")
                     try:
                         if language_mismatch:
                             raise ValueError(f"Generated language {actual_language} does not match requested language {language}; execution was not attempted.")
                         if evidence_plan['category'] == 'notebook':
+                            code = neutralize_magics(code)
                             from .colab_requirements import missing_required_libraries
                             missing = missing_required_libraries(question['text'], code)
                             if missing: raise ValueError('Required notebook libraries missing from solution: '+', '.join(missing))
@@ -781,7 +812,7 @@ async def _process_assignment(workflow_id: int):
                         if requires_interaction:
                             verification = {"required": True, "status": "failed", "tests": [],
                                             "error": "The required browser interaction could not be verified."}
-                    if not is_web_project and not success and not language_mismatch and evidence_plan["supported"] and not (actual_language=='ubuntu' and execution_stages.get('execution')=='passed') and (
+                    if not is_web_project and not success and not language_mismatch and evidence_plan["supported"] and execution_stages.get('capture') != 'unavailable' and not (actual_language=='ubuntu' and execution_stages.get('execution')=='passed') and (
                             bool(error) or bool(verification and (verification.get("error") or verification.get("failures")))):
                         for repair_attempt in range(1 if actual_language=='ubuntu' else 2):
                             record(workflow, db, "execute", progress,
@@ -790,6 +821,7 @@ async def _process_assignment(workflow_id: int):
                                 repaired = await repair_generated_code(question["text"], actual_language, code, error or output)
                                 code = repaired
                                 if evidence_plan['category'] == 'notebook':
+                                    code = neutralize_magics(code)
                                     from .colab_requirements import missing_required_libraries
                                     missing = missing_required_libraries(question['text'], code)
                                     if missing: raise ValueError('Required notebook libraries missing from solution: '+', '.join(missing))
@@ -812,14 +844,15 @@ async def _process_assignment(workflow_id: int):
                             except Exception as repair_error:
                                 error = (error + '\nRepair failed: ' + str(repair_error)).strip()
                     # Capture exactly what the runtime returned, including failures.
-                    if actual_language == 'java':
+                    if actual_language in {'java', 'distributed'}:
                         from .runtime_engine import java_class_name
                         class_name = java_class_name(code)
                         if class_name: src_filename = class_name + '.java'
                     record(workflow, db, "capture", progress, f"Capturing output for question {index + 1}.")
                     theme = {
-                        "python": "idle",
+                        "python": "jupyter" if question.get("python_template") == "jupyter" else "idle",
                         "java": "notepad",
+                        "distributed": "vscode",
                         "c": "codeblocks",
                         "cpp": "codeblocks",
                         "node": "vscode",
@@ -852,23 +885,26 @@ async def _process_assignment(workflow_id: int):
                         candidates, browser_frame_errors = await frame_browser_captures(
                             browser_captures, verification, browser_theme=question.get('browser_theme', 'edge'),
                             job_id=group, filename=src_filename)
-                    if category == 'ubuntu':
+                    if category in {'ubuntu','rstudio'}:
                         candidates=list((verification or {}).get('evidence_frames') or [])
                     if category in {'database','notebook'}:
                         candidates = (list((verification or {}).get('evidence_frames') or []) if (verification or {}).get('evidence_frames') else [{'path':p,'kind':category,'caption':f"MySQL Workbench-style rendered interface connected to real {(verification or {}).get('engine', 'MySQL')}" if category=='database' else 'Actual local Python notebook evidence'} for p in browser_captures])
                     project_files=(project_config or {}).get('project_files')
                     source_language='java_gui' if category in {'java_awt','java_swing'} else 'flask' if (project_config or {}).get('project_type')=='flask' else actual_language
-                    sources,source_errors=([], []) if actual_language in {'sql','ubuntu'} or category=='notebook' else await capture_source_evidence(
+                    sources,source_errors=([], []) if actual_language in {'sql','ubuntu','r'} or category=='notebook' else await capture_source_evidence(
                         project_files,code,src_filename,theme=theme,group=group,username=username,
                         language=source_language,screenshot_style=screenshot_style,
-                        requested_files=(project_config or {}).get('source_capture_files'), policy=planned.get('source_policy','selected'))
+                        requested_files=(project_config or {}).get('source_capture_files'), policy=planned.get('source_policy','selected'), jupyter_theme=question.get('jupyter_theme','light'))
                     source_errors.extend(browser_frame_errors)
                     candidates.extend(sources)
                     source_plan=source_capture_plan(project_files,code,src_filename,source_language,(project_config or {}).get('source_capture_files'),policy=planned.get('source_policy','selected'))
-                    evidence_plan['required_source_files']=[src_filename] if actual_language == 'ubuntu' else [name for name,_ in source_plan['files']]
+                    evidence_plan['required_source_files']=[src_filename] if actual_language in {'ubuntu','r'} else [name for name,_ in source_plan['files']]
                     if planned.get('source_policy') == 'complete':
                         evidence_plan['complete_source_lines']={name:len(text.splitlines()) for name,text in source_plan['files']}
                     evidence_plan['source_selection']=({'policy': 'complete', 'renderer': 'mysql_workbench', 'captured_files': [src_filename]} if actual_language == 'sql' else {k:v for k,v in source_plan.items() if k!='files'})
+                    if category == 'rstudio':
+                        evidence_plan['complete_source_lines']={src_filename:(verification or {}).get('source_lines',len(code.splitlines()))}
+                        evidence_plan['source_selection']={'policy':'complete','renderer':'rstudio','theme':question.get('rstudio_theme','light'),'captured_files':[src_filename]}
                     if category == 'notebook':
                         evidence_plan['required_source_files']=[src_filename]
                         evidence_plan['complete_source_lines']={src_filename:(verification or {}).get('source_lines',len(code.splitlines()))}
@@ -884,19 +920,28 @@ async def _process_assignment(workflow_id: int):
                         display_output = "Supplied stdin:\n" + stdin_data + "\nCaptured stdout/stderr:\n" + display_output
                         input_echoed = True  # Already represented separately, never guess prompt timing.
                     for capture_view in capture_views:
+                        use_vscode_terminal = theme == "vscode" and actual_language == "distributed" and not actual_http and capture_view == "output"
+                        dc_project_files = project_files
+                        if use_vscode_terminal and not dc_project_files:
+                            from .dc_runtime import split_java_files
+                            split_map = split_java_files(code)
+                            if len(split_map) > 1:
+                                dc_project_files = dict(split_map)
                         ok, path, _, _ = await screenshot_service.generate_screenshot(
                             code, display_output, theme, group, username, src_filename,
+                            project_files=dc_project_files,
                             screenshot_style=screenshot_style, error=error if not success else "",
                             stdin_data=stdin_data, input_echoed=input_echoed, view_mode=capture_view,
-                            presentation="ide_evidence" if actual_language in {"python", "java", "c", "cpp"} and not actual_http else "evidence", language=actual_language,
-                            palette="dark" if screenshot_style == "style_2" else "light",
+                            presentation="vscode_evidence" if use_vscode_terminal else ("ide_evidence" if actual_language in {"python", "java", "c", "cpp"} and not actual_http else "evidence"),
+                            language=actual_language,
+                            palette=question.get("jupyter_theme", "light") if theme == "jupyter" else "dark" if theme == "vscode" or screenshot_style == "style_2" else "light",
                             evidence_kind="http" if actual_http else "terminal",
                         )
                         if ok:
                             kind = "source_preview" if capture_view == "editor" else "http" if actual_http else "terminal"
                             candidates.append({"path": path, "kind": kind, "caption": {
                                 "source_preview": "Rendered source preview", "http": "Captured HTTP request and response",
-                                "terminal": "Captured process transcript"}[kind]})
+                                "terminal": "VS Code integrated terminal output" if use_vscode_terminal else ("Jupyter Notebook-style capture of actual Python output" if theme == "jupyter" else "Captured process transcript")}[kind]})
                         else:
                             success = False
                             error = (error + f"\n{capture_view.title()} evidence could not be captured.").strip()
@@ -991,6 +1036,11 @@ async def _process_assignment(workflow_id: int):
             workflow.lease_expires_at = None
             workflow.error = str(error)
             record(workflow, db, workflow.stage, workflow.progress, str(error))
+        except HTTPException as error:
+            workflow.status = "failed"
+            workflow.lease_expires_at = None
+            workflow.error = str(error.detail)
+            record(workflow, db, workflow.stage, workflow.progress, workflow.error)
         except Exception:
             logger.exception("Assignment processing failed for workflow %s", workflow_id)
             try:
@@ -1030,6 +1080,8 @@ def report_safe_values(value):
 
 def build_word_report(upload, workflow):
     """Keep code reports compact; preserve explicitly requested theory formatting."""
+    # Every builder below reads the uploaded manual by path; resolve it once for all of them.
+    upload = SimpleNamespace(**{**vars(upload), 'file_path': local_upload_path(upload.file_path)})
     fields={key:report_safe_values(getattr(workflow,key)) for key in
         ('id','output_name','instructions','mode','results','student_name','roll_no','department','institution') if hasattr(workflow,key)}
     workflow=SimpleNamespace(**fields)
@@ -1050,8 +1102,7 @@ def build_word_report(upload, workflow):
         document.add_heading("Laboratory Manual & Problem Statements", 0)
         document.add_paragraph(upload.original_filename)
         with pdfplumber.open(upload.file_path) as pdf:
-            pages_to_embed = [p for p in pdf.pages if len([l for l in (p.extract_text() or '').splitlines() if l.strip()]) > 2 and len((p.extract_text() or '').strip()) >= 80]
-            for page in (pages_to_embed or pdf.pages):
+            for page in pdf.pages:
                 image = page.to_image(resolution=130).original
                 buffer = io.BytesIO()
                 image.save(buffer, format="PNG")
@@ -1121,7 +1172,7 @@ def build_word_report(upload, workflow):
             verification = result.get("verification")
             if verification and verification.get("status") == "failed":
                 status = str(verification.get("status", "unknown")).replace("_", " ").upper()
-                label = f"MySQL execution & semantic verification ({verification.get('engine') or 'MySQL'})" if verification.get('kind')=='database' else "Python notebook execution verification" if verification.get('kind')=='notebook' else "Java UI interaction verification" if verification.get('kind')=='gui' else "HTTP request verification" if verification.get("kind") == "http" else "Render verification" if verification.get('kind')=='render' else "Browser interaction verification"
+                label = f"MySQL execution & semantic verification ({verification.get('engine') or 'MySQL'})" if verification.get('kind')=='database' else "R / RStudio execution verification" if verification.get('kind')=='rstudio' else "Python notebook execution verification" if verification.get('kind')=='notebook' else "Java UI interaction verification" if verification.get('kind')=='gui' else "HTTP request verification" if verification.get("kind") == "http" else "Render verification" if verification.get('kind')=='render' else "Browser interaction verification"
                 if verification.get('capture_method'):document.add_paragraph(verification['capture_method'])
                 document.add_paragraph(f"{label}: {status}")
                 if verification.get("kind") == "database":

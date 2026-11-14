@@ -21,12 +21,14 @@ const api = axios.create({
 
 // Ensure latest stored tokens are attached before every request
 api.interceptors.request.use((config) => {
-  // Billing bootstrap can include a Railway cold start; auth checks remain short.
+  // Allow billing cold starts while preserving longer payment-verification timeouts.
   const download = config.responseType === 'blob' || config.responseType === 'arraybuffer';
-  const billingBootstrap = config.url?.includes('/billing/plans') || config.url?.includes('/billing/wallet');
+  const billingBootstrap = config.url?.includes('/billing/');
   const authBootstrap = config.url?.includes('/basic-auth/');
   if ((billingBootstrap || authBootstrap) && !download) {
-    config.timeout = 30000;
+    config.timeout = billingBootstrap
+      ? Math.max(30000, config.timeout === api.defaults.timeout ? 30000 : config.timeout || 0)
+      : 30000;
   } else if (config.method?.toLowerCase() === 'get' && !download) {
     config.timeout = 15000;
   }
@@ -174,6 +176,7 @@ api.interceptors.response.use(
             localStorage.removeItem("labmate_access_token");
             localStorage.removeItem("labmate_refresh_token");
             localStorage.removeItem("labmate_csrf_token");
+            localStorage.removeItem("labmate_user");
           }
           processQueue(refreshErr, null);
           return Promise.reject(refreshErr);
@@ -189,6 +192,12 @@ api.interceptors.response.use(
         }
         return rotateSession();
       } else {
+        if (typeof window !== "undefined" && (status === 401 || status === 403)) {
+          localStorage.removeItem("labmate_access_token");
+          localStorage.removeItem("labmate_refresh_token");
+          localStorage.removeItem("labmate_csrf_token");
+          localStorage.removeItem("labmate_user");
+        }
         processQueue(error, null);
         isRefreshing = false;
       }
@@ -247,6 +256,7 @@ export type ThemeOption =
   | "sql"
   | "colab"
   | "ubuntu"
+  | "r"
   | "idle"
   | "notepad"
   | "codeblocks"
@@ -518,13 +528,6 @@ export const apiService = {
     return response.data;
   },
 
-  // Compose final report
-  async composeReport(request: ComposeRequest): Promise<ComposeResponse> {
-    const response = await api.post("/api/compose", request);
-    this.invalidateAssignmentsCache();
-    return response.data;
-  },
-
   // Download report
   async downloadReport(docId: number): Promise<Blob> {
     try {
@@ -594,7 +597,7 @@ export const apiService = {
     }
 
     const fetchPromise = api
-      .get(`/api/assignments/?user_id=${userId}`)
+      .get("/api/assignments/")
       .then((response) => {
         if (epoch !== cacheEpoch) throw new axios.CanceledError('Session changed.');
         const list = normalizeAssignmentsList(response.data);
