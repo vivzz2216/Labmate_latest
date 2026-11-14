@@ -13,6 +13,22 @@ def semantic_failures(objective, output, language=''):
         if re.search(r'(?i)^\s*(?:CHECK\s+FAILED\b|FAIL(?:ED)?\s*:|INCONSISTENCY\b)|\bINCONSISTENCY at\b|\b->\s*FAIL\b|\bMatch:\s*False\b',line):
             failures.append('Observed failed program check: '+line.strip()[:240])
     text=objective.lower()
+    if re.search(r'compar|benchmark', text) and all(name in text for name in ('sgd','adam','rmsprop')):
+        for optimizer in ('SGD','Adam','RMSProp'):
+            if not re.search(r'\b'+optimizer+r'\b', str(output or ''), re.I):
+                failures.append('Missing observed optimizer benchmark: '+optimizer)
+    threshold = re.search(r'accuracy\s+(?:exceeding|above|greater than|at least|over|>=)\s*(\d+(?:\.\d+)?)\s*%',text)
+    if threshold:
+        observed = re.findall(r'(?i)(?:test|held[- ]out|validation)\s*(?:set\s*)?(?:accuracy|acc)\s*[:=]\s*(\d+(?:\.\d+)?)\s*(%)?',str(output or ''))
+        if not observed:
+            failures.append('Required held-out accuracy threshold has no observed metric.')
+        else:
+            target = float(threshold[1])/100
+            for value,percent in observed:
+                accuracy=float(value);accuracy=accuracy/100 if percent or accuracy>1 else accuracy
+                strict=threshold[0].split()[1] not in {'at','>='}
+                if accuracy<target or strict and accuracy==target:
+                    failures.append('Observed held-out accuracy does not meet the required '+threshold[1]+'% threshold.')
     if re.search(r'perceptron|logic gates?|truth table',text) and re.search(r'\b(?:and|or|xor)\b',text):
         for match in re.finditer(r'(?i)accuracy\s*:\s*(\d+(?:\.\d+)?)\s*(%)?',output or ''):
             value=float(match[1]);value=value/100 if match[2] or value>1 else value

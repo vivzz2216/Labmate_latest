@@ -24,6 +24,14 @@ def test_logic_gate_zero_exit_does_not_hide_wrong_predictions():
     assert not semantic_failures('Image classification', 'Accuracy: 75%', 'colab')
 
 
+def test_required_optimizer_and_accuracy_outcomes_cannot_silently_disappear():
+    objective='Compare SGD, Adam and RMSProp. Test accuracy exceeding 95%.'
+    assert not semantic_failures(objective,'SGD: 0.5\nAdam: 0.3\nRMSProp: 0.2\nTest accuracy: 96%', 'colab')
+    assert semantic_failures(objective,'Adam: 0.3\nTest accuracy: 96%', 'colab')
+    assert semantic_failures(objective,'SGD Adam RMSProp\nTest accuracy: 0.90', 'colab')
+    assert semantic_failures(objective,'SGD Adam RMSProp', 'colab')
+
+
 def test_replica_conflict_cannot_pass_even_at_equal_version():
     def state(node, value):
         return dict(type='replica_state', key='grade', node=node, value=value, version=3)
