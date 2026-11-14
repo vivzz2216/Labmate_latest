@@ -622,6 +622,187 @@ export const LAB_CATEGORIES: LabCategory[] = [
       },
     ],
   },
+  {
+    slug: "r",
+    track: "r",
+    title: "R & RStudio Labs",
+    shortTitle: "R / RStudio",
+    tagline: "Statistics, data frames, plots and models run in real R and captured in an RStudio workspace",
+    description:
+      "R practicals executed by a real Rscript. The script appears in the RStudio source editor, its transcript in the console, variables in the Environment pane and figures in the Plots pane.",
+    defaultLanguage: "r",
+    badge: "New",
+    accentColor: "#2a6fbb",
+    features: [
+      "Real Rscript execution with expression-by-expression console echo",
+      "RStudio source, console, Environment and Plots panes in light or dark theme",
+      "Base R plus ggplot2, dplyr, tidyr, MASS, e1071, randomForest and rpart",
+      "Built-in datasets only; no network access during a run",
+    ],
+    environmentSpecs: [
+      { label: "Runtime", value: "R (Rscript)" },
+      { label: "Packages", value: "Base R, ggplot2, dplyr, tidyr, MASS, rpart, e1071, randomForest" },
+      { label: "Plot Device", value: "PNG (cairo) captured into the Plots pane" },
+      { label: "Screenshot Style", value: "RStudio (source, console, Environment, Plots)" },
+    ],
+    experiments: [
+      {
+        id: "r-1",
+        number: 1,
+        title: "Vectors, Operators & Built-in Functions",
+        aim: "Create numeric, character and logical vectors and apply arithmetic, comparison and summary functions.",
+        category: "R Basics",
+        difficulty: "Beginner",
+        frameworks: ["R", "base"],
+        runtime: "r",
+        track: "r",
+        description:
+          "Vectors built, indexed and summarised, with the result of each operation printed in the console.",
+        expectedOutputs: [
+          "Console output of vector arithmetic and summary functions",
+          "Variables listed in the Environment pane",
+        ],
+        starterPrompt:
+          "Write an R script that creates numeric, character and logical vectors, performs vectorised arithmetic and comparisons, subsets with an index and a condition, and prints length(), sum(), mean(), min(), max() and seq()/rep() results.",
+      },
+      {
+        id: "r-2",
+        number: 2,
+        title: "Descriptive Statistics on the mtcars Dataset",
+        aim: "Compute measures of central tendency and spread and summarise a built-in dataset.",
+        category: "Statistics",
+        difficulty: "Beginner",
+        frameworks: ["R", "stats"],
+        runtime: "r",
+        track: "r",
+        description:
+          "Mean, median, variance, standard deviation, quantiles and summary() of mtcars columns.",
+        expectedOutputs: [
+          "summary() table and str() of the data frame",
+          "Mean, median, sd and quantiles for mpg",
+        ],
+        starterPrompt:
+          "Write an R script that loads the built-in mtcars dataset, prints str() and summary(), and computes the mean, median, variance, standard deviation, range and quartiles of mpg, plus the mode of cyl.",
+      },
+      {
+        id: "r-3",
+        number: 3,
+        title: "Data Frames: Subsetting, Sorting & Aggregation",
+        aim: "Build and manipulate data frames with indexing, order(), merge() and aggregate().",
+        category: "Data Manipulation",
+        difficulty: "Intermediate",
+        frameworks: ["R", "base"],
+        runtime: "r",
+        track: "r",
+        description:
+          "A student data frame filtered, sorted, extended with a derived column and aggregated by group.",
+        expectedOutputs: [
+          "Filtered and sorted data frame printed",
+          "aggregate() result by group",
+          "Data frame visible in the Environment pane",
+        ],
+        starterPrompt:
+          "Write an R script that builds a data frame of students (name, branch, marks), filters rows with a condition, sorts with order(), adds a grade column with ifelse(), merges it with a second data frame and aggregates the mean marks by branch.",
+      },
+      {
+        id: "r-4",
+        number: 4,
+        title: "Base Graphics: Histogram, Box Plot & Scatter Plot",
+        aim: "Visualise a distribution and a relationship with base R graphics.",
+        category: "Visualization",
+        difficulty: "Beginner",
+        frameworks: ["R", "graphics"],
+        runtime: "r",
+        track: "r",
+        description:
+          "Histogram, box plot and scatter plot with a fitted line drawn in the RStudio Plots pane.",
+        expectedOutputs: [
+          "Plots pane showing the figure",
+          "Console output of the correlation coefficient",
+        ],
+        starterPrompt:
+          "Write an R script that uses the built-in mtcars dataset to draw a histogram of mpg, a box plot of mpg by cyl and a scatter plot of wt against mpg with abline(lm()), arranged with par(mfrow), and prints cor(wt, mpg).",
+      },
+      {
+        id: "r-5",
+        number: 5,
+        title: "Simple & Multiple Linear Regression",
+        aim: "Fit, interpret and use linear models with lm().",
+        category: "Regression",
+        difficulty: "Intermediate",
+        frameworks: ["R", "stats"],
+        runtime: "r",
+        track: "r",
+        description:
+          "A regression of mpg on weight and horsepower with coefficients, R-squared and predictions.",
+        expectedOutputs: [
+          "summary(lm) output with coefficients and R-squared",
+          "Predicted values for new data",
+          "Fitted-line plot",
+        ],
+        starterPrompt:
+          "Write an R script that fits lm(mpg ~ wt) and lm(mpg ~ wt + hp) on mtcars, prints summary() and anova(), predicts mpg for new cars with predict(), and plots the fitted line over the data.",
+      },
+      {
+        id: "r-6",
+        number: 6,
+        title: "Hypothesis Testing: t-test & Chi-square",
+        aim: "Run parametric and categorical tests and read the p-value.",
+        category: "Statistics",
+        difficulty: "Intermediate",
+        frameworks: ["R", "stats"],
+        runtime: "r",
+        track: "r",
+        description:
+          "One-sample, two-sample and paired t-tests and a chi-square test of independence with conclusions.",
+        expectedOutputs: [
+          "t.test() and chisq.test() output",
+          "A printed decision at the 5% level",
+        ],
+        starterPrompt:
+          "Write an R script that runs a one-sample t.test on mtcars mpg, a two-sample t.test of mpg by transmission (am), a paired t.test on the built-in sleep data and a chisq.test on table(mtcars$cyl, mtcars$am), and prints a decision for each at alpha = 0.05.",
+      },
+      {
+        id: "r-7",
+        number: 7,
+        title: "ggplot2: Grammar of Graphics & Facets",
+        aim: "Build layered, faceted plots with ggplot2.",
+        category: "Visualization",
+        difficulty: "Intermediate",
+        frameworks: ["R", "ggplot2"],
+        runtime: "r",
+        track: "r",
+        description:
+          "A scatter plot coloured by group with a smoother, and a faceted bar chart, in the Plots pane.",
+        expectedOutputs: [
+          "ggplot scatter with regression smoother in the Plots pane",
+          "Faceted bar chart",
+        ],
+        starterPrompt:
+          "Write an R script that loads ggplot2 and draws, from the built-in mtcars data, a scatter plot of wt against mpg coloured by factor(cyl) with geom_smooth(method = 'lm'), then a bar chart of car counts by cyl faceted by transmission, with titles and theme_minimal().",
+      },
+      {
+        id: "r-8",
+        number: 8,
+        title: "Clustering & Classification: k-means and Decision Tree",
+        aim: "Group observations with k-means and classify with a decision tree.",
+        category: "Machine Learning",
+        difficulty: "Advanced",
+        frameworks: ["R", "stats", "rpart"],
+        runtime: "r",
+        track: "r",
+        description:
+          "k-means on iris measurements compared with the species labels, and an rpart tree with its accuracy.",
+        expectedOutputs: [
+          "Cluster sizes and a confusion table",
+          "Decision tree accuracy on a held-out set",
+          "Cluster plot in the Plots pane",
+        ],
+        starterPrompt:
+          "Write an R script that runs set.seed(42), clusters the iris measurements with kmeans(centers = 3), compares clusters with Species using table(), plots the clusters, then trains an rpart decision tree on a 70/30 split of iris and prints the confusion matrix and accuracy.",
+      },
+    ],
+  },
 ];
 
 export function getLabCategory(slugOrTrack: string): LabCategory | undefined {

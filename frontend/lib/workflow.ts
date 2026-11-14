@@ -13,7 +13,8 @@ export type LabLanguage =
   | "colab"
   | "ubuntu"
   | "theory"
-  | "distributed";
+  | "distributed"
+  | "r";
 export interface LabQuestion {
   id: number;
   text: string;
@@ -23,6 +24,7 @@ export interface LabQuestion {
   python_template?: "idle" | "jupyter";
   jupyter_theme?: "light" | "dark";
   colab_theme?: "light" | "dark";
+  rstudio_theme?: "light" | "dark";
   browser_theme?: "edge" | "chrome";
 }
 export interface LabResult {

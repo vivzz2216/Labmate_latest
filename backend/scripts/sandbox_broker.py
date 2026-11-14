@@ -58,7 +58,7 @@ def validate_resources():
     """Reject stale report/screenshot files before exposing resources to a job."""
     allowed = {'assets', 'index.html', 'app.js', 'style.css'}
     extensions = {'.svg', '.png', '.jpg', '.jpeg', '.webp', '.json', '.woff', '.woff2', '.ttf'}
-    for name in ('google_colab', 'sql_workbench'):
+    for name in ('google_colab', 'sql_workbench', 'rstudio'):
         folder = ROOT / 'resources' / name
         if folder.is_symlink() or not folder.is_dir():
             raise ValueError('Worker lab resources are missing or unsafe.')

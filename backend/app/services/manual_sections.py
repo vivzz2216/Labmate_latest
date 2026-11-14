@@ -52,6 +52,7 @@ def section_language(title, content, default="python"):
     # Mixed React/Express is a full-stack Node assignment, never raw JSX in Node.
     text = title + "\n" + content
     if re.search(r'\b(?:UNIX|Ubuntu|Bash|shell scripting)\b',title,re.I):return 'ubuntu'
+    if re.search(r'\bR\s?Studio\b|\bRscript\b|\bR\s+(?:programming|language|lab|script)\b|\b(?:in|using|with|via)\s+(?-i:R)(?![\w.+#-])',title,re.I):return 'r'
     if re.search(r'\b(?:SQL|MySQL|SQLite)\b',title,re.I) and not re.search(r'\b(?:react|node|html|css|javascript|python|java|web|webpage|website|portfolio)\b',title,re.I):return 'sql'
     if re.search(r'\b(?:Colab|Jupyter|PySpark|SparkSession|SparkContext|PyTorch|TensorFlow|Keras|Data Science|Deep Learning|Neural Network|Machine Learning|Perceptron|Autoencoder|Backpropagation|MLP|ANN|LSTM|CNN|RNN|AdaBoost|Random Forest|Bayesian Network|Fuzzy Controller|Fuzzy Sets?|Classification Algorithms?)\b|\.ipynb\b', text, re.I): return 'colab'
     if re.search(r"\b(?:node(?:\.js)?|express)\b", title, re.I): return "node"
@@ -63,6 +64,7 @@ def section_language(title, content, default="python"):
     # Academic titles often name the concept rather than the language. Route
     # executable SQL and scientific Python to their actual supported runtimes.
     if re.search(r"\b(?:SELECT\s+.+\s+FROM|CREATE\s+(?:TABLE|VIEW|PROCEDURE|FUNCTION|TRIGGER)|(?:INNER|OUTER|LEFT|RIGHT)\s+JOIN)\b", content, re.I): return "sql"
+    if re.search(r"^\s*(?:library\s*\(\s*(?:ggplot2|dplyr|tidyr)\b|[A-Za-z_.][\w.]*\s*<-\s*(?:data\.frame|c)\s*\()", content, re.M) and not re.search(r"\bdef\s+\w+\s*\(|\bimport\s+\w+", content): return "r"
     if re.search(r"\b(?:from|import)\s+(?:sklearn|pandas|numpy|pyspark|torch|tensorflow|keras)\b", content): return "colab"
     if re.search(r"\bc\+\+|\bcpp\b", text, re.I): return "cpp"
     if re.search(r"\bjava\b", text, re.I): return "java"

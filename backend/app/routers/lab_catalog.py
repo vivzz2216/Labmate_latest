@@ -135,6 +135,24 @@ LAB_CATALOG_DATA: List[Dict[str, Any]] = [
         ],
         "experiment_count": 10,
     },
+    {
+        "slug": "r",
+        "track": "r",
+        "title": "R & RStudio Labs",
+        "short_title": "R / RStudio",
+        "tagline": "Statistics, data frames, plots and models run in real R and captured in an RStudio workspace",
+        "description": "R practicals executed by a real Rscript. The script appears in the RStudio source editor, its transcript in the console, variables in the Environment pane and figures in the Plots pane.",
+        "default_language": "r",
+        "badge": "New",
+        "accent_color": "#2a6fbb",
+        "features": [
+            "Real Rscript execution with expression-by-expression console echo",
+            "RStudio source, console, Environment and Plots panes in light or dark theme",
+            "Base R plus ggplot2, dplyr, tidyr, MASS, e1071, randomForest and rpart",
+            "Built-in datasets only; no network access during a run",
+        ],
+        "experiment_count": 8,
+    },
 ]
 
 

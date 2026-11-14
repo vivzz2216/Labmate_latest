@@ -14,7 +14,7 @@ VERSION = 1
 MINI = re.compile(r'\bmini[\s-]*project\b|\bcapstone\b', re.I)
 UNCLEAR = re.compile(r'\bTBD\b|\bto be decided\b|\bunspecified\b|\bnot provided\b|\bsame as above\b',re.I)
 TOOLS = ['generate_project', 'execute_console', 'execute_browser', 'execute_api', 'execute_java_ui',
-         'execute_ubuntu', 'capture_ubuntu_editor', 'capture_ubuntu_terminal',
+         'execute_ubuntu', 'capture_ubuntu_editor', 'capture_ubuntu_terminal', 'execute_rstudio', 'capture_rstudio',
          'capture_complete_source', 'capture_selected_source', 'capture_output', 'verify_results', 'repair_project', 'compose_report']
 TOPICS = ['Restaurant', 'Any Tourist location', 'Music Store', 'Lifestyle Brand',
           'A self-paced learning course', 'Any product', 'Personal webpage', 'Any event/conference webpage']
@@ -205,8 +205,8 @@ async def _make_plan_once(questions, instructions='', language='auto', previous=
             source_request, re.I,
         ) else 'selected'
         mini_project = bool(MINI.search(q['text']))
-        if actual_language == 'ubuntu':source_policy='complete'
-        tool = 'execute_ubuntu' if category=='ubuntu' else 'execute_browser' if category in {'browser','react','flask'} else 'execute_java_ui' if category in {'java_awt','java_swing'} else 'execute_api' if category=='api' else 'execute_console'
+        if actual_language in {'ubuntu','r'}:source_policy='complete'
+        tool = 'execute_rstudio' if category=='rstudio' else 'execute_ubuntu' if category=='ubuntu' else 'execute_browser' if category in {'browser','react','flask'} else 'execute_java_ui' if category in {'java_awt','java_swing'} else 'execute_api' if category=='api' else 'execute_console'
         if not plan_experiment(q['text'],actual_language)['supported']:
             raise GenerationError(f'{category} does not have a configured runtime; no execution was attempted.')
         task = {'id':q['id'],'language':actual_language,'category':category,'topic':decision.get('topic',''),
@@ -220,6 +220,9 @@ async def _make_plan_once(questions, instructions='', language='auto', previous=
         if actual_language == 'ubuntu':
             task['tools'] += ['capture_ubuntu_editor','capture_ubuntu_terminal']
             task['brief'] += '\nUse the actual Ubuntu Bash adapter and native GNOME editor/terminal evidence. Preserve all shell source lines. Administrative and OS installation tasks must respect the VM capability boundary; disclose missing evidence.'
+        elif actual_language == 'r':
+            task['tools'] += ['capture_rstudio']
+            task['brief'] += '\nUse the real Rscript runtime and RStudio workspace evidence (source editor, console, Environment and Plots). Preserve every script line; use only built-in datasets or inline data.'
         elif source_policy=='complete':
             task['brief']+='\nMINI-PROJECT EVIDENCE: supply all authored HTML, CSS, JavaScript and React files. Every source line will be captured across readable pages, including CSS and mounting files. source_capture_files remains at most three recommendations; the host captures every authored file independently. Format source with line breaks, keep lines below 110 characters, and keep the implementation small. Do not minify or generate dependencies/configuration.'
         base['tasks'].append(task)

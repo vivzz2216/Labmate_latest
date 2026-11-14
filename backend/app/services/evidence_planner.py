@@ -13,6 +13,7 @@ from .viewport_policy import responsive_requested
 
 TEMPLATE_CATEGORIES = {
     "ubuntu": {"source":"source_preview","result":"ubuntu_desktop","available":True},
+    "rstudio": {"source":"source_preview","result":"rstudio","available":True},
     "database": {"source":"source_preview","result":"database","available":True},
     "notebook": {"source":"source_preview","result":"notebook","available":True},
     "console": {"source": "source_preview", "result": "terminal", "available": True},
@@ -31,6 +32,7 @@ def experiment_category(language, objective="", code=""):
     language = {"c++": "cpp", "webdev": "html", "javascript": "node"}.get(language, language)
     text = objective + "\n" + code
     if language in {'ubuntu','bash','shell','unix'}:return 'ubuntu'
+    if language in {'r','rstudio','rlang'}:return 'rstudio'
     if language=='sql':return 'database'
     if language in {'python', 'colab'} and re.search(r'\b(?:pyspark|torch|pytorch|tensorflow|keras)\b', text, re.I):return 'notebook'
     if language=='colab' or language=='python' and re.search(r'\b(?:colab|jupyter|deep\s+learning|neural\s+network|perceptron|autoencoder|backpropagation|cnn|rnn|lstm|mlp)\b|\.ipynb\b',objective,re.I):return 'notebook'
@@ -147,6 +149,8 @@ def verification_summary(plan, success, output, browser_verification=None, viewp
     checks = {"execution": "passed" if success else "failed", "output": "not_specified",
               "render": "not_applicable", "interaction": "not_required"}
     failures = []
+    if plan['category']=='rstudio' and (browser_verification or {}).get('status')!='passed':
+        failures.append('Real R execution and RStudio workspace evidence did not pass.')
     if plan['category']=='ubuntu' and (browser_verification or {}).get('status')!='passed':
         failures.append('Real Ubuntu execution and native terminal/editor evidence did not pass.')
     if not plan["supported"]:

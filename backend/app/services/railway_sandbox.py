@@ -30,7 +30,8 @@ def runtime_bundle():
         return member
     with tarfile.open(fileobj=output, mode='w:gz') as archive:
         for source, target in [(BACKEND/'app','backend/app'),(BACKEND/'templates','backend/templates'),
-                               (resources/'google_colab','resources/google_colab'),(resources/'sql_workbench','resources/sql_workbench')]:
+                               (resources/'google_colab','resources/google_colab'),(resources/'sql_workbench','resources/sql_workbench'),
+                               (resources/'rstudio','resources/rstudio')]:
             if not source.is_dir():
                 raise ValueError('Required Railway runtime resources are missing.')
             for path in sorted(source.rglob('*')):
@@ -40,7 +41,7 @@ def runtime_bundle():
                 if target.startswith('resources/'):
                     valid = rel.as_posix() in {'index.html','app.js','style.css'} or (rel.parts[0]=='assets' and path.suffix.lower() in {'.svg','.png','.jpg','.jpeg','.webp','.json','.woff','.woff2','.ttf'})
                 else:
-                    valid = path.suffix.lower() in {'.py','.java','.html','.css','.js','.svg','.png','.jpg','.gif','.woff','.woff2','.ttf','.json'}
+                    valid = path.suffix.lower() in {'.py','.r','.java','.html','.css','.js','.svg','.png','.jpg','.gif','.woff','.woff2','.ttf','.json'}
                 if valid:
                     archive.add(path, str(Path(target)/rel), filter=clean)
         for source, target in [(scripts/'sandbox_job.py','sandbox_job.py'),(scripts/'sandbox_broker.py','broker.py'),

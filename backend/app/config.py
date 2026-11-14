@@ -195,6 +195,8 @@ class Settings(BaseSettings):
     C_COMPILER: str = "gcc"
     CPP_COMPILER: str = "g++"
     NODE_COMMAND: str = "node"
+    R_COMMAND: str = "Rscript"
+    R_LIBS: str = ""  # extra library directory for R packages (system packages need none)
     JAVA_GUI_TEST_TIMEOUT: float = 30.0
     JAVA_GUI_TOTAL_TIMEOUT: float = 90.0
     # One-time Razorpay packs. Test and live balances are separate.
