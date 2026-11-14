@@ -15,7 +15,12 @@ import bcrypt
 
 
 # Test database setup
-SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
+import tempfile
+from pathlib import Path
+
+# Keep the throwaway database out of the working directory so test runs leave no .db files behind.
+_TEST_DB_DIR = Path(tempfile.mkdtemp(prefix="labmate-test-db-"))
+SQLALCHEMY_DATABASE_URL = f"sqlite:///{(_TEST_DB_DIR / 'test.db').as_posix()}"
 engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

@@ -61,7 +61,7 @@ async def generate_glm_json(instructions, content, schema):
     deadline = max(1, min(settings.GLM_REQUEST_TIMEOUT, 120))
     try:
         async with asyncio.timeout(deadline):
-            async with AsyncClient(timeout=deadline, follow_redirects=True) as client:
+            async with AsyncClient(timeout=deadline, follow_redirects=False) as client:
                 response = await client.post(settings.GLM_ENDPOINT,
                     headers={'Authorization': 'Bearer ' + settings.GLM_API_KEY, 'Content-Type': 'application/json'}, json=payload)
     except TimeoutError:

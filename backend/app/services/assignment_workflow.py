@@ -735,7 +735,24 @@ async def _process_assignment(workflow_id: int):
                         record(workflow, db, "generate", progress, reason)
                         continue
                 if actual_language == "python" and re.search(r"\binput\s*\(", code) and not stdin_data:
-                    raise ValueError(f"Question {index + 1} needs explicit sample input before it can be verified.")
+                    # One interactive program must not abort the whole manual: record this question as
+                    # failed with an honest diagnostic and carry on with the remaining questions.
+                    reason = f"Question {index + 1} needs explicit sample input before it can be verified."
+                    store_workflow_result(workflow, index, {
+                        "id": question["id"],
+                        "question": question["text"],
+                        "language": language,
+                        "answer": answer or reason,
+                        "code": code,
+                        "output": "",
+                        "error": reason,
+                        "status": "failed",
+                        "screenshot_paths": [],
+                        "evidence_plan": plan_experiment(question["text"], language, ""),
+                        "verification_summary": verification_summary(plan_experiment(question["text"], language, ""), False, reason),
+                    })
+                    record(workflow, db, "generate", progress, reason)
+                    continue
                 requires_interaction = bool((web_execution.verification or {}).get('required')) if is_web_project and web_execution is not None else actual_language in {"html", "react"} and bool(
                     browser_tests or interaction_required(question["text"] + " " + (workflow.instructions or "")))
                 evidence_plan = plan_experiment(question["text"] + "\n" + (workflow.instructions or ""), language, code)
