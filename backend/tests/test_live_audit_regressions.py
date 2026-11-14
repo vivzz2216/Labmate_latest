@@ -204,3 +204,57 @@ async def test_first_image_preparation_does_not_mark_all_execution_unhealthy(mon
     with pytest.raises(worker_health.RuntimePreparingError,match='prepared for its first run'):
         await assignment_workflow.execute_solution('print(7)','python','Print 7','group','Student')
     invalidate.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('compiler_failed',[True,False])
+@pytest.mark.parametrize('language',['java','distributed'])
+async def test_workflow_repairs_compiler_errors_but_not_missing_runtimes(tmp_path,monkeypatch,compiler_failed,language):
+    from unittest.mock import AsyncMock
+    from docx import Document
+    from PIL import Image
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from app.database import Base
+    from app.models import User,UserProfile,Upload,AssignmentWorkflow
+    from app.services import assignment_workflow as flow
+    document=Document();document.add_paragraph('Write a Java program to print 5.')
+    source=tmp_path/'manual.docx';document.save(source)
+    image=tmp_path/'output.png';Image.new('RGB',(800,300),'white').save(image)
+    engine=create_engine('sqlite:///'+str(tmp_path/'state.db'));Base.metadata.create_all(engine);factory=sessionmaker(bind=engine)
+    with factory() as db:
+        user=User(email='compiler-qa@example.test',name='Compiler Student',
+            profile=UserProfile(institution='Test College',course='Computer Science',profile_metadata={'year':'4','graduation_year':'2026','roll_number':'QA03'}))
+        db.add(user);db.flush()
+        upload=Upload(user_id=user.id,filename='manual.docx',original_filename='manual.docx',file_path=str(source),file_type='docx',file_size=source.stat().st_size)
+        db.add(upload);db.flush()
+        job=AssignmentWorkflow(upload_id=upload.id,status='processing',stage='generate',language=language,questions=[dict(id=1,text='Write a Java program to print 5.',language=language)],results=[],output_name='compiler_test')
+        db.add(job);db.commit();job_id=job.id
+    original='public class Main { public static void main(String[] args) { MissingType x; System.out.println(5); } }'
+    corrected='public class Main { public static void main(String[] args) { System.out.println(5); } }'
+    if language=='distributed':
+        prefix='// File: Helper.java\nclass Helper { static int value() { return 5; } }\n// File: Main.java\n'
+        original=prefix+original.replace('println(5)','println(Helper.value())')
+        corrected=prefix+corrected.replace('println(5)','println(Helper.value())')
+    generation=AsyncMock(return_value=dict(answer='',code=original,language=language))
+    repair=AsyncMock(return_value=corrected)
+    first=flow.SolutionExecution(False,'','cannot find symbol MissingType' if compiler_failed else 'Java runtime unavailable',[],None,
+        {'compile':'failed' if compiler_failed else 'not_run','execution':'not_run'})
+    executor=AsyncMock(side_effect=[first,flow.SolutionExecution(True,'5','',[str(image)],None,{'compile':'passed','execution':'passed'})])
+    monkeypatch.setattr(flow,'SessionLocal',factory)
+    monkeypatch.setattr(flow.generation_service,'generate_json',generation)
+    monkeypatch.setattr(flow,'repair_generated_code',repair)
+    monkeypatch.setattr(flow,'execute_solution',executor)
+    for name,directory in [('REPORT_DIR','reports'),('SCREENSHOT_DIR','screenshots'),('REACT_TEMP_DIR','runtime')]:monkeypatch.setattr(flow.settings,name,str(tmp_path/directory))
+    await flow.process_assignment(job_id)
+    with factory() as db:
+        job=db.get(AssignmentWorkflow,job_id)
+        assert job.status==('completed' if compiler_failed else 'failed'),job.error
+        assert job.report_id
+        assert repair.await_count==(1 if compiler_failed else 0)
+        assert executor.await_count==(2 if compiler_failed else 1)
+        if language=='distributed':
+            plan=job.results[0]['evidence_plan']
+            assert set(plan['required_source_files'])=={'Helper.java','Main.java'}
+            assert set(plan['complete_source_lines'])=={'Helper.java','Main.java'}
+    engine.dispose()

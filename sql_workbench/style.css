@@ -1127,12 +1127,18 @@ body.workbench-window {
    Larger query/result type remains readable when printed; ordinary UI is unchanged. */
 .print-evidence .wb-right-sidebar { display: none; }
 .print-evidence .sql-highlight-layer,
-.print-evidence .sql-textarea { font-size: 16px; line-height: 18px; }
+.print-evidence .sql-textarea { font-size: 19px; line-height: 22px; }
 .print-evidence .code-gutter { font-size: 13px; }
-.print-evidence .gutter-item { height: 18px; line-height: 18px; }
-.print-evidence .rg-table { font-size: 16px; }
+.print-evidence .gutter-item { height: 22px; line-height: 22px; }
+.print-evidence .rg-table { font-size: 19px; table-layout: fixed; }
 .print-evidence .rg-table th,
-.print-evidence .rg-table td { line-height: 18px; padding: 1px 8px; }
+.print-evidence .rg-table td { line-height: 22px; padding: 1px 8px; }
+.print-evidence .rg-table th,
+.print-evidence .rg-table td { white-space: pre-wrap; overflow-wrap: anywhere; max-width: none; overflow: visible; text-overflow: clip; }
+.print-evidence .nav-category:not(.schemas-section) .nav-list { display: none; }
+.print-evidence .sql-textarea { height: 100% !important; min-height: 0; }
+.print-evidence .sql-highlight-layer { min-height: 0; bottom: auto; height: auto; }
+.print-evidence .sql-source-line { display: block; width: 100%; min-width: 0; min-height: 22px; white-space: pre-wrap; overflow-wrap: anywhere; }
 
 .additions-toolbar {
   height: 26px;

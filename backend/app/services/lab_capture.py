@@ -24,6 +24,54 @@ RESULT_ROWS_PER_PAGE = 12
 RESULT_EDITOR_WINDOW_LINES = 10
 
 
+async def capture_sql_frame(page, path):
+    height = int(await page.evaluate('''() => {
+        const pane = document.getElementById('result-pane');
+        const container = document.querySelector('.rg-table-container');
+        const table = document.querySelector('.rg-table');
+        let height = Number(document.body.dataset.captureHeight) || 900;
+        if (table && container && getComputedStyle(pane).display !== 'none') {
+            const previous = pane.getBoundingClientRect().height;
+            const chrome = previous - container.clientHeight;
+            const required = Math.ceil(table.getBoundingClientRect().height + chrome + 3);
+            pane.style.height = `${required}px`;
+            pane.style.flex = `0 0 ${required}px`;
+            height += required - previous;
+        }
+        return Math.max(420, height);
+    }'''))
+    if not 420 <= height <= 1200:
+        raise ValueError('SQL evidence frame exceeds readable capture bounds.')
+    await page.set_viewport_size({'width':1200, 'height':height})
+    clipped = await page.evaluate('''() => {
+        const source = document.querySelector('.sql-highlight-layer');
+        const editor = document.getElementById('wb-code-section');
+        const table = document.querySelector('.rg-table');
+        const grid = document.querySelector('.rg-table-container');
+        const pane = document.getElementById('result-pane');
+        const gridClipped = table && grid && getComputedStyle(pane).display !== 'none' &&
+            (table.getBoundingClientRect().bottom > grid.getBoundingClientRect().bottom + 2 ||
+             table.scrollWidth > grid.clientWidth + 2);
+        return source.scrollWidth > source.clientWidth + 2 ||
+            source.getBoundingClientRect().bottom > editor.getBoundingClientRect().bottom + 2 || gridClipped;
+    }''')
+    if clipped:
+        raise ValueError('SQL source or result grid would be clipped; split long statements or oversized result sets into smaller sections.')
+    await page.screenshot(path=str(path))
+
+
+def sql_code_page_end(lines, start, boundary):
+    """Budget wrapped display rows while retaining every original source line."""
+    end, visual_rows = start - 1, 0
+    while end < boundary:
+        rows = max(1, math.ceil(len(lines[end]) / 76))
+        if end >= start and visual_rows + rows > CODE_LINES_PER_PAGE:
+            break
+        visual_rows += rows
+        end += 1
+    return end
+
+
 def sql_result_label(statement):
     sql = statement.upper()
     if 'HAVING' in sql: return 'HAVING example'
@@ -217,7 +265,7 @@ async def capture_sql(
             cursor = 1
             for boundary in boundaries:
                 while cursor <= boundary:
-                    end = min(boundary, cursor + CODE_LINES_PER_PAGE - 1)
+                    end = sql_code_page_end(all_lines, cursor, boundary)
                     code_pages.append((cursor, end));cursor=end+1
             total_code_pages = len(code_pages)
             final_schemas = receipt.get("schemas") or {}
@@ -283,7 +331,7 @@ async def capture_sql(
                     "actionLogs": page_logs,
                 }
                 await page.evaluate("(cfg) => window.MySQLWorkbench.renderFrame(cfg)", frame_cfg)
-                await page.screenshot(path=str(frame_path))
+                await capture_sql_frame(page, frame_path)
                 key = f"source_page_{page_idx + 1}"
                 screenshots_map[key] = str(frame_path)
                 evidence_frames.append(
@@ -338,7 +386,7 @@ async def capture_sql(
                             'activeSchema': previous.get('active_schema', 'lab') if previous else 'lab',
                             'resultSets': [], 'activeResultIndex': -1, 'actionLogs': build_action_logs(st['index'] - 1),
                         })
-                        await page.screenshot(path=str(command_path))
+                        await capture_sql_frame(page, command_path)
                         screenshots_map[f"database_command_{st['index']}_{part + 1}"] = str(command_path)
                         evidence_frames.append({'path': str(command_path), 'kind': 'database', 'phase': 'command',
                             'statement_index': st['index'], 'statement': st['statement'],
@@ -376,7 +424,7 @@ async def capture_sql(
                             "actionLogs": step_logs,
                         }
                         await page.evaluate("(cfg) => window.MySQLWorkbench.renderFrame(cfg)", frame_cfg)
-                        await page.screenshot(path=str(frame_path))
+                        await capture_sql_frame(page, frame_path)
                         last_rendered_path = frame_path
                         q_key = f"database_q{query_counter}_p{r_page + 1}"
                         screenshots_map[q_key] = str(frame_path)
@@ -432,7 +480,7 @@ async def capture_sql(
                         "actionLogs": step_logs,
                     }
                     await page.evaluate("(cfg) => window.MySQLWorkbench.renderFrame(cfg)", frame_cfg)
-                    await page.screenshot(path=str(frame_path))
+                    await capture_sql_frame(page, frame_path)
                     last_rendered_path = frame_path
                     s_key = f"database_step_{st['index']}"
                     screenshots_map[s_key] = str(frame_path)

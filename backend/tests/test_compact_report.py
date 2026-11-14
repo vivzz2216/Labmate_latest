@@ -51,7 +51,7 @@ def test_sql_default_uses_the_same_compact_structure(tmp_path,monkeypatch):
     doc=Document(path)
     assert [p.text for p in doc.paragraphs if p.text]==['Original manual cover and long instructions','Experiment 1 Joins','MySQL join results.']
     assert not doc.tables
-    assert doc.sections[-1].page_width>doc.sections[-1].page_height
+    assert doc.sections[-1].page_width<doc.sections[-1].page_height
 
 
 def test_pdf_manual_pages_precede_compact_output_and_screenshot(tmp_path,monkeypatch):

@@ -412,4 +412,4 @@ DROP VIEW product_data;
     for f in frames:
         assert os.path.isfile(f["path"])
         with Image.open(f["path"]) as img:
-            assert img.size == (1200, 900)
+            assert img.width == 1200 and 420 <= img.height <= 1200

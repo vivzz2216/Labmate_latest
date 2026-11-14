@@ -839,7 +839,7 @@ async def _process_assignment(workflow_id: int):
                         if requires_interaction:
                             verification = {"required": True, "status": "failed", "tests": [],
                                             "error": "The required browser interaction could not be verified."}
-                    if not is_web_project and not success and not language_mismatch and evidence_plan["supported"] and execution_stages.get('capture') != 'unavailable' and execution_stages.get('execution') != 'not_run' and not (actual_language=='ubuntu' and execution_stages.get('execution')=='passed') and (
+                    if not is_web_project and not success and not language_mismatch and evidence_plan["supported"] and execution_stages.get('capture') != 'unavailable' and (execution_stages.get('execution') != 'not_run' or execution_stages.get('compile') == 'failed') and not (actual_language=='ubuntu' and execution_stages.get('execution')=='passed') and (
                             bool(error) or bool(verification and (verification.get("error") or verification.get("failures")))):
                         for repair_attempt in range(1 if actual_language=='ubuntu' else 2):
                             record(workflow, db, "execute", progress,
@@ -916,16 +916,22 @@ async def _process_assignment(workflow_id: int):
                     if category in {'database','notebook'}:
                         candidates = (list((verification or {}).get('evidence_frames') or []) if (verification or {}).get('evidence_frames') else [{'path':p,'kind':category,'caption':f"MySQL Workbench-style rendered interface connected to real {(verification or {}).get('engine', 'MySQL')}" if category=='database' else 'Actual local Python notebook evidence'} for p in browser_captures])
                     project_files=(project_config or {}).get('project_files')
+                    capture_files=project_files
+                    source_policy=planned.get('source_policy','selected')
+                    if actual_language == 'distributed':
+                        from .dc_runtime import split_java_files
+                        capture_files=split_java_files(code)
+                        source_policy='complete'
                     source_language='java_gui' if category in {'java_awt','java_swing'} else 'flask' if (project_config or {}).get('project_type')=='flask' else actual_language
                     sources,source_errors=([], []) if actual_language in {'sql','ubuntu','r'} or category=='notebook' else await capture_source_evidence(
-                        project_files,code,src_filename,theme=theme,group=group,username=username,
+                        capture_files,code,src_filename,theme=theme,group=group,username=username,
                         language=source_language,screenshot_style=screenshot_style,
-                        requested_files=(project_config or {}).get('source_capture_files'), policy=planned.get('source_policy','selected'), jupyter_theme=question.get('jupyter_theme','light'))
+                        requested_files=(project_config or {}).get('source_capture_files'), policy=source_policy, jupyter_theme=question.get('jupyter_theme','light'))
                     source_errors.extend(browser_frame_errors)
                     candidates.extend(sources)
-                    source_plan=source_capture_plan(project_files,code,src_filename,source_language,(project_config or {}).get('source_capture_files'),policy=planned.get('source_policy','selected'))
+                    source_plan=source_capture_plan(capture_files,code,src_filename,source_language,(project_config or {}).get('source_capture_files'),policy=source_policy)
                     evidence_plan['required_source_files']=[src_filename] if actual_language in {'ubuntu','r'} else [name for name,_ in source_plan['files']]
-                    if planned.get('source_policy') == 'complete':
+                    if source_policy == 'complete':
                         evidence_plan['complete_source_lines']={name:len(text.splitlines()) for name,text in source_plan['files']}
                     evidence_plan['source_selection']=({'policy': 'complete', 'renderer': 'mysql_workbench', 'captured_files': [src_filename]} if actual_language == 'sql' else {k:v for k,v in source_plan.items() if k!='files'})
                     if category == 'rstudio':
