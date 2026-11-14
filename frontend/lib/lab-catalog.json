@@ -540,8 +540,8 @@
       {
         "id": "cpp-1",
         "number": 1,
-        "title": "Singly Linked List with Dynamic Memory",
-        "aim": "Implement a singly linked list using pointers and dynamic memory allocation, with insert, delete and display operations.",
+        "title": "Linked Lists, Stacks and Binary Search Trees",
+        "aim": "Implement linked lists, stacks, and binary search tree traversals using pointers and dynamic memory allocation.",
         "category": "Data Structures",
         "difficulty": "Intermediate",
         "frameworks": [
@@ -552,9 +552,11 @@
         "description": "Pointers, memory allocation, and traversal algorithms.",
         "expectedOutputs": [
           "Successful compilation without warnings",
-          "Correct traversal sequences"
+          "Linked-list insertion, deletion and display results",
+          "Stack push, pop and top results",
+          "BST inorder, preorder and postorder traversal sequences"
         ],
-        "starterPrompt": "Implement a singly linked list in C++ with insert, delete, and display operations."
+        "starterPrompt": "Implement ALL THREE structures in one concise C++ program: a singly linked list with insert/delete/display, a pointer-based stack with push/pop/top, and a binary search tree with inorder/preorder/postorder traversal. Allocate and release nodes correctly. Demonstrate each structure using fixed sample values and print labeled actual results for Linked list, Stack and BST. Do not omit any structure."
       }
     ]
   },

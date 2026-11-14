@@ -27,6 +27,7 @@ def test_logic_gate_zero_exit_does_not_hide_wrong_predictions():
 def test_required_optimizer_and_accuracy_outcomes_cannot_silently_disappear():
     objective='Compare SGD, Adam and RMSProp. Test accuracy exceeding 95%.'
     assert not semantic_failures(objective,'SGD: 0.5\nAdam: 0.3\nRMSProp: 0.2\nTest accuracy: 96%', 'colab')
+    assert not semantic_failures(objective,'SGD Adam RMSProp\nTest set accuracy on held-out images: 0.96', 'colab')
     assert semantic_failures(objective,'Adam: 0.3\nTest accuracy: 96%', 'colab')
     assert semantic_failures(objective,'SGD Adam RMSProp\nTest accuracy: 0.90', 'colab')
     assert semantic_failures(objective,'SGD Adam RMSProp', 'colab')
@@ -108,6 +109,8 @@ def test_catalog_counts_are_the_actual_frontend_experiments():
     assert {c['slug']:c['experiment_count'] for c in LAB_CATALOG_DATA} == {c['slug']:len(c['experiments']) for c in source}
     assert sum(c['experiment_count'] for c in LAB_CATALOG_DATA)==30
     assert 'ubuntu' not in {c['slug'] for c in LAB_CATALOG_DATA}
+    cpp=next(c for c in source if c['slug']=='c-cpp')['experiments'][0]
+    assert all(word in cpp['starterPrompt'].lower() for word in ('linked list','stack','binary search tree'))
     root=Path(__file__).resolve().parents[2]
     for dockerfile in (root/'Dockerfile',root/'backend/Dockerfile'):
         assert 'COPY frontend/lib/lab-catalog.json ./app/data/lab_catalog.json' in dockerfile.read_text()

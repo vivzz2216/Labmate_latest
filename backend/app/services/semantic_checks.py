@@ -19,7 +19,7 @@ def semantic_failures(objective, output, language=''):
                 failures.append('Missing observed optimizer benchmark: '+optimizer)
     threshold = re.search(r'accuracy\s+(?:exceeding|above|greater than|at least|over|>=)\s*(\d+(?:\.\d+)?)\s*%',text)
     if threshold:
-        observed = re.findall(r'(?i)(?:test|held[- ]out|validation)\s*(?:set\s*)?(?:accuracy|acc)\s*[:=]\s*(\d+(?:\.\d+)?)\s*(%)?',str(output or ''))
+        observed = re.findall(r'(?i)(?:test|held[- ]out|validation)\s*(?:set\s*)?(?:accuracy|acc)\b[^\n:=]{0,80}[:=]\s*(\d+(?:\.\d+)?)\s*(%)?',str(output or ''))
         if not observed:
             failures.append('Required held-out accuracy threshold has no observed metric.')
         else:
