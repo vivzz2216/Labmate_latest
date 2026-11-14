@@ -410,7 +410,7 @@ class RuntimeEngine:
                 return RuntimeResult(False,error='Notebook execution requires an explicit beta execution allowlist.',exit_code=126)
             from .lab_capture import capture_notebook
             cfg = project_config or {}
-            return await capture_notebook(code, datasets=cfg.get('datasets'), exp_no=cfg.get('exp_no', '01'), student_name=cfg.get('student_name', 'Student'), subject=cfg.get('subject', 'DSLab'), notebook_title=cfg.get('notebook_title'),theme=cfg.get('colab_theme','dark'),source_filename=filename or 'notebook.py')
+            return await capture_notebook(code, datasets=cfg.get('datasets'), exp_no=cfg.get('exp_no', '01'), student_name=cfg.get('student_name', 'Student'), subject=cfg.get('subject', 'DSLab'), notebook_title=cfg.get('notebook_title'),theme=cfg.get('colab_theme','dark'),source_filename=filename or 'notebook.py', notebook_template=cfg.get('notebook_template','colab'), jupyter_theme=cfg.get('jupyter_theme','light'))
         if not capability["supported"]:
             return RuntimeResult(False, error=f"Unsupported capability: {capability['category']} requires an isolated display/server adapter and genuine capture support; it was not executed.",
                                  exit_code=69, stages={"execution": "not_run", "capability": capability["category"]})

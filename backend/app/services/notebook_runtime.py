@@ -1,5 +1,6 @@
 """Killable stateful notebook workers. No model/application secrets enter cells."""
 import base64
+import hashlib
 import json
 import os
 import queue
@@ -11,6 +12,30 @@ import tempfile
 import threading
 import time
 from pathlib import Path
+
+
+def provision_approved_cache(work_dir, cache_root=Path('/opt/labmate-runtime/dl-cache')):
+    """Copy only trusted, manifest-listed immutable artifacts into this job."""
+    manifest_path = cache_root / 'manifest.json'
+    if not manifest_path.is_file():
+        return
+    manifest = json.loads(manifest_path.read_text())
+    if not isinstance(manifest, dict) or len(manifest) > 32:
+        raise ValueError('Invalid runtime artifact manifest.')
+    for name, digest in manifest.items():
+        relative = Path(name)
+        if relative.is_absolute() or '..' in relative.parts or '\\' in name:
+            raise ValueError('Unsafe runtime artifact path.')
+        source = cache_root / 'keras' / relative
+        if source.is_symlink() or not source.is_file() or source.stat().st_size > 128 * 1024**2:
+            raise ValueError('Invalid runtime artifact.')
+        with source.open('rb') as artifact:
+            actual_digest = hashlib.file_digest(artifact, 'sha256').hexdigest()
+        if actual_digest != digest:
+            raise ValueError('Runtime artifact checksum mismatch.')
+        destination = Path(work_dir) / '.keras' / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, destination)
 
 
 def _notebook_python_executable():
@@ -45,6 +70,7 @@ class ColabPythonKernel:
         self._replies = queue.Queue()
 
     def _start(self, deadline):
+        provision_approved_cache(self.work_dir)
         allowed={'PATH','PATHEXT','SYSTEMROOT','WINDIR','COMSPEC','LANG','LC_ALL'}
         environment={k:v for k,v in os.environ.items() if k.upper() in allowed}
         environment.update(LABMATE_NOTEBOOK_THEME=self.theme,TMP=self.work_dir,TEMP=self.work_dir,TMPDIR=self.work_dir,

@@ -76,7 +76,7 @@ async def capture_source_evidence(project_files,code,filename,*,theme,group,user
         return [],['Complete source exceeds 80 readable capture pages. Split the project; no source was silently omitted.']
     for name,text in files:
         digest=hashlib.sha256(text.encode('utf-8')).hexdigest()
-        web=language in {'html','react','node','flask'}
+        web=language in {'html','react','node','flask','distributed'}
         ide=language in {'python','java','java_gui','c','cpp'}
         count=len(text.splitlines())
         pages=[[[start,min(start+31,count)]] for start in range(1,count+1,32)] if policy=='complete' and count else [excerpt_ranges(text) if web else []]

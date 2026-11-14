@@ -13,6 +13,15 @@ test('Spark dependencies are installed only for Spark jobs',()=>{
   }
 });
 
+test('R exists in the actual image; approved ML cache is opt-in and allowlisted',()=>{
+  const commands=[];const recipe={run(command){commands.push(command);return this}};
+  template({template(){return recipe}},Buffer.from('deps'),false,['mnist'],'trusted-cache-script');
+  assert.ok(commands.some(c=>c.includes('r-base-core') && c.includes('r-cran-ggplot2')));
+  assert.ok(commands.some(c=>c.includes('Rscript --vanilla')));
+  assert.ok(commands.at(-1).endsWith('prepare_dl.py mnist'));
+  assert.throws(()=>template({template(){return recipe}},Buffer.from('deps'),false,['; curl bad'],'trusted-cache-script'));
+});
+
 test('network retries are bounded and only apply to read queries',async()=>{
   let calls=0;
   const fail=async()=>{calls++;throw new Error('connection interrupted')};

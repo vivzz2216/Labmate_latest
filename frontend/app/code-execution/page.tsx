@@ -1183,7 +1183,7 @@ function AssignmentContent() {
                 glow={isProcessingActive}
                 glowColor="#d4d4d8"
                 showTimer={isProcessingActive || complete}
-                elapsed={!isProcessingActive && !complete ? 0 : undefined}
+                elapsed={workflow?.elapsed_seconds ?? (!isProcessingActive && !complete ? 0 : undefined)}
               />
 
               {complete && (

@@ -212,10 +212,11 @@ def embed_screenshot(document, image_path, caption=None, reserved_height=0.8, ma
             paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
             paragraph.paragraph_format.keep_together = True
             paragraph.paragraph_format.keep_with_next = bool(caption)
-            if max_width is not None:
-                paragraph.paragraph_format.space_before = Pt(0)
-                paragraph.paragraph_format.space_after = Pt(2)
-                paragraph.paragraph_format.line_spacing = 1.0
+            # Uploaded documents can have an exact/large Normal line height.
+            # Never inherit that spacing for an inline screenshot.
+            paragraph.paragraph_format.space_before = Pt(0)
+            paragraph.paragraph_format.space_after = Pt(2)
+            paragraph.paragraph_format.line_spacing = 1.0
 
             if s_top == 0 and s_bottom == pixels_h:
                 source = str(image_path)
@@ -240,6 +241,9 @@ def embed_screenshot(document, image_path, caption=None, reserved_height=0.8, ma
                 cap_para = document.add_paragraph()
                 cap_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 cap_para.paragraph_format.keep_together = True
+                cap_para.paragraph_format.space_before = Pt(0)
+                cap_para.paragraph_format.space_after = Pt(3)
+                cap_para.paragraph_format.line_spacing = 1.0
                 run = cap_para.add_run(slice_cap)
                 run.font.size = Pt(9)
                 run.italic = True

@@ -1123,6 +1123,17 @@ body.workbench-window {
   flex-direction: column;
 }
 
+/* Capture the query workspace with Workbench's optional additions pane closed.
+   Larger query/result type remains readable when printed; ordinary UI is unchanged. */
+.print-evidence .wb-right-sidebar { display: none; }
+.print-evidence .sql-highlight-layer,
+.print-evidence .sql-textarea { font-size: 16px; line-height: 18px; }
+.print-evidence .code-gutter { font-size: 13px; }
+.print-evidence .gutter-item { height: 18px; line-height: 18px; }
+.print-evidence .rg-table { font-size: 16px; }
+.print-evidence .rg-table th,
+.print-evidence .rg-table td { line-height: 18px; padding: 1px 8px; }
+
 .additions-toolbar {
   height: 26px;
   padding: 0 4px;

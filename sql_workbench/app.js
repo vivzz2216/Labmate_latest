@@ -796,15 +796,16 @@
         const codeSectionEl = document.getElementById('wb-code-section');
         const resultPaneEl = document.getElementById('result-pane');
         const outputPanelEl = document.getElementById('output-panel');
+        document.body.classList.add('print-evidence');
         if (codeSectionEl && resultPaneEl && outputPanelEl) {
           if (frameConfig.layoutMode === 'code') {
             codeSectionEl.style.height = '365px';
             codeSectionEl.style.flex = '0 0 365px';
             codeSectionEl.style.minHeight = '365px';
-            resultPaneEl.style.height = '286px';
-            resultPaneEl.style.flex = '0 0 286px';
-            outputPanelEl.style.height = '96px';
-            outputPanelEl.style.flex = '0 0 96px';
+            resultPaneEl.style.height = '308px';
+            resultPaneEl.style.flex = '0 0 308px';
+            outputPanelEl.style.height = '72px';
+            outputPanelEl.style.flex = '0 0 72px';
           } else if (frameConfig.layoutMode === 'result') {
             codeSectionEl.style.height = '200px';
             codeSectionEl.style.flex = '0 0 200px';

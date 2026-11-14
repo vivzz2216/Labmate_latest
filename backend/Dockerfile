@@ -20,6 +20,7 @@ RUN pip install --no-cache-dir -r requirements.txt \
     && python -m playwright install --with-deps chromium \
     && rm -rf /var/lib/apt/lists/*
 COPY backend/app ./app
+COPY frontend/lib/lab-catalog.json ./app/data/lab_catalog.json
 COPY backend/templates ./templates
 COPY backend/scripts/sandbox_job.py backend/scripts/sandbox_broker.py ./runtime_scripts/
 COPY backend/railway_runtime ./railway_runtime
@@ -30,6 +31,8 @@ COPY google_colab/index.html google_colab/app.js google_colab/style.css ./lab_re
 COPY google_colab/assets ./lab_resources/google_colab/assets
 COPY sql_workbench/index.html sql_workbench/app.js sql_workbench/style.css ./lab_resources/sql_workbench/
 COPY sql_workbench/assets ./lab_resources/sql_workbench/assets
+COPY rstudio/index.html rstudio/app.js rstudio/style.css ./lab_resources/rstudio/
+COPY rstudio/assets ./lab_resources/rstudio/assets
 RUN groupadd -g 10001 labmate && useradd -u 10001 -g 10001 --no-create-home --shell /usr/sbin/nologin labmate \
     && mkdir -p /data && chmod +x /app/start.sh
 

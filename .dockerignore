@@ -24,7 +24,9 @@ test_screenshots
 test_video_out
 final_boss_manuals
 
-frontend
+frontend/**
+!frontend/lib/
+!frontend/lib/lab-catalog.json
 chrome_extension
 # Local verification bundles can be large and never belong in deployment contexts.
 **/audit_artifacts

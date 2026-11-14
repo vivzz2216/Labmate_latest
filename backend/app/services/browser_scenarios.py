@@ -1,7 +1,7 @@
 """Versioned, declarative browser scenarios. No generated scripts are evaluated."""
 import asyncio
 import json
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urljoin
 
 from playwright.async_api import expect
 
@@ -15,6 +15,15 @@ def local_path(value):
     return (isinstance(value, str) and value.startswith('/') and not value.startswith('//')
             and '\\' not in value and len(value) <= 500 and not any(ord(c) < 32 for c in value)
             and not urlsplit(value).netloc and not urlsplit(value).scheme)
+
+
+def local_navigation(value):
+    if not isinstance(value, str) or not value or len(value) > 500:
+        return False
+    if value.startswith('//') or '\\' in value or any(ord(c) < 32 for c in value):
+        return False
+    url = urlsplit(value)
+    return not url.scheme and not url.netloc and '..' not in url.path.split('/')
 
 
 def normalize_v2(tests):
@@ -63,7 +72,7 @@ def normalize_v2(tests):
                 raise ValueError('Role is required only for accessible role locators.')
             if action in {'click', 'reload', 'reset_storage', 'assert_visible', 'assert_absent', 'assert_no_overflow', 'screenshot'} and value:
                 raise ValueError('This browser operation does not accept a value.')
-            if action in {'goto','assert_url'} and not local_path(value):
+            if action in {'goto','assert_url'} and not local_navigation(value):
                 raise ValueError('Browser navigation must stay on the local origin.')
             if action=='assert_checked' and value not in {'true','false'}: raise ValueError('Checked assertions require true or false.')
             if action=='click_confirm' and not value.strip(): raise ValueError('Confirmed clicks require the exact expected confirmation message.')
@@ -217,7 +226,10 @@ async def run_v2(page, test, result, origin, observations, capture, reset_http=l
             await page.reload(wait_until='domcontentloaded', timeout=5000)
         elif op == 'goto':
             reset_http()
-            await page.goto(origin + value, wait_until='domcontentloaded', timeout=5000)
+            target = urljoin(page.url, value)
+            if urlsplit(target)[:2] != urlsplit(origin)[:2]:
+                raise ValueError('Browser navigation must stay on the local origin.')
+            await page.goto(target, wait_until='domcontentloaded', timeout=5000)
         elif op == 'reset_storage':
             await page.evaluate('() => { localStorage.clear(); sessionStorage.clear(); }')
             reset_http()
@@ -234,8 +246,10 @@ async def run_v2(page, test, result, origin, observations, capture, reset_http=l
             if value=='true': await expect(loc).to_be_checked(timeout=3000)
             else: await expect(loc).not_to_be_checked(timeout=3000)
         elif op == 'assert_url':
+            target = urlsplit(urljoin(page.url, value))
+            expected = target.path + ('?' + target.query if target.query else '') + ('#' + target.fragment if target.fragment else '')
             deadline=asyncio.get_running_loop().time()+3
-            while await assertion_state(step)!=value:
+            while await assertion_state(step)!=expected:
                 if asyncio.get_running_loop().time()>=deadline: raise ValueError(f'Expected URL path {value!r}, observed {await assertion_state(step)!r}.')
                 await asyncio.sleep(.05)
         elif op == 'assert_attribute':

@@ -381,6 +381,11 @@ def dataset_brief(datasets):
 
 async def execute_solution(code, language, question, group_id, username, stdin_data=None, filename="solution.txt",
                            browser_tests=None, interaction_is_required=False, project_config=None):
+    if language == 'distributed' and re.search(r'\bRMI\b|remote method invocation',question,re.I):
+        from .dc_runtime import split_java_files, detect_topology
+        server, client, mains = detect_topology(split_java_files(code))
+        if not server or not client or server == client:
+            raise ValueError('RMI requires separate Server.java and Client.java main programs. Client must use LocateRegistry.getRegistry on localhost, not a registry object created in the same JVM.')
     if (project_config or {}).get('project_type')=='flask':
         from pathlib import PurePosixPath
         validate_generated_code(code,language,capability='flask',local_modules={PurePosixPath(n).stem for n in project_config['project_files'] if n.endswith('.py')})
@@ -398,6 +403,12 @@ async def execute_solution(code, language, question, group_id, username, stdin_d
                          if item.get("type") == "browser_verification"), None)
     screenshots = [item["path"] for item in files if item.get("path") and os.path.isfile(item["path"])]
     stages = next((item.get("stages") for item in files if item.get("type") == "execution_stages"), {})
+    from .semantic_checks import semantic_failures
+    failures = semantic_failures(question, output, language) if success else []
+    if failures:
+        success=False
+        errors='\n'.join(filter(None,[errors,*failures]))
+        verification=dict(verification or {}, status='failed', semantic_failures=failures)
     if stages.get('isolation') == 'failed':
         from .worker_health import WorkerUnavailableError, worker_health
         worker_health.invalidate()
@@ -667,13 +678,14 @@ async def _process_assignment(workflow_id: int):
                             display_number = report_number(upload.original_filename if len(questions)==1 else '', question['text'])
                             code_instruction += f' Label SQL comments Experiment {display_number}; the upload filename supplies the submission label. Do not copy conflicting class or department headers. '
                         elif language=='colab':
-                            code_instruction+='\nNOTEBOOK RUNTIME (CPU ONLY): Return Python source using numpy, pandas, sklearn, scipy, matplotlib, and when requested for deep learning, torch (PyTorch), tensorflow, and keras. Execution runs on CPU only: never call .cuda(), .to("cuda"), or tf.device("/GPU:0"). Keep neural networks compact (<=64 hidden units/filters, 5..15 epochs, small batch sizes) so CPU training finishes quickly. Read only supplied workspace datasets; if no dataset was supplied, create self-contained inline sample/synthetic data or use built-in offline toy datasets (e.g. load_iris, load_digits, make_classification, never substitute synthetic data for MNIST, Fashion-MNIST or IMDB; require supplied data when the exact dataset is mandatory). Never invent real training data or hardware capabilities. No os/subprocess imports, network, pip installs or Google Drive mounts. Do not download remote datasets or models (e.g. do not call fetch_20newsgroups, nltk.download, torch.hub.load, or torchvision.datasets). Use relative dataset paths or /content aliases. Prefer numeric_only=True explicitly when appropriate for mixed DataFrames. Print training/evaluation metrics and sample predictions, and capture plots with plt.show().'
+                            code_instruction+='\nNOTEBOOK RUNTIME (CPU ONLY): Return Python source using numpy, pandas, sklearn, scipy, matplotlib, and when requested for deep learning, torch (PyTorch), tensorflow, and keras. Execution runs on CPU only: never call .cuda(), .to("cuda"), or tf.device("/GPU:0"). Keep neural networks compact (<=64 hidden units/filters and small batches; for nontrivial datasets use 5..15 epochs, but tiny logic gates may use up to 2000 deterministic updates until every truth-table row is correct) so CPU training finishes quickly. Read only supplied workspace datasets; if no dataset was supplied, create self-contained inline sample/synthetic data or use built-in offline toy datasets (e.g. load_iris, load_digits, make_classification, never substitute synthetic data for MNIST, Fashion-MNIST or IMDB; require supplied data when a mandatory dataset is not in the approved runtime cache). Never invent real training data or hardware capabilities. No os/subprocess imports, network, pip installs or Google Drive mounts. Do not download remote datasets or models (e.g. do not call fetch_20newsgroups, nltk.download, torch.hub.load, or torchvision.datasets). Use relative dataset paths or /content aliases. Prefer numeric_only=True explicitly when appropriate for mixed DataFrames. For required MNIST use keras.datasets.mnist.load_data(); approved cached genuine MNIST and ImageNet weights are provided by the trusted environment. For pretrained models use keras.applications.MobileNetV2(input_shape=(224,224,3), include_top=False, weights="imagenet", alpha=1.0) or ResNet50(include_top=False, weights="imagenet"); these exact official weight variants are cached. Train on a bounded genuine subset of MNIST (e.g. 5000 training and 1000 held-out examples) within the CPU deadline, reporting actual accuracy and subset sizes. Never replace a named dataset or pretrained model. For AND/OR/XOR print Predictions and Targets and assert exact truth-table equality. Implement every named optimizer (including SGD and RMSProp) when requested. Print training/evaluation metrics and sample predictions, and capture plots with plt.show().'
                             code_instruction+=' Use pandas Copy on Write compatible assignments: df[col] = df[col].fillna(value) or df.loc[mask, col] = value. Never use df[col].fillna(..., inplace=True) or other chained inplace updates. Do not suppress data correctness warnings. Check requested row counts and missing-value invariants after cleaning.'
                             code_instruction+=' Use every library explicitly required by the question; do not silently replace it with another implementation.'
                             if question.get('track') == 'deep_learning' or re.search(r'\b(?:perceptron|mlp|cnn|rnn|lstm|deep learning|neural network|backpropagation|keras|pytorch|torch|tensorflow)\b', question['text'], re.I):
                                 code_instruction+=' DEEP LEARNING GUIDELINES: Strictly use the framework requested (torch or tensorflow/keras). Plot training loss/accuracy across epochs with plt.plot() and call plt.show(). Print epoch loss progression and test evaluation metrics.'
                         elif language == 'distributed':
-                            code_instruction += '\nDISTRIBUTED COMPUTING RUNTIME (Java 17 Multi-Process): Return complete Java source code. For client-server or distributed systems (Sockets, Java RMI, Election Algorithms, Lamport Clocks, Token Ring), write clean, robust, executable Java code coordinating on localhost (127.0.0.1) with dynamic ports (5000-8000). Print informative execution logs with timestamps and status indicators.'
+                            from .semantic_checks import distributed_instructions
+                            code_instruction += distributed_instructions()
                         elif language == 'ubuntu':
                             from .ubuntu_runtime import ubuntu_instructions
                             code_instruction += ubuntu_instructions()
@@ -766,6 +778,10 @@ async def _process_assignment(workflow_id: int):
                     evidence_plan['requirements'] = [{**r,'evidence':'browser'} if r['id']=='execution' else r for r in evidence_plan['requirements']]
                     evidence_plan['requirements'] += [{'id': 'backend_api', 'description': 'Captured backend HTTP requests and responses', 'evidence': 'http'}]
                 language_mismatch = actual_language != language and not ({actual_language, language} <= {'python', 'colab'} and evidence_plan['category'] == 'notebook')
+                if language == 'distributed' and actual_language == 'java':
+                    actual_language, language_mismatch = 'distributed', False
+                if evidence_plan['category'] == 'notebook' and language == 'colab' and actual_language == 'python':
+                    actual_language = 'colab'
                 screenshots = []
                 screenshot_captions = None
                 output, error, success = "", "", True
@@ -792,6 +808,8 @@ async def _process_assignment(workflow_id: int):
                     nb_subject = 'DLLab' if is_dl else 'DSLab'
                     notebook_config = {'colab_theme': question.get('colab_theme','dark'), 'datasets': question.get('datasets'),
                                        'exp_no': exp_no, 'student_name': student_name, 'subject': nb_subject,
+                                       'notebook_template': 'jupyter' if language == 'python' and question.get('python_template') == 'jupyter' else 'colab',
+                                       'jupyter_theme': question.get('jupyter_theme', 'light'),
                                        'notebook_title': f"{nb_subject}_{student_name.split()[0]}_Exp{exp_no}.ipynb"}
                 elif evidence_plan['category'] == 'rstudio':
                     notebook_config = {'rstudio_theme': question.get('rstudio_theme', 'light')}
@@ -818,7 +836,7 @@ async def _process_assignment(workflow_id: int):
                         if requires_interaction:
                             verification = {"required": True, "status": "failed", "tests": [],
                                             "error": "The required browser interaction could not be verified."}
-                    if not is_web_project and not success and not language_mismatch and evidence_plan["supported"] and execution_stages.get('capture') != 'unavailable' and not (actual_language=='ubuntu' and execution_stages.get('execution')=='passed') and (
+                    if not is_web_project and not success and not language_mismatch and evidence_plan["supported"] and execution_stages.get('capture') != 'unavailable' and execution_stages.get('execution') != 'not_run' and not (actual_language=='ubuntu' and execution_stages.get('execution')=='passed') and (
                             bool(error) or bool(verification and (verification.get("error") or verification.get("failures")))):
                         for repair_attempt in range(1 if actual_language=='ubuntu' else 2):
                             record(workflow, db, "execute", progress,
@@ -857,7 +875,7 @@ async def _process_assignment(workflow_id: int):
                     theme = {
                         "python": "jupyter" if question.get("python_template") == "jupyter" else "idle",
                         "java": "notepad",
-                        "distributed": "notepad",
+                        "distributed": "vscode",
                         "c": "codeblocks",
                         "cpp": "codeblocks",
                         "node": "vscode",
@@ -913,7 +931,8 @@ async def _process_assignment(workflow_id: int):
                     if category == 'notebook':
                         evidence_plan['required_source_files']=[src_filename]
                         evidence_plan['complete_source_lines']={src_filename:(verification or {}).get('source_lines',len(code.splitlines()))}
-                        evidence_plan['source_selection']={'policy':'complete','renderer':'colab','theme':question.get('colab_theme','dark'),'captured_files':[src_filename]}
+                        renderer = (notebook_config or {}).get('notebook_template', 'colab')
+                        evidence_plan['source_selection']={'policy':'complete','renderer':renderer,'theme':question.get('jupyter_theme','light') if renderer == 'jupyter' else question.get('colab_theme','dark'),'captured_files':[src_filename]}
                     if actual_language == 'sql' and code:
                         evidence_plan['complete_source_lines'] = {src_filename: len(code.splitlines())}
                     if source_errors:
@@ -929,7 +948,7 @@ async def _process_assignment(workflow_id: int):
                             code, display_output, theme, group, username, src_filename,
                             screenshot_style=screenshot_style, error=error if not success else "",
                             stdin_data=stdin_data, input_echoed=input_echoed, view_mode=capture_view,
-                            presentation="ide_evidence" if actual_language in {"python", "java", "c", "cpp", "distributed"} and not actual_http else "evidence", language=actual_language,
+                            presentation="vscode_evidence" if actual_language == 'distributed' else "ide_evidence" if actual_language in {"python", "java", "c", "cpp"} and not actual_http else "evidence", language='java' if actual_language == 'distributed' else actual_language,
                             palette=question.get("jupyter_theme", "light") if theme == "jupyter" else "dark" if screenshot_style == "style_2" else "light",
                             evidence_kind="http" if actual_http else "terminal",
                         )

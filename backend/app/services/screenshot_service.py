@@ -732,6 +732,7 @@ class ScreenshotService:
             source_code=source_code or "",
             jupyter_title=os.path.splitext(safe_filename)[0] + ".ipynb",
             jupyter_theme="dark" if kwargs.get("palette") == "dark" else "light",
+            jupyter_plot=kwargs.get('jupyter_plot', ''),
             collapse_input=view_mode in {"shell", "output"} and len((source_code or "").splitlines()) > 40,
         )
         
@@ -982,10 +983,14 @@ class ScreenshotService:
         
         return results
     
-    async def _capture_workbench(self, sql, output_path, width=1440, height=900):
+    async def _capture_workbench(self, sql, output_path, width=1200, height=900):
         from .lab_capture import capture_sql
         result = await capture_sql(sql, output_path)
-        return bool(result.screenshots), 1440, 900
+        if not result.screenshots:
+            return False, 0, 0
+        from PIL import Image
+        with Image.open(next(iter(result.screenshots.values()))) as image:
+            return True, image.width, image.height
 
     async def _capture_colab(self, code, output, output_path, error="", notebook_title=None,
             student_name="Student", subject="DSLab", exp_no="6", datasets=None, plots=None,

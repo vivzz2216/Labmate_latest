@@ -71,6 +71,38 @@ def owned_upload(upload_id, user, db):
     return upload
 
 
+def workflow_elapsed_seconds(workflow):
+    logs = workflow.logs or []
+    starts = [entry.get('time') for entry in logs if entry.get('message') == 'Processing requested.']
+    # Older workflows have dated stage logs but no explicit start marker.
+    if not starts:
+        starts = [entry.get('time') for entry in logs if str(entry.get('message', '')).startswith(('Generating', 'Planning'))]
+        starts = starts[:1]
+    if not starts:
+        return None
+    try:
+        start = datetime.fromisoformat(starts[-1])
+        start = start.replace(tzinfo=timezone.utc) if start.tzinfo is None else start
+        end = datetime.now(timezone.utc) if workflow.status in {'queued', 'processing'} else workflow.updated_at
+        if end is None:
+            return None
+        end = end.replace(tzinfo=timezone.utc) if end.tzinfo is None else end
+        return round(max(0, (end - start).total_seconds()), 1)
+    except (ValueError, TypeError):
+        return None
+
+
+def same_questions(previous, current):
+    """Old saved jobs omit presentation defaults now supplied by the client."""
+    defaults = {'python_template':'idle', 'jupyter_theme':'light',
+                'colab_theme':'dark', 'rstudio_theme':'light', 'browser_theme':'edge',
+                'datasets':{}, 'track':None}
+    def canonical(items):
+        return [{key:value for key,value in item.items()
+                 if key not in defaults or value != defaults[key]} for item in (items or [])]
+    return canonical(previous) == canonical(current)
+
+
 def workflow_response(workflow, db):
     report = db.query(Report).get(workflow.report_id) if workflow.report_id else None
     results = [{key: value for key, value in result.items() if key not in {"screenshot_paths", "project_files"}}
@@ -91,6 +123,7 @@ def workflow_response(workflow, db):
         "mode": workflow.mode, "screenshot_style": workflow.screenshot_style, "batch_id": workflow.batch_id,
         "agent_plan": workflow.agent_plan or {},
         "queue_position": queue_position,
+        "elapsed_seconds": workflow_elapsed_seconds(workflow),
         "report": {"id": report.id, "filename": report.filename, "size": report.file_size, "download_url": f"/api/download/{report.id}"} if report else None,
     }
 
@@ -352,10 +385,10 @@ async def process(upload_id: int, data: ProcessInput, request: Request, backgrou
                 question["language"] = "theory"
                 question["is_theory"] = True
     previous_instructions = re.sub(r"^\[screenshot_style:[^\]]+\]\s*", "", workflow.instructions or "")
-    resume = (workflow.status in {"paused", "failed"} and workflow.questions == questions
+    resume = (workflow.status in {"paused", "failed"} and same_questions(workflow.questions, questions)
               and workflow.language == data.language and previous_instructions == data.instructions
               and workflow.mode == data.mode and workflow.screenshot_style == data.screenshot_style)
-    unchanged = (workflow.questions == questions and workflow.language == data.language
+    unchanged = (same_questions(workflow.questions, questions) and workflow.language == data.language
                  and previous_instructions == data.instructions and workflow.mode == data.mode
                  and workflow.screenshot_style == data.screenshot_style)
     if workflow.status == 'completed' and unchanged and workflow.report_id:
@@ -374,6 +407,7 @@ async def process(upload_id: int, data: ProcessInput, request: Request, backgrou
     workflow.status, workflow.stage = "queued", 'resume' if continue_pending else 'generate'
     workflow.progress = 20 + int(65 * len(workflow.results) / len(questions))
     workflow.updated_at = datetime.now(timezone.utc)
+    workflow.logs = [*(workflow.logs or []), {"time": workflow.updated_at.isoformat(), "message": "Processing requested."}]
     db.commit()
     return workflow_response(workflow, db)
 

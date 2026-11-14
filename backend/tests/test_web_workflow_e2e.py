@@ -18,7 +18,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.database import Base, get_db
 from app.middleware.auth import get_current_user
-from app.models import AssignmentWorkflow, Report, Upload, User
+from app.models import AssignmentWorkflow, Report, Upload, User, UserProfile
 from app.services.assignment_workflow import process_assignment
 
 
@@ -31,6 +31,8 @@ async def test_actual_add_browser_word_preview_and_download(tmp_path,wrong):
     Base.metadata.create_all(engine);factory=sessionmaker(bind=engine)
     with factory() as db:
         user=User(email='integration@example.com',name='Integration Student');db.add(user);db.flush();user_id=user.id
+        user.profile=UserProfile(institution='Test College', course='Computer Science',
+            profile_metadata={'year':'4','graduation_year':'2026','roll_number':'QA001'})
         upload=Upload(user_id=user.id,filename='manual.docx',original_filename='manual.docx',file_path=str(source_path),file_type='docx',file_size=source_path.stat().st_size)
         db.add(upload);db.flush();upload_id=upload.id
         workflow=AssignmentWorkflow(upload_id=upload.id,status='processing',stage='generate',language='auto',questions=[{'id':7,'text':objective,'language':'html'}],results=[],output_name='add_test')

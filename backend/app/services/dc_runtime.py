@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from ..config import settings
-from .runtime_engine import RuntimeResult, java_class_name
+from .runtime_engine import RuntimeResult, java_class_name, run_process, start_process, collect_output, kill_process_tree
 
 
 def split_java_files(code: str) -> Dict[str, str]:
@@ -23,6 +23,10 @@ def split_java_files(code: str) -> Dict[str, str]:
     2. Multiple class declarations: 'public class Foo' / 'class Bar'
     """
     files: Dict[str, str] = {}
+    # A fenced multi-file response must not leave closing fences/prose in .java.
+    blocks = re.findall(r'```(?:java)?\s*\n(.*?)```', code, re.S)
+    if blocks:
+        code = '\n'.join(blocks)
     
     # 1. Check for explicit file comments
     file_pattern = r"(?:(?://|/\*)\s*(?:File|Filename|Source):\s*([\w\.\-]+?\.java)\s*(?:\*/)?)"
@@ -52,13 +56,22 @@ def split_java_files(code: str) -> Dict[str, str]:
             return files
 
     # 3. Multiple public classes in one text
-    public_classes = list(re.finditer(r"public\s+(?:final\s+|abstract\s+)?(?:class|interface|enum)\s+(\w+)", code))
+    masked = re.sub(r'//[^\n]*|/\*.*?\*/|"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'',
+                    lambda m: ' ' * len(m[0]), code, flags=re.S)
+    depth = 0
+    depths = []
+    for character in masked:
+        depths.append(depth)
+        depth += (character == '{') - (character == '}')
+    public_classes = [m for m in re.finditer(r"public\s+(?:final\s+|abstract\s+)?(?:class|interface|enum)\s+(\w+)", masked)
+                      if depths[m.start()] == 0]
     if len(public_classes) > 1:
         starts = [m.start() for m in public_classes] + [len(code)]
         for i in range(len(public_classes)):
             cname = public_classes[i].group(1)
             segment = code[starts[i]:starts[i+1]].strip()
-            files[f"{cname}.java"] = segment
+            imports = '\n'.join(re.findall(r'(?m)^\s*(?:package|import)\s+[^;]+;', code[:starts[0]]))
+            files[f"{cname}.java"] = imports + '\n' + segment
         return files
 
     # 4. Fallback: single file
@@ -137,22 +150,11 @@ async def execute_distributed_java(
         *java_files,
     ]
 
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            *compile_cmd,
-            cwd=str(directory),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        c_stdout, c_stderr = await asyncio.wait_for(proc.communicate(), timeout=30.0)
-    except asyncio.TimeoutError:
-        return RuntimeResult(False, error="Compilation timed out.", exit_code=124, stages={"compile": "failed", "execution": "not_run"})
-    except Exception as e:
-        return RuntimeResult(False, error=f"Compilation launch failed: {e}", exit_code=1, stages={"compile": "failed", "execution": "not_run"})
-
-    if proc.returncode != 0:
-        err = c_stderr.decode("utf-8", errors="replace") or c_stdout.decode("utf-8", errors="replace")
-        return RuntimeResult(False, error="Compilation error:\n" + err, exit_code=proc.returncode, stages={"compile": "failed", "execution": "not_run"})
+    compiled = await run_process(compile_cmd, directory, timeout=30.0,
+                                 resource_limits={"max_memory_bytes": 0, "max_cpu_seconds": 30})
+    if not compiled.success:
+        return RuntimeResult(False, error="Compilation error:\n" + (compiled.error or compiled.output),
+                             exit_code=compiled.exit_code, stages={"compile": "failed", "execution": "not_run"})
 
     # 3. Detect Topology
     server_class, client_class, mains = detect_topology(files)
@@ -179,30 +181,11 @@ async def _run_single_process(directory: Path, main_class: str, stdin: Optional[
         main_class,
     ]
 
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            cwd=str(directory),
-            stdin=asyncio.subprocess.PIPE if stdin else None,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        input_bytes = stdin.encode("utf-8") if stdin else None
-        stdout_bytes, stderr_bytes = await asyncio.wait_for(proc.communicate(input=input_bytes), timeout=timeout)
-        out = stdout_bytes.decode("utf-8", errors="replace")
-        err = stderr_bytes.decode("utf-8", errors="replace")
-        success = proc.returncode == 0
-        return RuntimeResult(
-            success=success,
-            output=out,
-            error=err if not success else "",
-            exit_code=proc.returncode or 0,
-            stages={"compile": "passed", "execution": "passed" if success else "failed"},
-        )
-    except asyncio.TimeoutError:
-        return RuntimeResult(False, error="Execution timed out.", exit_code=124, stages={"compile": "passed", "execution": "failed"})
-    except Exception as e:
-        return RuntimeResult(False, error=f"Execution failed: {e}", exit_code=1, stages={"compile": "passed", "execution": "failed"})
+    result = await run_process(cmd, directory, stdin=stdin or "", timeout=timeout,
+                               resource_limits={"max_memory_bytes": 0, "max_cpu_seconds": max(1, int(timeout))})
+    result.stages = {"compile": "passed", "execution": "passed" if result.success else "failed"}
+    result.stages['topology'] = 'single_jvm_local_simulation'
+    return result
 
 
 async def _run_server_client(
@@ -230,22 +213,21 @@ async def _run_server_client(
     ]
 
     server_proc = None
+    streams = []
     try:
         # 1. Start Server
-        server_proc = await asyncio.create_subprocess_exec(
-            *server_cmd,
-            cwd=str(directory),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
+        server_proc = await start_process(server_cmd, directory, resource_limits={"max_memory_bytes": 0, "max_cpu_seconds": max(1, int(timeout))})
+        server_proc.stdin.close()
+        streams = [asyncio.create_task(collect_output(server_proc.stdout, server_proc)),
+                   asyncio.create_task(collect_output(server_proc.stderr, server_proc))]
 
         # 2. Allow server to bind socket or initialize RMI
         await asyncio.sleep(1.8)
 
         # 3. Check if server died prematurely
         if server_proc.returncode is not None:
-            s_out, s_err = await server_proc.communicate()
-            err_msg = s_err.decode("utf-8", errors="replace") or s_out.decode("utf-8", errors="replace")
+            s_out, s_err = await asyncio.gather(*streams)
+            err_msg = s_err[0] or s_out[0]
             return RuntimeResult(
                 False,
                 error=f"Server process terminated unexpectedly:\n{err_msg}",
@@ -254,32 +236,16 @@ async def _run_server_client(
             )
 
         # 4. Start Client
-        client_proc = await asyncio.create_subprocess_exec(
-            *client_cmd,
-            cwd=str(directory),
-            stdin=asyncio.subprocess.PIPE if stdin else None,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-
-        input_bytes = stdin.encode("utf-8") if stdin else None
-        c_stdout, c_stderr = await asyncio.wait_for(client_proc.communicate(input=input_bytes), timeout=timeout - 5.0)
+        client = await run_process(client_cmd, directory, stdin=stdin or "", timeout=max(0.1, timeout - 2.0),
+                                   resource_limits={"max_memory_bytes": 0, "max_cpu_seconds": max(1, int(timeout))})
 
         # 5. Give server 1 second to flush final logs, then terminate
         await asyncio.sleep(0.8)
-        if server_proc.returncode is None:
-            try:
-                server_proc.terminate()
-                s_stdout, s_stderr = await asyncio.wait_for(server_proc.communicate(), timeout=3.0)
-            except Exception:
-                server_proc.kill()
-                s_stdout, s_stderr = await server_proc.communicate()
-        else:
-            s_stdout, s_stderr = await server_proc.communicate()
-
-        s_out_text = s_stdout.decode("utf-8", errors="replace").strip()
-        c_out_text = c_stdout.decode("utf-8", errors="replace").strip()
-        c_err_text = c_stderr.decode("utf-8", errors="replace").strip()
+        await kill_process_tree(server_proc)
+        server_out, server_err = await asyncio.gather(*streams)
+        s_out_text = server_out[0].strip()
+        c_out_text = client.output.strip()
+        c_err_text = client.error.strip()
 
         combined_output = (
             f"=== [SERVER: {server_class}] ===\n"
@@ -288,13 +254,14 @@ async def _run_server_client(
             f"{c_out_text}"
         )
 
-        success = client_proc.returncode == 0
+        success = client.success and not server_out[1] and not server_err[1]
         return RuntimeResult(
             success=success,
             output=combined_output,
             error=c_err_text if not success else "",
-            exit_code=client_proc.returncode or 0,
-            stages={"compile": "passed", "execution": "passed" if success else "failed"},
+            exit_code=client.exit_code if client.exit_code else (0 if success else 125),
+            stages={"compile": "passed", "execution": "passed" if success else "failed",
+                    "topology": "separate_jvm_loopback"},
         )
 
     except asyncio.TimeoutError:
@@ -302,9 +269,11 @@ async def _run_server_client(
     except Exception as e:
         return RuntimeResult(False, error=f"Distributed execution failed: {e}", exit_code=1, stages={"compile": "passed", "execution": "failed"})
     finally:
-        if server_proc and server_proc.returncode is None:
-            try:
-                server_proc.kill()
-            except Exception:
-                pass
+        if server_proc:
+            await kill_process_tree(server_proc)
+        for task in streams:
+            if not task.done():
+                task.cancel()
+        if streams:
+            await asyncio.gather(*streams, return_exceptions=True)
 

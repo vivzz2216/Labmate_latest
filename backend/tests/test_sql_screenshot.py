@@ -22,11 +22,11 @@ SELECT * FROM Students WHERE marks >= 90;"""
 
     assert success is True, "Screenshot generation should succeed"
     assert os.path.isfile(path), f"Screenshot file should exist at {path}"
-    assert width == 1440, f"Expected width 1440, got {width}"
+    assert width == 1200, f"Expected print-readable workspace width 1200, got {width}"
     assert height == 900, f"Expected height 900, got {height}"
 
     with Image.open(path) as img:
-        assert img.width == 1440
+        assert img.width == 1200
         assert img.height == 900
 
     # Clean up

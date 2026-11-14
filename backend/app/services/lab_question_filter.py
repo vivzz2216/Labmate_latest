@@ -10,7 +10,10 @@ EXPLICIT_PROGRAM = re.compile(r"\b(?:write|create|develop|implement|build)\s+(?:
 
 
 HANDWRITTEN_REGEX = re.compile(
-    r"\b(handwritten|hand[- ]written|by hand|write by hand|draw by hand|draw neatly|sketch|manual drawing)\b",
+    r"\b(?:by hand|draw neatly|sketch|manual drawing|"
+    r"(?:to be|must be|should be|is|are|please)\s+hand[- ]?written\b|"
+    r"hand[- ]?written\s+(?:exercise|answers?|notes?|viva|questions?|submission|work)\b|"
+    r"\(\s*hand[- ]?written\s*\))",
     re.I
 )
 

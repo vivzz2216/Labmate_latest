@@ -143,12 +143,18 @@ def build_compact_report(upload,workflow):
         for image_index,path in enumerate(paths):
             if not Path(path).is_file():raise ValueError('A required screenshot is missing: '+str(path))
             caption=evidence_caption(result.get('language'),captions[image_index] if image_index<len(captions) else '')
+            if not re.search(r'\b(?:simulated|unverified|failed|diagnostic)\b', caption, re.I):
+                # Interface details already appear in the image itself.
+                caption = re.sub(r'\s*\([^)]*(?:style|preview)[^)]*\)', '', caption, flags=re.I)
+                caption = re.sub(r'\s*\[[^\]]*(?:style|preview)[^\]]*\]', '', caption, flags=re.I)
             if result.get('language') == 'colab' and not re.search(r'\b(?:simulated|unverified|failed|diagnostic)\b', caption, re.I):
                 # The notebook screenshots already contain their content; avoid
                 # redundant per-slice labels and fit two readable frames per page.
                 caption = None
             # Leave room on the first page for the heading, aim and caption.
             reserve = min(3.0, 1.7 + max(0, len(aim) - 140) / 300) if image_index == 0 else .8
+            if result.get('language') == 'sql':
+                reserve = .7
             embed_screenshot(document,path,caption=caption,reserved_height=reserve,
                              max_width=6.25 if result.get('language') == 'colab' else None)
     name=normalize_output_name(workflow.output_name or 'lab_report',max_length=80)+'.docx'
