@@ -101,7 +101,7 @@ def fence_claim(db):
 def commit_fenced(db):
     fence_claim(db)
     db.commit()
-LANGUAGES = ["python", "java", "c", "cpp", "html", "react", "node", "sql", "colab", "ubuntu", "distributed"]
+LANGUAGES = ["python", "java", "c", "cpp", "html", "react", "node", "sql", "colab", "ubuntu", "distributed", "r"]
 QUESTION_SCHEMA = {
     "type": "OBJECT",
     "properties": {"questions": {"type": "ARRAY", "items": {
@@ -349,7 +349,7 @@ def student_friendly_filename(question_text: str, language: str, index: int) -> 
         "html": ".html",
         "react": ".jsx",
         "node": ".js",
-        "sql": ".sql", "colab": ".py", "ubuntu": ".sh", "distributed": ".java"
+        "sql": ".sql", "colab": ".py", "ubuntu": ".sh", "distributed": ".java", "r": ".R"
     }
     ext = ext_map.get(language, ".py")
     cleaned = re.sub(r'[^a-zA-Z0-9\s]', ' ', question_text.lower())
@@ -386,6 +386,8 @@ async def execute_solution(code, language, question, group_id, username, stdin_d
         validate_generated_code(code,language,capability='flask',local_modules={PurePosixPath(n).stem for n in project_config['project_files'] if n.endswith('.py')})
     elif language == 'python' and re.search(r'\bpyspark\b', code + '\n' + (question or ''), re.I):
         validate_generated_code(code, language, capability='spark')
+    elif language == 'r':
+        validate_generated_code(code, 'r')
     elif language == 'colab' or plan_experiment(question or '', language, code).get('category') == 'notebook':
         validate_generated_code(code, language, capability='notebook')
     else:validate_generated_code(code, language)
@@ -675,6 +677,9 @@ async def _process_assignment(workflow_id: int):
                         elif language == 'ubuntu':
                             from .ubuntu_runtime import ubuntu_instructions
                             code_instruction += ubuntu_instructions()
+                        elif language == 'r':
+                            from .r_runtime import r_instructions
+                            code_instruction += r_instructions()
                         solution = await generation_service.generate_json(
                             code_instruction,
                             f"Language: {language}\n{personalization_prompt}\nAdditional requirements: {workflow.instructions}\nProject brief: {planned.get('brief','')}\n"
@@ -788,6 +793,8 @@ async def _process_assignment(workflow_id: int):
                     notebook_config = {'colab_theme': question.get('colab_theme','dark'), 'datasets': question.get('datasets'),
                                        'exp_no': exp_no, 'student_name': student_name, 'subject': nb_subject,
                                        'notebook_title': f"{nb_subject}_{student_name.split()[0]}_Exp{exp_no}.ipynb"}
+                elif evidence_plan['category'] == 'rstudio':
+                    notebook_config = {'rstudio_theme': question.get('rstudio_theme', 'light')}
                 if code:
                     record(workflow, db, "execute", progress, f"Running question {index + 1} ({actual_language}).")
                     try:
@@ -883,23 +890,26 @@ async def _process_assignment(workflow_id: int):
                         candidates, browser_frame_errors = await frame_browser_captures(
                             browser_captures, verification, browser_theme=question.get('browser_theme', 'edge'),
                             job_id=group, filename=src_filename)
-                    if category == 'ubuntu':
+                    if category in {'ubuntu','rstudio'}:
                         candidates=list((verification or {}).get('evidence_frames') or [])
                     if category in {'database','notebook'}:
                         candidates = (list((verification or {}).get('evidence_frames') or []) if (verification or {}).get('evidence_frames') else [{'path':p,'kind':category,'caption':f"MySQL Workbench-style rendered interface connected to real {(verification or {}).get('engine', 'MySQL')}" if category=='database' else 'Actual local Python notebook evidence'} for p in browser_captures])
                     project_files=(project_config or {}).get('project_files')
                     source_language='java_gui' if category in {'java_awt','java_swing'} else 'flask' if (project_config or {}).get('project_type')=='flask' else actual_language
-                    sources,source_errors=([], []) if actual_language in {'sql','ubuntu'} or category=='notebook' else await capture_source_evidence(
+                    sources,source_errors=([], []) if actual_language in {'sql','ubuntu','r'} or category=='notebook' else await capture_source_evidence(
                         project_files,code,src_filename,theme=theme,group=group,username=username,
                         language=source_language,screenshot_style=screenshot_style,
                         requested_files=(project_config or {}).get('source_capture_files'), policy=planned.get('source_policy','selected'), jupyter_theme=question.get('jupyter_theme','light'))
                     source_errors.extend(browser_frame_errors)
                     candidates.extend(sources)
                     source_plan=source_capture_plan(project_files,code,src_filename,source_language,(project_config or {}).get('source_capture_files'),policy=planned.get('source_policy','selected'))
-                    evidence_plan['required_source_files']=[src_filename] if actual_language == 'ubuntu' else [name for name,_ in source_plan['files']]
+                    evidence_plan['required_source_files']=[src_filename] if actual_language in {'ubuntu','r'} else [name for name,_ in source_plan['files']]
                     if planned.get('source_policy') == 'complete':
                         evidence_plan['complete_source_lines']={name:len(text.splitlines()) for name,text in source_plan['files']}
                     evidence_plan['source_selection']=({'policy': 'complete', 'renderer': 'mysql_workbench', 'captured_files': [src_filename]} if actual_language == 'sql' else {k:v for k,v in source_plan.items() if k!='files'})
+                    if category == 'rstudio':
+                        evidence_plan['complete_source_lines']={src_filename:(verification or {}).get('source_lines',len(code.splitlines()))}
+                        evidence_plan['source_selection']={'policy':'complete','renderer':'rstudio','theme':question.get('rstudio_theme','light'),'captured_files':[src_filename]}
                     if category == 'notebook':
                         evidence_plan['required_source_files']=[src_filename]
                         evidence_plan['complete_source_lines']={src_filename:(verification or {}).get('source_lines',len(code.splitlines()))}
@@ -1156,7 +1166,7 @@ def build_word_report(upload, workflow):
             verification = result.get("verification")
             if verification and verification.get("status") == "failed":
                 status = str(verification.get("status", "unknown")).replace("_", " ").upper()
-                label = f"MySQL execution & semantic verification ({verification.get('engine') or 'MySQL'})" if verification.get('kind')=='database' else "Python notebook execution verification" if verification.get('kind')=='notebook' else "Java UI interaction verification" if verification.get('kind')=='gui' else "HTTP request verification" if verification.get("kind") == "http" else "Render verification" if verification.get('kind')=='render' else "Browser interaction verification"
+                label = f"MySQL execution & semantic verification ({verification.get('engine') or 'MySQL'})" if verification.get('kind')=='database' else "R / RStudio execution verification" if verification.get('kind')=='rstudio' else "Python notebook execution verification" if verification.get('kind')=='notebook' else "Java UI interaction verification" if verification.get('kind')=='gui' else "HTTP request verification" if verification.get("kind") == "http" else "Render verification" if verification.get('kind')=='render' else "Browser interaction verification"
                 if verification.get('capture_method'):document.add_paragraph(verification['capture_method'])
                 document.add_paragraph(f"{label}: {status}")
                 if verification.get("kind") == "database":

@@ -28,7 +28,7 @@ from ..services.billing_service import reserve_workflow_credits, settle_workflow
 from ..services.workflow_batch import archive_chunks, create_batch_archive, stage_batch_file
 
 router = APIRouter(prefix="/workflows")
-Language = Literal["auto", "python", "java", "c", "cpp", "html", "react", "node", "sql", "colab", "ubuntu", "theory", "distributed"]
+Language = Literal["auto", "python", "java", "c", "cpp", "html", "react", "node", "sql", "colab", "ubuntu", "theory", "distributed", "r"]
 
 
 class QuestionInput(BaseModel):
@@ -38,6 +38,7 @@ class QuestionInput(BaseModel):
     track: Optional[str] = None
     datasets: dict[str,str] = Field(default_factory=dict,max_length=20)
     colab_theme: Literal["light", "dark"] = "dark"
+    rstudio_theme: Literal["light", "dark"] = "light"
     browser_theme: Literal["edge", "chrome"] = "edge"
     python_template: Literal["idle", "jupyter"] = "idle"
     jupyter_theme: Literal["light", "dark"] = "light"
@@ -338,6 +339,7 @@ async def process(upload_id: int, data: ProcessInput, request: Request, backgrou
                   **({'datasets':q.datasets} if q.datasets else {}),
                   **({'python_template':q.python_template, 'jupyter_theme':q.jupyter_theme} if q.language in {'python','auto'} or data.language in {'python','auto'} else {}),
                   **({'colab_theme':q.colab_theme} if q.language=='colab' or data.language=='colab' else {}),
+                  **({'rstudio_theme':q.rstudio_theme} if q.language=='r' or data.language=='r' else {}),
                   **({'browser_theme':q.browser_theme} if q.browser_theme == 'chrome' or q.language in {'html','react','node'} or data.language in {'html','react','node'} else {})} for q in data.questions]
     if sum(sum(len(name)+len(content) for name,content in q.datasets.items()) for q in data.questions)>8*1024*1024:
         raise HTTPException(400,'Dataset upload exceeds 8 MiB.')

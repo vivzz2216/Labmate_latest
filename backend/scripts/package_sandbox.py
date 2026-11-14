@@ -13,11 +13,11 @@ def safe_mode(member):
     return member
 with tarfile.open(target, 'w:gz') as archive:
     for root, dest in [('backend/app', 'backend/app'), ('google_colab', 'resources/google_colab'),
-                       ('sql_workbench', 'resources/sql_workbench')]:
+                       ('sql_workbench', 'resources/sql_workbench'), ('rstudio', 'resources/rstudio')]:
         for path in (repo / root).rglob('*'):
             if path.is_file() and not path.is_symlink() and '__pycache__' not in path.parts and path.suffix != '.pyc' and not path.name.startswith('.env'):
                 relative = path.relative_to(repo / root)
-                if root in {'google_colab', 'sql_workbench'}:
+                if root in {'google_colab', 'sql_workbench', 'rstudio'}:
                     allowed_asset = relative.parts[0] == 'assets' and path.suffix.lower() in {'.svg', '.png', '.jpg', '.jpeg', '.webp', '.json', '.woff', '.woff2', '.ttf'}
                     if not allowed_asset and relative.as_posix() not in {'index.html', 'app.js', 'style.css'}:
                         continue

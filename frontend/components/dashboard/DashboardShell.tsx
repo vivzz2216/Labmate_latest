@@ -60,6 +60,7 @@ export const languageMeta: Record<
   node: { label: "Node.js (Web Dev)", icon: SiHtml5, className: styles.html },
   sql: { label: "SQL", icon: Terminal, className: styles.c },
   ubuntu: { label: "Ubuntu / Linux", icon: Terminal, className: styles.fileIcon },
+  r: { label: "R / RStudio", icon: Terminal, className: styles.fileIcon },
   deep_learning: { label: "Deep Learning", icon: SiPython, className: styles.python },
   "deep-learning": { label: "Deep Learning", icon: SiPython, className: styles.python },
   distributed: { label: "Distributed Computing", icon: FaJava, className: styles.java },

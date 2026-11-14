@@ -7,6 +7,9 @@ def validate_generated_code(code: str, language: str, capability=None, local_mod
     """Restrict generated lab programs before the existing local execution fallback."""
     if len(code) > 50000:
         raise ValueError("Generated code exceeds the supported size.")
+    if language == "r":
+        from .r_code import validate_r_code
+        return validate_r_code(code)
     if language == "python":
         tree = ast.parse(code)
         safe_modules = {"math", "random", "statistics", "decimal", "fractions", "collections", "itertools", "functools", "operator", "string", "re", "json", "csv", "datetime", "copy", "heapq", "bisect", "array", "typing", "dataclasses", "enum", "abc"}

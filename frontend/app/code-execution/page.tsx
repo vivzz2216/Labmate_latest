@@ -66,6 +66,7 @@ const languages: { value: LabLanguage; label: string }[] = [
   { value: "node", label: "Node.js" },
   { value: "sql", label: "SQL (MySQL runtime)" },
   { value: "ubuntu", label: "Ubuntu (Bash + GNOME)" },
+  { value: "r", label: "R (RStudio)" },
 ];
 const stages = [
   {

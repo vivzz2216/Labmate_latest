@@ -368,7 +368,7 @@ class RuntimeEngine:
                       prepare_files=None, collect_files=None, browser_tests=None, interaction_is_required=False,
                       objective="", api_tests=None, project_config=None):
         language = {'c++':'cpp', 'javascript':'node', 'webdev':'html', 'mysql':'sql', 'ipynb':'colab',
-                    'bash':'ubuntu', 'shell':'ubuntu', 'unix':'ubuntu'}.get(language.lower(), language.lower())
+                    'bash':'ubuntu', 'shell':'ubuntu', 'unix':'ubuntu', 'rstudio':'r', 'rlang':'r'}.get(language.lower(), language.lower())
         async with heavy_execution_budget.slot():
             from .isolated_runtime import isolation_required, execute_isolated
             from .evidence_planner import plan_experiment
@@ -390,12 +390,15 @@ class RuntimeEngine:
     async def _execute_direct(self, code, language="python", filename=None, stdin=None, project_files=None, routes=None,
                              prepare_files=None, collect_files=None, browser_tests=None, interaction_is_required=False,
                              objective="", api_tests=None, project_config=None):
-        language = {"c++": "cpp", "javascript": "node", "webdev": "html", "mysql":"sql", "ipynb":"colab", "bash":"ubuntu", "shell":"ubuntu", "unix":"ubuntu"}.get(language.lower(), language.lower())
-        if language not in {"python", "java", "c", "cpp", "html", "react", "node", "sql", "colab", "ubuntu", "distributed"}:
+        language = {"c++": "cpp", "javascript": "node", "webdev": "html", "mysql":"sql", "ipynb":"colab", "bash":"ubuntu", "shell":"ubuntu", "unix":"ubuntu", "rstudio":"r", "rlang":"r"}.get(language.lower(), language.lower())
+        if language not in {"python", "java", "c", "cpp", "html", "react", "node", "sql", "colab", "ubuntu", "distributed", "r"}:
             return RuntimeResult(False, error="Unsupported execution language.", exit_code=2)
         if language == 'ubuntu':
             from .ubuntu_runtime import capture_ubuntu
             return await capture_ubuntu(code,filename,stdin,objective)
+        if language == 'r':
+            from .r_runtime import capture_r
+            return await capture_r(code,filename,stdin,objective,theme=(project_config or {}).get('rstudio_theme','light'))
         from .evidence_planner import plan_experiment
         capability = plan_experiment(objective, language, code)
         if capability['category']=='database':

@@ -37,6 +37,7 @@ const iconMap: Record<string, any> = {
   "web": Code2,
   "sql": Database,
   "colab": BookOpen,
+  "r": BookOpen,
 };
 
 export default function LabSectionDetailPage() {

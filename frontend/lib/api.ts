@@ -256,6 +256,7 @@ export type ThemeOption =
   | "sql"
   | "colab"
   | "ubuntu"
+  | "r"
   | "idle"
   | "notepad"
   | "codeblocks"
