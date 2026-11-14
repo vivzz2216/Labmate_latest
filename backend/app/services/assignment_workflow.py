@@ -403,6 +403,9 @@ async def execute_solution(code, language, question, group_id, username, stdin_d
                          if item.get("type") == "browser_verification"), None)
     screenshots = [item["path"] for item in files if item.get("path") and os.path.isfile(item["path"])]
     stages = next((item.get("stages") for item in files if item.get("type") == "execution_stages"), {})
+    if stages.get('preparation') == 'pending':
+        from .worker_health import RuntimePreparingError
+        raise RuntimePreparingError()
     from .semantic_checks import semantic_failures
     failures = semantic_failures(question, output, language) if success else []
     if failures:

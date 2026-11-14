@@ -188,3 +188,19 @@ async def test_capture_failure_preserves_original_notebook_error(tmp_path,monkey
     assert 'original model error' in result.error
     assert 'Started real computation' in result.output
     assert result.stages=={'execution':'failed','capture':'unavailable'}
+
+
+@pytest.mark.asyncio
+async def test_first_image_preparation_does_not_mark_all_execution_unhealthy(monkeypatch):
+    from unittest.mock import AsyncMock,Mock
+    from app.services import railway_sandbox,assignment_workflow,worker_health
+    monkeypatch.setattr(railway_sandbox,'exchange',AsyncMock(side_effect=RuntimeError('Timed out waiting for template "id" to become ready (last status: BUILDING).')))
+    result=await railway_sandbox.execute({'code':'print(7)'})
+    assert result.stages['preparation']=='pending'
+    assert result.stages['isolation']!='failed'
+    invalidate=Mock()
+    monkeypatch.setattr(worker_health.worker_health,'invalidate',invalidate)
+    monkeypatch.setattr(assignment_workflow.executor_service,'execute_code',AsyncMock(return_value=(False,'',result.error,0,[{'type':'execution_stages','stages':result.stages}])))
+    with pytest.raises(worker_health.RuntimePreparingError,match='prepared for its first run'):
+        await assignment_workflow.execute_solution('print(7)','python','Print 7','group','Student')
+    invalidate.assert_not_called()
