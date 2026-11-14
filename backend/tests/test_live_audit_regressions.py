@@ -108,6 +108,10 @@ def test_catalog_counts_are_the_actual_frontend_experiments():
     assert {c['slug']:c['experiment_count'] for c in LAB_CATALOG_DATA} == {c['slug']:len(c['experiments']) for c in source}
     assert sum(c['experiment_count'] for c in LAB_CATALOG_DATA)==30
     assert 'ubuntu' not in {c['slug'] for c in LAB_CATALOG_DATA}
+    root=Path(__file__).resolve().parents[2]
+    for dockerfile in (root/'Dockerfile',root/'backend/Dockerfile'):
+        assert 'COPY frontend/lib/lab-catalog.json ./app/data/lab_catalog.json' in dockerfile.read_text()
+        assert 'COPY rstudio/assets' in dockerfile.read_text()
 
 
 def test_completed_workflow_restores_server_elapsed_time():
