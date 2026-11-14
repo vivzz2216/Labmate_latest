@@ -140,6 +140,17 @@ def test_generation_and_repair_share_distributed_observation_contract():
     assert 'message_id' in distributed_instructions()
 
 
+def test_sql_repair_advice_preserves_linux_table_case_and_experiment_scope():
+    from app.services.sql_result_checks import practical_table_checks
+    from app.services.sql_instructions import sql_instructions
+    checks=practical_table_checks([dict(index=1,type='INSERT',success=True,active_schema='lab',tableName='Department')])
+    assert 'SELECT * FROM `Department`' in checks[0]['detail']
+    advice=sql_instructions('Create Employee and Department tables and show department-wise JOIN queries.')
+    assert 'Use 10 Employees' not in advice
+    assert 'case-sensitive' in advice
+    assert 'only the manual tables' in advice
+
+
 def test_tall_notebook_sections_split_without_losing_source_or_output(tmp_path,monkeypatch):
     from app.services import colab_pipeline
     rendered=[]

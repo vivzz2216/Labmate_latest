@@ -29,8 +29,11 @@ def practical_table_checks(statements):
             displayed = bool(saved) and not step.get('truncated') and encode(saved) == encode(step.get('rows', []))
             if displayed:
                 break
-        checks.append({'name': f'Input table {table} displayed completely', 'passed': displayed,
-                       'detail': 'All inserted records are visible.' if displayed else f'After inserting records, run SELECT * FROM `{table}`; without WHERE or LIMIT, before experiment queries.'})
+        # Case-fold only for receipt matching. Linux MySQL executes identifiers
+        # case-sensitively; repair advice must preserve the authored name.
+        actual_table = inserted.get('tableName') or table
+        checks.append({'name': f'Input table {actual_table} displayed completely', 'passed': displayed,
+                       'detail': 'All inserted records are visible.' if displayed else f'After inserting records, run SELECT * FROM `{actual_table}`; without WHERE or LIMIT, before experiment queries.'})
     return checks
 
 
