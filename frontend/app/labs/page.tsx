@@ -9,16 +9,18 @@ import {
   Network,
   CheckCircle2,
   Search,
-  Sparkles,
   Terminal,
-  UploadCloud,
   FileCode2,
   Database,
   Code2,
   BookOpen,
+  FileText,
+  FlaskConical,
+  Plus,
+  ChevronRight,
 } from "lucide-react";
 import DashboardShell from "@/components/dashboard/DashboardShell";
-import { getAllLabCategories, type LabCategory } from "@/lib/labCatalog";
+import { getAllLabCategories } from "@/lib/labCatalog";
 import styles from "./labs.module.css";
 
 const iconMap: Record<string, any> = {
@@ -30,6 +32,7 @@ const iconMap: Record<string, any> = {
   web: Code2,
   sql: Database,
   colab: BookOpen,
+  ubuntu: Terminal,
   r: BookOpen,
   sma: Network,
 };
@@ -43,6 +46,7 @@ const runtimeLabelMap: Record<string, string> = {
   web: "HTML / React / Node",
   sql: "MySQL",
   colab: "Jupyter / Colab",
+  ubuntu: "Ubuntu / Bash",
   r: "R / RStudio",
   sma: "Social Media Analytics",
 };
@@ -66,21 +70,34 @@ export default function LabsDirectoryPage() {
 
   const categories = useMemo(() => getAllLabCategories(), []);
 
+  const totalExperiments = useMemo(
+    () => categories.reduce((sum, cat) => sum + cat.experiments.length, 0),
+    [categories],
+  );
+
   const filteredCategories = useMemo(() => {
+    const query = search.trim().toLowerCase();
     return categories.filter((cat) => {
       const matchesSearch =
-        search.trim() === "" ||
-        cat.title.toLowerCase().includes(search.toLowerCase()) ||
-        cat.tagline.toLowerCase().includes(search.toLowerCase()) ||
-        cat.description.toLowerCase().includes(search.toLowerCase()) ||
-        cat.features.some((f) => f.toLowerCase().includes(search.toLowerCase())) ||
-        cat.experiments.some((e) => e.title.toLowerCase().includes(search.toLowerCase()));
+        query === "" ||
+        cat.title.toLowerCase().includes(query) ||
+        cat.tagline.toLowerCase().includes(query) ||
+        cat.description.toLowerCase().includes(query) ||
+        cat.features.some((f) => f.toLowerCase().includes(query)) ||
+        cat.experiments.some((e) => e.title.toLowerCase().includes(query));
 
       const matchesTag =
         selectedTag === "all" ||
-        (selectedTag === "ai" && (cat.track === "deep_learning" || cat.track === "colab")) ||
-        (selectedTag === "systems" && (cat.track === "distributed" || cat.track === "java" || cat.track === "cpp")) ||
-        (selectedTag === "web" && (cat.track === "web" || cat.track === "sql"));
+        (selectedTag === "ai" &&
+          (cat.track === "deep_learning" || cat.track === "colab" || cat.track === "r")) ||
+        (selectedTag === "systems" &&
+          (cat.track === "distributed" || cat.track === "ubuntu")) ||
+        (selectedTag === "web" &&
+          (cat.track === "web" || cat.track === "sql")) ||
+        (selectedTag === "programming" &&
+          (cat.track === "python" ||
+            cat.track === "java" ||
+            cat.track === "cpp"));
 
       return matchesSearch && matchesTag;
     });
@@ -92,42 +109,90 @@ export default function LabsDirectoryPage() {
       subtitle="Dedicated practical environments, curriculum experiment listings, and execution engines"
       searchValue={search}
       onSearchChange={setSearch}
-      searchPlaceholder="Search lab sections, frameworks, experiments..."
+      searchPlaceholder="Search labs, experiments, frameworks..."
     >
       <div className={styles.container}>
-        {/* Navigation Breadcrumb */}
-        <div className={styles.breadcrumbs}>
-          <Link href="/dashboard">Dashboard</Link>
-          <span className={styles.breadcrumbSeparator}>/</span>
-          <span className={styles.breadcrumbActive}>Lab Sections</span>
-        </div>
+        {/* Cosmic Hero Banner */}
+        <header className={styles.heroBanner}>
+          <div className={styles.heroArc} aria-hidden="true" />
+          <div className={styles.heroInner}>
+            <nav className={styles.breadcrumbs} aria-label="Breadcrumb">
+              <Link href="/dashboard">Dashboard</Link>
+              <ChevronRight size={13} className={styles.breadcrumbSeparator} />
+              <span className={styles.breadcrumbActive}>Lab Sections</span>
+            </nav>
 
-        {/* Header */}
-        <header className={styles.header}>
-          <div className={styles.titleRow}>
-            <h1 className={styles.title}>All Lab Sections</h1>
-            <span className={`${styles.badge} ${styles.badgePurple}`}>
-              <Sparkles size={12} /> Production Runtimes
-            </span>
+            <div className={styles.heroGrid}>
+              <div className={styles.heroContent}>
+                <div className={styles.titleRow}>
+                  <h1 className={styles.title}>All Lab Sections</h1>
+                </div>
+                <p className={styles.heroSubtitle}>
+                  Complete academic coursework suites with real sandbox execution
+                  and submission-ready reports.
+                </p>
+
+                <div className={styles.heroFeaturesRow}>
+                  <span className={styles.heroFeatureItem}>
+                    <CheckCircle2 size={15} /> Structured labs
+                  </span>
+                  <span className={styles.heroFeatureItem}>
+                    <Layers size={15} /> Auto reports (DOCX)
+                  </span>
+                  <span className={styles.heroFeatureItem}>
+                    <Terminal size={15} /> Real execution
+                  </span>
+                </div>
+
+                <div className={styles.actionsBar}>
+                  <Link
+                    href="/code-execution"
+                    className={styles.heroPrimaryPill}
+                  >
+                    <Plus size={15} strokeWidth={2.4} />
+                    <span>Upload Lab Manual</span>
+                  </Link>
+                  <a href="#catalog" className={styles.heroSecondaryPill}>
+                    <span>Browse Catalog</span>
+                  </a>
+                </div>
+              </div>
+
+              <div className={styles.heroStats}>
+                <div className={styles.heroStatTile}>
+                  <span className={styles.heroStatValue}>
+                    {categories.length}
+                  </span>
+                  <span className={styles.heroStatLabel}>Lab Tracks</span>
+                </div>
+                <div className={styles.heroStatTile}>
+                  <span className={styles.heroStatValue}>
+                    {totalExperiments}
+                  </span>
+                  <span className={styles.heroStatLabel}>Experiments</span>
+                </div>
+                <div className={styles.heroStatTile}>
+                  <span className={styles.heroStatValue}>DOCX</span>
+                  <span className={styles.heroStatLabel}>Auto Reports</span>
+                </div>
+              </div>
+            </div>
           </div>
-          <p className={styles.tagline}>
-            Complete academic coursework suites with real sandbox execution and submission-ready Word reports
-          </p>
-          <p className={styles.description}>
-            Select a specialized lab track to view its comprehensive experiment syllabus, verify required
-            frameworks, or launch directly into the automated execution pipeline with your university manual.
-          </p>
         </header>
 
-        {/* Filter Pills */}
-        <div className={styles.filterRow}>
-          <div className={styles.filterPills}>
+        {/* Filter Toolbar */}
+        <div id="catalog" className={styles.filterRow}>
+          <div
+            className={styles.filterPills}
+            role="group"
+            aria-label="Filter lab categories"
+          >
             <button
               type="button"
               className={`${styles.filterPill} ${selectedTag === "all" ? styles.filterPillActive : ""}`}
               onClick={() => setSelectedTag("all")}
             >
-              All Categories ({categories.length})
+              All Sections
             </button>
             <button
               type="button"
@@ -150,106 +215,104 @@ export default function LabsDirectoryPage() {
             >
               Web &amp; Databases
             </button>
+            <button
+              type="button"
+              className={`${styles.filterPill} ${selectedTag === "programming" ? styles.filterPillActive : ""}`}
+              onClick={() => setSelectedTag("programming")}
+            >
+              Programming
+            </button>
           </div>
+
           <div className={styles.searchBox}>
-            <Search size={15} />
+            <Search size={14} />
             <input
               type="text"
-              placeholder="Filter by keyword..."
+              placeholder="Filter labs..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
         </div>
 
-        {/* Categories Grid */}
-        <div className={styles.categoryGrid}>
-          {filteredCategories.map((category) => {
-            const Icon = iconMap[category.track] || Layers;
-            const isHighlighted =
-              category.track === "deep_learning" || category.track === "distributed";
+        {/* 3-Column Minimalist Cards Grid */}
+        {filteredCategories.length === 0 ? (
+          <div className={styles.emptyFilterState}>
+            <Layers size={28} />
+            <h3>No matching lab sections</h3>
+            <p>
+              Try clearing your search query or switching back to All Sections.
+            </p>
+          </div>
+        ) : (
+          <div className={styles.categoryGrid}>
+            {filteredCategories.map((category) => {
+              const Icon = iconMap[category.track] || Layers;
+              const badgeText = shortBadge(category.badge);
+              const runtimeText =
+                runtimeLabelMap[category.track] || category.defaultLanguage;
 
-            return (
-              <article
-                key={category.slug}
-                className={styles.categoryCard}
-                style={{
-                  borderColor: isHighlighted
-                    ? `rgba(${category.track === "deep_learning" ? "168, 85, 247" : "14, 165, 233"}, 0.35)`
-                    : undefined,
-                }}
-              >
-                {/* Glow effect for new sections */}
-                {isHighlighted && (
-                  <div
-                    className={styles.cardGlow}
-                    style={{
-                      background: category.track === "deep_learning" ? "#a855f7" : "#0ea5e9",
-                    }}
-                  />
-                )}
-
-                <div>
-                  <div className={styles.categoryCardHeader}>
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <Icon size={20} color={category.accentColor} />
-                        <h2 className={styles.categoryCardTitle}>{category.title}</h2>
-                      </div>
-                      <p className={styles.categoryCardTagline}>{category.tagline}</p>
-                    </div>
-                    {category.badge && (
+              return (
+                <Link
+                  key={category.slug}
+                  href={`/labs/${category.slug}`}
+                  className={styles.categoryCard}
+                >
+                  <div>
+                    <div className={styles.categoryCardTop}>
                       <span
-                        className={`${styles.badge} ${
-                          category.track === "deep_learning"
-                            ? styles.badgePurple
-                            : category.track === "distributed"
-                            ? styles.badgeSky
-                            : ""
-                        }`}
+                        className={styles.categoryIconWrap}
+                        style={{
+                          background: `${category.accentColor}20`,
+                          border: `1px solid ${category.accentColor}38`,
+                        }}
                       >
-                        {category.badge}
+                        <Icon size={19} color={category.accentColor} />
                       </span>
-                    )}
+
+                      {badgeText && (
+                        <span
+                          className={`${styles.badge} ${badgeClass(category.track)}`}
+                        >
+                          {badgeText}
+                        </span>
+                      )}
+                    </div>
+
+                    <h2 className={styles.categoryCardTitle}>
+                      {category.title}
+                    </h2>
+                    <p className={styles.categoryCardTagline}>
+                      {category.tagline}
+                    </p>
                   </div>
 
-                  <p className="text-xs text-zinc-400 leading-relaxed mb-3">
-                    {category.description}
-                  </p>
+                  <div className={styles.categoryCardFooter}>
+                    <div className={styles.cardMetaRow}>
+                      <span className={styles.cardMetaItem}>
+                        <FlaskConical size={13} />
+                        {category.experiments.length} Experiments
+                      </span>
+                      <span className={styles.cardMetaItem}>
+                        <BookOpen size={13} />
+                        {runtimeText}
+                      </span>
+                      <span className={styles.cardMetaItem}>
+                        <FileText size={13} />
+                        DOCX Reports
+                      </span>
+                    </div>
 
-                  <ul className={styles.categoryCardFeatures}>
-                    {category.features.slice(0, 3).map((feat, idx) => (
-                      <li key={idx} className={styles.categoryCardFeatureItem}>
-                        <CheckCircle2 size={13} color={category.accentColor} className="shrink-0 mt-0.5" />
-                        <span>{feat}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                <div className={styles.categoryCardActions}>
-                  <Link
-                    href={`/labs/${category.slug}`}
-                    className={styles.cardPrimaryBtn}
-                  >
-                    <span>View Experiments ({category.experiments.length})</span>
-                    <ArrowRight size={14} />
-                  </Link>
-                  <Link
-                    href={`/code-execution?track=${category.track}`}
-                    className={styles.cardSecondaryBtn}
-                    title="Directly launch manual processing for this track"
-                  >
-                    <UploadCloud size={14} />
-                    <span>Upload Manual</span>
-                  </Link>
-                </div>
-              </article>
-            );
-          })}
-        </div>
+                    <span className={styles.cardArrowBtn} aria-hidden="true">
+                      <ArrowRight size={15} />
+                    </span>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        )}
       </div>
     </DashboardShell>
   );
 }
-
