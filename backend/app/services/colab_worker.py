@@ -29,6 +29,8 @@ from pathlib import Path
 from contextlib import redirect_stdout, redirect_stderr
 from typing import Any, Dict, List, Optional, Union
 
+APPROVED_CORPUS_DIR = Path('/opt/labmate-runtime/nltk_data')
+
 import numpy as np
 import pandas as pd
 import sklearn
@@ -102,6 +104,8 @@ def clean_notebook_text(text: str, is_stderr: bool = False) -> str:
             r"(?:^[IW]0000\s|oneDNN custom operations|This TensorFlow binary is optimized|cpu_feature_guard\.cc|cuda_dnn\.cc|cuda_blas\.cc)",
             raw_line,
         ):
+            continue
+        if is_stderr and raw_line.startswith('WARNING:tensorflow:TensorFlow GPU support is not available on native Windows'):
             continue
         lines.append(raw_line.rstrip())
     return "\n".join(lines).strip()
@@ -499,6 +503,7 @@ def restrict_runtime(root):
     os.environ['KERAS_HOME'] = str(root / '.keras')
     os.environ['TORCH_HOME'] = str(root / '.torch')
     reads = [Path(sys.prefix).resolve(), Path(sys.base_prefix).resolve(), root,
+             APPROVED_CORPUS_DIR.resolve(),
              Path('/opt/labmate-runtime/site-packages').resolve(),
              Path('/usr/share/fonts'), Path('/usr/local/share/fonts'), Path('/etc/fonts'), Path('/usr/share/zoneinfo'),
              Path('/sys/devices/system/cpu'), Path('/dev')]

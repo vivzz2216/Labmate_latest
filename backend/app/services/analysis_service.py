@@ -82,6 +82,7 @@ async def repair_generated_code(question: str, language: str, code: str, error: 
         "Use native RIGHT JOIN when required, retaining unmatched right rows, and query only views actually created. "
         "For Colab/Notebook, the runtime is strictly offline with no network access and no subprocess/pip. "
         "Never download remote datasets or models (e.g. avoid fetch_20newsgroups(), nltk.download()). "
+        "Keep supplied datasets and approved library assets unchanged. Never replace a missing corpus or lexicon with invented entries. "
         "Use supplied or approved cached datasets when an exact dataset/model is required; never substitute synthetic/toy data for MNIST or pretrained weights. "
         "Inline sample or built-in toy data is allowed only when the assignment leaves the dataset unspecified. "
         "For logic gates, train deterministically until all truth-table predictions match (up to 2000 tiny updates), print Predictions and Targets, and assert equality. "
