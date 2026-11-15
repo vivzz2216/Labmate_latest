@@ -87,6 +87,7 @@ class ColabPythonKernel:
         environment.update(LABMATE_NOTEBOOK_THEME=self.theme,TMP=self.work_dir,TEMP=self.work_dir,TMPDIR=self.work_dir,
             HOME=self.work_dir,USERPROFILE=self.work_dir,KERAS_HOME=str(Path(self.work_dir)/'.keras'),
             TORCH_HOME=str(Path(self.work_dir)/'.torch'),
+            NLTK_DATA='/opt/labmate-runtime/nltk_data',
             MPLCONFIGDIR=str(Path(self.work_dir)/'.matplotlib'),PYTHONIOENCODING='utf-8',PYTHONDONTWRITEBYTECODE='1',
             OPENBLAS_NUM_THREADS='1',OMP_NUM_THREADS='1',MKL_NUM_THREADS='1',NUMEXPR_NUM_THREADS='1',
             CUDA_VISIBLE_DEVICES='',TF_CPP_MIN_LOG_LEVEL='2',TF_ENABLE_ONEDNN_OPTS='0',
