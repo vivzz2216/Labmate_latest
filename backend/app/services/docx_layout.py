@@ -169,7 +169,7 @@ def embed_screenshot(document, image_path, caption=None, reserved_height=0.8, ma
         # rather than awkwardly slicing off a tiny fragment at the bottom.
         if max_slice_h < pixels_h <= int(max_slice_h * 1.25):
             scaled_w = int(pixels_w * page_height / pixels_h)
-            if scaled_w >= Inches(4.5):
+            if scaled_w >= min(Inches(4.5), int(display_w * .8)):
                 display_w = scaled_w
                 max_slice_h = pixels_h
 

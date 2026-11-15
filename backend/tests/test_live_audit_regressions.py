@@ -278,3 +278,17 @@ def test_long_screenshot_tail_cannot_push_image_beyond_printable_page(tmp_path):
     embed_screenshot(document,source,caption='Actual output')
     assert all(shape.height<=height for shape in document.inline_shapes)
     assert abs(sum(shape.height/shape.width*pixel_width for shape in document.inline_shapes)-pixels)<4
+
+
+def test_narrow_mobile_capture_scales_slightly_instead_of_creating_a_tiny_second_page(tmp_path):
+    from docx import Document
+    from docx.shared import Inches
+    from PIL import Image
+    from app.services.docx_layout import embed_screenshot
+    document=Document();section=document.sections[-1]
+    height=section.page_height-section.top_margin-section.bottom_margin-Inches(.8)
+    source=tmp_path/'mobile.png';Image.new('RGB',(390,900),'white').save(source)
+    embed_screenshot(document,source,caption='Mobile output')
+    assert len(document.inline_shapes)==1
+    assert document.inline_shapes[0].height<=height
+    assert document.inline_shapes[0].width>=Inches(3)
