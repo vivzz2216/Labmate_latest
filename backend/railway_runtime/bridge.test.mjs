@@ -74,6 +74,12 @@ test('setup failure destroys VM before any code is run',async()=>{
   assert.equal(f.calls.commands.length,1);
 });
 
+test('an incomplete receipt identifies the exit condition even without stderr',async()=>{
+  const f=fixture({exitCode:137,stdout:'',stderr:''});
+  await assert.rejects(run({bundle:'',job:{}},f.sdk,Buffer.from('deps')),/exit=137, timedOut=false, truncated=false/);
+  assert.equal(f.calls.destroyed,1);
+});
+
 test('cleanup failure cannot be reported as successful execution',async()=>{
   const f=fixture({exitCode:0,stdout:'{"success":true}'});
   const create=f.sdk.create;

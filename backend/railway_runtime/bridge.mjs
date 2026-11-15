@@ -62,7 +62,10 @@ export async function run(request, sdk=Sandbox, requirements=undefined) {
     await handle.stdin.write(JSON.stringify(request.job));
     await handle.stdin.end();
     const result = await handle;
-    if (result.exitCode !== 0 || result.timedOut || result.truncated) throw new Error('Incomplete sandbox receipt: '+String(result.stderr || '').slice(-2000));
+    if (result.exitCode !== 0 || result.timedOut || result.truncated) {
+      const reason = `exit=${result.exitCode}, timedOut=${Boolean(result.timedOut)}, truncated=${Boolean(result.truncated)}`;
+      throw new Error(`Incomplete sandbox receipt (${reason}): `+String(result.stderr || '').slice(-2000));
+    }
     return JSON.parse(result.stdout);
   } finally {
     try { await vm.destroy(); } finally { process.removeListener('SIGTERM',terminate); }
