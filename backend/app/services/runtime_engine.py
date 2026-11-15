@@ -32,6 +32,16 @@ from .browser_capture import acquire_capture_context, launch_capture_browser
 from .resource_budget import heavy_execution_budget
 
 
+async def capture_document_from_top(page, **options):
+    """Place sticky headers at the document top without changing the test's scroll state."""
+    position = await page.evaluate('({x:window.scrollX,y:window.scrollY})')
+    try:
+        await page.evaluate("window.scrollTo({left:0,top:0,behavior:'instant'})")
+        await page.screenshot(**options)
+    finally:
+        await page.evaluate("p=>window.scrollTo({left:p.x,top:p.y,behavior:'instant'})", position)
+
+
 @dataclass
 class RuntimeResult:
     success: bool
@@ -714,7 +724,7 @@ class RuntimeEngine:
                                                 height = max(viewport['height'], await page.evaluate('document.documentElement.scrollHeight'))
                                                 if height > 16000: raise ValueError('Page exceeds evidence height limit.')
                                                 path = directory / f'test_{index+1}_step_{step_index}.png'
-                                                await page.screenshot(path=str(path), full_page=True, timeout=3000)
+                                                await capture_document_from_top(page, path=str(path), full_page=True, timeout=3000)
                                                 key = f'/test-{index+1}/step-{step_index}'
                                                 screenshots[key] = str(path)
                                                 verification.setdefault('captures', []).append({'path':str(path), 'url':page.url, 'title':(await page.title())[:160]})
@@ -768,7 +778,7 @@ class RuntimeEngine:
                                     if height > 16000:
                                         raise ValueError("Page exceeds the 16000-pixel evidence limit; partial capture is not accepted.")
                                     path = directory / f"test_{index + 1}.png"
-                                    await page.screenshot(path=str(path), clip={"x": 0, "y": 0, "width": viewport["width"], "height": height}, timeout=3000)
+                                    await capture_document_from_top(page, path=str(path), clip={"x": 0, "y": 0, "width": viewport["width"], "height": height}, timeout=3000)
                                     return path
                                 screenshot_started = time.perf_counter()
                                 path = await asyncio.wait_for(screenshot(), timeout=4)

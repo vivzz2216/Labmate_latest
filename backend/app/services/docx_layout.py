@@ -197,7 +197,7 @@ def embed_screenshot(document, image_path, caption=None, reserved_height=0.8, ma
                     if brightness_check(sample):
                         bottom = candidate
                         break
-            if pixels_h - bottom < 160:
+            if pixels_h - bottom < 160 and pixels_h - top <= max_slice_h:
                 bottom = pixels_h
             slices.append((top, bottom))
             top = bottom
