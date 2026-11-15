@@ -28,6 +28,7 @@ export interface LabQuestion {
   evidence_slots?: { id: string; label: string }[];
   datasets?: Record<string, string>;
   python_template?: "idle" | "jupyter";
+  source_ide?: "codeblocks" | "vscode" | "notepad" | "workbench";
   jupyter_theme?: "light" | "dark";
   colab_theme?: "light" | "dark";
   rstudio_theme?: "light" | "dark";

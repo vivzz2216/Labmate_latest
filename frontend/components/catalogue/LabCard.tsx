@@ -2,7 +2,8 @@
 
 import React from "react";
 import Image from "next/image";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, CheckCircle2, XCircle } from "lucide-react";
+import { LAB_IDE_ASSOCIATIONS } from "@/lib/mumbaiUniversity/labIdeAssociations";
 import type {
   UniversityLabEntry,
   DepartmentCode,
@@ -62,6 +63,7 @@ export default function LabCard({
       {/* Main Content */}
       <div className={styles.cardBody}>
         <p className={styles.cardMetaLine}>
+          {LAB_IDE_ASSOCIATIONS[lab.id] ? <span style={{display:"inline-flex",verticalAlign:"middle",marginRight:6,color:"#4ade80"}} title="Lab connected"><CheckCircle2 size={15} aria-label="Lab connected" /></span> : <span style={{display:"inline-flex",verticalAlign:"middle",marginRight:6,color:"#f87171"}} title="Lab not connected yet"><XCircle size={15} aria-label="Lab not connected yet" /></span>}
           Sem {lab.semester} &middot; {lab.year} &middot; {lab.category}
         </p>
 

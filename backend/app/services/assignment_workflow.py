@@ -1250,8 +1250,14 @@ async def _process_assignment(workflow_id: int):
                         capture_files=split_java_files(code)
                         source_policy='complete'
                     source_language='java_gui' if category in {'java_awt','java_swing'} else 'flask' if (project_config or {}).get('project_type')=='flask' else actual_language
+                    source_theme = theme
+                    if actual_language in {'c','cpp','java'}:
+                        allowed = {'vscode', 'notepad'} if actual_language == 'java' else {'vscode', 'codeblocks'}
+                        if question.get('source_ide') in allowed:
+                            source_theme = question['source_ide']
+                            source_policy = 'complete'
                     sources,source_errors=([], []) if actual_language in {'sql','ubuntu','r'} or category=='notebook' else await capture_source_evidence(
-                        capture_files,code,src_filename,theme=theme,group=group,username=username,
+                        capture_files,code,src_filename,theme=source_theme,group=group,username=username,
                         language=source_language,screenshot_style=screenshot_style,
                         requested_files=(project_config or {}).get('source_capture_files'), policy=source_policy, jupyter_theme=question.get('jupyter_theme','light'))
                     source_errors.extend(browser_frame_errors)

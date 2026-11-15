@@ -19,6 +19,8 @@ import {
   getDisplayLabName,
 } from "../../lib/mumbaiUniversity/filterLogic.ts";
 import styles from "./catalogue.module.css";
+import LabIdeSelector from "./LabIdeSelector";
+import { LAB_IDE_ASSOCIATIONS } from "@/lib/mumbaiUniversity/labIdeAssociations";
 
 interface LabDetailModalProps {
   lab: UniversityLabEntry | null;
@@ -93,6 +95,10 @@ export default function LabDetailModal({
               {displayName}
             </h2>
             <p className={styles.courseSubtitle}>{lab.courseName}</p>
+            <p style={{color:LAB_IDE_ASSOCIATIONS[lab.id] ? "#4ade80" : "#f87171"}}>
+              {LAB_IDE_ASSOCIATIONS[lab.id] ? "✓ Lab connected" : "✕ Lab not connected yet"}
+            </p>
+            <LabIdeSelector key={lab.id} labId={lab.id} />
           </div>
           <button
             ref={closeButtonRef}

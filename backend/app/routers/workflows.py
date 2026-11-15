@@ -53,6 +53,7 @@ class QuestionInput(BaseModel):
     rstudio_theme: Literal["light", "dark"] = "light"
     browser_theme: Literal["edge", "chrome"] = "edge"
     python_template: Literal["idle", "jupyter"] = "idle"
+    source_ide: Optional[Literal["codeblocks", "vscode", "notepad", "workbench"]] = None
     jupyter_theme: Literal["light", "dark"] = "light"
 
 
@@ -478,6 +479,7 @@ async def process(upload_id: int, data: ProcessInput, request: Request, backgrou
                   **({'track': q.track or data.track} if (q.track or data.track) else {}),
                   **multi_part_fields(q, data),
                   **({'datasets':q.datasets} if q.datasets else {}),
+                  **({'source_ide':q.source_ide} if q.source_ide else {}),
                   **({'python_template':q.python_template, 'jupyter_theme':q.jupyter_theme} if q.language in {'python','auto'} or data.language in {'python','auto'} else {}),
                   **({'colab_theme':q.colab_theme} if q.language=='colab' or data.language=='colab' else {}),
                   **({'rstudio_theme':q.rstudio_theme} if q.language=='r' or data.language=='r' else {}),

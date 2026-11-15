@@ -54,6 +54,8 @@ import {
 } from "@/lib/workflow";
 import styles from "./processing.module.css";
 import { getLabCategory } from "@/lib/labCatalog";
+import { LAB_IDE_ASSOCIATIONS, resolveLabIde, labIdeHref } from "@/lib/mumbaiUniversity/labIdeAssociations";
+import LabIdeSelector from "@/components/catalogue/LabIdeSelector";
 
 const languages: { value: LabLanguage; label: string }[] = [
   { value: "auto", label: "Use detected languages" },
@@ -337,6 +339,15 @@ function AssignmentContent() {
   const trackParam = searchParams.get("track") || "";
   const expParam = searchParams.get("exp") || "";
   const promptParam = searchParams.get("prompt") || "";
+  const muLabId = searchParams.get("muLab") || "";
+  const ideParam = searchParams.get("ide");
+  const muAssociation = LAB_IDE_ASSOCIATIONS[muLabId];
+  const sourceIde = resolveLabIde(muLabId,ideParam);
+  useEffect(()=>{
+    const href=labIdeHref(muLabId,sourceIde);
+    if(href && !href.startsWith('/code-execution')){router.replace(href);return;}
+    if(muAssociation)setLanguage(muAssociation.language);
+  },[muLabId,muAssociation,sourceIde,router]);
   const inputRef = useRef<HTMLInputElement>(null);
   const promptSeededRef = useRef("");
   const [upload, setUpload] = useState<UploadResponse | null>(null);
@@ -448,7 +459,7 @@ function AssignmentContent() {
     if(!['queued','extracting','processing'].includes(data.status))setProcessingTriggered(false);
     if (data.status === "ready" || restoreFields) setQuestions(data.questions);
     if (restoreFields) {
-      setLanguage(data.language);
+      setLanguage(muAssociation?.language || data.language);
       setColabTheme(data.questions.find((question) => question.colab_theme)?.colab_theme || "dark");
       setJupyterTheme(data.questions.find((question) => question.jupyter_theme)?.jupyter_theme || "light");
       setPythonTemplate(data.questions.find((question) => question.python_template)?.python_template || "idle");
@@ -671,6 +682,7 @@ function AssignmentContent() {
                 track: question.track || trackParam || undefined,
                 colab_theme: colabTheme,
                 browser_theme: browserTheme,
+                source_ide: muAssociation ? sourceIde as LabQuestion["source_ide"] : question.source_ide,
                 python_template: pythonTemplate,
                 jupyter_theme: jupyterTheme,
               })),
@@ -830,6 +842,7 @@ function AssignmentContent() {
             track: question.track || trackParam || undefined,
             colab_theme: colabTheme,
             browser_theme: browserTheme,
+            source_ide: muAssociation ? sourceIde as LabQuestion["source_ide"] : question.source_ide,
             python_template: pythonTemplate,
             jupyter_theme: jupyterTheme,
           })),
@@ -1236,6 +1249,12 @@ function AssignmentContent() {
             <span className={styles.stepNumber}>3</span>
             <div>
               <h2>Programming language</h2>
+              {muAssociation && <LabIdeSelector labId={muLabId} preferredIde={sourceIde} disabled={running || busy || batchProcessing}
+                onSelect={ide=>{
+                  let href=labIdeHref(muLabId,ide)!;
+                  if(href.startsWith('/code-execution') && searchParams.get('assignment'))href+='&assignment='+encodeURIComponent(searchParams.get('assignment')!);
+                  router.push(href);
+                }} />}
               <p>Use the detected language or choose one.</p>
               <select
                 aria-label="Programming language"

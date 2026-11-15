@@ -1,0 +1,1214 @@
+/* Eclipse IDE Classic Light (Luna / Photon / 2018-09) Design System */
+
+.eclipseRoot {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100vw;
+  height: 100dvh;
+  min-width: 720px;
+  min-height: 480px;
+  overflow: hidden;
+  background: #e1e8f2;
+  color: #1e1e1e;
+  font-family: "Segoe UI", Tahoma, -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 12px;
+  line-height: 1.35;
+  border: 1px solid #8c98a8;
+  user-select: none;
+}
+
+.eclipseRoot *,
+.eclipseRoot *::before,
+.eclipseRoot *::after {
+  box-sizing: border-box;
+}
+
+/* ---------- Window Title Bar ---------- */
+.titleBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 29px;
+  background: #ffffff;
+  padding-left: 8px;
+  flex-shrink: 0;
+}
+
+.titleLeft {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.titleText {
+  font-size: 12px;
+  color: #1a1a1a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.winCaptions {
+  display: flex;
+  align-items: stretch;
+  height: 100%;
+  flex-shrink: 0;
+}
+
+.winBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 100%;
+  border: none;
+  background: transparent;
+  color: #222222;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 0.08s ease;
+}
+
+.winBtn:hover {
+  background: #e5e5e5;
+}
+
+.winCloseBtn:hover {
+  background: #e81123;
+  color: #ffffff;
+}
+
+/* ---------- Menu Bar ---------- */
+.menuBar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 4px;
+  background: #ffffff;
+  border-bottom: 1px solid #e6e6e6;
+  flex-shrink: 0;
+  gap: 1px;
+}
+
+.menuWrap {
+  position: relative;
+}
+
+.menuItemBtn {
+  height: 20px;
+  padding: 0 7px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #1e1e1e;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+}
+
+.menuItemBtn:hover,
+.menuItemBtnOpen {
+  background: #e5f3ff;
+  border-color: #99d1ff;
+}
+
+.menuDropdown {
+  position: absolute;
+  top: 21px;
+  left: 0;
+  min-width: 220px;
+  background: #f2f2f2;
+  border: 1px solid #999999;
+  box-shadow: 2px 3px 8px rgba(0, 0, 0, 0.22);
+  padding: 2px;
+  z-index: 120;
+}
+
+.menuActionBtn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 4px 10px 4px 22px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #1a1a1a;
+  font-family: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  gap: 16px;
+}
+
+.menuActionBtn:hover:not(:disabled) {
+  background: #cde8ff;
+  border-color: #82c4ff;
+}
+
+.menuActionBtn:disabled {
+  color: #8c8c8c;
+  cursor: default;
+}
+
+.menuShortcut {
+  color: #5e5e5e;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.menuSep {
+  height: 1px;
+  margin: 3px 4px 3px 22px;
+  background: #d4d4d4;
+}
+
+/* ---------- Coolbar / Main Toolbar ---------- */
+.coolBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 31px;
+  padding: 0 6px 0 4px;
+  background: linear-gradient(to bottom, #fafafa 0%, #f0f0f0 100%);
+  border-bottom: 1px solid #c6c9ce;
+  flex-shrink: 0;
+  overflow: visible;
+  gap: 4px;
+}
+
+.coolLeft {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  min-width: 0;
+  flex-wrap: nowrap;
+}
+
+.coolRight {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.coolGrip {
+  display: inline-block;
+  width: 5px;
+  height: 18px;
+  margin: 0 3px;
+  border-left: 1px solid #c6c8cc;
+  background-image: radial-gradient(#a0a4aa 1px, transparent 1px);
+  background-size: 3px 4px;
+  background-position: 2px 1px;
+  flex-shrink: 0;
+}
+
+.toolBtnGroup {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.toolBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  min-width: 22px;
+  padding: 0 3px;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.toolBtn:hover:not(:disabled) {
+  background: #e5f1fb;
+  border-color: #a8cbe8;
+}
+
+.toolBtn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.toolBtnToggled {
+  background: #cce4f7;
+  border-color: #7eb4ea;
+}
+
+.toolCaretBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 10px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: transparent;
+  color: #4b5563;
+  font-size: 8px;
+  cursor: pointer;
+}
+
+.toolCaretBtn:hover {
+  background: #e5f1fb;
+  border-color: #a8cbe8;
+}
+
+.toolDropdown {
+  position: absolute;
+  top: 24px;
+  left: 0;
+  min-width: 195px;
+  background: #f4f4f4;
+  border: 1px solid #999999;
+  box-shadow: 2px 3px 8px rgba(0, 0, 0, 0.2);
+  padding: 2px;
+  z-index: 120;
+}
+
+/* Quick Access Search */
+.quickAccessWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.quickAccessInput {
+  width: 104px;
+  height: 21px;
+  padding: 0 6px;
+  border: 1px solid #abadb3;
+  background: #ffffff;
+  color: #1e1e1e;
+  font-family: inherit;
+  font-size: 11.5px;
+  outline: none;
+}
+
+.quickAccessInput:focus {
+  width: 170px;
+  border-color: #4f8ac9;
+}
+
+.quickAccessInput::placeholder {
+  color: #6b7280;
+}
+
+.quickAccessPopup {
+  position: absolute;
+  top: 23px;
+  right: 0;
+  width: 300px;
+  max-height: 280px;
+  overflow-y: auto;
+  background: #ffffff;
+  border: 1px solid #7d8da3;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22);
+  z-index: 140;
+}
+
+.quickAccessHeader {
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #465872;
+  background: #eef3fa;
+  border-bottom: 1px solid #d5deeb;
+}
+
+.quickAccessItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 5px 8px;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 11.5px;
+  color: #1e1e1e;
+  text-align: left;
+  cursor: pointer;
+}
+
+.quickAccessItem:hover {
+  background: #cde8ff;
+}
+
+.quickAccessCategory {
+  color: #6b7280;
+  font-size: 10.5px;
+}
+
+.perspDivider {
+  width: 1px;
+  height: 18px;
+  background: #c8cbd1;
+  margin: 0 2px;
+}
+
+/* ---------- Workbench Body & Sash Splitters ---------- */
+.workbenchBody {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  padding: 5px 5px 3px 5px;
+  background: #e1e8f2;
+  gap: 0;
+}
+
+.leftColumn {
+  display: flex;
+  flex-direction: column;
+  min-width: 170px;
+  min-height: 0;
+}
+
+.rightColumn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 260px;
+  min-height: 0;
+}
+
+.vSash {
+  width: 5px;
+  cursor: col-resize;
+  flex-shrink: 0;
+  background: transparent;
+}
+
+.vSash:hover {
+  background: rgba(93, 146, 204, 0.3);
+}
+
+.hSash {
+  height: 5px;
+  cursor: row-resize;
+  flex-shrink: 0;
+  background: transparent;
+}
+
+.hSash:hover {
+  background: rgba(93, 146, 204, 0.3);
+}
+
+/* ---------- View Card Chrome (Package Explorer, Editor, Bottom Views) ---------- */
+.viewCard {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: #ffffff;
+  border: 1px solid #b8c4d4;
+  border-top-left-radius: 5px;
+  border-top-right-radius: 5px;
+  overflow: hidden;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+}
+
+.viewHeader {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  height: 26px;
+  padding: 2px 4px 0 3px;
+  background: linear-gradient(to bottom, #f5f8fd 0%, #e7eef8 100%);
+  border-bottom: 1px solid #c2cddc;
+  flex-shrink: 0;
+}
+
+.tabsStrip {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  min-width: 0;
+  height: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.viewTab {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 23px;
+  padding: 0 7px 0 6px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-top-left-radius: 4px;
+  border-top-right-radius: 4px;
+  background: transparent;
+  color: #6b7280;
+  font-family: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.viewTab:hover:not(.viewTabActive) {
+  color: #1f2937;
+  background: rgba(255, 255, 255, 0.45);
+}
+
+.viewTabActive {
+  background: #ffffff;
+  color: #1e1e1e;
+  border-color: #b8c4d4;
+  position: relative;
+  z-index: 2;
+  height: 24px;
+  margin-bottom: -1px;
+  padding-bottom: 1px;
+}
+
+.tabDirtyStar {
+  color: #1e1e1e;
+  font-weight: 600;
+  margin-right: 1px;
+}
+
+.tabCloseIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 2px;
+  color: #7c8490;
+  font-size: 11px;
+  line-height: 1;
+  margin-left: 2px;
+}
+
+.tabCloseIcon:hover {
+  background: #e2e6ed;
+  color: #1e1e1e;
+}
+
+.viewActions {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding-bottom: 2px;
+  flex-shrink: 0;
+}
+
+.viewMiniBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: transparent;
+  color: #596370;
+  cursor: pointer;
+  padding: 0;
+}
+
+.viewMiniBtn:hover {
+  background: #dde8f6;
+  border-color: #9cb9dc;
+}
+
+.viewMiniBtnActive {
+  background: #cce4f7;
+  border-color: #7eb4ea;
+}
+
+.viewMiniDivider {
+  width: 1px;
+  height: 14px;
+  background: #c5cedb;
+  margin: 0 3px;
+}
+
+/* ---------- Package Explorer Tree ---------- */
+.treeContainer {
+  position: relative;
+  flex: 1;
+  overflow: auto;
+  padding: 4px 2px 8px 4px;
+  background: #ffffff;
+}
+
+.treeRow {
+  display: flex;
+  align-items: center;
+  height: 20px;
+  padding-right: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.treeRow:hover {
+  background: #eff5fc;
+}
+
+.treeRowSelected {
+  background: #dcdcdc;
+}
+
+.treeRowSelected:hover {
+  background: #d4d4d4;
+}
+
+.treeLabelPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 4px;
+  border-radius: 2px;
+}
+
+.treeChevronBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: #5c6570;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.treeChevronSpacer {
+  display: inline-block;
+  width: 14px;
+  flex-shrink: 0;
+}
+
+.treeText {
+  font-size: 12px;
+  color: #1a1a1a;
+}
+
+.treeJreVersion {
+  color: #7d664f;
+}
+
+/* Context menu in Package Explorer */
+.contextMenu {
+  position: fixed;
+  min-width: 190px;
+  background: #f2f2f2;
+  border: 1px solid #999999;
+  box-shadow: 2px 3px 8px rgba(0, 0, 0, 0.24);
+  padding: 2px;
+  z-index: 200;
+}
+
+/* ---------- Center Java Text Editor ---------- */
+.editorCardBody {
+  position: relative;
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.editorScrollWrap {
+  position: relative;
+  flex: 1;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.editorGutter {
+  position: sticky;
+  left: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  width: 44px;
+  min-height: 100%;
+  padding-top: 2px;
+  background: #ffffff;
+  border-right: 1px solid #e4e4e4;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.gutterRow {
+  display: flex;
+  align-items: center;
+  height: 18px;
+  padding-right: 5px;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 12px;
+  line-height: 18px;
+  color: #787878;
+}
+
+.gutterAnnoCol {
+  width: 16px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.gutterLineNum {
+  flex: 1;
+  text-align: right;
+  font-size: 11.5px;
+}
+
+.foldDot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1px solid #96a0ac;
+  background: #ffffff;
+  color: #606872;
+  font-size: 8px;
+  line-height: 1;
+}
+
+.editorCodeStage {
+  position: relative;
+  flex: 1;
+  min-width: max-content;
+  min-height: 100%;
+  padding-top: 2px;
+}
+
+.syntaxLayer {
+  position: relative;
+  z-index: 1;
+  pointer-events: none;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 13px;
+  line-height: 18px;
+  tab-size: 4;
+  letter-spacing: 0;
+  font-variant-ligatures: none;
+  white-space: pre;
+}
+
+.syntaxLine {
+  height: 18px;
+  padding: 0 18px 0 6px;
+  white-space: pre;
+}
+
+.syntaxLineActive {
+  background: #e8f2fe;
+}
+
+.syntaxLineError {
+  text-decoration: underline wavy #e02020;
+  text-underline-offset: 2px;
+}
+
+.editorTextarea {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2;
+  margin: 0;
+  padding: 2px 18px 2px 6px;
+  border: none;
+  outline: none;
+  resize: none;
+  overflow: hidden;
+  background: transparent;
+  color: transparent;
+  caret-color: #000000;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 13px;
+  line-height: 18px;
+  tab-size: 4;
+  letter-spacing: 0;
+  font-variant-ligatures: none;
+  white-space: pre;
+  user-select: text;
+}
+
+.editorTextarea::selection {
+  background: rgba(51, 153, 255, 0.3);
+  color: transparent;
+}
+
+/* Eclipse Java Syntax Tokens */
+.tokKeyword {
+  color: #7f0055;
+  font-weight: 700;
+}
+
+.tokString {
+  color: #2a00ff;
+}
+
+.tokComment {
+  color: #3f7f5f;
+}
+
+.tokJavadoc {
+  color: #3f5fbf;
+}
+
+.tokTodo {
+  color: #7f9fbf;
+  font-weight: 700;
+}
+
+.tokStaticField {
+  color: #0000c0;
+  font-style: italic;
+}
+
+.tokAnnotation {
+  color: #646464;
+}
+
+.occurrenceMark {
+  background: #d5e4f7;
+  border-radius: 1px;
+}
+
+.wsSpace {
+  color: #b4bec8;
+}
+
+.wsTab {
+  position: relative;
+}
+
+.wsTab::before {
+  content: "»";
+  position: absolute;
+  left: 0;
+  color: #b4bec8;
+  font-size: 11px;
+  pointer-events: none;
+}
+
+.wsCr::after {
+  content: "¶";
+  color: #b4bec8;
+  font-size: 11px;
+}
+
+/* Right Overview Ruler */
+.overviewRuler {
+  position: relative;
+  width: 13px;
+  background: #f5f5f5;
+  border-left: 1px solid #e2e2e2;
+  flex-shrink: 0;
+}
+
+.rulerTodoMark {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  height: 4px;
+  background: #6f9ed1;
+  border: 1px solid #3f6ca1;
+  cursor: pointer;
+}
+
+.rulerErrorMark {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  height: 4px;
+  background: #e53935;
+  border: 1px solid #a61c1c;
+  cursor: pointer;
+}
+
+/* ---------- Bottom Pane (Problems / Javadoc / Declaration / Console) ---------- */
+.consoleSubToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  height: 24px;
+  padding: 0 5px;
+  background: #ffffff;
+  border-bottom: 1px solid #e6e9ef;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.consoleBody {
+  flex: 1;
+  overflow: auto;
+  background: #ffffff;
+  padding: 2px 6px 8px 6px;
+  user-select: text;
+}
+
+.consoleHeaderLine {
+  font-family: "Segoe UI", Tahoma, sans-serif;
+  font-size: 11.5px;
+  color: #2b2b2b;
+  padding: 1px 0 2px;
+  white-space: nowrap;
+}
+
+.consoleOutputPre {
+  margin: 0;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #000000;
+  white-space: pre;
+}
+
+.consoleOutputWrap {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.consoleErrPre {
+  margin: 0;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: #d61c1c;
+  white-space: pre-wrap;
+}
+
+/* Problems Table */
+.problemsWrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  background: #ffffff;
+}
+
+.problemsSummary {
+  padding: 4px 8px;
+  font-size: 11.5px;
+  color: #333333;
+  background: #f8f9fb;
+  border-bottom: 1px solid #e1e5ec;
+}
+
+.problemsTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+}
+
+.problemsTable th {
+  text-align: left;
+  padding: 3px 8px;
+  font-weight: 400;
+  color: #374151;
+  background: #f3f5f8;
+  border-bottom: 1px solid #d5dbe3;
+  border-right: 1px solid #e4e8ee;
+}
+
+.problemsTable td {
+  padding: 3px 8px;
+  border-bottom: 1px solid #f0f2f5;
+  color: #1e1e1e;
+}
+
+.problemsRow:hover {
+  background: #e8f2fe;
+  cursor: pointer;
+}
+
+/* Javadoc & Declaration Views */
+.infoViewBody {
+  flex: 1;
+  overflow: auto;
+  padding: 8px 10px;
+  background: #ffffe1;
+  font-size: 12px;
+  color: #1e1e1e;
+  user-select: text;
+}
+
+.declarationBody {
+  flex: 1;
+  overflow: auto;
+  padding: 8px 10px;
+  background: #ffffff;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 12.5px;
+  color: #1e1e1e;
+  user-select: text;
+}
+
+/* Debug Perspective Inline Variables Bar */
+.debugStrip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px;
+  background: #eef4fc;
+  border-bottom: 1px solid #c5d3e6;
+  font-size: 11.5px;
+  color: #1e3a5f;
+}
+
+/* ---------- Bottom Status Bar ---------- */
+.statusBar {
+  display: flex;
+  align-items: center;
+  height: 22px;
+  background: #edf1f7;
+  border-top: 1px solid #c7cfdc;
+  font-size: 11.5px;
+  color: #1e1e1e;
+  flex-shrink: 0;
+}
+
+.statusSpacer {
+  flex: 1;
+  padding: 0 8px;
+  color: #4b5563;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.statusCell {
+  display: inline-flex;
+  align-items: center;
+  height: 100%;
+  padding: 0 10px;
+  border-left: 1px solid #c7cfdc;
+  min-width: 92px;
+}
+
+.statusCoords {
+  min-width: 82px;
+}
+
+.statusGrip {
+  width: 14px;
+  height: 100%;
+  border-left: 1px solid #c7cfdc;
+  background-image: radial-gradient(#8d97a6 1px, transparent 1px);
+  background-size: 3px 3px;
+  background-position: 4px 10px;
+}
+
+/* ---------- Modals ---------- */
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 300;
+}
+
+.eclipseDialog {
+  width: 440px;
+  max-width: 94vw;
+  background: #f0f0f0;
+  border: 1px solid #707070;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  color: #1e1e1e;
+}
+
+.dialogTitleBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 28px;
+  padding: 0 4px 0 8px;
+  background: #ffffff;
+  border-bottom: 1px solid #dcdcdc;
+}
+
+.dialogTitleLeft {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.dialogCloseBtn {
+  width: 26px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.dialogCloseBtn:hover {
+  background: #e81123;
+  color: #ffffff;
+}
+
+.dialogBanner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: #ffffff;
+  border-bottom: 1px solid #d4d4d4;
+}
+
+.dialogBannerTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.dialogBannerSub {
+  font-size: 11.5px;
+  color: #4b5563;
+  margin-top: 2px;
+}
+
+.dialogBody {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.dialogRow {
+  display: grid;
+  grid-template-columns: 128px 1fr;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.dialogInput {
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid #abadb3;
+  background: #ffffff;
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.dialogTextarea {
+  width: 100%;
+  padding: 6px;
+  border: 1px solid #abadb3;
+  background: #ffffff;
+  font-family: Consolas, monospace;
+  font-size: 12px;
+  resize: vertical;
+}
+
+.dialogCheckGroup {
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid #d4d4d4;
+}
+
+.dialogCheckHeading {
+  font-size: 11.5px;
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+.dialogCheck {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.dialogSectionTitle {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #374151;
+  border-bottom: 1px solid #d6d6d6;
+  padding-bottom: 3px;
+}
+
+.dialogError {
+  padding: 5px 8px;
+  background: #fde8e8;
+  border: 1px solid #e57373;
+  color: #9b1c1c;
+  font-size: 11.5px;
+}
+
+.dialogFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.dialogPrimaryBtn,
+.dialogBtn {
+  min-width: 76px;
+  height: 24px;
+  padding: 0 12px;
+  border: 1px solid #adadad;
+  background: #e1e1e1;
+  color: #1e1e1e;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.dialogPrimaryBtn {
+  border-color: #0078d7;
+  background: #e5f1fb;
+}
+
+.dialogPrimaryBtn:hover,
+.dialogBtn:hover {
+  background: #cce4f7;
+  border-color: #005a9e;
+}
+
+.aboutBody {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 16px 14px;
+  background: #ffffff;
+  border-bottom: 1px solid #d8d8d8;
+}
+
+.aboutHeading {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.aboutSub {
+  font-size: 11.5px;
+  color: #4b5563;
+  margin-top: 3px;
+}
+
+.aboutDesc {
+  font-size: 12px;
+  color: #374151;
+  margin-top: 8px;
+}
