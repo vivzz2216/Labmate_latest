@@ -841,7 +841,7 @@ async def _process_assignment(workflow_id: int):
                             verification = {"required": True, "status": "failed", "tests": [],
                                             "error": "The required browser interaction could not be verified."}
                     if not is_web_project and not success and not language_mismatch and evidence_plan["supported"] and execution_stages.get('capture') != 'unavailable' and (execution_stages.get('execution') != 'not_run' or execution_stages.get('compile') == 'failed') and not (actual_language=='ubuntu' and execution_stages.get('execution')=='passed') and (
-                            bool(error) or bool(verification and (verification.get("error") or verification.get("failures")))):
+                            bool(error or output) or bool(verification and (verification.get("error") or verification.get("failures")))):
                         for repair_attempt in range(1 if actual_language=='ubuntu' else 2):
                             record(workflow, db, "execute", progress,
                                    f"Repairing question {index + 1} after execution failure (attempt {repair_attempt + 1}).")

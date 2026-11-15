@@ -207,9 +207,9 @@ async def test_first_image_preparation_does_not_mark_all_execution_unhealthy(mon
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('compiler_failed',[True,False])
+@pytest.mark.parametrize('failure_mode',['compile','runtime_missing','stdout_only'])
 @pytest.mark.parametrize('language',['java','distributed'])
-async def test_workflow_repairs_compiler_errors_but_not_missing_runtimes(tmp_path,monkeypatch,compiler_failed,language):
+async def test_workflow_repairs_program_failures_but_not_missing_runtimes(tmp_path,monkeypatch,failure_mode,language):
     from unittest.mock import AsyncMock
     from docx import Document
     from PIL import Image
@@ -238,8 +238,11 @@ async def test_workflow_repairs_compiler_errors_but_not_missing_runtimes(tmp_pat
         corrected=prefix+corrected.replace('println(5)','println(Helper.value())')
     generation=AsyncMock(return_value=dict(answer='',code=original,language=language))
     repair=AsyncMock(return_value=corrected)
-    first=flow.SolutionExecution(False,'','cannot find symbol MissingType' if compiler_failed else 'Java runtime unavailable',[],None,
-        {'compile':'failed' if compiler_failed else 'not_run','execution':'not_run'})
+    repairable=failure_mode!='runtime_missing'
+    first=flow.SolutionExecution(False,'FAIL: expected 700, observed 5800' if failure_mode=='stdout_only' else '',
+        'cannot find symbol MissingType' if failure_mode=='compile' else 'Java runtime unavailable' if failure_mode=='runtime_missing' else '',[],None,
+        {'compile':'failed' if failure_mode=='compile' else 'passed' if failure_mode=='stdout_only' else 'not_run',
+         'execution':'failed' if failure_mode=='stdout_only' else 'not_run'})
     executor=AsyncMock(side_effect=[first,flow.SolutionExecution(True,'5','',[str(image)],None,{'compile':'passed','execution':'passed'})])
     monkeypatch.setattr(flow,'SessionLocal',factory)
     monkeypatch.setattr(flow.generation_service,'generate_json',generation)
@@ -249,12 +252,29 @@ async def test_workflow_repairs_compiler_errors_but_not_missing_runtimes(tmp_pat
     await flow.process_assignment(job_id)
     with factory() as db:
         job=db.get(AssignmentWorkflow,job_id)
-        assert job.status==('completed' if compiler_failed else 'failed'),job.error
+        assert job.status==('completed' if repairable else 'failed'),job.error
         assert job.report_id
-        assert repair.await_count==(1 if compiler_failed else 0)
-        assert executor.await_count==(2 if compiler_failed else 1)
+        assert repair.await_count==(1 if repairable else 0)
+        assert executor.await_count==(2 if repairable else 1)
+        if failure_mode=='stdout_only':assert 'expected 700, observed 5800' in repair.call_args.args[3]
         if language=='distributed':
             plan=job.results[0]['evidence_plan']
             assert set(plan['required_source_files'])=={'Helper.java','Main.java'}
             assert set(plan['complete_source_lines'])=={'Helper.java','Main.java'}
     engine.dispose()
+
+
+def test_long_screenshot_tail_cannot_push_image_beyond_printable_page(tmp_path):
+    from docx import Document
+    from docx.shared import Inches
+    from PIL import Image
+    from app.services.docx_layout import embed_screenshot
+    document=Document();section=document.sections[-1]
+    width=section.page_width-section.left_margin-section.right_margin
+    height=section.page_height-section.top_margin-section.bottom_margin-Inches(.8)
+    pixel_width=1000;limit=int(pixel_width*height/width)
+    pixels=limit*2+100
+    source=tmp_path/'long-evidence.png';Image.new('RGB',(pixel_width,pixels),'white').save(source)
+    embed_screenshot(document,source,caption='Actual output')
+    assert all(shape.height<=height for shape in document.inline_shapes)
+    assert abs(sum(shape.height/shape.width*pixel_width for shape in document.inline_shapes)-pixels)<4
