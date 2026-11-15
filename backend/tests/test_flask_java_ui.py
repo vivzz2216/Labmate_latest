@@ -1,7 +1,6 @@
 from copy import deepcopy
 import os
 import shutil
-from unittest.mock import AsyncMock,patch
 import pytest
 from PIL import Image
 from app.config import settings

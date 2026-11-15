@@ -4,17 +4,23 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from app.database import Base, get_db
 from app.main import app
 from app.middleware.csrf import require_csrf_token
 from app.models import User
+from conftest import student_profile
 from app.security.jwt import create_access_token
 import bcrypt
 
 
-SQLALCHEMY_DATABASE_URL = "sqlite:///./code_review_test.db"
-engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
+SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL,
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
+)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
@@ -49,7 +55,8 @@ def client():
 @pytest.fixture(scope="function")
 def auth_headers(db):
     hashed_password = bcrypt.hashpw("SecurePass123!".encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-    user = User(email="reviewer@example.com", name="Vivek Pillai", password_hash=hashed_password)
+    user = User(email="reviewer@example.com", name="Vivek Pillai", password_hash=hashed_password,
+                profile=student_profile())
     db.add(user)
     db.commit()
     db.refresh(user)

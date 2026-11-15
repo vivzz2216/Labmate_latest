@@ -4,7 +4,7 @@ import asyncio
 import time
 import unittest
 from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from sqlalchemy import create_engine
@@ -13,6 +13,7 @@ from sqlalchemy.orm import sessionmaker
 from app.config import settings
 from app.database import Base
 from app.models import AssignmentWorkflow, Upload, User
+from conftest import student_profile
 from app.services.generation_service import (
     GenerationError,
     GenerationUnavailableError,
@@ -130,6 +131,7 @@ async def test_no_silent_code_generation_on_ai_error(monkeypatch):
         name="Test Student",
         password_hash="pw",
         is_active=True,
+        profile=student_profile(),
     )
     db.add(user)
 

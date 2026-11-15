@@ -55,6 +55,27 @@
     return "lab_manual.pdf";
   }
 
+  function sanitizeHttpUrl(rawUrl, fallback = null) {
+    if (!rawUrl || typeof rawUrl !== "string") return fallback;
+    try {
+      const parsed = new URL(rawUrl, DEFAULT_WEB_URL);
+      return parsed.protocol === "https:" || parsed.protocol === "http:" ? parsed.href : fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  function setButtonContent(btn, iconClass, iconText, labelText) {
+    if (!btn) return;
+    const iconSpan = document.createElement("span");
+    iconSpan.className = iconClass;
+    if (iconText) iconSpan.textContent = iconText;
+    const textSpan = document.createElement("span");
+    if (iconClass === "labmate-btn-icon") textSpan.className = "labmate-btn-text";
+    textSpan.textContent = labelText;
+    btn.replaceChildren(iconSpan, textSpan);
+  }
+
   // Inject LabMate button into Drive preview toolbar
   function injectToolbarButton() {
     if (document.getElementById("labmate-drive-btn")) return;
@@ -71,10 +92,7 @@
     const btn = document.createElement("button");
     btn.id = "labmate-drive-btn";
     btn.className = "labmate-injected-btn";
-    btn.innerHTML = `
-      <span class="labmate-btn-icon">⚡</span>
-      <span class="labmate-btn-text">Send to LabMate</span>
-    `;
+    setButtonContent(btn, "labmate-btn-icon", "⚡", "Send to LabMate");
 
     btn.addEventListener("click", handleSendToLabMate);
     toolbar.appendChild(btn);
@@ -86,17 +104,17 @@
     e.stopPropagation();
 
     const btn = document.getElementById("labmate-drive-btn");
-    const originalText = btn ? btn.innerHTML : "";
 
     chrome.storage.local.get(
-      ["labmate_token", "labmate_server_url", "labmate_web_url", "labmate_user"],
+      ["labmate_token", "labmate_csrf_token", "labmate_server_url", "labmate_web_url", "labmate_user"],
       async (stored) => {
         const token = stored.labmate_token;
-        const serverUrl = stored.labmate_server_url || DEFAULT_SERVER;
-        const webUrl = stored.labmate_web_url || DEFAULT_WEB_URL;
+        const csrfToken = stored.labmate_csrf_token;
+        const serverUrl = sanitizeHttpUrl(stored.labmate_server_url, DEFAULT_SERVER).replace(/\/+$/, "");
+        const webUrl = sanitizeHttpUrl(stored.labmate_web_url, DEFAULT_WEB_URL).replace(/\/+$/, "");
 
-        // Step 1: Check Authentication
-        if (!token) {
+        // Step 1: Check Authentication + CSRF token required by /api/upload
+        if (!token || !csrfToken) {
           showLoginModal(webUrl);
           return;
         }
@@ -111,7 +129,7 @@
 
         try {
           if (btn) {
-            btn.innerHTML = `<span class="labmate-btn-spinner"></span> <span>Fetching from Drive...</span>`;
+            setButtonContent(btn, "labmate-btn-spinner", "", "Fetching from Drive...");
             btn.disabled = true;
           }
 
@@ -126,18 +144,21 @@
           const fileBlob = await fileResp.blob();
 
           if (btn) {
-            btn.innerHTML = `<span class="labmate-btn-spinner"></span> <span>Sending to LabMate...</span>`;
+            setButtonContent(btn, "labmate-btn-spinner", "", "Sending to LabMate...");
           }
 
           // Step 3: Upload to LabMate backend
           const formData = new FormData();
           formData.append("file", fileBlob, filename);
 
+          const authHeaders = {
+            Authorization: `Bearer ${token}`,
+            "X-CSRF-Token": csrfToken,
+          };
+
           const uploadResp = await fetch(`${serverUrl}/api/upload`, {
             method: "POST",
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
+            headers: authHeaders,
             body: formData,
           });
 
@@ -152,9 +173,7 @@
           try {
             await fetch(`${serverUrl}/api/workflows/${uploadData.id}/extract`, {
               method: "POST",
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
+              headers: authHeaders,
             });
           } catch (wfErr) {
             console.warn("Auto-extract trigger note:", wfErr);
@@ -171,7 +190,7 @@
           showToast(`❌ Failed to send: ${err.message}`, "error");
         } finally {
           if (btn) {
-            btn.innerHTML = originalText;
+            setButtonContent(btn, "labmate-btn-icon", "⚡", "Send to LabMate");
             btn.disabled = false;
           }
         }
@@ -186,29 +205,52 @@
     const modal = document.createElement("div");
     modal.id = "labmate-login-modal";
     modal.className = "labmate-modal-backdrop";
-    modal.innerHTML = `
-      <div class="labmate-modal-card">
-        <div class="labmate-modal-icon">🔒</div>
-        <h3>Login to LabMate</h3>
-        <p>You need to be logged into your LabMate account to automatically send lab manuals to your workspace.</p>
-        <div class="labmate-modal-actions">
-          <a href="${webUrl}" target="_blank" id="labmate-open-login-btn" class="labmate-primary-btn">
-            Open LabMate Login
-          </a>
-          <button id="labmate-close-modal-btn" class="labmate-secondary-btn">
-            Cancel
-          </button>
-        </div>
-      </div>
-    `;
+
+    const card = document.createElement("div");
+    card.className = "labmate-modal-card";
+
+    const icon = document.createElement("div");
+    icon.className = "labmate-modal-icon";
+    icon.textContent = "🔒";
+
+    const heading = document.createElement("h3");
+    heading.textContent = "Login to LabMate";
+
+    const desc = document.createElement("p");
+    desc.textContent =
+      "You need to be logged into your LabMate account to automatically send lab manuals to your workspace.";
+
+    const actions = document.createElement("div");
+    actions.className = "labmate-modal-actions";
+
+    const loginLink = document.createElement("a");
+    loginLink.href = sanitizeHttpUrl(webUrl, DEFAULT_WEB_URL);
+    loginLink.target = "_blank";
+    loginLink.rel = "noopener noreferrer";
+    loginLink.id = "labmate-open-login-btn";
+    loginLink.className = "labmate-primary-btn";
+    loginLink.textContent = "Open LabMate Login";
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.id = "labmate-close-modal-btn";
+    cancelBtn.className = "labmate-secondary-btn";
+    cancelBtn.textContent = "Cancel";
+
+    actions.appendChild(loginLink);
+    actions.appendChild(cancelBtn);
+    card.appendChild(icon);
+    card.appendChild(heading);
+    card.appendChild(desc);
+    card.appendChild(actions);
+    modal.appendChild(card);
 
     document.body.appendChild(modal);
 
-    document.getElementById("labmate-close-modal-btn").addEventListener("click", () => {
+    cancelBtn.addEventListener("click", () => {
       modal.remove();
     });
 
-    document.getElementById("labmate-open-login-btn").addEventListener("click", () => {
+    loginLink.addEventListener("click", () => {
       modal.remove();
     });
   }
@@ -252,6 +294,9 @@
     toast.querySelector(".labmate-toast-close").addEventListener("click", () => {
       toast.remove();
     });
+    toast.appendChild(closeBtn);
+
+    document.body.appendChild(toast);
 
     setTimeout(() => {
       if (toast.parentElement) toast.remove();

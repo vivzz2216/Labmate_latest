@@ -14,9 +14,8 @@ const labs = [
     { name: "Colab · Dark", image: "colab-dark", caption: "Deep learning training & loss curves · Colab dark theme" },
     { name: "Colab · Light", image: "colab-light", caption: "Neural network architecture and evaluation · Colab light theme" },
   ] },
-  { id: "distributed", name: "Distributed Computing", icon: Network, description: "Multi-process Java topologies, TCP/UDP sockets, Java RMI, and consensus algorithms. Captures synchronized multi-terminal outputs.", templates: [
-    { name: "Server & Client", image: "java-output", caption: "Concurrent Server and Client execution · Windows Command Prompt" },
-    { name: "Java Source", image: "java", caption: "Distributed RMI / Socket implementation · Windows Notepad" },
+  { id: "distributed", name: "Distributed Computing", icon: Network, description: "Multi-process Java topologies, TCP/UDP sockets, Java RMI, and consensus algorithms in VS Code.", templates: [
+    { name: "VS Code (Java)", image: "web-code", caption: "Distributed Java implementation · Visual Studio Code" },
   ] },
   { id: "python", name: "Python", icon: Terminal, description: "Functions, OOP and programming practicals. Choose the editor you use in class.", templates: [
     { name: "IDLE editor", image: "idle", caption: "Python IDLE editor · Windows" },

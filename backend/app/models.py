@@ -149,6 +149,21 @@ class WorkflowBatchItem(Base):
     error = Column(Text, nullable=True)
 
 
+class WorkflowEvidence(Base):
+    """A screenshot the student made in an outside tool (Canva, ParseHub, ...) for one evidence part."""
+    __tablename__ = "workflow_evidence"
+    __table_args__ = (UniqueConstraint("workflow_id", "question_id", "slot", name="uq_workflow_evidence_slot"),)
+
+    id = Column(Integer, primary_key=True)
+    workflow_id = Column(Integer, ForeignKey("assignment_workflows.id"), nullable=False, index=True)
+    question_id = Column(Integer, nullable=False)
+    slot = Column(String(40), nullable=False)
+    file_path = Column(String, nullable=False)
+    original_filename = Column(String(255), nullable=False)
+    file_size = Column(Integer, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
 class AIJob(Base):
     __tablename__ = "ai_jobs"
     

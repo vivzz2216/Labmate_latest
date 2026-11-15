@@ -1,4 +1,3 @@
-import asyncio
 import tempfile
 import unittest
 from pathlib import Path
@@ -6,19 +5,18 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from docx import Document
-from fastapi import HTTPException
 from PIL import Image
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
 from app.models import User, Upload, AssignmentWorkflow
-from app.services.brain_agent import make_plan, fingerprint, TOOLS, topic_choices
+from conftest import student_profile
+from app.services.brain_agent import make_plan, TOOLS, topic_choices
 from app.services.generation_service import GenerationError, GenerationUnavailableError, invalid_answer
-from app.services.source_evidence import capture_source_evidence, source_capture_plan
+from app.services.source_evidence import capture_source_evidence
 from app.services.evidence_planner import select_evidence
 from app.services.assignment_workflow import build_word_report, process_assignment
-from app.routers.workflows import clarify, ClarificationInput
 
 QUESTION={'id':9,'language':'react','text':'Experiment - 9: Mini project. Build a webapp using HTML CSS JavaScript and React. Choose one topic: Restaurant; Music Store; Personal webpage.'}
 DECISION={'decisions':[{'id':9,'topic':'Restaurant','reason':'A local menu and cart demonstrate React state without external services.','features':['Menu with categories','Filter by category','Add and remove cart items','Display the total']} ]}
@@ -146,7 +144,7 @@ class BrainTests(unittest.IsolatedAsyncioTestCase):
             engine=create_engine('sqlite:///'+folder.replace('\\','/')+'/test.db')
             Base.metadata.create_all(engine);factory=sessionmaker(bind=engine)
             with factory() as db:
-                user=User(email='brain@example.com',name='Student');db.add(user);db.flush()
+                user=User(email='brain@example.com',name='Student',profile=student_profile());db.add(user);db.flush()
                 upload=Upload(user_id=user.id,filename='x.docx',original_filename='x.docx',file_path='unused',file_type='docx',file_size=1);db.add(upload);db.flush()
                 wf=AssignmentWorkflow(upload_id=upload.id,questions=[{**QUESTION,'text':QUESTION['text']+' Ask me which topic.'}],status='processing');db.add(wf);db.commit();wid=wf.id
             with patch('app.services.assignment_workflow.SessionLocal',factory),patch('app.services.assignment_workflow.settings.EXECUTION_ALLOWED_EMAILS','brain@example.com'),\

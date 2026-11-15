@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
   FileText,
@@ -96,38 +97,30 @@ export default function WorkspacePage() {
   const [workspaceError, setWorkspaceError] = useState('');
 
   // Authentication check & initial fetch
-  useEffect(() => {
-    if (authLoading) return;
-    if (!user) {
-      router.replace("/");
-      return;
-    }
+  const userId = user?.id;
 
-    fetchAssignments();
-  }, [authLoading, user?.id, router]);
-
-  const fetchAssignments = async () => {
-    if (!user?.id) return;
-    const cached = apiService.peekUserAssignments(user.id);
+  const fetchAssignments = useCallback(async () => {
+    if (!userId) return;
+    const cached = apiService.peekUserAssignments(userId);
     if (cached) {
       setAssignments(cached);
       setLoadingList(false);
-      if (cached.length > 0 && selectedId === null) {
+      if (cached.length > 0) {
         const requestedId =
           typeof window !== "undefined"
             ? Number(new URLSearchParams(window.location.search).get("assignment"))
             : NaN;
         if (Number.isSafeInteger(requestedId) && requestedId > 0 && cached.some((a: any) => a.id === requestedId)) {
-          setSelectedId(requestedId);
+          setSelectedId((prev) => prev ?? requestedId);
         } else {
-          setSelectedId(cached[0].id);
+          setSelectedId((prev) => prev ?? cached[0].id);
         }
       }
     } else {
       setLoadingList(true);
     }
     try {
-      const data: any = await apiService.getUserAssignments(user.id);
+      const data: any = await apiService.getUserAssignments(userId);
       const list = Array.isArray(data) ? data : data?.assignments ?? data?.data ?? [];
       setAssignments(list);
 
@@ -137,8 +130,8 @@ export default function WorkspacePage() {
           : NaN;
       if (Number.isSafeInteger(requestedId) && requestedId > 0 && list.some((a: any) => a.id === requestedId)) {
         setSelectedId(requestedId);
-      } else if (list.length > 0 && selectedId === null) {
-        setSelectedId(list[0].id);
+      } else if (list.length > 0) {
+        setSelectedId((prev) => prev ?? list[0].id);
       }
     } catch (err: any) {
       if (err?.response?.status !== 401 && err?.response?.status !== 403) {
@@ -147,7 +140,17 @@ export default function WorkspacePage() {
     } finally {
       setLoadingList(false);
     }
-  };
+  }, [userId]);
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (!userId) {
+      router.replace("/");
+      return;
+    }
+
+    fetchAssignments();
+  }, [authLoading, userId, router, fetchAssignments]);
 
   // Load selected assignment workspace
   useEffect(() => {
@@ -282,9 +285,9 @@ export default function WorkspacePage() {
                 action={
                   !searchQuery
                     ? {
-                        label: "Upload manual",
-                        onClick: () => router.push("/code-execution"),
-                      }
+                      label: "Upload manual",
+                      onClick: () => router.push("/code-execution"),
+                    }
                     : undefined
                 }
               />
@@ -469,7 +472,7 @@ export default function WorkspacePage() {
                             onKeyDown={(event) => {
                               if ((event.key === 'Enter' || event.key === ' ') && item.screenshot.url && !imageErrors[item.screenshot.url]) {
                                 event.preventDefault();
-                                setPreviewImage({url: item.screenshot.url, title: item.screenshot.title});
+                                setPreviewImage({ url: item.screenshot.url, title: item.screenshot.title });
                               }
                             }}
                             onClick={() =>
@@ -481,12 +484,15 @@ export default function WorkspacePage() {
                             }
                           >
                             {item.screenshot.url && !imageErrors[item.screenshot.url] ? (
-                              <img
+                              <Image
                                 src={item.screenshot.url}
                                 alt={item.screenshot.title}
+                                width={640}
+                                height={360}
+                                unoptimized
                                 className={styles.screenshotImg}
                                 loading="lazy"
-                                onError={() => setImageErrors(previous => ({...previous, [item.screenshot.url!]: true}))}
+                                onError={() => setImageErrors(previous => ({ ...previous, [item.screenshot.url!]: true }))}
                               />
                             ) : (
                               <div className={styles.imagePlaceholder}>Screenshot unavailable. Check the Word report.</div>
@@ -685,7 +691,14 @@ export default function WorkspacePage() {
               </button>
             </div>
             <div className={styles.modalImageWrap}>
-              <img src={previewImage.url} alt={previewImage.title} className={styles.modalImage} />
+              <Image
+                src={previewImage.url}
+                alt={previewImage.title}
+                width={1200}
+                height={800}
+                unoptimized
+                className={styles.modalImage}
+              />
             </div>
             <div className={styles.modalFooter}>
               <a

@@ -35,6 +35,7 @@ export default function CheckoutPanel({packId}: {packId: string}) {
     return () => { active.current = false; };
   }, []);
 
+  const userId = user?.id;
   useEffect(() => {
     const controller = new AbortController();
     setCatalogue(null);
@@ -42,7 +43,7 @@ export default function CheckoutPanel({packId}: {packId: string}) {
     if (ownerCheck && loading) return () => controller.abort();
     billingApi.catalogue(controller.signal)
       .then(async data => {
-        if (ownerCheck && user) {
+        if (ownerCheck && userId) {
           try {
             const ownerPack = await billingApi.ownerCheck(controller.signal);
             if (!controller.signal.aborted) setCatalogue({...data, packs: [...data.packs, ownerPack]});
@@ -56,7 +57,7 @@ export default function CheckoutPanel({packId}: {packId: string}) {
       })
       .catch(e => { if (!controller.signal.aborted) setMessage(paymentError(e)); });
     return () => controller.abort();
-  }, [retry, packId, ownerCheck, user?.id, loading]);
+  }, [retry, packId, ownerCheck, userId, loading]);
 
   useEffect(() => {
     setOrder(null);
@@ -331,7 +332,7 @@ export default function CheckoutPanel({packId}: {packId: string}) {
                 <button
                   className={styles.payButton}
                   onClick={pay}
-                  disabled={loading || busy || !catalogue.checkout_available}
+                  disabled={loading || busy || (Boolean(user) && !catalogue.checkout_available)}
                 >
                   {busy ? (
                     <><Loader2 size={17} className={styles.spinner} aria-hidden="true" /> Please wait…</>

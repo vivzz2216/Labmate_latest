@@ -93,6 +93,7 @@ def command(work, unit, *, managed_vm=False):
            'DATA_DIR': '/work', 'LAB_RESOURCES_DIR': str(ROOT / 'resources'),
            'PYTHONPATH': str(ROOT / 'backend'), 'PLAYWRIGHT_BROWSERS_PATH': str(ROOT / 'browsers'),
            'NODE_RUNTIME_CACHE': str(ROOT / 'node_cache'),
+           'NLTK_DATA': str(ROOT / 'nltk_data'),
            'COMPILATION_TIMEOUT': '60',
            'REDIS_URL': 'redis://127.0.0.1:6379', 'REDIS_REQUIRED': 'true',
            'OPENBLAS_NUM_THREADS': '1', 'OMP_NUM_THREADS': '1', 'LANG': 'C.UTF-8'}

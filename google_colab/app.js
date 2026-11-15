@@ -757,8 +757,8 @@ document.addEventListener('DOMContentLoaded', () => {
         disconnectRuntime();
       } else if (act === 'save-notebook') {
         if (saveStatusText) {
-          saveStatusText.textContent = 'All changes saved';
-          setTimeout(() => { saveStatusText.textContent = ''; }, 2500);
+          saveStatusText.textContent = 'Notebook saving is unavailable in this preview';
+          setTimeout(() => { saveStatusText.textContent = ''; }, 4000);
         }
       } else if (act === 'print-notebook') {
         window.print();

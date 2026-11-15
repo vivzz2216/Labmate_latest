@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import Link from 'next/link';
 import {ArrowRight} from 'lucide-react';
 import {rupees} from '@/lib/billing';
@@ -32,7 +33,7 @@ export default function FestiveOffer({packName, credits, amount, regularAmount, 
         )}
       </div>
       <div className={styles.offerArt} aria-hidden="true">
-        <img
+        <Image
           src="/images/diwali/diwali_scene.webp"
           alt=""
           className={styles.offerSceneImg}

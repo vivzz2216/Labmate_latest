@@ -1,13 +1,10 @@
 import os
 import uuid
 import re
-import random
 from typing import List, Dict, Any, Optional, Tuple
 from docx import Document
-from docx.shared import Inches, Pt, RGBColor
+from docx.shared import Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.enum.table import WD_TABLE_ALIGNMENT
-from PIL import Image
 from sqlalchemy.orm import Session
 from ..models import Upload, Job, Screenshot
 from ..config import settings

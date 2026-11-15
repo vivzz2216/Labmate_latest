@@ -28,6 +28,7 @@ import DashboardShell, {
   getProgress,
 } from "@/components/dashboard/DashboardShell";
 import { useAuth } from "@/contexts/BasicAuthContext";
+import CreditStatus from "@/components/billing/CreditStatus";
 import { apiService } from "@/lib/api";
 import { errorMessage, saveReport } from "@/lib/workflow";
 import styles from "./dashboard.module.css";
@@ -48,16 +49,17 @@ export default function DashboardPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "completed">("all");
 
+  const userId = user?.id;
   useEffect(() => {
     let active = true;
 
     const loadDashboard = async () => {
-      if (!user) {
+      if (!userId) {
         router.replace("/");
         return;
       }
 
-      const cached = apiService.peekUserAssignments(user.id) as Assignment[] | null;
+      const cached = apiService.peekUserAssignments(userId) as Assignment[] | null;
       if (cached) {
         setAssignments(cached);
         setLoading(false);
@@ -67,7 +69,7 @@ export default function DashboardPage() {
       setLoadError("");
 
       try {
-        const response = await apiService.getUserAssignments(user.id);
+        const response = await apiService.getUserAssignments(userId);
         if (!active) return;
 
         const list = Array.isArray(response)
@@ -97,7 +99,7 @@ export default function DashboardPage() {
     return () => {
       active = false;
     };
-  }, [authLoading, router, user?.id]);
+  }, [authLoading, router, userId]);
 
   const filteredAssignments = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -164,6 +166,7 @@ export default function DashboardPage() {
                 ? "Upload a syllabus PDF or Word lab manual to extract questions, run verified solutions, and export a formatted report."
                 : `You have ${activeLabs} active lab${activeLabs === 1 ? "" : "s"} in progress and ${reportsReady} accredited Word report${reportsReady === 1 ? "" : "s"} ready for submission.`}
             </p>
+            <CreditStatus />
           </div>
           <div className={styles.welcomeActions}>
             <button
@@ -172,6 +175,13 @@ export default function DashboardPage() {
               onClick={() => go("/code-execution")}
             >
               <UploadCloud size={16} strokeWidth={2} /> Upload Assignment
+            </button>
+            <button
+              type="button"
+              className={styles.secondaryButton}
+              onClick={() => go("/labs")}
+            >
+              <Layers size={16} strokeWidth={1.8} /> Lab Sections
             </button>
             <button
               type="button"

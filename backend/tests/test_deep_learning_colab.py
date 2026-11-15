@@ -1,5 +1,4 @@
 """Tests for the CPU-based Deep-Learning Colab workflow."""
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -7,9 +6,8 @@ from docx import Document
 from PIL import Image
 
 from app.security.generated_code import validate_generated_code
-from app.services.colab_requirements import missing_required_libraries
 from app.services.colab_worker import validate_cell
-from app.services.evidence_planner import experiment_category, plan_experiment
+from app.services.evidence_planner import experiment_category
 from app.services.lab_capture import capture_notebook
 from app.services.manual_sections import numbered_experiments, section_language
 from app.services.notebook_runtime import ColabPythonKernel
@@ -141,17 +139,14 @@ import numpy as np
 np.random.seed(7)
 tf.random.set_seed(7)
 
-from sklearn.datasets import load_digits
-digits = load_digits()
-x_train, y_train = digits.images[:64], digits.target[:64]
-x_test, y_test = digits.images[100:116], digits.target[100:116]
-x_train = x_train[:64].reshape(-1, 64).astype('float32') / 16.0
+(x_train, y_train), (x_test, y_test) = tf.keras.datasets.mnist.load_data()
+x_train = x_train[:64].reshape(-1, 784).astype('float32') / 255.0
 y_train = y_train[:64]
-x_test = x_test[:16].reshape(-1, 64).astype('float32') / 16.0
+x_test = x_test[:16].reshape(-1, 784).astype('float32') / 255.0
 y_test = y_test[:16]
 
 model = keras.Sequential([
-    layers.Input(shape=(64,)),
+    layers.Input(shape=(784,)),
     layers.Dense(16, activation='relu'),
     layers.Dense(10, activation='softmax'),
 ])
@@ -172,7 +167,7 @@ print('Sample predictions:', len(preds), preds)
     assert "TF version:" in result.output and "Keras version:" in result.output
     assert "Epochs trained: 3" in result.output
     assert "Sample predictions: 4" in result.output
-    assert not any(d["source"] == "builtin_offline_sample" for d in result.verification["cells"][0]["datasets"])
+    assert "builtin_offline_sample" in {d["source"] for d in result.verification["cells"][0]["datasets"]}
     # Progress bar carriage returns must be normalized cleanly
     assert "\r" not in result.output
 
@@ -185,16 +180,14 @@ from keras import layers
 import numpy as np
 
 np.random.seed(11)
-from sklearn.datasets import load_digits
-digits = load_digits()
-x_train, x_test = digits.images[:48], digits.images[100:108]
-x_train = x_train[:48].reshape(-1, 64).astype('float32') / 16.0
-x_test = x_test[:8].reshape(-1, 64).astype('float32') / 16.0
+(x_train, _), (x_test, _) = keras.datasets.fashion_mnist.load_data()
+x_train = x_train[:48].reshape(-1, 784).astype('float32') / 255.0
+x_test = x_test[:8].reshape(-1, 784).astype('float32') / 255.0
 
 autoencoder = keras.Sequential([
-    layers.Input(shape=(64,)),
+    layers.Input(shape=(784,)),
     layers.Dense(16, activation='relu'),
-    layers.Dense(64, activation='sigmoid'),
+    layers.Dense(784, activation='sigmoid'),
 ])
 autoencoder.compile(optimizer='adam', loss='mse')
 history = autoencoder.fit(x_train, x_train, epochs=3, batch_size=16, verbose=0)
@@ -211,7 +204,7 @@ print('Reconstruction shape:', tuple(recon.shape))
     )
     assert result.success, result.error
     assert "Keras autoencoder MSE:" in result.output
-    assert "Reconstruction shape: (2, 64)" in result.output
+    assert "Reconstruction shape: (2, 784)" in result.output
     for frame in result.verification["evidence_frames"]:
         with Image.open(frame["path"]) as img:
             assert img.width == 1100
@@ -330,3 +323,21 @@ async def test_timeout_and_invalid_code_produce_diagnostic_report(tmp_path, monk
     assert "Diagnostic report" in full_text
     assert "GPU execution is unavailable in the CPU lab runtime" in full_text
 
+
+
+def test_offline_keras_loader_announces_its_stand_in_dataset(monkeypatch, capsys):
+    """A tiny built-in sample must never pass silently for the real dataset in a student's report."""
+    import sys
+    import types
+    from app.services import colab_worker
+
+    fake = types.SimpleNamespace(datasets=types.SimpleNamespace(mnist=types.SimpleNamespace(load_data=None)))
+    monkeypatch.setitem(sys.modules, "keras", fake)
+    records = {}
+    colab_worker._configure_dl_libraries_for_code("import keras", records)
+    (x_train, _), (x_test, _) = fake.datasets.mnist.load_data()
+    printed = capsys.readouterr().out
+    assert "keras.datasets.mnist.load_data()" in printed
+    assert f"{len(x_train)} training and {len(x_test)} test items" in printed
+    assert "not the full mnist dataset" in printed
+    assert "keras.datasets.mnist" in records

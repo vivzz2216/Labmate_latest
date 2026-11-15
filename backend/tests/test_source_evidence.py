@@ -1,5 +1,4 @@
 import hashlib
-from pathlib import Path
 from unittest.mock import AsyncMock,patch
 
 import pytest
@@ -59,8 +58,9 @@ async def test_dark_modern_uses_actual_logo_fonts_and_jsx_tokens_without_source_
     assert not any(token is Error for token,_ in tokens)
     html=await screenshot_service._render_template('','','vscode',filename='src/App.jsx',source_code=source,presentation='vscode_evidence',language='react')
     assert 'alt="Visual Studio Code"' in html and 'data:image/png;base64,' in html
-    assert 'font-family:codicon' in html and 'font-family:seti' in html
-    assert 'grid-template-columns:52px minmax(0,1fr)' in html
+    compact_css = html.replace(": ", ":").replace(", ", ",")
+    assert 'font-family:codicon' in compact_css and 'font-family:seti' in compact_css
+    assert 'grid-template-columns:52px minmax(0,1fr)' in compact_css
 
 
 def test_console_source_labels_match_actual_runtime_filenames():
@@ -171,3 +171,17 @@ async def test_real_cjs_capture_preserves_header_and_long_source_without_horizon
         ok,path,width,height=await screenshot_service.generate_screenshot(source,'',theme='vscode',job_id='long-source',filename='server.cjs',view_mode='editor',presentation='evidence',language='node')
     assert ok and inspected
     with Image.open(path) as image:assert image.width==960 and image.height==height and height>1000
+
+
+@pytest.mark.asyncio
+async def test_vscode_evidence_output_renders_integrated_terminal():
+    output = "=== [SERVER: Server] ===\n[SERVER] Started\n\n=== [CLIENT: Client] ===\n[CLIENT] Connected"
+    html = await screenshot_service._render_template(
+        '', output, 'vscode', filename='Server.java', source_code='public class Server {}',
+        presentation='vscode_evidence', view_mode='output', language='distributed'
+    )
+    assert 'alt="Visual Studio Code"' in html
+    assert 'TERMINAL' in html and 'PROBLEMS' in html
+    assert 'terminal-output' in html and '[SERVER] Started' in html and '[CLIENT] Connected' in html
+    assert 'public class Server' not in html
+

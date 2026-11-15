@@ -1,7 +1,6 @@
 """Opt-in DCL exercises confined to ephemeral users and this run's schemas."""
 import re
 import secrets
-import time
 
 ACCOUNT = r"['`]?([A-Za-z][A-Za-z0-9_]{0,30})['`]?(?:\s*@\s*['`]?(localhost|127\.0\.0\.1)['`]?)?"
 IDENT = r'(?:`[A-Za-z0-9_]+`|[A-Za-z0-9_]+)'  # one identifier, optionally wrapped in a single balanced pair of backticks
@@ -48,9 +47,11 @@ def execute_dcl(session, sql, started):
                         physical = session.schema_map.get(session._find_logical_schema(logical.strip('`')))
                     else:
                         physical = session.schema_map.get(session.active_schema)
-                    if not physical:
+                    if not physical or not re.fullmatch(r'[A-Za-z0-9_]+', physical):
                         raise ValueError('Grants are confined to the current run schemas.')
                     table = table.strip('`')
+                    if table != '*' and not re.fullmatch(r'[A-Za-z0-9_]+', table):
+                        raise ValueError('Invalid table identifier in privilege statement.')
                     target = '*' if table == '*' else '`' + table + '`'
                     cur.execute(f'{verb} {privileges} ON `{physical}`.{target} ' + ('TO' if verb.upper() == 'GRANT' else 'FROM') + ' %s@%s', (actual, 'localhost'))
                 elif show:

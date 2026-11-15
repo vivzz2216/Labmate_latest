@@ -119,15 +119,16 @@ export default function ReportsPage() {
   const [selectedCategory, setSelectedCategory] =
     useState<LanguageCategory>("all");
 
+  const userId = user?.id;
   useEffect(() => {
     if (authLoading) return;
-    if (!user) {
+    if (!userId) {
       router.replace("/");
       return;
     }
 
     let active = true;
-    const cached = apiService.peekUserAssignments(user.id) as Assignment[] | null;
+    const cached = apiService.peekUserAssignments(userId) as Assignment[] | null;
     if (cached) {
       setAssignments(cached);
       setLoading(false);
@@ -136,7 +137,7 @@ export default function ReportsPage() {
     }
     setError("");
     apiService
-      .getUserAssignments(user.id)
+      .getUserAssignments(userId)
       .then((response: any) => {
         const list = Array.isArray(response)
           ? response
@@ -156,7 +157,7 @@ export default function ReportsPage() {
     return () => {
       active = false;
     };
-  }, [authLoading, user?.id, router]);
+  }, [authLoading, userId, router]);
 
   const allReports = useMemo(
     () =>

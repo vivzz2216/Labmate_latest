@@ -27,3 +27,13 @@
 test_screenshots
 test_video_out
 final_boss_manuals
+scratch
+Labmate_documents
+.memory
+backend/pytest-of-*
+backend/local_data
+backend/labmate-browser-tmp
+backend/audit_artifacts
+backend/tmp*
+backend/labmate.db*
+backend/test_lab_with_screenshots_*.docx

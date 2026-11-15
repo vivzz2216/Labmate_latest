@@ -1,9 +1,8 @@
 import asyncio
-from pathlib import Path
 import pytest
 from playwright.async_api import async_playwright
 from app.services.browser_capture import launch_capture_browser
-from app.services.lab_resources import resource_file,allowed_resource
+from app.services.lab_resources import resource_file
 from app.services.sql_runtime import SQLSession
 from app.services.notebook_runtime import ColabPythonKernel
 from app.services.colab_pipeline import display_cell

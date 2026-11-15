@@ -2,7 +2,6 @@ import os
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-import pytest
 from app.services.notebook_runtime import ColabPythonKernel
 from app.services.sql_runtime import SQLSession
 

@@ -2,10 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, Path
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from ..database import get_db
-from ..models import Report, User
+from ..models import User
 from ..middleware.auth import get_current_user, verify_report_ownership
 from ..services.storage_service import storage_service
-import os
 
 router = APIRouter()
 

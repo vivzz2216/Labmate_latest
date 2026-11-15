@@ -19,6 +19,26 @@ def answer(content='{"answer":"ready"}', reason='stop'):
 
 
 class GLMTests(unittest.IsolatedAsyncioTestCase):
+    async def test_glm_only_never_calls_other_providers(self):
+        with patch.object(settings, 'LLM_PROVIDER', 'glm'), \
+             patch.object(settings, 'FREE_LLM_FALLBACK_ORDER', ''), \
+             self.transport(lambda request: answer()):
+            self.assertEqual(await self.request(), {'answer': 'ready'})
+        self.primary.assert_not_awaited()
+        self.free.assert_not_awaited()
+        self.assertEqual(len(self.calls), 1)
+        self.assertEqual(self.calls[0].url.host, 'api.z.ai')
+
+    async def test_glm_only_failure_pauses_without_using_other_providers(self):
+        with patch.object(settings, 'LLM_PROVIDER', 'glm'), \
+             patch.object(settings, 'FREE_LLM_FALLBACK_ORDER', ''), \
+             self.transport(lambda request: httpx.Response(429)):
+            with self.assertRaises(GenerationUnavailableError):
+                await self.request()
+        self.primary.assert_not_awaited()
+        self.free.assert_not_awaited()
+        self.assertEqual(len(self.calls), 1)
+
     def setUp(self):
         self.stack = ExitStack()
         self.addCleanup(self.stack.close)

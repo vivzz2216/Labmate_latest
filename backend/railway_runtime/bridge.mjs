@@ -16,7 +16,9 @@ export async function fetchReadRetry(url, options={}, fetcher=fetch) {
   }
 }
 
-export function template(sdk, requirements, spark=false, dlProfiles=[], prepareDl='') {
+export const needsNotebookExtras = job => /^\s*(?:import|from)\s+(?:nltk|networkx|bs4|skfuzzy|pgmpy|sympy|statsmodels)\b/m.test(String(job?.code || ''));
+
+export function template(sdk, requirements, spark=false, dlProfiles=[], prepareDl='', notebookExtras=null) {
   const deps = {private:true,dependencies:{express:'4.21.2',joi:'17.13.3',cors:'2.8.5','cookie-parser':'1.4.7','express-session':'1.18.1',react:'18.2.0','react-dom':'18.2.0','react-router-dom':'6.30.1',vite:'5.4.21'}};
   const encodedDeps = Buffer.from(JSON.stringify(deps)).toString('base64');
   let runtime = sdk.template()
@@ -26,6 +28,7 @@ export function template(sdk, requirements, spark=false, dlProfiles=[], prepareD
     .run('PLAYWRIGHT_BROWSERS_PATH=/opt/labmate-runtime/browsers /opt/labmate-runtime/venv/bin/python -m playwright install --with-deps chromium')
     .run(`for kind in node react; do mkdir -p /opt/labmate-runtime/node_cache/$kind; echo '${encodedDeps}' | base64 -d > /opt/labmate-runtime/node_cache/$kind/package.json; (cd /opt/labmate-runtime/node_cache/$kind && npm install --ignore-scripts --no-audit --no-fund) || exit 1; done`);
   if (spark) runtime = runtime.run('apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends openjdk-17-jre-headless && uv pip install --python /opt/labmate-runtime/venv pyspark==3.5.7');
+  if (notebookExtras) runtime = runtime.run(`echo '${notebookExtras.toString('base64')}' | base64 -d > /opt/labmate-runtime/requirements-colab-extra.txt && uv pip install --python /opt/labmate-runtime/venv -r /opt/labmate-runtime/requirements-colab-extra.txt && mkdir -p /opt/labmate-runtime/nltk_data && /opt/labmate-runtime/venv/bin/python -m nltk.downloader -d /opt/labmate-runtime/nltk_data vader_lexicon stopwords punkt_tab && test -f /opt/labmate-runtime/nltk_data/sentiment/vader_lexicon.zip`);
   const profiles = [...new Set(dlProfiles)].sort();
   if (profiles.some(value => !['mnist','mobilenet','resnet'].includes(value))) throw new Error('Invalid cache profile.');
   if (profiles.length) {
@@ -35,7 +38,7 @@ export function template(sdk, requirements, spark=false, dlProfiles=[], prepareD
   return runtime;
 }
 
-export async function run(request, sdk=Sandbox, requirements=undefined) {
+export async function run(request, sdk=Sandbox, requirements=undefined, extraRequirements=undefined) {
   if (!process.env.RAILWAY_API_TOKEN || !process.env.RAILWAY_ENVIRONMENT_ID)
     throw new Error('Railway sandbox credentials are not configured.');
   requirements ??= await readFile(new URL('../requirements.txt', import.meta.url));
@@ -49,7 +52,9 @@ export async function run(request, sdk=Sandbox, requirements=undefined) {
   if (/\bmobilenet(?:v2)?\b/i.test(source)) dlProfiles.push('mobilenet');
   if (/\bresnet(?:50)?\b/i.test(source)) dlProfiles.push('resnet');
   const prepareDl = dlProfiles.length ? await readFile(new URL('./prepare_dl.py', import.meta.url), 'utf8') : '';
-  const vm = await sdk.create(template(sdk, requirements, spark, dlProfiles, prepareDl), {fetch:fetchReadRetry,networkIsolation:'ISOLATED', idleTimeoutMinutes:5,
+  const notebookExtras = needsNotebookExtras(request.job)
+    ? (extraRequirements ?? await readFile(new URL('../requirements-colab-extra.txt', import.meta.url))) : null;
+  const vm = await sdk.create(template(sdk, requirements, spark, dlProfiles, prepareDl, notebookExtras), {fetch:fetchReadRetry,networkIsolation:'ISOLATED', idleTimeoutMinutes:5,
     resources:{cpu:1,memoryGB:2},env:{}});
   const terminate = () => { vm.destroy().finally(() => process.exit(143)); };
   process.once('SIGTERM', terminate);

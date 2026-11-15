@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Form, Request, Path
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Request, Path
 from fastapi.responses import HTMLResponse
 from ..security.html_preview import PREVIEW_HEADERS
 from sqlalchemy.orm import Session
@@ -10,16 +10,11 @@ from ..security.validators import sanitize_filename, validate_file_path
 from ..middleware.auth import get_current_user
 from ..middleware.csrf import require_csrf_token
 from ..models import User
+import logging
 import asyncio
 import os
 import uuid
-from datetime import datetime
-from pydantic import BaseModel, Field, validator
-try:
-    import magic  # python-magic for file type validation
-except ImportError:
-    magic = None
-import logging
+from pydantic import BaseModel, Field, field_validator
 import mammoth
 import pdfplumber
 from docx import Document
@@ -27,6 +22,12 @@ from zipfile import BadZipFile
 
 # Set up logging for debugging
 logger = logging.getLogger(__name__)
+
+try:
+    import magic  # python-magic for file type validation
+except ImportError:
+    magic = None
+    logger.warning("python-magic is not installed; falling back to header/signature file validation.")
 
 router = APIRouter()
 
@@ -41,7 +42,8 @@ class SetFilenameRequest(BaseModel):
     upload_id: int = Field(..., gt=0, description="Upload ID must be positive")
     filename: str = Field(..., min_length=1, max_length=255)
     
-    @validator('filename')
+    @field_validator('filename')
+    @classmethod
     def validate_filename(cls, v):
         """Sanitize and validate filename"""
         return sanitize_filename(v)
@@ -334,8 +336,11 @@ async def preview_docx(
         if upload.file_type not in ('docx', 'pdf'):
             raise HTTPException(status_code=400, detail="Preview only available for DOCX/PDF files")
         
-        # Check if file exists
-        if not os.path.exists(upload.file_path):
+        # Check the file exists. Another API replica may have saved it, so fall back to object storage.
+        from ..services.storage_service import storage_service
+        try:
+            local_path = str(await asyncio.to_thread(storage_service.ensure_local, upload.file_path))
+        except FileNotFoundError:
             logger.warning(f"Preview failed: File not found at {upload.file_path}")
             raise HTTPException(status_code=404, detail="File not found")
         
@@ -382,7 +387,7 @@ async def preview_docx(
         # PDF preview: extract text from first few pages
         if upload.file_type == 'pdf':
             try:
-                pages_html = await asyncio.to_thread(_render_pdf_preview, upload.file_path)
+                pages_html = await asyncio.to_thread(_render_pdf_preview, local_path)
                 if not pages_html:
                     return HTMLResponse(content=_wrap_html("<p><em>No extractable text found in this PDF.</em></p>"), headers=PREVIEW_HEADERS)
                 return HTMLResponse(content=_wrap_html(pages_html), headers=PREVIEW_HEADERS)
@@ -392,7 +397,7 @@ async def preview_docx(
 
         # DOCX preview: try Mammoth first (best HTML), then fallback to python-docx (plain HTML)
         try:
-            docx_html = await asyncio.to_thread(_render_docx_preview, upload.file_path)
+            docx_html = await asyncio.to_thread(_render_docx_preview, local_path)
             return HTMLResponse(content=_wrap_html(docx_html), headers=PREVIEW_HEADERS)
         except (BadZipFile, ValueError) as bad_docx:
             logger.warning(f"Invalid DOCX for upload_id={upload_id}: {bad_docx}")

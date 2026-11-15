@@ -5,9 +5,10 @@ Server-Client topologies or single-driver distributed simulations.
 """
 
 import asyncio
+import bisect
 import os
 import re
-import signal
+import subprocess
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -66,18 +67,61 @@ def split_java_files(code: str) -> Dict[str, str]:
     public_classes = [m for m in re.finditer(r"public\s+(?:final\s+|abstract\s+)?(?:class|interface|enum)\s+(\w+)", masked)
                       if depths[m.start()] == 0]
     if len(public_classes) > 1:
-        starts = [m.start() for m in public_classes] + [len(code)]
+        # Character offsets also support multiple public types on one physical line.
+        starts = [match.start() for match in public_classes] + [len(code)]
+        # Imports are usually written once at the top; every split file needs them.
+        imports = list(dict.fromkeys(m.group(0).strip() for m in re.finditer(
+            r"^[ \t]*import\s+(?:static\s+)?[\w.*]+\s*;", code, re.M)))
         for i in range(len(public_classes)):
             cname = public_classes[i].group(1)
             segment = code[starts[i]:starts[i+1]].strip()
-            imports = '\n'.join(re.findall(r'(?m)^\s*(?:package|import)\s+[^;]+;', code[:starts[0]]))
-            files[f"{cname}.java"] = imports + '\n' + segment
+            segment = re.sub(r'(?m)^[ \t]*import\s+(?:static\s+)?[\w.*]+\s*;', '', segment).strip()
+            header = '\n'.join(value for value in imports if value not in segment.splitlines())
+            files[f"{cname}.java"] = (header + '\n' + segment).strip()
         return files
 
     # 4. Fallback: single file
     cname = java_class_name(code) or "DistributedLab"
     files[f"{cname}.java"] = code
     return files
+
+
+def _entry_classes_with_main(fname: str, content: str) -> List[Tuple[str, str]]:
+    """Return [(jvm_class_name, class_body_snippet), ...] for every class declaring main()."""
+    stripped = re.sub(r'//[^\n]*|/\*.*?\*/|"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'', lambda m: ' ' * len(m.group(0)), content, flags=re.S)
+    class_decl = re.compile(r'\bclass\s+(\w+)\b[^{;]*\{')
+    main_decl = re.compile(r'\b(?:public\s+static|static\s+public)\s+void\s+main\s*\(\s*String\b')
+    entries: List[Tuple[str, str]] = []
+    # Track brace depth for nested classes using sequential scan of class openings and main declarations
+    stack: List[Tuple[str, int, int]] = []  # (name, open_depth, start_pos)
+    depth = 0
+    pos = 0
+    n = len(stripped)
+    tokens = list(re.finditer(r'\bclass\s+(\w+)\b[^{;]*\{|\b(?:public\s+static|static\s+public)\s+void\s+main\s*\(\s*String\b|[{}]', stripped))
+    seen_mains = set()
+    for tok in tokens:
+        text = tok.group(0)
+        if text == '{':
+            depth += 1
+        elif text == '}':
+            while stack and stack[-1][1] >= depth:
+                stack.pop()
+            depth = max(0, depth - 1)
+        elif text.startswith('class'):
+            depth += 1
+            stack.append((tok.group(1), depth, tok.start()))
+        else:
+            # main() matched at current stack
+            if stack:
+                jvm_name = "$".join(item[0] for item in stack)
+                body_start = stack[-1][2]
+            else:
+                jvm_name = Path(fname).stem
+                body_start = 0
+            if jvm_name not in seen_mains:
+                seen_mains.add(jvm_name)
+                entries.append((jvm_name, content[body_start:min(len(content), tok.end() + 1500)]))
+    return entries
 
 
 def detect_topology(files: Dict[str, str]) -> Tuple[Optional[str], Optional[str], List[str]]:
@@ -90,20 +134,18 @@ def detect_topology(files: Dict[str, str]) -> Tuple[Optional[str], Optional[str]
     client_class: Optional[str] = None
 
     for fname, content in files.items():
-        # Check if file has public static void main
-        if re.search(r"public\s+static\s+void\s+main\s*\(\s*String", content):
-            cname = Path(fname).stem
+        for cname, snippet in _entry_classes_with_main(fname, content):
             mains.append(cname)
+            scope = snippet + " " + cname + " " + fname
 
-            # Heuristics for Server vs Client
             is_server = bool(re.search(
                 r"\b(?:Server|Master|Registry|Coordinator|Broker)\b|ServerSocket|LocateRegistry\.createRegistry|rebind\(",
-                content + " " + fname,
+                scope,
                 re.I,
             ))
             is_client = bool(re.search(
                 r"\b(?:Client|Worker|Node|Consumer)\b|new\s+Socket\(|LocateRegistry\.getRegistry|lookup\(",
-                content + " " + fname,
+                scope,
                 re.I,
             ))
 
@@ -112,12 +154,46 @@ def detect_topology(files: Dict[str, str]) -> Tuple[Optional[str], Optional[str]
             elif is_client and not is_server:
                 client_class = cname
             elif is_server and is_client:
-                if re.search(r"server", fname, re.I):
+                # Prefer class name itself before falling back to filename
+                if re.search(r"server|master|registry|coordinator|broker", cname, re.I):
+                    server_class = cname
+                elif re.search(r"client|worker|node|consumer", cname, re.I):
+                    client_class = cname
+                elif re.search(r"server", fname, re.I):
                     server_class = cname
                 elif re.search(r"client", fname, re.I):
                     client_class = cname
 
     return server_class, client_class, mains
+
+
+async def _stop(proc) -> None:
+    """Kill a child (and any descendant processes) if still running."""
+    if proc is None or proc.returncode is not None:
+        return
+    if isinstance(getattr(proc, "pid", None), int) and hasattr(proc, "_transport"):
+        try:
+            await asyncio.wait_for(kill_process_tree(proc), timeout=5.0)
+            return
+        except Exception:
+            pass
+    try:
+        proc.kill()
+    except ProcessLookupError:
+        return
+    try:
+        await asyncio.wait_for(proc.wait(), timeout=5.0)
+    except Exception:
+        pass
+
+
+async def _drain(stream, limit: int) -> bytes:
+    """Read a pipe to EOF so the writer never blocks; keep only the first `limit` bytes."""
+    data = bytearray()
+    while chunk := await stream.read(65536):
+        if len(data) < limit:
+            data.extend(chunk[:limit - len(data)])
+    return bytes(data)
 
 
 async def execute_distributed_java(
@@ -224,7 +300,7 @@ async def _run_server_client(
         # 2. Allow server to bind socket or initialize RMI
         await asyncio.sleep(1.8)
 
-        # 3. Check if server died prematurely
+        # 3. Check if server already finished
         if server_proc.returncode is not None:
             s_out, s_err = await asyncio.gather(*streams)
             err_msg = s_err[0] or s_out[0]

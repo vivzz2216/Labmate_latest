@@ -11,13 +11,14 @@ export default function ProfileGate({children}: {children: ReactNode}) {
   const protectedPage = ['/dashboard', '/workspace', '/code-execution'].some(path => pathname === path || pathname.startsWith(path + '/'))
   const [checked, setChecked] = useState('')
   const [complete, setComplete] = useState(false)
-  const key = `${user?.id || ''}:${pathname}`
+  const userId = user?.id
+  const key = `${userId || ''}:${pathname}`
   useEffect(() => {
     let active = true
-    if (!protectedPage || loading || !user) return
+    if (!protectedPage || loading || !userId) return
     checkProfileComplete().then(done => {if (active) {setComplete(done); setChecked(key)}})
     return () => {active = false}
-  }, [protectedPage, loading, user?.id, key])
+  }, [protectedPage, loading, userId, key, checkProfileComplete])
   if (!protectedPage || (!loading && !user)) return <>{children}</>
   if (loading || checked !== key) return <div role="status" style={{minHeight:'100vh',display:'grid',placeItems:'center',background:'#050506',color:'#a1a1aa'}}>Loading your profile…</div>
   if (!complete) return <UserOnboarding isOpen onComplete={async () => {

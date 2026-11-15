@@ -1,9 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {run,fetchReadRetry,template} from './bridge.mjs';
+import {run,fetchReadRetry,template,needsNotebookExtras} from './bridge.mjs';
 
 process.env.RAILWAY_API_TOKEN='test-token-must-never-enter-vm';
 process.env.RAILWAY_ENVIRONMENT_ID='test-environment';
+
+test('approved notebook extras and corpora are built only when requested',()=>{
+  assert.equal(needsNotebookExtras({code:'import nltk\nfrom bs4 import BeautifulSoup'}),true);
+  assert.equal(needsNotebookExtras({code:'print(1)'}),false);
+  const commands=[];const recipe={run(command){commands.push(command);return this}};
+  template({template(){return recipe}},Buffer.from('base'),false,[],'',Buffer.from('nltk==3.10.4'));
+  assert.ok(commands.some(c=>c.includes('vader_lexicon stopwords punkt_tab')));
+  assert.ok(commands.some(c=>c.includes('requirements-colab-extra.txt')));
+});
 
 test('Spark dependencies are installed only for Spark jobs',()=>{
   for(const spark of [false,true]) {

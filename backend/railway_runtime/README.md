@@ -5,21 +5,6 @@ existing runtime inside Bubblewrap namespaces, validates its receipt, and destro
 the sandbox. SQL continues to use restricted per-run MySQL schemas. The SSH/Google
 worker transport remains the default and its provisioning files remain available.
 
-## Historical validation (2026-11-03 release checkout)
-
-Eight Node lifecycle tests passed, including read-only network retry limits.
-The authenticated namespace probe and seven direct execution cases passed on
-real Railway sandboxes: Python functions/OOP, Java, C, C++, HTML interaction and
-NumPy notebook capture. The candidate upload/report suite passed ten questions
-across seven manuals, including preserving completed Java evidence on resume.
-Candidate SQL used local MySQL 8.0.46; production MySQL and public deployment
-verification are tracked separately. The focused backend suite passed 88 tests.
-
-These results predate reconciliation into the Desktop working tree. Current
-independent checks, remaining limitations and deployment status are recorded in
-`CODEX_IMPLEMENTATION_REPORT.md` at the repository root. Copying this transport
-does not deploy it or re-verify a cloud sandbox running the current bundle.
-
 ## Configuration
 
 The backend image installs the pinned `railway` SDK with Node 22. Add these

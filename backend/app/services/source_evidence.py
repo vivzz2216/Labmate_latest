@@ -13,6 +13,11 @@ def source_files(project_files,code,filename,language=None):
         return [(name,text) for name,text in project_files.items()
                 if PurePosixPath(name).suffix.lower() in SOURCE_SUFFIXES]
     # Match the filenames actually written by the existing console runner.
+    if language=='distributed':
+        from .dc_runtime import split_java_files
+        split=split_java_files(code)
+        if split:
+            return list(split.items())
     if language=='java':
         from .runtime_engine import java_class_name
         name=java_class_name(code)
@@ -77,13 +82,14 @@ async def capture_source_evidence(project_files,code,filename,*,theme,group,user
     for name,text in files:
         digest=hashlib.sha256(text.encode('utf-8')).hexdigest()
         web=language in {'html','react','node','flask','distributed'}
+        vs=web
         ide=language in {'python','java','java_gui','c','cpp'}
         count=len(text.splitlines())
         pages=[[[start,min(start+31,count)]] for start in range(1,count+1,32)] if policy=='complete' and count else [excerpt_ranges(text) if web else []]
         for page_index,ranges in enumerate(pages,1):
             excerpt=''.join(''.join(text.splitlines(keepends=True)[start-1:end]) for start,end in ranges) if ranges else text
             ok,path,width,height=await screenshot_service.generate_screenshot(
-                text,'','notepad' if language=='java_gui' else theme,group,username,name,view_mode='editor',presentation='vscode_evidence' if web else 'ide_evidence' if ide else 'evidence',
+                text,'','notepad' if language=='java_gui' else theme,group,username,name,view_mode='editor',presentation='vscode_evidence' if vs else 'ide_evidence' if ide else 'evidence',
                 language=language,screenshot_style=screenshot_style,
                 palette=jupyter_theme if theme=='jupyter' else 'dark' if web or screenshot_style=='style_2' else 'light',
                 source_ranges=ranges if web or policy=='complete' else None,project_files=project_files)

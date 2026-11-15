@@ -74,6 +74,15 @@ _PROVIDER_ISOLATION = {
 }
 
 
+def student_profile(**overrides):
+    """A complete student profile. Lab execution refuses an account without one."""
+    from app.models import UserProfile
+    values = {'institution': 'Example College', 'course': 'Computer Science', **overrides}
+    values['profile_metadata'] = {'roll_number': 'CS01', 'year': '2nd Year', 'graduation_year': '2028',
+                                  **(overrides.get('profile_metadata') or {})}
+    return UserProfile(**values)
+
+
 def _is_local_host(host, extra=()):
     if host is None:
         return True

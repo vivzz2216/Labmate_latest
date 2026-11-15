@@ -21,6 +21,8 @@ export default function UserOnboarding({isOpen, onComplete}: Props) {
   const [retry, setRetry] = useState(0)
   const dialog = useRef<HTMLDivElement>(null)
 
+  const userId = user?.id
+  const fallbackName = user?.name || ''
   useEffect(() => {
     if (!isOpen) return
     let active = true
@@ -30,12 +32,12 @@ export default function UserOnboarding({isOpen, onComplete}: Props) {
       if (!active) return
       const profile = data.profile || data
       const meta = profile.profile_metadata || profile.metadata || {}
-      setForm({name: profile.name || user?.name || '', roll: meta.roll_number || meta.usn || meta.roll_no || '',
+      setForm({name: profile.name || fallbackName, roll: meta.roll_number || meta.usn || meta.roll_no || '',
         institution: profile.institution || '', course: profile.course || '', year: meta.year || '', graduation: String(meta.graduation_year || '')})
       setFetching(false)
     }).catch(() => {if (active) setError('Your saved profile could not load. Please retry.')})
     return () => {active = false}
-  }, [isOpen, user?.id, retry])
+  }, [isOpen, userId, fallbackName, retry])
 
   useEffect(() => {
     if (!isOpen) return

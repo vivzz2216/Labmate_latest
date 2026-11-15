@@ -1,6 +1,25 @@
 import catalog from "./lab-catalog.json";
 import { LabLanguage } from "./workflow";
 
+// A multi-part experiment (Social Media Analytics) is launched as one question per part:
+//   theory   - a written answer,
+//   code     - a Python notebook run on LabMate practice data,
+//   evidence - work done in an outside tool; LabMate writes the procedure and the student uploads their own screenshots.
+export type LabPartKind = "theory" | "code" | "evidence";
+
+export interface LabEvidenceSlot {
+  id: string;
+  label: string;
+}
+
+export interface LabPart {
+  kind: LabPartKind;
+  title: string;
+  text: string;
+  builtinDatasets?: string[];
+  evidenceSlots?: LabEvidenceSlot[];
+}
+
 export interface LabExperiment {
   id: string;
   number: number;
@@ -15,6 +34,9 @@ export interface LabExperiment {
   prerequisites?: string[];
   expectedOutputs: string[];
   starterPrompt: string;
+  parts?: LabPart[];
+  // Practice files students can download for their exercises.
+  downloads?: string[];
 }
 
 export interface LabCategory {

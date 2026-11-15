@@ -16,7 +16,7 @@ RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
        r-base-core r-recommended r-cran-ggplot2 r-cran-dplyr r-cran-tidyr r-cran-tibble r-cran-scales r-cran-reshape2 r-cran-e1071 r-cran-randomforest \
     && rm -rf /var/lib/apt/lists/*
 
-COPY backend/requirements.txt ./requirements.txt
+COPY backend/requirements.txt backend/requirements-colab-extra.txt ./
 RUN pip install --no-cache-dir -r requirements.txt \
     && python -m playwright install --with-deps chromium \
     && rm -rf /var/lib/apt/lists/*

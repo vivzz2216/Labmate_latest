@@ -6,10 +6,9 @@ import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from pathlib import Path
-from playwright.sync_api import sync_playwright
 from .notebook_runtime import ColabPythonKernel
 from .lab_resources import resource_file, allowed_resource
-from .browser_capture import acquire_capture_context_sync, launch_capture_browser_sync
+from .browser_capture import acquire_capture_context_sync
 
 
 def ensure_home_loan_dataset(target_dir):
@@ -80,7 +79,7 @@ def render_and_capture_colab(cells,screenshot_path,notebook_title=None,student_n
         if expand_full:
             needed=page.evaluate('Math.max(document.body.scrollHeight,document.documentElement.scrollHeight)')
             if needed>14000:raise ValueError('Notebook exceeds one screenshot; split it into smaller sections.')
-            if print_readable and needed>1400:raise ValueError('Colab section is too tall for readable print evidence; split the cell or output.')
+            if print_readable and needed>1400:raise ValueError(f'Colab section is too tall for readable print evidence ({needed}px > 1400px); split the cell or output.')
             height=max(viewport_height,needed+8 if print_readable else needed+40);page.set_viewport_size({'width':viewport_width,'height':height})
         page.screenshot(path=screenshot_path)
         if pdf_path:

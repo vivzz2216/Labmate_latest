@@ -3,10 +3,11 @@ from sqlalchemy.orm import Session
 from sqlalchemy.sql import func
 from sqlalchemy import update,case
 from sqlalchemy.exc import IntegrityError
-from pydantic import BaseModel, EmailStr, Field, validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, ValidationInfo, field_validator
 from typing import Optional
 from datetime import datetime, timedelta, timezone
 import bcrypt
+import functools
 import secrets
 import re
 import logging
@@ -15,7 +16,7 @@ import json
 from starlette.concurrency import run_in_threadpool
 
 from ..config import settings
-from ..database import get_db, get_db_transaction
+from ..database import get_db
 from ..models import User, UserProfile
 from ..security.jwt import create_access_token, create_refresh_token, verify_token, revoke_token
 from ..middleware.auth import get_current_user
@@ -55,12 +56,13 @@ class UserSignup(BaseModel):
     name: str = Field(..., min_length=2, max_length=100)
     password: str = Field(..., min_length=MIN_PASSWORD_LENGTH)
     
-    @validator('password')
-    def validate_password_strength(cls, v, values):
+    @field_validator('password')
+    @classmethod
+    def validate_password_strength(cls, v, info: ValidationInfo):
         """Enforce strong passwords except for explicitly configured test accounts."""
         if len(v) < MIN_PASSWORD_LENGTH:
             raise ValueError(f'Password must be at least {MIN_PASSWORD_LENGTH} characters long')
-        email = str(values.get('email', '')).strip().casefold()
+        email = str(info.data.get('email', '')).strip().casefold()
         exceptions = {
             item.strip().casefold()
             for item in settings.BETA_TEST_EMAILS.split(',')
@@ -78,7 +80,8 @@ class UserSignup(BaseModel):
             raise ValueError('Password must contain at least one special character')
         return v
     
-    @validator('name')
+    @field_validator('name')
+    @classmethod
     def validate_name(cls, v):
         """Sanitize and validate name"""
         # Remove any non-alphanumeric characters except spaces, hyphens, apostrophes
@@ -99,8 +102,7 @@ class UserResponse(BaseModel):
     last_login: Optional[str] = None
     is_admin: bool = False
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TokenResponse(BaseModel):
@@ -129,6 +131,16 @@ def verify_password(password: str, hashed: str) -> bool:
     except Exception:
         return False
 
+@functools.lru_cache(maxsize=1)
+def _timing_hash() -> str:
+    return hash_password(secrets.token_urlsafe(24))
+
+
+def burn_password_check(password: str) -> None:
+    """Spend one bcrypt check on an unknown email so timing does not reveal which emails exist."""
+    verify_password(password, _timing_hash())
+
+
 def check_account_lockout(user: User) -> bool:
     """Check if account is locked due to failed login attempts"""
     return lockout_seconds(user)>0
@@ -144,10 +156,11 @@ def handle_failed_login(db: Session, user: User):
     """Handle failed login attempt with progressive lockout"""
     # Best-effort: never let tracking/lockout updates turn a normal 401 into a 500.
     try:
-        attempts=case((User.locked_until<=datetime.utcnow(),1),else_=func.coalesce(User.failed_login_attempts,0)+1)
+        now = datetime.now(timezone.utc)
+        attempts=case((User.locked_until<=now,1),else_=func.coalesce(User.failed_login_attempts,0)+1)
         db.execute(update(User).where(User.id==user.id).values(
             failed_login_attempts=attempts,
-            locked_until=case((attempts>=MAX_LOGIN_ATTEMPTS,datetime.utcnow()+timedelta(minutes=LOCKOUT_DURATION_MINUTES)),else_=User.locked_until)
+            locked_until=case((attempts>=MAX_LOGIN_ATTEMPTS,now+timedelta(minutes=LOCKOUT_DURATION_MINUTES)),else_=User.locked_until)
         ).execution_options(synchronize_session=False))
         db.commit()
     except Exception as e:
@@ -166,7 +179,7 @@ def reset_failed_attempts(db: Session, user: User):
     """Reset failed login attempts after successful login"""
     # Best-effort: do not fail login if this bookkeeping update fails.
     try:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         db.execute(update(User).where(User.id == user.id).values(
             failed_login_attempts=0, locked_until=None, last_login=now).execution_options(synchronize_session=False))
         db.commit()
@@ -219,8 +232,8 @@ async def signup(request: UserSignup, db: Session = Depends(get_db)):
             profile_picture=None,
             is_active=True,
             failed_login_attempts=0,
-            created_at=datetime.utcnow(),
-            last_login=datetime.utcnow()
+            created_at=datetime.now(timezone.utc),
+            last_login=datetime.now(timezone.utc)
         )
 
         db.add(user)
@@ -306,6 +319,7 @@ async def login(request: UserLogin, db: Session = Depends(get_db)):
         # Use constant-time comparison to prevent timing attacks
         # Return same error message whether user exists or password is wrong
         if not user:
+            await password_work(burn_password_check, request.password)
             logger.warning(f"Login failed: User not found for email {request.email}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -487,19 +501,22 @@ class ProfileUpdateRequest(BaseModel):
     course: Optional[str] = Field(default=None, max_length=200)
     profile_metadata: Optional[dict] = Field(default=None, max_length=64)
 
-    @validator('name')
+    @field_validator('name')
+    @classmethod
     def trim_profile_name(cls, value):
         if value is not None and not value.strip():
             raise ValueError('Name must not be blank.')
         return value.strip() if value is not None else None
 
-    @validator('institution', 'course')
+    @field_validator('institution', 'course')
+    @classmethod
     def trim_academic_field(cls, value):
         if value is not None and not value.strip():
             raise ValueError('Academic details must not be blank.')
         return value.strip() if value is not None else None
 
-    @validator('profile_metadata')
+    @field_validator('profile_metadata')
+    @classmethod
     def bound_profile_metadata(cls, value):
         if value is not None and len(json.dumps(value).encode('utf-8')) > 32768:
             raise ValueError('Profile metadata must be at most 32 KiB.')

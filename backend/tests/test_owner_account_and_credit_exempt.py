@@ -24,7 +24,7 @@ PASSWORD='owner-fixture-secret'
 @pytest.fixture
 def env(tmp_path,monkeypatch):
     for name,value in {'ADMIN_USERID':OWNER,'ADMIN_PASSWORD':PASSWORD,'CREDIT_EXEMPT_EMAILS':'',
-            'EXECUTION_ALLOWED_EMAILS':OWNER,'BILLING_ENABLED':True,'RAZORPAY_MODE':'test',
+            'EXECUTION_ALLOWED_EMAILS':OWNER,'LOCAL_OPEN_EXECUTION':False,'BILLING_ENABLED':True,'RAZORPAY_MODE':'test',
             'SECRET_KEY':'fixture-secret-key-that-is-at-least-32-characters'}.items():monkeypatch.setattr(settings,name,value)
     engine=create_engine('sqlite:///'+str(tmp_path/'owner.db'),connect_args={'check_same_thread':False})
     Base.metadata.create_all(engine)

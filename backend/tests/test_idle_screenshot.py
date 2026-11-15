@@ -23,7 +23,8 @@ class IdleScreenshotTests(unittest.IsolatedAsyncioTestCase):
         self.assertLess(rendered.index("Enter first number: 25"), rendered.index("Enter second number: 5"))
         self.assertLess(rendered.index("Enter second number: 5"), rendered.index("Sum: 30"))
         self.assertIn("C:/Users/Student/Desktop/sum.py", rendered)
-        self.assertIn("Python 3.11.4 Shell", rendered)
+        self.assertIn("Python IDLE Shell", rendered)
+        self.assertNotIn("3.11.4", rendered)
         self.assertNotIn("#12161c", rendered)
         self.assertNotIn("#e8edf3", rendered)
 

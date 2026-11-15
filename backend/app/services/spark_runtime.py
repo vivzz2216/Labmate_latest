@@ -1,8 +1,5 @@
 """Small local-mode Spark exercises, only inside the OS-isolated Linux worker."""
 import asyncio
-import base64
-import json
-import os
 from pathlib import Path
 import sys
 import tempfile

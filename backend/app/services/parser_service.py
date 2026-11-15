@@ -9,7 +9,7 @@ from docx import Document
 from ..config import settings
 
 try:
-    import openai
+    from openai import OpenAI
     OPENAI_AVAILABLE = settings.LLM_PROVIDER.lower() == "openai" and bool(settings.OPENAI_API_KEY)
 except ImportError:
     OPENAI_AVAILABLE = False
@@ -418,8 +418,7 @@ class ParserService:
         self.openai_client = None
         if OPENAI_AVAILABLE and settings.OPENAI_API_KEY:
             try:
-                openai.api_key = settings.OPENAI_API_KEY
-                self.openai_client = openai
+                self.openai_client = OpenAI(api_key=settings.OPENAI_API_KEY)
                 self.openai_model = getattr(settings, 'OPENAI_MODEL', 'gpt-4o-mini')
             except Exception as e:
                 logger.warning(f"Failed to initialize OpenAI: {e}")
@@ -699,7 +698,7 @@ class ParserService:
             # Count questions in the document to help AI
             question_count = len(re.findall(r'(?:^|\n)\s*(?:\d+[\.\)]|Q\d+|Question\s+\d+|Program\s+\d+)', document_text, re.MULTILINE | re.IGNORECASE))
             
-            response = self.openai_client.ChatCompletion.create(
+            response = self.openai_client.chat.completions.create(
                 model=self.openai_model,
                 messages=[
                     {"role": "system", "content": LAB_EXTRACTION_PROMPT},
@@ -726,7 +725,7 @@ Lab Manual Text:
                 max_tokens=8000,  # Increased significantly to handle 10+ questions
                 temperature=0.1  # Lower temperature for more consistent extraction
             )
-            raw_content = response.choices[0].message.content.strip()
+            raw_content = (response.choices[0].message.content or "").strip()
             tasks_data = json.loads(raw_content)
 
             normalized_tasks: List[Dict[str, Any]] = []
@@ -1752,7 +1751,7 @@ CRITICAL REQUIREMENTS:
 The generated code must be ready to execute without any missing components or placeholders.
 """
             
-            response = self.openai_client.ChatCompletion.create(
+            response = self.openai_client.chat.completions.create(
                 model=self.openai_model,
                 messages=[
                     {"role": "system", "content": system_prompt},
@@ -1762,7 +1761,7 @@ The generated code must be ready to execute without any missing components or pl
                 temperature=0.1  # Lower temperature for more consistent rule-following
             )
             
-            code = response.choices[0].message.content.strip()
+            code = (response.choices[0].message.content or "").strip()
             
             # Remove markdown code blocks if present
             if code.startswith("```python"):

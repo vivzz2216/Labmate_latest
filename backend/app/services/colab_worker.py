@@ -22,14 +22,12 @@ import threading
 import time
 import traceback
 import warnings
-import uuid
 import hashlib
 import builtins
 import platform
 from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from contextlib import redirect_stdout, redirect_stderr
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -55,7 +53,6 @@ _CPU_HAS_AVX = _detect_x86_avx()
 
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-COLAB_HTML_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "index.html")
 
 _KERNEL_LOCK = threading.Lock()
 _RENDER_LOCK = threading.Lock()
@@ -455,7 +452,8 @@ def validate_cell(code):
         raise ValueError('Notebook cells are limited to 50000 characters.')
     safe = {'numpy','pandas','sklearn','scipy','matplotlib','seaborn','math','statistics','random','collections',
             'itertools','functools','decimal','fractions','datetime','json','csv','sys','warnings',
-            're','string','typing','io','operator','copy','pprint','time','nltk','skfuzzy','pgmpy','torch','tensorflow','keras'}
+            're','string','typing','io','operator','copy','pprint','time','nltk','skfuzzy','pgmpy','torch','tensorflow','keras',
+            'networkx','bs4','PIL'}
     for node in ast.walk(ast.parse(code)):
         if isinstance(node, (ast.Import, ast.ImportFrom)):
             modules = [x.name for x in node.names] if isinstance(node, ast.Import) else [node.module or '']

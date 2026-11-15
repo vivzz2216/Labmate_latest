@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Path
 from sqlalchemy.orm import Session
 from ..database import get_db
-from ..models import Upload
 from ..schemas import ParseResponse, Task
 from ..services.parser_service import parser_service
 from ..middleware.auth import get_current_user, verify_upload_ownership

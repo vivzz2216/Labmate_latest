@@ -35,7 +35,7 @@ def experiment_category(language, objective="", code=""):
     if language in {'r','rstudio','rlang'}:return 'rstudio'
     if language=='sql':return 'database'
     if language in {'python', 'colab'} and re.search(r'\b(?:pyspark|torch|pytorch|tensorflow|keras)\b', text, re.I):return 'notebook'
-    if language=='colab' or language=='python' and re.search(r'\b(?:colab|jupyter|deep\s+learning|neural\s+network|perceptron|autoencoder|backpropagation|cnn|rnn|lstm|mlp)\b|\.ipynb\b',objective,re.I):return 'notebook'
+    if language=='colab' or language=='python' and re.search(r'\b(?:colab|jupyter|deep\s+learning|neural\s+network|perceptron|autoencoder|backpropagation|cnn|rnn|lstm|mlp|gradient\s+descent|adam\s+optimizer|rmsprop)\b|\.ipynb\b',objective,re.I):return 'notebook'
     if language == "java":
         gui_terms=r'(?:graphical user interface|Java UI|GUI|JavaFX|Swing|AWT)'
         negated=r'\b(?:no|without|avoid|do\s+not\s+(?:use|create|build))\s+(?:an?\s+)?'+gui_terms+r'\b(?:\s*(?:,|or|and)\s*'+gui_terms+r'\b)*'
@@ -160,9 +160,21 @@ def verification_summary(plan, success, output, browser_verification=None, viewp
         failures.append('Real Ubuntu execution and native terminal/editor evidence did not pass.')
     if not plan["supported"]:
         failures.append(f"{plan['category']} has no isolated execution and capture adapter.")
+    failed_check = re.search(
+        r'(?im)^\s*(?:CHECK\s+FAILED\b|FAIL(?:ED)?\s*:\s*(?!expected\b)|'
+        r'CHECK[^\n]*\s(?:->|\])\s*FAIL\b|[^\n]*\bmatch\s*[:=]\s*false\s*$)',
+        output or '',
+    )
     if plan["expected_output"]:
         actual = output.replace("\r\n", "\n").rstrip()
         expected = "\n".join(plan["expected_output"])
+        descriptive_expected = bool(
+            re.search(
+                r"\b(?:printed|showing|demonstrat\w*|accurately|console\s+log|received\s+response|loss\s+curve|accuracy|subclass\s+overrides|format|displayed)\b",
+                expected,
+                re.I,
+            )
+        )
         if plan['category'] in {'java_awt','java_swing','flask'}:
             observed='\n'.join(str(t.get('observed_text','')) for t in (browser_verification or {}).get('tests',[]) if t.get('status')=='passed')
             def present(value):
@@ -176,6 +188,9 @@ def verification_summary(plan, success, output, browser_verification=None, viewp
                 checks["output"] = "passed" if actual == expected or actual.endswith("\n" + expected) else "failed"
         if checks["output"] == "failed":
             failures.append("Actual output does not contain the explicit expected output from the manual.")
+    if failed_check:
+        checks["output"] = "failed"
+        failures.append("Program output reported a failed internal or verification check.")
     if plan["category"] in {"browser", "react", "flask", "java_awt", "java_swing"}:
         checks["render"] = "passed" if success else "failed"
         required = any(r["id"] == "interaction" for r in plan["requirements"]) or bool((browser_verification or {}).get("required"))

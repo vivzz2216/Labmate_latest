@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 from datetime import date, datetime, time as dt_time
 from decimal import Decimal
+import logging
 import re
 import secrets
 import threading
@@ -17,6 +18,8 @@ import pymysql
 import pymysql.cursors
 
 from ..config import settings
+
+logger = logging.getLogger(__name__)
 
 MAX_STATEMENTS = 80
 MAX_ROWS = 1000
@@ -398,7 +401,7 @@ class SQLSession:
             try:
                 self.conn.close()
             except Exception:
-                pass
+                logger.debug("Closing prior SQL session connection failed.", exc_info=True)
             self.conn = None
 
         target_physical = self.schema_map.get(self.active_schema, self.physical_schema)
@@ -422,8 +425,8 @@ class SQLSession:
                 max_exec_ms = max(100, int(self.timeout * 1000))
                 try:
                     cur.execute(f"SET SESSION max_execution_time = {max_exec_ms}")
-                except Exception:
-                    pass
+                except pymysql.MySQLError:
+                    logger.debug("max_execution_time session variable unsupported.", exc_info=True)
         except Exception as exc:
             raise RuntimeError(f"MySQL restricted session connection failed: {exc}") from exc
 
@@ -452,7 +455,7 @@ class SQLSession:
             finally:
                 admin_conn.close()
         except Exception:
-            pass
+            logger.debug("Killing timed-out MySQL query failed.", exc_info=True)
 
     def _cleanup_server_objects(self, admin_conn: pymysql.connections.Connection | None = None) -> None:
         own_conn = False
@@ -471,20 +474,20 @@ class SQLSession:
                     if phys_db.startswith("lab_"):
                         try:
                             cur.execute(f"DROP DATABASE IF EXISTS `{phys_db}`")
-                        except Exception:
-                            pass
+                        except pymysql.MySQLError:
+                            logger.debug("Drop database cleanup failed for %s.", phys_db, exc_info=True)
                 if self.db_user.startswith("labu_"):
                     for host_spec in ("%", "localhost", "127.0.0.1"):
                         try:
                             cur.execute("DROP USER IF EXISTS %s@%s", (self.db_user, host_spec))
-                        except Exception:
-                            pass
+                        except pymysql.MySQLError:
+                            logger.debug("Drop user cleanup failed for %s@%s.", self.db_user, host_spec, exc_info=True)
         finally:
             if own_conn and admin_conn is not None:
                 try:
                     admin_conn.close()
                 except Exception:
-                    pass
+                    logger.debug("Closing MySQL admin connection failed.", exc_info=True)
 
     def reset(self) -> None:
         with self._lock:
@@ -492,7 +495,7 @@ class SQLSession:
                 try:
                     self.conn.close()
                 except Exception:
-                    pass
+                    logger.debug("Closing MySQL connection during reset failed.", exc_info=True)
                 self.conn = None
             self._cleanup_server_objects()
             self.session_token = uuid.uuid4().hex[:12]
@@ -513,7 +516,7 @@ class SQLSession:
                 try:
                     self.conn.close()
                 except Exception:
-                    pass
+                    logger.debug("Closing MySQL connection during close failed.", exc_info=True)
                 self.conn = None
             self._cleanup_server_objects()
 
@@ -624,7 +627,7 @@ class SQLSession:
                         else:
                             tables_meta[obj_name] = obj_info
             except Exception:
-                pass
+                logger.debug("Schema snapshot introspection failed for %s.", phys_schema, exc_info=True)
             out[logical_schema] = {
                 "name": logical_schema,
                 "physicalName": phys_schema,

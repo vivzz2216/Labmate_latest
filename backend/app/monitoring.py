@@ -3,9 +3,7 @@ import asyncio
 import logging
 import time
 from functools import wraps
-from typing import Callable, Any
-from fastapi import Request
-import json
+from typing import Callable
 import os
 from .config import settings
 
@@ -89,7 +87,7 @@ def get_db_pool_status() -> dict:
                 try:
                     info[attr] = val()
                 except Exception:
-                    pass
+                    logger.debug("Pool metric %s unavailable", attr, exc_info=True)
             elif val is not None:
                 info[attr] = val
         return info
@@ -122,8 +120,10 @@ class EventLoopLagMonitor:
             self._task.cancel()
             try:
                 await self._task
-            except (asyncio.CancelledError, Exception):
+            except asyncio.CancelledError:
                 pass
+            except Exception:
+                logger.debug("Event-loop lag monitor stop failed", exc_info=True)
             self._task = None
 
     async def _run(self):

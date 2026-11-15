@@ -26,7 +26,7 @@ import {
 } from "lucide-react";
 import DashboardShell from "@/components/dashboard/DashboardShell";
 import { getLabCategory, type LabExperiment } from "@/lib/labCatalog";
-import styles from "../labs.module.css";
+import styles from "../detail.module.css";
 
 const iconMap: Record<string, any> = {
   "deep_learning": Cpu,

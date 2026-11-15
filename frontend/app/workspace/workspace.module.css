@@ -3,9 +3,6 @@
    Inherits theme variables from DashboardShell (dashboard.module.css)
    ======================================================== */
 
-.questionStatus { margin: 0 0 12px; font-size: 13px; color: var(--dash-text-secondary, #a1a1aa); }
-.executionError { color: #fca5a5; white-space: pre-wrap; overflow-wrap: anywhere; margin-bottom: 16px; }
-
 .workspaceGrid {
   display: grid;
   grid-template-columns: 320px minmax(0, 1fr);
@@ -730,6 +727,8 @@
 .modalImage {
   max-width: 100%;
   max-height: 72vh;
+  width: auto;
+  height: auto;
   object-fit: contain;
   border-radius: 8px;
 }

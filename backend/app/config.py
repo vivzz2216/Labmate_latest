@@ -237,6 +237,8 @@ class Settings(BaseSettings):
     RATE_LIMIT_ENABLED: bool = True
     RATE_LIMIT_PER_MINUTE: int = 180
     AUTH_RATE_LIMIT_PER_MINUTE: int = 20
+    USER_RATE_LIMIT_PER_MINUTE: int = 180
+    AUTHENTICATED_IP_RATE_LIMIT_PER_MINUTE: int = 3000
 
     # MySQL SQL-Lab Runtime Settings
     MYSQL_URL: str = os.getenv("MYSQL_URL", "")
@@ -250,14 +252,46 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def initialize_storage_paths(self):
+        import shutil
+        from pathlib import Path
+
+        backend_root = Path(__file__).resolve().parent.parent
         for name, folder in (("UPLOAD_DIR", "uploads"), ("SCREENSHOT_DIR", "screenshots"),
                              ("REPORT_DIR", "reports"), ("REACT_TEMP_DIR", "react_temp"), ("LOG_DIR", "logs")):
             if name not in self.model_fields_set:
                 setattr(self, name, os.path.join(self.DATA_DIR, folder))
+            else:
+                current = str(getattr(self, name, "") or "")
+                if current.replace("\\", "/") in {f"./{folder}", folder}:
+                    setattr(self, name, str(backend_root / folder))
+
+        cache_root = Path.home() / ".cache" / "labmate-tools"
+        exe = ".exe" if os.name == "nt" else ""
+        toolchain_candidates = {
+            "C_COMPILER": [cache_root / "cpp" / "mingw64" / "bin" / f"gcc{exe}"],
+            "CPP_COMPILER": [cache_root / "cpp" / "mingw64" / "bin" / f"g++{exe}"],
+            "JAVA_COMMAND": [
+                Path(f"C:/temp_jdk17/bin/java{exe}"),
+                *sorted(cache_root.glob(f"java/*/bin/java{exe}"), reverse=True),
+            ],
+            "JAVAC_COMMAND": [
+                Path(f"C:/temp_jdk17/bin/javac{exe}"),
+                *sorted(cache_root.glob(f"java/*/bin/javac{exe}"), reverse=True),
+            ],
+        }
+        for attr, candidates in toolchain_candidates.items():
+            cmd = str(getattr(self, attr, "") or "")
+            if cmd and not Path(cmd).is_file() and shutil.which(cmd) is None:
+                for candidate in candidates:
+                    if candidate.is_file():
+                        setattr(self, attr, str(candidate))
+                        break
         return self
 
     @model_validator(mode="after")
     def validate_railway_settings(self):
+        if self.EXECUTION_BACKEND == 'ssh' and self.HEAVY_EXECUTION_LOCAL_LIMIT > 1:
+            print('The SSH worker accepts one job at a time; use a limit of 1 or railway_sandbox.')
         if self.EXECUTION_BACKEND not in {'ssh', 'railway_sandbox'}:
             raise ValueError('EXECUTION_BACKEND must be ssh or railway_sandbox.')
         if self.EXECUTION_ISOLATION not in {'required', 'development'}:

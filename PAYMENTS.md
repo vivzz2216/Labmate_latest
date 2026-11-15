@@ -25,7 +25,7 @@ RAZORPAY_WEBHOOK_SECRET=<a separate random webhook secret>
 
 Do not put the key secret or webhook secret in frontend variables or source control. The public checkout key ID is returned with an authenticated order. The supplied test credentials are saved only in the ignored local backend environment. The current local test database is separate from Railway.
 
-Apply `backend/migrations/007_experiment_credits.sql` to an existing PostgreSQL installation before enabling packs. The application also creates missing tables at startup through SQLAlchemy. Back up production first. No existing user or workflow rows are rewritten. SQLite local development uses the same models; the SQL migration targets PostgreSQL.
+The application provisions billing tables and indexes automatically at startup through SQLAlchemy `create_all` and `backend/app/workflow_schema.py`. Back up production first before enabling packs. No existing user or workflow rows are rewritten. SQLite local development and Railway PostgreSQL use the same models.
 
 On Railway, configure the backend service variables, retain the database and data volume, and redeploy the backend and frontend together. Keep `EXECUTION_ALLOWED_EMAILS` populated for the controlled beta: purchasing a pack does not grant execution admission. Legacy `/api/run` and task-submit execution routes return 402 while billing is enabled; use the durable `/code-execution` assignment workflow, which enforces reservations.
 
@@ -49,7 +49,7 @@ Public comparison pages checked on 18 October 2026 advertised [BlackBook](https:
 
 ## Verification
 
-See `PAYMENTS_VERIFICATION_2026-10-18.md` for the exact tested environment, test results, and remaining activation work. The gateway integration follows [Razorpay Standard Checkout](https://razorpay.com/docs/payments/payment-gateway/web-integration/standard/integration-steps/) and [webhook validation](https://razorpay.com/docs/webhooks/validate-test/).
+The gateway integration follows [Razorpay Standard Checkout](https://razorpay.com/docs/payments/payment-gateway/web-integration/standard/integration-steps/) and [webhook validation](https://razorpay.com/docs/webhooks/validate-test/).
 
 
 ## Test checkout recovery (21 October 2026)

@@ -5,12 +5,13 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 from app.main import app
 from app.database import Base, get_db
 from app.models import User, Upload
 from app.security.jwt import create_access_token
 import bcrypt
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 # Test database setup
@@ -97,7 +98,7 @@ def upload_user1(db, user1):
         file_type="docx",
         file_size=1000,
         user_id=user1.id,
-        uploaded_at=datetime.utcnow()
+        uploaded_at=datetime.now(timezone.utc)
     )
     db.add(upload)
     db.commit()
@@ -115,7 +116,7 @@ def upload_user2(db, user2):
         file_type="docx",
         file_size=1000,
         user_id=user2.id,
-        uploaded_at=datetime.utcnow()
+        uploaded_at=datetime.now(timezone.utc)
     )
     db.add(upload)
     db.commit()

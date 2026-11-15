@@ -1,7 +1,7 @@
 """
 JWT token generation and validation for secure authentication
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 import jwt
 from jwt import InvalidTokenError as JWTError
@@ -35,13 +35,14 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
         raise ValueError("SECRET_KEY must be set for JWT token generation")
     
     to_encode = data.copy()
-    
+    now = datetime.now(timezone.utc)
+
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = now + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    
-    to_encode.update({"exp": expire, "iat": datetime.utcnow(), "type": "access", "jti": uuid.uuid4().hex})
+        expire = now + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+
+    to_encode.update({"exp": expire, "iat": now, "type": "access", "jti": uuid.uuid4().hex})
     
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
@@ -61,9 +62,10 @@ def create_refresh_token(data: dict) -> str:
         raise ValueError("SECRET_KEY must be set for JWT token generation")
     
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
-    
-    to_encode.update({"exp": expire, "iat": datetime.utcnow(), "type": "refresh", "jti": uuid.uuid4().hex})
+    now = datetime.now(timezone.utc)
+    expire = now + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+
+    to_encode.update({"exp": expire, "iat": now, "type": "refresh", "jti": uuid.uuid4().hex})
     
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
@@ -128,6 +130,25 @@ def verify_token(token: str, token_type: str = "access") -> dict:
     except Exception as e:
         logger.error(f"Unexpected error during token verification: {e}")
         raise credentials_exception
+
+
+def rate_limit_subject(token: str) -> Optional[str]:
+    """Return the user id of a validly signed, unexpired access token, else None.
+
+    Used only to choose a rate-limit bucket. It checks the signature, expiry and token type
+    but not revocation, and it never touches Redis or the database, so a forged, expired or
+    garbage token simply falls back to the caller's IP bucket and cannot pick another user's.
+    """
+    if not token or not settings.SECRET_KEY:
+        return None
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
+    except Exception:
+        return None
+    subject = payload.get("sub")
+    if payload.get("type") != "access" or not isinstance(subject, (str, int)) or not str(subject).isdigit():
+        return None
+    return str(int(subject))
 
 
 def _revocation_key(token):

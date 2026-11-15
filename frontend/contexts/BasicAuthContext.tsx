@@ -1,6 +1,6 @@
 'use client'
 
-import React, { createContext, useContext, useEffect, useState } from 'react'
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import api, { apiService, TokenResponse, BasicAuthUser } from '@/lib/api'
 
 interface User {
@@ -80,6 +80,12 @@ const formatApiErrorDetail = (detail: any): string => {
   return String(detail)
 }
 
+const notifyAuthExtension = () => {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('labmate:auth-changed'))
+  }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
@@ -109,6 +115,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     setAuthHeaders(access_token, csrf_token)
+    notifyAuthExtension()
   }
 
   const loadStoredTokens = () => {
@@ -132,6 +139,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (typeof window === 'undefined') return
     localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userData))
     setUser(userData)
+    notifyAuthExtension()
   }
 
   const clearStoredSession = () => {
@@ -144,9 +152,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     apiService.invalidateProfileCache()
     apiService.clearSessionCaches()
     setAuthHeaders(null, null)
+    notifyAuthExtension()
   }
 
-  const checkProfileComplete = async (): Promise<boolean> => {
+  const checkProfileComplete = useCallback(async (): Promise<boolean> => {
     try {
       const profile = await apiService.getUserProfile()
       const isComplete = profile?.is_complete || false
@@ -171,7 +180,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error('Failed to check profile:', error)
       return false
     }
-  }
+  }, [])
 
   const handleAuthSuccess = async (response: TokenResponse, redirectTo = '/dashboard') => {
     const userPayload = response?.user
@@ -240,6 +249,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const verifiedUser = { ...parsedUser, is_admin: profile?.is_admin === true }
           setUser(verifiedUser)
           localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(verifiedUser))
+          notifyAuthExtension()
         } catch (profileError: any) {
           const status = profileError?.response?.status
           if (status !== 401 && status !== 403) {

@@ -104,7 +104,7 @@ class _AsyncBrowserPool:
                     if self._browser.is_connected():
                         return self._browser
                 except Exception:
-                    pass
+                    logger.debug("Async browser health check failed; recycling browser.", exc_info=True)
                 # Stale or disconnected browser
                 await self._close_locked()
 
@@ -118,7 +118,7 @@ class _AsyncBrowserPool:
                 try:
                     await pw.stop()
                 except Exception:
-                    pass
+                    logger.debug("Async playwright stop failed after launch error.", exc_info=True)
                 raise
 
     async def _close_locked(self):
@@ -126,13 +126,13 @@ class _AsyncBrowserPool:
             try:
                 await self._browser.close()
             except Exception:
-                pass
+                logger.debug("Async browser close failed.", exc_info=True)
             self._browser = None
         if self._playwright is not None:
             try:
                 await self._playwright.stop()
             except Exception:
-                pass
+                logger.debug("Async playwright stop failed.", exc_info=True)
             self._playwright = None
 
     async def close(self):
@@ -153,7 +153,7 @@ class _SyncBrowserPool:
                 if browser.is_connected():
                     return browser
             except Exception:
-                pass
+                logger.debug("Sync browser health check failed; recycling browser.", exc_info=True)
             self.close()
 
         pw = sync_playwright().start()
@@ -166,7 +166,7 @@ class _SyncBrowserPool:
             try:
                 pw.stop()
             except Exception:
-                pass
+                logger.debug("Sync playwright stop failed after launch error.", exc_info=True)
             raise
 
     def close(self):
@@ -175,14 +175,14 @@ class _SyncBrowserPool:
             try:
                 browser.close()
             except Exception:
-                pass
+                logger.debug("Sync browser close failed.", exc_info=True)
             self._local.browser = None
         pw = getattr(self._local, "playwright", None)
         if pw is not None:
             try:
                 pw.stop()
             except Exception:
-                pass
+                logger.debug("Sync playwright stop failed.", exc_info=True)
             self._local.playwright = None
 
 
@@ -225,7 +225,7 @@ async def acquire_capture_context(**context_kwargs) -> AsyncIterator[AsyncContex
             try:
                 await context.close()
             except Exception:
-                pass
+                logger.debug("Async browser context close failed.", exc_info=True)
 
 
 @contextlib.contextmanager
@@ -248,7 +248,7 @@ def acquire_capture_context_sync(**context_kwargs) -> Iterator[SyncContext]:
             try:
                 context.close()
             except Exception:
-                pass
+                logger.debug("Sync browser context close failed.", exc_info=True)
             _sync_pool._local.contexts -= 1
             # A short-lived notebook thread must not strand its browser/driver.
             if _sync_pool._local.contexts == 0:

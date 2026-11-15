@@ -80,7 +80,29 @@ You can set backend `ALLOWED_ORIGINS` and `FRONTEND_URL` to the frontend's publi
 
 Attach one Railway volume to backend at `/data` **before deploying**. The backend config requires this mount and enforces one replica with app sleeping disabled. DATA_DIR places uploads, screenshots, reports, public files, and runtime workspaces under that mount. Do not set the older individual directory variables to `/app/...`; either remove them or place them under `/data`. Existing files on your PC are not transferred automatically.
 
-Use one backend replica with in-process WORKFLOW_WORKERS. An independent worker with another volume cannot see the API's local uploads, and Railway does not share one volume between services. Splitting workers or adding backend replicas requires a shared storage design first. Volume contents exist only at runtime, so database initialization and directory creation happen at startup rather than during the image build. PostgreSQL/schema initialization retries startup failures and refuses to serve a partially initialized database.
+The default is one backend replica with in-process WORKFLOW_WORKERS, which keeps everything on the one volume. Railway does not share a volume between services, so a separate worker service can only see uploads through object storage. Uploads, screenshots and reports are already copied to S3/R2 when saved, and workers and the preview endpoints now fetch a file from there when it is not on their own disk.
+
+### Scaling out to about 100 simultaneous students
+
+Do this only with `STORAGE_BACKEND=s3` (plus the `S3_*` variables) and `EXECUTION_BACKEND=railway_sandbox` on every service; the single SSH worker runs one job at a time and cannot take more.
+
+1. **API service.** Keep `/backend/railway.json`. Set `WORKFLOW_WORKERS=0` so it only accepts requests and queues work. With object storage you may raise its replicas.
+2. **Worker service.** Add a service from the same repository and set its config-as-code path to `/backend/railway.worker.json` (4 replicas, no volume, no HTTP port). Give each replica about 4 vCPU and 8 GB. Variables: copy every variable from the API (same `SECRET_KEY`, `DATABASE_URL`, `REDIS_URL`, storage, AI and Railway sandbox variables), then set:
+
+```dotenv
+LABMATE_ROLE=worker
+WORKFLOW_WORKERS=25
+HEAVY_EXECUTION_LOCAL_LIMIT=25
+HEAVY_EXECUTION_GLOBAL_LIMIT=90
+BROWSER_CAPTURE_LOCAL_LIMIT=4
+```
+
+   `HEAVY_EXECUTION_GLOBAL_LIMIT` is shared through Redis, so all replicas together never exceed 90 sandboxes (Railway Pro allows 100 running sandboxes per environment). Raise it only after Railway raises your cap.
+3. **Database connections.** Each running workflow holds one Postgres connection. Four workers of 25 plus the API need about 140. The pool grows to `WORKFLOW_WORKERS + 3` automatically, but Postgres `max_connections` must be at least 200 (the PostgreSQL default is 100; check your Railway database).
+4. **Rate limits.** Signed-in requests are now counted per user (`USER_RATE_LIMIT_PER_MINUTE`, default 180) instead of per IP, so a campus behind one address no longer shares one bucket. `AUTHENTICATED_IP_RATE_LIMIT_PER_MINUTE` (default 3000) still bounds one address. Login, signup and refresh stay per IP at `AUTH_RATE_LIMIT_PER_MINUTE`; raise it on lab days, since 100 students sign in at once from one address.
+5. **AI provider.** 100 students need roughly 300 generation requests a minute in the first minute. Check `GROQ_RPM_LIMIT`, `GEMINI_RPM_LIMIT` and your provider tier, or generation becomes the queue.
+
+Capacity at this size is an estimate until the load test in the audit report passes. A worker restart on its local disk discards in-progress screenshots; the workflow then re-runs the affected question rather than failing. Volume contents exist only at runtime, so database initialization and directory creation happen at startup rather than during the image build. PostgreSQL/schema initialization retries startup failures and refuses to serve a partially initialized database.
 
 The active execution engine uses bounded local subprocesses when a Docker daemon is absent, including Python, Java, C/C++, React, Node, and HTML capture. The image includes the required runtimes and a Chromium version matching the installed Playwright package. The subprocess fallback's environment filtering, code validation, and resource limits are not a container security boundary. Hostile multi-tenant code execution needs a separate isolated execution service before opening unrestricted access.
 
@@ -115,7 +137,7 @@ docker build -t labmate-backend-root .
 docker compose -f docker-compose.railway.yml up --build
 ```
 
-The Railway-like Compose file runs frontend, backend, Postgres, and Redis with private proxying and a persistent backend data volume. Copy `env.example` to `.env`, replace SECRET_KEY and provider credentials, and use `http://localhost:3000`. This is a local smoke-test harness; Railway does not automatically deploy this Compose file.
+The Railway-like Compose file runs frontend, backend, Postgres, and Redis with private proxying and a persistent backend data volume. Copy `backend/.env.example` to `.env`, replace SECRET_KEY and provider credentials, and use `http://localhost:3000`. This is a local smoke-test harness; Railway does not automatically deploy this Compose file.
 
 Official references: [monorepo roots and config paths](https://docs.railway.com/deployments/monorepo), [Dockerfiles](https://docs.railway.com/builds/dockerfiles), [private networking](https://docs.railway.com/networking/private-networking), [healthchecks](https://docs.railway.com/deployments/healthchecks), [volumes](https://docs.railway.com/volumes).
 

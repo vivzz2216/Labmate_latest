@@ -10,6 +10,20 @@ def practical_table_checks(statements):
     for step in statements:
         if step.get('success') and step.get('type') == 'INSERT':
             inserts[(step.get('active_schema', 'lab'), step.get('tableName', '').lower())] = step
+        elif step.get('success') and step.get('type') == 'ROLLBACK':
+            # A rolled-back insert must not replace evidence for the restored data.
+            def snapshot_rows(item, schema, table):
+                tables = (item.get('schemas_snapshot') or {}).get(schema, {}).get('tables', {})
+                return next((value.get('rows', []) for name, value in tables.items() if name.lower() == table), [])
+            for (schema, table) in list(inserts):
+                restored = snapshot_rows(step, schema, table)
+                candidates = [prior for prior in statements if prior.get('index', 0) < step.get('index', 0)
+                              and prior.get('success') and prior.get('type') == 'INSERT'
+                              and prior.get('active_schema', 'lab') == schema
+                              and prior.get('tableName', '').lower() == table
+                              and snapshot_rows(prior, schema, table) == restored]
+                if candidates:
+                    inserts[(schema, table)] = candidates[-1]
     checks = []
     for (schema, table), inserted in inserts.items():
         if not table:

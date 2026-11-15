@@ -17,8 +17,8 @@
   left: 50%;
   transform: translateX(-50%);
   width: 100vw;
-  height: 900px;
-  background: radial-gradient(circle at 50% 15%, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.03) 40%, rgba(0, 0, 0, 0) 75%);
+  height: 760px;
+  background: radial-gradient(ellipse at 50% 0%, rgba(255, 255, 255, 0.03) 0%, rgba(0, 0, 0, 0) 70%);
   pointer-events: none;
   z-index: 0;
 }

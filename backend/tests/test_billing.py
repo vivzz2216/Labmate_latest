@@ -4,21 +4,20 @@ import hmac
 import json
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from copy import deepcopy
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.config import settings
 from app.database import Base, get_db
 from app.middleware.auth import get_current_user
 from app.middleware.csrf import require_csrf_token
-from app.models import (AssignmentWorkflow, CreditLedger, CreditWallet, PackPurchase, Upload, User, WorkflowCreditHold)
+from app.models import (AssignmentWorkflow, CreditLedger, CreditWallet, PackPurchase, Upload, User)
 from app.routers import billing as routes
 from app.services import billing_service as billing
 
@@ -29,6 +28,7 @@ def env(tmp_path,monkeypatch):
         'RAZORPAY_KEY_ID':'rzp_test_fixture','RAZORPAY_KEY_SECRET':'fixture-secret',
         'RAZORPAY_WEBHOOK_SECRET':'fixture-webhook-secret','EXECUTION_ALLOWED_EMAILS':''}.items():
         monkeypatch.setattr(settings,name,value)
+    monkeypatch.setattr(settings,'LOCAL_OPEN_EXECUTION',False)
     monkeypatch.delenv('RAILWAY_ENVIRONMENT_ID',raising=False)
     engine=create_engine('sqlite:///'+str(tmp_path/'payments.db'),connect_args={'check_same_thread':False,'timeout':20})
     Base.metadata.create_all(engine);factory=sessionmaker(bind=engine,expire_on_commit=False,autoflush=False)

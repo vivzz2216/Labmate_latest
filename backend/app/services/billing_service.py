@@ -15,7 +15,6 @@ from sqlalchemy.exc import IntegrityError
 from ..config import settings
 from ..models import (CreditWallet, CreditLedger, PackPurchase, WorkflowCreditHold, User)
 from ..security.operator_access import is_user_credit_exempt
-from ..security.operator_access import is_admin_user
 
 PACKS = (
     {'id': 'quick-lab', 'name': 'Quick Lab', 'amount': 2900, 'credits': 10,
@@ -141,6 +140,18 @@ def settle_workflow_credits(db, workflow):
     ledger(db, hold.user_id, hold.mode, 'release:' + hold.run_token, 'unused_returned', refund)
 
 
+def check_workflow_credits_available(db, workflow, user_id):
+    if not settings.BILLING_ENABLED or is_credit_exempt(db, user_id):
+        return
+    existing = db.get(WorkflowCreditHold, workflow.id, populate_existing=True)
+    if existing and existing.state == 'held':
+        return
+    baseline = [r['id'] for r in (workflow.results or []) if r.get('status') == 'completed']
+    count = sum(q['id'] not in baseline for q in workflow.questions)
+    if wallet(db, user_id, settings.RAZORPAY_MODE)['available'] < count:
+        raise HTTPException(402, f'This run needs {count} experiment credits. Top up a pack on the homepage to continue.')
+
+
 def reserve_workflow_credits(db, workflow, user_id):
     if not settings.BILLING_ENABLED or is_credit_exempt(db, user_id):
         return
@@ -210,11 +221,6 @@ async def create_order(db, user_id, pack_id, request_key):
         raise HTTPException(404, 'The ₹1 payment check is not currently available.')
     if os.getenv('RAILWAY_ENVIRONMENT_ID') and settings.RAZORPAY_MODE != 'live':
         raise HTTPException(503, 'Live Razorpay payments are not configured yet.')
-    if pack.get('admin_only'):
-        if not is_admin_user(db.get(User, user_id)):
-            raise HTTPException(404, 'Payment pack not found.')
-        if settings.RAZORPAY_MODE != 'live':
-            raise HTTPException(503, 'The ₹1 payment check requires live Razorpay keys.')
     row = db.scalar(select(PackPurchase).where(PackPurchase.user_id == user_id,
         PackPurchase.mode == settings.RAZORPAY_MODE, PackPurchase.request_key == request_key))
     if row:

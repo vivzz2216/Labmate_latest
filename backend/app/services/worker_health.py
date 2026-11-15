@@ -28,6 +28,7 @@ class WorkerHealth:
         self._expires = 0.0
         self._identity = None
         self._result = {'status': 'checking', 'available': False, 'checked_at': None}
+        self._probe = None  # The loop keeps only weak references to tasks.
 
     def invalidate(self):
         self._expires = 0.0

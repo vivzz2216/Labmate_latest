@@ -181,6 +181,29 @@ export default function HomePage() {
           Supported programming languages, runtimes &amp; laboratory tools:
         </div>
         <div className={styles.langTickerRow}>
+          {/* Deep Learning */}
+          <Link href="/labs/deep-learning" className={styles.langItem} title="Deep Learning (PyTorch, TensorFlow, Keras)">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#8B5CF6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="4" y="4" width="16" height="16" rx="2" />
+              <rect x="9" y="9" width="6" height="6" />
+              <path d="M9 1v3" /><path d="M15 1v3" /><path d="M9 20v3" /><path d="M15 20v3" />
+              <path d="M20 9h3" /><path d="M20 14h3" /><path d="M1 9h3" /><path d="M1 14h3" />
+            </svg>
+            <span>Deep Learning</span>
+          </Link>
+
+          {/* Distributed Computing */}
+          <Link href="/labs/distributed-computing" className={styles.langItem} title="Distributed Computing (Java Sockets, RMI, RPC)">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#38BDF8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="16" y="16" width="6" height="6" rx="1" />
+              <rect x="2" y="16" width="6" height="6" rx="1" />
+              <rect x="9" y="2" width="6" height="6" rx="1" />
+              <path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3" />
+              <path d="M12 12V8" />
+            </svg>
+            <span>Distributed Computing</span>
+          </Link>
+
           {/* Python */}
           <div className={styles.langItem} title="Python 3 Runtime">
             <svg width="22" height="22" viewBox="0 0 256 255" fill="none" xmlns="http://www.w3.org/2000/svg">

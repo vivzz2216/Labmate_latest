@@ -22,16 +22,43 @@ import { getAllLabCategories, type LabCategory } from "@/lib/labCatalog";
 import styles from "./labs.module.css";
 
 const iconMap: Record<string, any> = {
-  "deep_learning": Cpu,
-  "distributed": Network,
-  "python": Terminal,
-  "java": FileCode2,
-  "cpp": Code2,
-  "web": Code2,
-  "sql": Database,
-  "colab": BookOpen,
-  "r": BookOpen,
+  deep_learning: Cpu,
+  distributed: Network,
+  python: Terminal,
+  java: FileCode2,
+  cpp: Code2,
+  web: Code2,
+  sql: Database,
+  colab: BookOpen,
+  r: BookOpen,
+  sma: Network,
 };
+
+const runtimeLabelMap: Record<string, string> = {
+  deep_learning: "PyTorch / TensorFlow",
+  distributed: "Java",
+  python: "Python",
+  java: "Java",
+  cpp: "C / C++",
+  web: "HTML / React / Node",
+  sql: "MySQL",
+  colab: "Jupyter / Colab",
+  r: "R / RStudio",
+  sma: "Social Media Analytics",
+};
+
+function badgeClass(track: string) {
+  if (track === "deep_learning") return styles.badgePurple;
+  if (track === "distributed") return styles.badgeSky;
+  if (track === "python" || track === "colab") return styles.badgeEmerald;
+  return "";
+}
+
+function shortBadge(badge?: string) {
+  if (!badge) return "";
+  if (badge === "Expanded Section") return "Expanded";
+  return badge;
+}
 
 export default function LabsDirectoryPage() {
   const [search, setSearch] = useState("");

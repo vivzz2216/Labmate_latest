@@ -11,11 +11,14 @@ def validate_generated_code(code: str, language: str, capability=None, local_mod
         from .r_code import validate_r_code
         return validate_r_code(code)
     if language == "python":
+        if capability == 'notebook':
+            from ..services.notebook_magics import neutralize_magics
+            code = neutralize_magics(code)
         tree = ast.parse(code)
         safe_modules = {"math", "random", "statistics", "decimal", "fractions", "collections", "itertools", "functools", "operator", "string", "re", "json", "csv", "datetime", "copy", "heapq", "bisect", "array", "typing", "dataclasses", "enum", "abc"}
         if capability=='flask':safe_modules.update({'flask','markupsafe',*local_modules})
         if capability=='spark':safe_modules.add('pyspark')
-        if capability=='notebook':safe_modules.update({'numpy','pandas','sklearn','scipy','matplotlib','seaborn','nltk','skfuzzy','pgmpy','torch','tensorflow','keras','time','warnings','io','pprint'})
+        if capability=='notebook':safe_modules.update({'numpy','pandas','sklearn','scipy','matplotlib','seaborn','nltk','skfuzzy','pgmpy','torch','tensorflow','keras','time','warnings','io','pprint','networkx','bs4','PIL'})
         for node in ast.walk(tree):
             if capability=='flask':
                 if isinstance(node,ast.Call) and isinstance(node.func,ast.Attribute) and node.func.attr in {'send_file','send_from_directory','open_resource','open_instance_resource','from_pyfile'}:

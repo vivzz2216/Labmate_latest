@@ -18,6 +18,11 @@ def student(email):
 
 
 class ExecutionAccessTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.local_open = patch.object(settings, 'LOCAL_OPEN_EXECUTION', False)
+        self.local_open.start()
+        self.addCleanup(self.local_open.stop)
+
     def test_all_execution_submission_routes_reject_noninvited_users(self):
         from app.routers import run, tasks, workflows
         app=FastAPI()
@@ -53,6 +58,16 @@ class ExecutionAccessTests(unittest.IsolatedAsyncioTestCase):
              patch.object(settings,'BETA_TEST_EMAILS',' qa@example.org '):
             self.assertEqual((await execution_user(student('QA@example.org'))).email,'QA@example.org')
             with self.assertRaises(ValueError): check_execution_access(SimpleNamespace(email='outsider@example.org'))
+
+    async def test_runtime_gate_agrees_with_admission(self):
+        from app.security.operator_access import execution_opted_in
+        with patch.object(settings,'EXECUTION_ALLOWED_EMAILS',''),patch.object(settings,'BETA_TEST_EMAILS',''):
+            with patch.dict('os.environ',{},clear=True):
+                self.assertTrue(execution_opted_in())  # an open local install runs notebook and Ubuntu labs too
+            with patch.dict('os.environ',{'RAILWAY_ENVIRONMENT_ID':'production'}):
+                self.assertFalse(execution_opted_in())
+        with patch.dict('os.environ',{'RAILWAY_ENVIRONMENT_ID':'production'}),patch.object(settings,'EXECUTION_ALLOWED_EMAILS','*'):
+            self.assertTrue(execution_opted_in())
 
     async def test_unconfigured_local_development_remains_available(self):
         with patch.dict('os.environ',{},clear=True),patch.object(settings,'EXECUTION_ALLOWED_EMAILS',''):

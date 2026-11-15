@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from typing import List, Optional, Dict, Union, Any
 from datetime import datetime
 
@@ -13,8 +13,7 @@ class UploadResponse(BaseModel):
     uploaded_at: datetime
     language: Optional[str] = None  # Detected language from code snippets
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Task schemas
@@ -59,8 +58,7 @@ class JobStatus(BaseModel):
     files: Optional[List[FileResult]] = None
     code_snippet: Optional[str] = None
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class RunResponse(BaseModel):
@@ -88,8 +86,7 @@ class ScreenshotInfo(BaseModel):
     height: int
     created_at: datetime
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # AI Analysis schemas
@@ -156,8 +153,7 @@ class TaskResult(BaseModel):
     caption: Optional[str] = None
     assistant_answer: Optional[str] = None
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class JobStatusResponse(BaseModel):
@@ -165,5 +161,4 @@ class JobStatusResponse(BaseModel):
     status: str
     tasks: List[TaskResult]
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

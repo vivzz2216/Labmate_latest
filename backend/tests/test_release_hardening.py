@@ -68,7 +68,7 @@ def test_failed_attempts_are_atomic_with_stale_sessions_and_expire(sessions):
         user = db.get(User, 1)
         assert user.failed_login_attempts == 2
         user.failed_login_attempts = 5
-        user.locked_until = datetime.utcnow() - timedelta(minutes=1)
+        user.locked_until = datetime.now(timezone.utc) - timedelta(minutes=1)
         db.commit()
         basic_auth.handle_failed_login(db, user)
         db.refresh(user)

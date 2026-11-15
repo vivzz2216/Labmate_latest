@@ -632,6 +632,8 @@
 
 .topbar {
   height: 60px;
+  max-width: 100%;
+  overflow: hidden;
   flex-shrink: 0;
   padding: 0 28px;
   display: flex;
@@ -672,14 +674,18 @@
   display: flex;
   align-items: center;
   gap: 12px;
+  flex: 1 1 auto;
   min-width: 0;
+  overflow: hidden;
 }
 
 .topbarHeadingWrap {
   display: flex;
   align-items: baseline;
   gap: 12px;
+  flex: 1 1 auto;
   min-width: 0;
+  overflow: hidden;
 }
 
 .topbarTitle h1 {
@@ -690,12 +696,17 @@
   letter-spacing: -0.03em;
   color: var(--text-heading);
   white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .topbarSubtitle {
   font-size: 12.5px;
   color: var(--text-dim);
   white-space: nowrap;
+  min-width: 0;
+  flex: 0 1 auto;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -704,6 +715,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-shrink: 0;
 }
 
 .search {
@@ -1839,6 +1851,44 @@
   .topbar {
     height: 56px;
     padding: 0 12px;
+    gap: 8px;
+    max-width: 100%;
+    overflow: hidden;
+  }
+  .topbarTitle {
+    gap: 6px;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .labRow > span:nth-child(2) {
+    grid-column: 1 / 2;
+    grid-row: 3 / 4;
+    font-size: 11.5px;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .labRow > span:nth-child(2)::before {
+    content: "Solved: ";
+    color: var(--text-dim);
+    font-size: 11px;
+    font-weight: 500;
+  }
+  .labRow > span:nth-child(4) {
+    grid-column: 2 / 3;
+    grid-row: 3 / 4;
+    font-size: 11px;
+    color: var(--text-dim);
+    text-align: right;
+  }
+}
+
+@media (max-width: 480px) {
+  .topbar {
+    height: 56px;
+    padding: 0 12px;
     gap: 6px;
   }
   .topbarTitle {
@@ -1847,20 +1897,23 @@
     min-width: 0;
   }
   .topbarTitle h1 {
-    font-size: 17px;
+    font-size: 16px;
     letter-spacing: -0.02em;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
   .topbarActions {
-    flex: 0 0 auto;
+    flex: 0 1 auto;
+    flex-shrink: 0;
     justify-content: flex-end;
     gap: 6px;
     min-width: 0;
   }
   .search {
-    display: none;
+    height: 34px;
+    padding: 0 9px;
+    width: clamp(88px, 30vw, 150px);
+    flex: 0 1 140px;
+    min-width: 68px;
+    font-size: 12px;
   }
   .search input {
     font-size: 12px;

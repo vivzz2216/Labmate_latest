@@ -40,7 +40,7 @@ async def test_assignment_source_uses_language_ui(tmp_path,monkeypatch,language,
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('language,theme,filename,selector,label',[
-    ('python','idle','sum.py','.shell-stdout','Python 3.11.4 Shell'),
+    ('python','idle','sum.py','.shell-stdout','Python IDLE Shell'),
     ('java','notepad','Main.java','.cmd-body','Command Prompt'),
     ('c','codeblocks','solution.c','.cb-console-body','Captured program output'),
     ('cpp','codeblocks','solution.cpp','.cb-console-body','Captured program output'),

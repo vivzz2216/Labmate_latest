@@ -6,7 +6,7 @@ import re
 import tempfile
 import uuid
 from pathlib import Path
-from zipfile import ZIP_DEFLATED, BadZipFile, ZipFile
+from zipfile import ZIP_DEFLATED, ZipFile
 
 from ..config import settings
 from ..security.validators import sanitize_filename, validate_file_path

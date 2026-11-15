@@ -20,6 +20,7 @@ from sqlalchemy.orm import sessionmaker
 from app.config import settings
 from app.database import Base
 from app.models import AssignmentWorkflow, CreditWallet, Report, Upload, User, WorkflowCreditHold
+from conftest import student_profile
 from app.services import assignment_workflow as flow
 from app.services import workflow_queue as queue
 from app.workflow_schema import ensure_workflow_columns
@@ -39,7 +40,7 @@ def seed(db, count=1, stage="generate", status="queued", results=None, email="cl
     ids = []
     with db.factory() as session:
         for number in range(count):
-            user = User(email=f"{number}-{email}", name="Claim Student")
+            user = User(email=f"{number}-{email}", name="Claim Student", profile=student_profile())
             session.add(user); session.flush()
             upload = Upload(user_id=user.id, filename="lab.docx", original_filename="lab.docx",
                             file_path="unused", file_type="docx", file_size=1)

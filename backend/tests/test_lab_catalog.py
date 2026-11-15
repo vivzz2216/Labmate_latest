@@ -1,8 +1,8 @@
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from backend.app.routers.lab_catalog import router as lab_catalog_router
-from backend.app.routers.workflows import QuestionInput, ProcessInput
+from app.routers.lab_catalog import router as lab_catalog_router
+from app.routers.workflows import QuestionInput, ProcessInput
 
 app = FastAPI()
 app.include_router(lab_catalog_router, prefix="/api")

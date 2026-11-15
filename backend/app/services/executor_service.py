@@ -5,7 +5,7 @@ import re
 import json
 from pathlib import Path
 import hashlib
-from typing import Tuple, Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List
 from ..config import settings
 
 class ExecutorService:

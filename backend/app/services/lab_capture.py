@@ -11,11 +11,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from playwright.async_api import async_playwright
-
 from ..config import settings
 from .browser_capture import CaptureBrowserUnavailable, acquire_capture_context, launch_capture_browser
 from .lab_resources import allowed_resource, resource_file
+from .notebook_magics import neutralize_magics
 from .notebook_runtime import ColabPythonKernel
 from .sql_runtime import SQLSession, verify_sql_exercise
 
@@ -103,12 +102,12 @@ def notebook_cells(code):
                 if not isinstance(source, str):
                     raise ValueError("Invalid notebook source.")
                 result.append(
-                    {"type": cell["cell_type"], "code": source}
+                    {"type": cell["cell_type"], "code": neutralize_magics(source)}
                     if cell["cell_type"] == "code"
                     else {"type": "markdown", "content": source}
                 )
             return result
-    return [{"type": "code", "code": code}]
+    return [{"type": "code", "code": neutralize_magics(code)}]
 
 
 def _summarize_sql_statement(stmt: str, leading_comment: str = "") -> str:
@@ -573,11 +572,172 @@ async def capture_sql(
             session.close()
 
 
+def _wrap_notebook_text(text: str, width: int = 90, chunk_lines: int = 18) -> list[str]:
+    """Wrap long notebook stream lines at fixed width and page them into bounded line chunks."""
+    import textwrap
+
+    wrapped: list[str] = []
+    for raw_line in str(text).splitlines():
+        wrapped.extend(
+            textwrap.wrap(
+                raw_line,
+                width=width,
+                replace_whitespace=False,
+                drop_whitespace=False,
+                break_on_hyphens=False,
+            )
+            or [""]
+        )
+    return ["\n".join(wrapped[i : i + chunk_lines]) for i in range(0, len(wrapped), chunk_lines)]
+
+
+async def capture_jupyter_evidence(
+    cells,
+    screenshot_path,
+    source_filename: str = "notebook.py",
+    theme: str = "dark",
+    **metadata,
+):
+    """Render readable sections of one saved execution receipt in JupyterLab theme."""
+    if theme not in {"light", "dark"}:
+        raise ValueError("Choose a light or dark Jupyter theme.")
+    from .screenshot_service import screenshot_service
+
+    student_name = str(metadata.get("student_name") or "Student")
+    group = metadata.get("job_id")
+    frames: list[dict[str, Any]] = []
+    code_cells = [
+        (c.get("code", "") or "").splitlines() or [""]
+        for c in cells
+        if c.get("type") not in {"markdown", "text"}
+    ]
+    full_source = "\n".join("\n".join(cell_lines) for cell_lines in code_cells)
+    offset = 0
+
+    async def capture(
+        code_arg: str,
+        output_arg: str,
+        kind: str,
+        caption: str,
+        *,
+        view_mode: str,
+        details: dict[str, Any] | None = None,
+        **extra_kwargs,
+    ):
+        if len(frames) >= 80:
+            raise ValueError("Notebook exceeds the 80 evidence section limit.")
+        ok, rendered_path, width, height = await screenshot_service.generate_screenshot(
+            code_arg,
+            output_arg,
+            "jupyter",
+            group,
+            student_name,
+            source_filename,
+            view_mode=view_mode,
+            presentation="ide_evidence",
+            language="python",
+            palette=theme,
+            input_echoed=True,
+            **extra_kwargs,
+        )
+        if not ok:
+            raise RuntimeError("Jupyter evidence capture failed.")
+        frame = dict(path=rendered_path, kind=kind, caption=caption, width=width, height=height)
+        if details:
+            frame.update(details)
+        frames.append(frame)
+
+    for number, cell in enumerate(cells, 1):
+        if cell.get("type") in {"markdown", "text"}:
+            await capture(
+                cell.get("code", "") or "",
+                "",
+                "notebook",
+                f"Jupyter Notebook text — cell {number}",
+                view_mode="output",
+            )
+            continue
+
+        lines = (cell.get("code", "") or "").splitlines() or [""]
+        for start in range(0, len(lines), 22):
+            end = min(start + 22, len(lines))
+            await capture(
+                full_source,
+                "",
+                "source_preview",
+                f"Jupyter Notebook code — cell {number}, lines {start + 1}–{end}",
+                view_mode="editor",
+                details={
+                    "source_file": source_filename,
+                    "source_ranges": [(offset + start + 1, offset + end)],
+                },
+                source_ranges=[[offset + start + 1, offset + end]],
+            )
+        offset += len(lines)
+
+        context = "\n".join(lines[-3:])
+        emitted_output = False
+        for key in ("stdout", "repr"):
+            text = cell.get(key)
+            if text:
+                for part, chunk in enumerate(_wrap_notebook_text(text), 1):
+                    emitted_output = True
+                    await capture(
+                        context,
+                        chunk,
+                        "notebook",
+                        f"Jupyter Notebook output — cell {number}, part {part}",
+                        view_mode="output",
+                    )
+        for key in ("stderr", "error"):
+            text = cell.get(key)
+            if text:
+                for part, chunk in enumerate(_wrap_notebook_text(text), 1):
+                    emitted_output = True
+                    await capture(
+                        context,
+                        "",
+                        "notebook",
+                        f"Jupyter Notebook output — cell {number}, error part {part}",
+                        view_mode="output",
+                        error=chunk,
+                    )
+        for idx, plot in enumerate(cell.get("plots") or [], 1):
+            plot_str = str(plot or "").strip()
+            if not re.fullmatch(r"data:image/png;base64,[A-Za-z0-9+/=]+", plot_str):
+                raise ValueError("Invalid Jupyter plot image data.")
+            emitted_output = True
+            await capture(
+                context,
+                "",
+                "notebook",
+                f"Jupyter Notebook plot — cell {number}, plot {idx}",
+                view_mode="output",
+                jupyter_plot=plot_str,
+            )
+        if not emitted_output:
+            await capture(
+                context,
+                "",
+                "notebook",
+                f"Jupyter Notebook execution — cell {number}",
+                view_mode="output",
+            )
+
+    return frames, offset
+
+
 async def capture_notebook(code, datasets=None, output_path=None, **metadata):
     from .isolated_runtime import isolation_required
     if isolation_required():
         from .runtime_engine import runtime_engine
-        config = dict(metadata, datasets=datasets, colab_theme=metadata.get('theme', 'dark'))
+        config = dict(
+            metadata,
+            datasets=datasets,
+            colab_theme=metadata.get('theme', 'dark'),
+            notebook_template=metadata.get('notebook_template', 'colab'),
+            jupyter_theme=metadata.get('jupyter_theme', 'light'),
+        )
         return await runtime_engine.execute(code, 'colab', filename=metadata.get('source_filename', 'notebook.py'), project_config=config)
     if re.search(r'\bpyspark\b', code, re.I):
         from .spark_runtime import capture_spark
@@ -591,6 +751,8 @@ async def capture_notebook(code, datasets=None, output_path=None, **metadata):
         else Path(settings.SCREENSHOT_DIR).resolve() / ("notebook_" + uuid.uuid4().hex + ".png")
     )
     theme=metadata.get('theme','dark')
+    notebook_template = str(metadata.pop('notebook_template', 'colab') or 'colab').lower()
+    jupyter_theme = str(metadata.pop('jupyter_theme', 'light') or 'light').lower()
     source_filename=metadata.pop('source_filename','notebook.py')
     notebook_template=metadata.pop('notebook_template', 'colab')
     jupyter_theme=metadata.pop('jupyter_theme', 'light')

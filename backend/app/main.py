@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.middleware.gzip import GZipMiddleware
 from contextlib import asynccontextmanager
 import os
@@ -334,38 +334,9 @@ async def api_health_check():
     logger.debug(f"API health check response: {response}")
     return response
 
-@app.get("/api/test-patterns")
-async def test_patterns():
-    """Test endpoint to verify question pattern matching"""
-    import re
-    from .services.composer_service import ComposerService
-    
-    composer = ComposerService()
-    test_texts = [
-        "1.Write a Python program to demonstrate the use of iterator and generator functions.",
-        "2.Write a Python program to calculate sum of first 5 natural numbers using recursion.",
-        "B. Questions/Programs:",
-        "Question 1: Write a program",
-        "Task 2: Demonstrate recursion"
-    ]
-    
-    results = {}
-    for text in test_texts:
-        pattern_match = composer._find_question_pattern(text)
-        results[text] = {
-            "matched": pattern_match is not None,
-            "task_number": pattern_match
-        }
-    
-    return {"pattern_tests": results}
-
-
 @app.get("/{path:path}", include_in_schema=False)
 async def serve_frontend(path: str):
-    """
-    Serve the static frontend for any non-API route.
-    FIXED: Placed after API routes so it no longer intercepts API GET requests.
-    """
+    """Redirect non-API routes to FRONTEND_URL when configured; otherwise return 404."""
     if path.startswith(("api/", "health", "docs", "uploads", "screenshots", "reports", "public")):
         raise HTTPException(status_code=404, detail="Not found")
 
@@ -373,38 +344,4 @@ async def serve_frontend(path: str):
     if getattr(settings, "FRONTEND_URL", ""):
         return RedirectResponse(url=settings.FRONTEND_URL.rstrip("/") + "/" + path.lstrip("/"), status_code=307)
 
-    frontend_index = "/app/frontend/index.html"
-    if os.path.exists(frontend_index):
-        try:
-            with open(frontend_index, 'r', encoding='utf-8') as f:
-                html = f.read()
-
-            shim = '''<script>(function(){
-try{
-    if(window.WebSocket){
-        var OriginalWebSocket = window.WebSocket;
-        window.WebSocket = function(){
-            return {
-                addEventListener: function(){},
-                removeEventListener: function(){},
-                send: function(){},
-                close: function(){},
-                onopen: null, onmessage: null, onclose: null, onerror: null
-            };
-        };
-        window.__LABMATE_STUBBED_WS = true;
-        window.__LABMATE_ORIGINAL_WS = OriginalWebSocket;
-    }
-}catch(e){}
-})();</script>'''
-
-            if "</head>" in html:
-                html = html.replace("</head>", shim + "</head>")
-            else:
-                html = shim + html
-
-            return HTMLResponse(content=html, status_code=200)
-        except Exception:
-            return FileResponse(frontend_index)
-    else:
-        return {"message": "Frontend not built. Please build the frontend first."}
+    raise HTTPException(status_code=404, detail="Not found")

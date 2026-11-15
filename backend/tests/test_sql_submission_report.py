@@ -1,5 +1,4 @@
 from types import SimpleNamespace
-from pathlib import Path
 from PIL import Image
 from docx import Document
 from app.config import settings

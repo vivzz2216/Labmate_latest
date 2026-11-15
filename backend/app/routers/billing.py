@@ -18,7 +18,6 @@ from ..middleware.csrf import require_csrf_token
 from ..models import PackPurchase, PaymentWebhookEvent, User
 from ..security.execution_access import check_execution_access
 from ..services import billing_service as billing
-from ..security.operator_access import is_admin_user
 
 router = APIRouter(prefix='/billing', tags=['billing'])
 

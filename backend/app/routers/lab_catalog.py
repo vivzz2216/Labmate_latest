@@ -2,6 +2,7 @@
 import json
 from pathlib import Path
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import Response
 
 router=APIRouter(prefix='/labs', tags=['lab-catalog'])
 
@@ -15,6 +16,17 @@ def load_catalog():
     return [{**{dest:c[src] for dest,src in keys.items() if src in c},'experiment_count':len(c['experiments'])} for c in data]
 
 LAB_CATALOG_DATA=load_catalog()
+
+
+@router.get('/datasets/{name}')
+async def download_practice_dataset(name: str):
+    from ..services.sma_datasets import DATASETS, dataset_path
+    if name not in DATASETS:
+        raise HTTPException(404, detail='Practice dataset not found.')
+    return Response(content=dataset_path(name).read_bytes(), media_type=DATASETS[name], headers={
+        'Content-Disposition': f'attachment; filename="{name}"',
+        'X-Content-Type-Options':'nosniff', 'Content-Security-Policy':"default-src 'none'; sandbox",
+        'Cache-Control':'public, max-age=3600'})
 
 @router.get('')
 async def list_labs():

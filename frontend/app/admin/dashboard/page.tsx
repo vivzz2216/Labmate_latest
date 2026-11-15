@@ -35,9 +35,11 @@ export default function AdminDashboardPage() {
     const timer = setTimeout(() => { setQuery(search); setPage(0) }, 250)
     return () => clearTimeout(timer)
   }, [search])
+  const userId = user?.id
+  const isAdmin = user?.is_admin
   useEffect(() => {
     if (authLoading) return
-    if (!user) { setOverview(null); setLoading(false); return }
+    if (!userId) { setOverview(null); setLoading(false); return }
     const controller = new AbortController()
     setLoading(true); setError(''); setDenied(false)
     const detail = tab === 'students'
@@ -54,7 +56,7 @@ export default function AdminDashboardPage() {
       else setError('Dashboard data could not be loaded. Refresh to try again.')
     }).finally(() => { if (!controller.signal.aborted) setLoading(false) })
     return () => controller.abort()
-  }, [authLoading, user?.id, user?.is_admin, tab, query, filter, mode, page, refresh])
+  }, [authLoading, userId, isAdmin, tab, query, filter, mode, page, refresh])
 
   const total = tab === 'students' ? students?.total || 0 : payments?.total || 0
   const checkingAccess = authLoading || (!!user && !user.is_admin && !overview && loading && !denied)
