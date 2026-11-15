@@ -455,7 +455,8 @@ def validate_cell(code):
         raise ValueError('Notebook cells are limited to 50000 characters.')
     safe = {'numpy','pandas','sklearn','scipy','matplotlib','seaborn','math','statistics','random','collections',
             'itertools','functools','decimal','fractions','datetime','json','csv','sys','warnings',
-            're','string','typing','io','operator','copy','pprint','time','nltk','skfuzzy','pgmpy','torch','tensorflow','keras'}
+            're','string','typing','io','operator','copy','pprint','time','nltk','skfuzzy','pgmpy','torch','tensorflow','keras',
+            'networkx','bs4','PIL'}
     for node in ast.walk(ast.parse(code)):
         if isinstance(node, (ast.Import, ast.ImportFrom)):
             modules = [x.name for x in node.names] if isinstance(node, ast.Import) else [node.module or '']

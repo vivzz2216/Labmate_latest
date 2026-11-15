@@ -9,7 +9,7 @@ from typing import Literal, Optional
 
 import mammoth
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import event, text, update
 from sqlalchemy.exc import IntegrityError
@@ -20,7 +20,7 @@ from ..middleware.auth import get_current_user
 from ..security.execution_access import execution_user
 from ..security.validators import normalize_output_name
 from ..middleware.csrf import require_csrf_token
-from ..models import AssignmentWorkflow, Report, Upload, User, WorkflowBatch, WorkflowBatchItem
+from ..models import AssignmentWorkflow, Report, Upload, User, WorkflowBatch, WorkflowBatchItem, WorkflowEvidence
 from ..config import settings
 from ..security.html_preview import PREVIEW_HEADERS
 from ..services.lab_question_filter import filter_lab_tasks
@@ -31,11 +31,23 @@ router = APIRouter(prefix="/workflows")
 Language = Literal["auto", "python", "java", "c", "cpp", "html", "react", "node", "sql", "colab", "ubuntu", "theory", "distributed", "r"]
 
 
+class EvidenceSlot(BaseModel):
+    id: str = Field(pattern=r"^[a-z0-9_]{1,40}$")
+    label: str = Field(min_length=1, max_length=120)
+
+
 class QuestionInput(BaseModel):
     id: int = Field(gt=0)
     text: str = Field(min_length=1, max_length=15000)
     language: Language = "python"
     track: Optional[str] = None
+    # One part of a multi-part lab experiment (Social Media Analytics). A declared kind is the lab's own decision,
+    # so it is not second-guessed by the heuristics that classify uploaded manuals.
+    kind: Optional[Literal["theory", "code", "evidence"]] = None
+    part_title: str = Field(default="", max_length=120)
+    experiment_no: Optional[int] = Field(default=None, ge=1, le=99)
+    builtin_datasets: list[str] = Field(default_factory=list, max_length=8)
+    evidence_slots: list[EvidenceSlot] = Field(default_factory=list, max_length=6)
     datasets: dict[str,str] = Field(default_factory=dict,max_length=20)
     colab_theme: Literal["light", "dark"] = "dark"
     rstudio_theme: Literal["light", "dark"] = "light"
@@ -62,6 +74,40 @@ class ProcessInput(BaseModel):
         if not normalized:
             raise ValueError("Output filename must contain at least one alphanumeric character.")
         return normalized
+
+
+def multi_part_fields(question, data):
+    """Validated multi-part fields of one question (Social Media Analytics parts), or nothing for an ordinary question."""
+    if not (question.kind or question.builtin_datasets or question.evidence_slots or question.experiment_no):
+        return {}
+    track = (question.track or getattr(data, "track", None) or "").lower()
+    from ..services.lab_tools import SLOT_IDS
+    # Any uploaded manual may contain a task done in an outside tool (extraction marks it as an evidence part); everything
+    # else multi-part belongs to the Social Media Analytics lab.
+    outside_tool = (question.kind == "evidence" and bool(question.evidence_slots) and not question.builtin_datasets
+                    and all(slot.id in SLOT_IDS for slot in question.evidence_slots))
+    if track != "sma" and not outside_tool:
+        raise HTTPException(400, "Multi-part experiments are only available in the Social Media Analytics lab.")
+    if question.kind != "evidence" and question.evidence_slots:
+        raise HTTPException(400, "Only evidence parts take upload slots.")
+    from ..services.sma_datasets import DATASETS
+    unknown = [name for name in question.builtin_datasets if name not in DATASETS]
+    if unknown:
+        raise HTTPException(400, "Unknown practice dataset: %s" % unknown[0][:60])
+    if len({slot.id for slot in question.evidence_slots}) != len(question.evidence_slots):
+        raise HTTPException(400, "Evidence slot ids must be unique.")
+    fields = {}
+    if question.kind:
+        fields["kind"] = question.kind
+    if question.part_title:
+        fields["part_title"] = question.part_title.strip()
+    if question.experiment_no:
+        fields["experiment_no"] = question.experiment_no
+    if question.builtin_datasets:
+        fields["builtin_datasets"] = list(dict.fromkeys(question.builtin_datasets))
+    if question.evidence_slots:
+        fields["evidence_slots"] = [slot.model_dump() for slot in question.evidence_slots]
+    return fields
 
 
 def owned_upload(upload_id, user, db):
@@ -105,8 +151,8 @@ def same_questions(previous, current):
 
 def workflow_response(workflow, db):
     report = db.query(Report).get(workflow.report_id) if workflow.report_id else None
-    results = [{key: value for key, value in result.items() if key not in {"screenshot_paths", "project_files"}}
-               | {"screenshots": len(result.get("screenshot_paths", [])),
+    results = [{key: value for key, value in result.items() if key not in {"screenshot_paths", "project_files", "auto_evidence"}}
+               | {"screenshots": len(result.get("screenshot_paths", [])) + len(result.get("auto_evidence") or []),
                   **({"project_file_names": list(result['project_files'])} if result.get('project_files') else {})}
                for result in (workflow.results or [])]
     queue_position = None
@@ -193,6 +239,67 @@ def batch_status(batch_id, user, db):
         "ready_to_download": terminal and any(row["report_id"] for row in states),
         "files": states,
     }
+
+
+class PromptStartInput(BaseModel):
+    questions: list[QuestionInput] = Field(min_length=1, max_length=20)
+    title: str = Field(default="Lab experiment", min_length=1, max_length=120)
+
+
+def _write_prompt_manual(path, title, questions):
+    from docx import Document
+    document = Document()
+    document.add_heading(title, level=1)
+    for question in questions:
+        document.add_heading(f"Experiment {question['id']}", level=2)
+        document.add_paragraph(question["text"])
+    document.save(path)
+
+
+@router.post("/from-prompt")
+async def start_from_prompt(data: PromptStartInput, user: User = Depends(get_current_user),
+                            db: Session = Depends(get_db), csrf: bool = Depends(require_csrf_token)):
+    """Start a lab from typed experiment text (a lab catalogue launch) with no uploaded manual.
+
+    The text is saved as a small Word manual, so review, execution and the report
+    treat it exactly like an upload whose questions are already extracted.
+    """
+    if len({q.id for q in data.questions}) != len(data.questions):
+        raise HTTPException(400, "Question IDs must be unique.")
+    questions = [{"id": q.id, "text": q.text.strip(), "language": "python" if q.language == "auto" else q.language,
+                  **({"track": q.track} if q.track else {}), **multi_part_fields(q, data)} for q in data.questions]
+    if any(not question["text"] for question in questions):
+        raise HTTPException(400, "Every question needs some text.")
+    title = re.sub(r"\s+", " ", data.title).strip() or "Lab experiment"
+    name = normalize_output_name(title, default="lab_experiment", max_length=60)
+    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+    stored = os.path.join(settings.UPLOAD_DIR, f"{uuid.uuid4().hex}.docx")
+    try:
+        await asyncio.to_thread(_write_prompt_manual, stored, title, questions)
+        os.chmod(stored, 0o600)
+        from ..services.storage_service import storage_service
+        storage_service.sync_file(stored)
+        upload = Upload(user_id=user.id, filename=os.path.basename(stored), original_filename=name + ".docx",
+                        file_path=stored, file_type="docx", file_size=os.path.getsize(stored),
+                        language=next((q["language"] for q in questions if q["language"] != "theory"), "theory"))
+        db.add(upload)
+        db.flush()
+        workflow = AssignmentWorkflow(upload_id=upload.id, status="ready", stage="review", progress=20, language="auto",
+                                      output_name=name, questions=questions, results=[], logs=[])
+        db.add(workflow)
+        db.commit()
+    except Exception:
+        db.rollback()
+        if os.path.exists(stored):
+            os.unlink(stored)
+        raise
+    db.refresh(upload)
+    db.refresh(workflow)
+    return {"upload": {"id": upload.id, "filename": upload.filename, "original_filename": upload.original_filename,
+                       "file_type": upload.file_type, "file_size": upload.file_size,
+                       "uploaded_at": upload.uploaded_at.isoformat() if upload.uploaded_at else None,
+                       "language": upload.language},
+            "workflow": workflow_response(workflow, db)}
 
 
 @router.post("/batch-upload")
@@ -369,6 +476,7 @@ async def process(upload_id: int, data: ProcessInput, request: Request, backgrou
         raise HTTPException(400, 'Question IDs must be unique; original experiment numbers are preserved.')
     questions = [{"id": q.id, "text": q.text.strip(), "language": "python" if q.language == "auto" else q.language,
                   **({'track': q.track or data.track} if (q.track or data.track) else {}),
+                  **multi_part_fields(q, data),
                   **({'datasets':q.datasets} if q.datasets else {}),
                   **({'python_template':q.python_template, 'jupyter_theme':q.jupyter_theme} if q.language in {'python','auto'} or data.language in {'python','auto'} else {}),
                   **({'colab_theme':q.colab_theme} if q.language=='colab' or data.language=='colab' else {}),
@@ -376,14 +484,40 @@ async def process(upload_id: int, data: ProcessInput, request: Request, backgrou
                   **({'browser_theme':q.browser_theme} if q.browser_theme == 'chrome' or q.language in {'html','react','node'} or data.language in {'html','react','node'} else {})} for q in data.questions]
     if sum(sum(len(name)+len(content) for name,content in q.datasets.items()) for q in data.questions)>8*1024*1024:
         raise HTTPException(400,'Dataset upload exceeds 8 MiB.')
-    filtered = filter_lab_tasks(questions, mode=data.mode)
-    if len(filtered) != len(questions):
+    # Parts the lab itself declared (kind) keep that decision; only undeclared questions go through the heuristics.
+    undeclared = [question for question in questions if not question.get("kind")]
+    filtered = filter_lab_tasks(undeclared, mode=data.mode)
+    if len(filtered) != len(undeclared):
         raise HTTPException(400, "Only valid laboratory questions can be processed. Handwritten exercises are excluded.")
-    if data.mode == "theory_and_code":
-        for question, classified in zip(questions, filtered):
-            if classified.get("is_theory"):
+    classified_rows = iter(filtered)
+    for question in questions:
+        if question.get("kind"):
+            # An evidence part is written up like a theory answer (no execution); the student's own screenshots
+            # are attached to it afterwards.
+            if question["kind"] in {"theory", "evidence"}:
                 question["language"] = "theory"
                 question["is_theory"] = True
+            else:
+                question["language"] = "colab"
+            continue
+        classified = next(classified_rows)
+        if data.mode == "theory_and_code" and classified.get("is_theory"):
+            question["language"] = "theory"
+            question["is_theory"] = True
+        elif question.get("track") == "sma" and question["language"] in {"python", "colab"}:
+            # A Social Media Analytics manual uploaded by the student: run its code tasks as notebooks on the practice
+            # data that fits each task, as the catalogue launch does, instead of on data the model would invent.
+            from ..services.sma_datasets import suggest_datasets
+            question["language"] = "colab"
+            if not question.get("builtin_datasets"):
+                names = suggest_datasets(question["text"])
+                if names:
+                    question["builtin_datasets"] = names
+    absent = missing_required_datasets(questions, [
+        (row.question_id, row.slot) for row in db.query(WorkflowEvidence).filter_by(workflow_id=workflow.id).all()])
+    if absent:
+        raise HTTPException(400, "Upload your dataset (CSV) for \"%s\" before generating: LabMate builds the Power BI dashboard "
+                                 "from it." % absent[0])
     previous_instructions = re.sub(r"^\[screenshot_style:[^\]]+\]\s*", "", workflow.instructions or "")
     resume = (workflow.status in {"paused", "failed"} and same_questions(workflow.questions, questions)
               and workflow.language == data.language and previous_instructions == data.instructions
@@ -446,6 +580,157 @@ async def clarify(upload_id: int, data: ClarificationInput, user: User = Depends
     db.commit()
     db.refresh(workflow)
     return workflow_response(workflow, db)
+
+
+EVIDENCE_LIMIT_PER_WORKFLOW = 16
+BUSY_STATES = {"queued", "extracting", "processing"}
+
+
+def _evidence_slot(workflow, question_id, slot):
+    for question in workflow.questions or []:
+        if question.get("id") == question_id and question.get("kind") == "evidence":
+            return next((item for item in question.get("evidence_slots") or [] if item.get("id") == slot), None)
+    return None
+
+
+def missing_required_datasets(questions, rows):
+    """Titles of Power BI parts that have neither the student's dataset nor their own dashboard screenshot.
+
+    LabMate builds the dashboard from the dataset, so the dataset is mandatory; a student who already made the dashboard
+    in a real Power BI and attached that screenshot does not need one. rows are (question_id, slot) pairs.
+    """
+    from ..services.evidence_files import DATASET_SLOT
+    have = set(rows)
+    missing = []
+    for question in questions or []:
+        slots = {slot.get("id") for slot in question.get("evidence_slots") or []}
+        if question.get("kind") != "evidence" or DATASET_SLOT not in slots:
+            continue
+        if (question["id"], DATASET_SLOT) in have or (question["id"], "powerbi_dashboard") in have:
+            continue
+        missing.append(question.get("part_title") or str(question.get("text", ""))[:80])
+    return missing
+
+
+def _evidence_json(row):
+    return {"id": row.id, "question_id": row.question_id, "slot": row.slot, "filename": row.original_filename,
+            "size": row.file_size}
+
+
+def _workflow_for_evidence(upload_id, user, db):
+    owned_upload(upload_id, user, db)
+    workflow = db.query(AssignmentWorkflow).filter_by(upload_id=upload_id).first()
+    if workflow is None:
+        raise HTTPException(404, "This assignment has not been processed yet.")
+    return workflow
+
+
+@router.get("/{upload_id}/evidence")
+async def list_evidence(upload_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    workflow = _workflow_for_evidence(upload_id, user, db)
+    rows = db.query(WorkflowEvidence).filter_by(workflow_id=workflow.id).order_by(WorkflowEvidence.id).all()
+    return [_evidence_json(row) for row in rows]
+
+
+@router.post("/{upload_id}/evidence")
+async def add_evidence(upload_id: int, question_id: int = Form(...), slot: str = Form(..., max_length=40),
+                       file: UploadFile = File(...), user: User = Depends(get_current_user),
+                       db: Session = Depends(get_db), csrf: bool = Depends(require_csrf_token)):
+    """Attach the student's own file to one slot of an evidence part: a screenshot (PNG, JPG or PDF), or the dataset (CSV)
+    that LabMate loads into its Power BI studio to build the dashboard."""
+    from ..services.evidence_files import DATASET_SLOT, MAX_BYTES, MAX_DATASET_BYTES, normalize_dataset, normalize_evidence
+    from ..services.storage_service import storage_service
+    workflow = _workflow_for_evidence(upload_id, user, db)
+    if workflow.status in BUSY_STATES:
+        raise HTTPException(409, "Wait for the current run to finish before changing screenshots.")
+    slot_definition = _evidence_slot(workflow, question_id, slot)
+    if slot_definition is None:
+        raise HTTPException(400, "This experiment has no such screenshot slot.")
+    is_dataset = slot == DATASET_SLOT
+    suffix = ".csv" if is_dataset else ".png"
+    data = await file.read((MAX_DATASET_BYTES if is_dataset else MAX_BYTES) + 1)
+    try:
+        png = await asyncio.to_thread(normalize_dataset if is_dataset else normalize_evidence, data)
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from None
+    existing = db.query(WorkflowEvidence).filter_by(workflow_id=workflow.id, question_id=question_id, slot=slot).first()
+    total = db.query(WorkflowEvidence).filter_by(workflow_id=workflow.id).count()
+    if existing is None and total >= EVIDENCE_LIMIT_PER_WORKFLOW:
+        raise HTTPException(400, "This assignment already has the maximum number of screenshots.")
+    directory = os.path.join(settings.UPLOAD_DIR, "evidence")
+    os.makedirs(directory, exist_ok=True)
+    stored = os.path.join(directory, f"{uuid.uuid4().hex}{suffix}")
+    default_name = "dataset.csv" if is_dataset else "screenshot.png"
+    safe_name = re.sub(r"[^A-Za-z0-9._ -]+", "_", os.path.basename(file.filename or default_name))[:120] or default_name
+    try:
+        with open(stored, "wb") as handle:
+            handle.write(png)
+        os.chmod(stored, 0o600)
+        storage_service.sync_file(stored)
+        old_path = existing.file_path if existing else None
+        if existing is None:
+            existing = WorkflowEvidence(workflow_id=workflow.id, question_id=question_id, slot=slot, file_path=stored,
+                                        original_filename=safe_name, file_size=len(png))
+            db.add(existing)
+        else:
+            existing.file_path, existing.original_filename, existing.file_size = stored, safe_name, len(png)
+        # A finished report was built from the earlier screenshots; the student runs again to include this one.
+        reset = workflow.status == "completed"
+        if reset:
+            workflow.status, workflow.stage = "ready", "review"
+        db.commit()
+    except Exception:
+        db.rollback()
+        if os.path.exists(stored):
+            os.unlink(stored)
+        raise
+    if old_path and old_path != stored:
+        try:
+            storage_service.delete_file(old_path)
+        except OSError:
+            pass
+    db.refresh(existing)
+    return {**_evidence_json(existing), "label": slot_definition.get("label"), "report_outdated": reset}
+
+
+@router.get("/{upload_id}/evidence/{evidence_id}/image")
+async def evidence_image(upload_id: int, evidence_id: int, user: User = Depends(get_current_user),
+                         db: Session = Depends(get_db)):
+    from ..services.storage_service import storage_service
+    workflow = _workflow_for_evidence(upload_id, user, db)
+    row = db.query(WorkflowEvidence).filter_by(id=evidence_id, workflow_id=workflow.id).first()
+    if row is None or str(row.file_path).lower().endswith(".csv"):      # a dataset is never served as an image
+        raise HTTPException(404, "Screenshot not found.")
+    try:
+        path = await asyncio.to_thread(storage_service.ensure_local, row.file_path)
+    except FileNotFoundError:
+        raise HTTPException(404, "Screenshot not found.") from None
+    return FileResponse(path, media_type="image/png",
+                        headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=300",
+                                 "Content-Security-Policy": "default-src 'none'"})
+
+
+@router.delete("/{upload_id}/evidence/{evidence_id}")
+async def delete_evidence(upload_id: int, evidence_id: int, user: User = Depends(get_current_user),
+                          db: Session = Depends(get_db), csrf: bool = Depends(require_csrf_token)):
+    from ..services.storage_service import storage_service
+    workflow = _workflow_for_evidence(upload_id, user, db)
+    if workflow.status in BUSY_STATES:
+        raise HTTPException(409, "Wait for the current run to finish before changing screenshots.")
+    row = db.query(WorkflowEvidence).filter_by(id=evidence_id, workflow_id=workflow.id).first()
+    if row is None:
+        raise HTTPException(404, "Screenshot not found.")
+    path = row.file_path
+    db.delete(row)
+    reset = workflow.status == "completed"
+    if reset:
+        workflow.status, workflow.stage = "ready", "review"
+    db.commit()
+    try:
+        storage_service.delete_file(path)
+    except OSError:
+        pass
+    return {"deleted": evidence_id, "report_outdated": reset}
 
 
 def _convert_docx_to_html(file_path: str) -> str:

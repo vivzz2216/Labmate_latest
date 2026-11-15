@@ -1,0 +1,181 @@
+tweet_id,date,user,text,label,likes,retweets
+5011,2026-03-01,user_09,"VerdantBank just made my day, brilliant service #Pricing",positive,7,0
+5022,2026-03-01,user_26,"Absolutely love QuantaCab, the experience is fantastic #CustomerCare",positive,170,74
+5018,2026-03-02,user_13,"Another outage at QuantaCab, this is unacceptable #Trending",negative,118,17
+5057,2026-03-02,user_36,"Paid for VerdantBank and got a poor experience, very frustrating #TechNews",negative,10,20
+5061,2026-03-02,user_34,Anyone using NimbusPhone at work? Curious how it fits #Service,neutral,1,49
+5100,2026-03-02,user_25,"Absolutely love QuantaCab, the experience is fantastic #Pricing",positive,84,76
+5009,2026-03-03,user_08,"Paid for NimbusPhone and got a poor experience, very frustrating #CustomerCare",negative,77,75
+5044,2026-03-03,user_06,"Absolutely love QuantaCab, the experience is fantastic #Update",positive,31,56
+5048,2026-03-03,user_09,"QuantaCab keeps getting better, great update this week #TechNews",positive,127,45
+5111,2026-03-03,user_36,"Paid for QuantaCab and got a poor experience, very frustrating #TechNews",negative,214,17
+5086,2026-03-04,user_31,"Amazing support from QuantaCab, solved my issue in minutes #TechNews",positive,96,68
+5136,2026-03-04,user_31,"Worst update ever from VerdantBank, nothing works now #Update",negative,84,33
+5003,2026-03-05,user_17,"Five stars for VerdantBank, smooth and reliable #TechNews",positive,192,32
+5092,2026-03-05,user_18,"QuantaCab is overpriced and slow, not worth it #Pricing",negative,113,50
+5008,2026-03-06,user_40,QuantaCab released a statement about the upcoming changes #Update,neutral,143,64
+5025,2026-03-06,user_40,"Another outage at NimbusPhone, this is unacceptable #CustomerCare",negative,43,42
+5077,2026-03-06,user_05,"Really disappointed with VerdantBank, the app keeps crashing #Update",negative,21,25
+5161,2026-03-06,user_01,"Paid for NimbusPhone and got a poor experience, very frustrating #Update",negative,115,31
+5051,2026-03-08,user_32,"Paid for QuantaCab and got a poor experience, very frustrating #Feedback",negative,151,12
+5109,2026-03-08,user_10,"Amazing support from QuantaCab, solved my issue in minutes #CustomerCare",positive,48,38
+5026,2026-03-09,user_04,Reading reviews of QuantaCab before deciding #Trending,neutral,46,1
+5068,2026-03-09,user_09,"VerdantBank support ignored me for three days, terrible #TechNews",negative,149,44
+5118,2026-03-10,user_32,"Absolutely love VerdantBank, the experience is fantastic #CustomerCare",positive,37,2
+5155,2026-03-10,user_37,VerdantBank will host a webinar on Friday #TechNews #Trending,neutral,65,61
+5005,2026-03-11,user_30,Reading reviews of VerdantBank before deciding #Pricing,neutral,95,40
+5066,2026-03-11,user_28,"Five stars for VerdantBank, smooth and reliable #Service",positive,174,43
+5079,2026-03-11,user_34,"Another outage at VerdantBank, this is unacceptable #Update #Trending",negative,21,44
+5114,2026-03-11,user_29,"Super happy with VerdantBank, would recommend to everyone #Feedback",positive,204,70
+5134,2026-03-11,user_09,Anyone using VerdantBank at work? Curious how it fits #Pricing #Trending,neutral,93,21
+5152,2026-03-11,user_35,Just saw the new QuantaCab announcement today #TechNews #Trending,neutral,63,53
+5039,2026-03-12,user_24,"VerdantBank support ignored me for three days, terrible #Pricing",negative,183,76
+5046,2026-03-12,user_18,Just saw the new NimbusPhone announcement today #Service #Trending,neutral,103,39
+5078,2026-03-12,user_05,Reading reviews of QuantaCab before deciding #Service,neutral,8,55
+5132,2026-03-12,user_25,"Absolutely love QuantaCab, the experience is fantastic #Trending",positive,87,57
+5027,2026-03-13,user_12,"Another outage at QuantaCab, this is unacceptable #TechNews",negative,195,36
+5031,2026-03-13,user_06,Trying out VerdantBank this week to compare options #Pricing,neutral,54,72
+5045,2026-03-13,user_32,Just saw the new QuantaCab announcement today #Service,neutral,194,61
+5096,2026-03-13,user_40,"VerdantBank keeps getting better, great update this week #Trending",positive,40,26
+5032,2026-03-14,user_37,"NimbusPhone is overpriced and slow, not worth it #CustomerCare",negative,174,59
+5069,2026-03-14,user_07,"Absolutely love VerdantBank, the experience is fantastic #Service",positive,11,18
+5091,2026-03-14,user_21,"Another outage at NimbusPhone, this is unacceptable #Trending",negative,165,31
+5095,2026-03-14,user_08,"Amazing support from VerdantBank, solved my issue in minutes #TechNews",positive,57,52
+5127,2026-03-14,user_38,"Another outage at QuantaCab, this is unacceptable #Pricing",negative,96,18
+5143,2026-03-14,user_37,"VerdantBank support ignored me for three days, terrible #Update",negative,11,59
+5015,2026-03-15,user_07,"Five stars for QuantaCab, smooth and reliable #Feedback",positive,200,11
+5021,2026-03-15,user_17,Trying out NimbusPhone this week to compare options #Update,neutral,105,11
+5083,2026-03-15,user_34,"Worst update ever from QuantaCab, nothing works now #Trending",negative,177,42
+5147,2026-03-15,user_01,QuantaCab released a statement about the upcoming changes #Pricing,neutral,188,62
+5028,2026-03-16,user_05,"NimbusPhone keeps getting better, great update this week #Feedback",positive,85,24
+5098,2026-03-16,user_36,"Absolutely love VerdantBank, the experience is fantastic #CustomerCare",positive,192,46
+5141,2026-03-16,user_12,"Another outage at QuantaCab, this is unacceptable #Feedback",negative,134,38
+5176,2026-03-16,user_28,"Paid for VerdantBank and got a poor experience, very frustrating #Service",negative,50,60
+5014,2026-03-17,user_38,"Paid for QuantaCab and got a poor experience, very frustrating #Trending",negative,142,19
+5016,2026-03-17,user_29,"NimbusPhone keeps getting better, great update this week #Feedback",positive,189,17
+5035,2026-03-17,user_03,"VerdantBank support ignored me for three days, terrible #Update",negative,110,18
+5081,2026-03-17,user_27,VerdantBank released a statement about the upcoming changes #Feedback,neutral,7,38
+5094,2026-03-17,user_23,"Paid for QuantaCab and got a poor experience, very frustrating #CustomerCare",negative,81,23
+5108,2026-03-17,user_15,"VerdantBank just made my day, brilliant service #TechNews",positive,3,43
+5002,2026-03-18,user_19,"Super happy with QuantaCab, would recommend to everyone #CustomerCare",positive,175,78
+5017,2026-03-18,user_23,QuantaCab will host a webinar on Friday #Pricing,neutral,61,73
+5126,2026-03-18,user_24,"Super happy with VerdantBank, would recommend to everyone #Feedback",positive,37,64
+5012,2026-03-19,user_33,"Another outage at VerdantBank, this is unacceptable #Service",negative,98,61
+5115,2026-03-19,user_25,"Absolutely love VerdantBank, the experience is fantastic #Pricing",positive,25,4
+5148,2026-03-20,user_20,"VerdantBank keeps getting better, great update this week #Update",positive,27,38
+5123,2026-03-21,user_27,"VerdantBank support ignored me for three days, terrible #Feedback",negative,41,54
+5085,2026-03-22,user_33,Just saw the new NimbusPhone announcement today #Pricing,neutral,166,30
+5151,2026-03-22,user_10,Just saw the new NimbusPhone announcement today #Update,neutral,0,40
+5170,2026-03-22,user_23,"Absolutely love QuantaCab, the experience is fantastic #CustomerCare",positive,29,78
+5171,2026-03-22,user_01,"NimbusPhone support ignored me for three days, terrible #Feedback",negative,93,66
+5065,2026-03-24,user_24,"Absolutely love VerdantBank, the experience is fantastic #Pricing",positive,100,66
+5072,2026-03-24,user_32,"Amazing support from QuantaCab, solved my issue in minutes #Service",positive,100,5
+5121,2026-03-24,user_37,"Worst update ever from QuantaCab, nothing works now #TechNews",negative,10,39
+5129,2026-03-24,user_31,"QuantaCab keeps getting better, great update this week #Feedback",positive,218,30
+5139,2026-03-24,user_16,Anyone using VerdantBank at work? Curious how it fits #TechNews,neutral,108,63
+5174,2026-03-24,user_38,"Paid for VerdantBank and got a poor experience, very frustrating #TechNews",negative,108,30
+5020,2026-03-25,user_17,"Amazing support from NimbusPhone, solved my issue in minutes #Service",positive,175,37
+5087,2026-03-25,user_31,"Amazing support from VerdantBank, solved my issue in minutes #Feedback",positive,142,69
+5168,2026-03-25,user_32,Just saw the new QuantaCab announcement today #Service,neutral,193,1
+5169,2026-03-25,user_12,Reading reviews of VerdantBank before deciding #Feedback,neutral,219,7
+5179,2026-03-25,user_38,"Five stars for VerdantBank, smooth and reliable #CustomerCare",positive,156,22
+5019,2026-03-26,user_38,"Worst update ever from NimbusPhone, nothing works now #CustomerCare",negative,77,26
+5023,2026-03-26,user_08,"Amazing support from VerdantBank, solved my issue in minutes #Service",positive,167,10
+5106,2026-03-26,user_37,"Worst update ever from VerdantBank, nothing works now #Pricing",negative,143,25
+5007,2026-03-27,user_25,"Absolutely love VerdantBank, the experience is fantastic #Trending",positive,145,11
+5036,2026-03-27,user_31,Anyone using VerdantBank at work? Curious how it fits #TechNews,neutral,75,17
+5140,2026-03-27,user_38,"Super happy with QuantaCab, would recommend to everyone #CustomerCare",positive,209,54
+5104,2026-03-28,user_20,Just saw the new NimbusPhone announcement today #Feedback,neutral,134,1
+5137,2026-03-28,user_35,"Paid for NimbusPhone and got a poor experience, very frustrating #Service",negative,57,45
+5173,2026-03-28,user_06,"Amazing support from NimbusPhone, solved my issue in minutes #Pricing",positive,29,79
+5043,2026-03-29,user_18,"Paid for VerdantBank and got a poor experience, very frustrating #Pricing",negative,170,46
+5112,2026-03-29,user_17,"Five stars for VerdantBank, smooth and reliable #Trending",positive,3,52
+5120,2026-03-29,user_12,"Another outage at QuantaCab, this is unacceptable #Pricing",negative,182,55
+5041,2026-03-30,user_30,"Absolutely love VerdantBank, the experience is fantastic #TechNews",positive,113,4
+5055,2026-03-30,user_34,NimbusPhone will host a webinar on Friday #Update,neutral,117,67
+5178,2026-03-30,user_08,"Paid for NimbusPhone and got a poor experience, very frustrating #CustomerCare",negative,83,80
+5059,2026-03-31,user_31,"QuantaCab keeps getting better, great update this week #Service",positive,189,62
+5073,2026-03-31,user_16,Just saw the new VerdantBank announcement today #Pricing,neutral,191,59
+5054,2026-04-01,user_12,Anyone using QuantaCab at work? Curious how it fits #CustomerCare,neutral,141,70
+5067,2026-04-01,user_29,"VerdantBank is overpriced and slow, not worth it #Update",negative,35,50
+5110,2026-04-02,user_11,Trying out NimbusPhone this week to compare options #Update,neutral,136,28
+5138,2026-04-02,user_08,"Absolutely love QuantaCab, the experience is fantastic #TechNews",positive,72,67
+5117,2026-04-03,user_17,"Amazing support from NimbusPhone, solved my issue in minutes #CustomerCare",positive,186,65
+5124,2026-04-03,user_03,"Paid for NimbusPhone and got a poor experience, very frustrating #Update",negative,201,23
+5130,2026-04-03,user_02,"QuantaCab just made my day, brilliant service #CustomerCare",positive,57,52
+5150,2026-04-03,user_09,"VerdantBank just made my day, brilliant service #Trending",positive,63,20
+5010,2026-04-04,user_02,"QuantaCab is overpriced and slow, not worth it #Update",negative,149,80
+5030,2026-04-04,user_04,"QuantaCab just made my day, brilliant service #Feedback",positive,220,58
+5047,2026-04-04,user_36,"NimbusPhone keeps getting better, great update this week #TechNews",positive,212,55
+5089,2026-04-04,user_33,"Amazing support from NimbusPhone, solved my issue in minutes #Update",positive,161,80
+5038,2026-04-05,user_33,Trying out QuantaCab this week to compare options #Feedback,neutral,213,12
+5133,2026-04-05,user_17,"Absolutely love VerdantBank, the experience is fantastic #Service",positive,67,38
+5160,2026-04-05,user_26,"QuantaCab is overpriced and slow, not worth it #Trending",negative,183,68
+5060,2026-04-06,user_01,"Amazing support from QuantaCab, solved my issue in minutes #Service",positive,212,63
+5074,2026-04-06,user_26,"Worst update ever from VerdantBank, nothing works now #Trending",negative,186,72
+5099,2026-04-06,user_07,"Amazing support from NimbusPhone, solved my issue in minutes #Service",positive,192,30
+5116,2026-04-06,user_21,VerdantBank released a statement about the upcoming changes #TechNews,neutral,73,30
+5145,2026-04-06,user_21,Anyone using VerdantBank at work? Curious how it fits #Update,neutral,140,71
+5033,2026-04-07,user_37,Trying out VerdantBank this week to compare options #Feedback,neutral,74,57
+5093,2026-04-07,user_16,"Five stars for VerdantBank, smooth and reliable #Feedback",positive,135,74
+5131,2026-04-07,user_14,"Super happy with NimbusPhone, would recommend to everyone #Update",positive,198,48
+5049,2026-04-08,user_01,"Really disappointed with VerdantBank, the app keeps crashing #Service",negative,205,64
+5103,2026-04-08,user_35,"VerdantBank support ignored me for three days, terrible #Trending",negative,97,6
+5153,2026-04-09,user_03,"Five stars for QuantaCab, smooth and reliable #Feedback",positive,187,9
+5142,2026-04-10,user_23,"QuantaCab support ignored me for three days, terrible #TechNews",negative,198,0
+5001,2026-04-11,user_26,"NimbusPhone keeps getting better, great update this week #Update #Trending",positive,160,23
+5088,2026-04-11,user_39,"Paid for QuantaCab and got a poor experience, very frustrating #Service #Trending",negative,122,70
+5090,2026-04-11,user_12,Just saw the new NimbusPhone announcement today #CustomerCare #Trending,neutral,101,41
+5144,2026-04-11,user_28,"VerdantBank just made my day, brilliant service #Service",positive,56,17
+5149,2026-04-11,user_01,"Super happy with VerdantBank, would recommend to everyone #Service #Trending",positive,149,23
+5050,2026-04-12,user_36,"NimbusPhone support ignored me for three days, terrible #Update #Trending",negative,34,22
+5177,2026-04-12,user_16,"Worst update ever from VerdantBank, nothing works now #Feedback",negative,7,59
+5082,2026-04-14,user_15,"Amazing support from NimbusPhone, solved my issue in minutes #CustomerCare",positive,160,52
+5122,2026-04-14,user_14,"QuantaCab keeps getting better, great update this week #Service",positive,3,5
+5052,2026-04-15,user_01,"Absolutely love VerdantBank, the experience is fantastic #Service",positive,189,62
+5070,2026-04-15,user_08,"NimbusPhone is overpriced and slow, not worth it #TechNews",negative,8,58
+5075,2026-04-15,user_40,Just saw the new VerdantBank announcement today #TechNews,neutral,141,50
+5167,2026-04-15,user_15,"VerdantBank support ignored me for three days, terrible #Trending",negative,190,39
+5058,2026-04-16,user_14,"Amazing support from VerdantBank, solved my issue in minutes #Trending",positive,61,79
+5076,2026-04-16,user_32,"QuantaCab just made my day, brilliant service #Service",positive,100,29
+5113,2026-04-16,user_13,VerdantBank released a statement about the upcoming changes #Pricing,neutral,166,71
+5156,2026-04-16,user_39,"VerdantBank is overpriced and slow, not worth it #CustomerCare",negative,135,75
+5157,2026-04-17,user_40,Anyone using NimbusPhone at work? Curious how it fits #Service,neutral,125,54
+5071,2026-04-18,user_28,"Five stars for QuantaCab, smooth and reliable #CustomerCare",positive,100,39
+5146,2026-04-18,user_17,VerdantBank will host a webinar on Friday #TechNews,neutral,124,54
+5006,2026-04-19,user_04,"Really disappointed with NimbusPhone, the app keeps crashing #Trending",negative,83,60
+5042,2026-04-19,user_33,"Five stars for NimbusPhone, smooth and reliable #Pricing",positive,52,76
+5097,2026-04-19,user_09,"VerdantBank keeps getting better, great update this week #Feedback",positive,20,76
+5105,2026-04-19,user_36,"Five stars for VerdantBank, smooth and reliable #TechNews",positive,69,70
+5154,2026-04-19,user_14,Reading reviews of NimbusPhone before deciding #Feedback,neutral,217,12
+5029,2026-04-20,user_34,"QuantaCab keeps getting better, great update this week #CustomerCare",positive,32,63
+5063,2026-04-20,user_18,"Super happy with NimbusPhone, would recommend to everyone #Trending",positive,38,30
+5101,2026-04-20,user_40,Reading reviews of VerdantBank before deciding #Trending,neutral,79,58
+5158,2026-04-20,user_35,"Amazing support from VerdantBank, solved my issue in minutes #Update",positive,175,65
+5172,2026-04-20,user_26,Just saw the new QuantaCab announcement today #Trending,neutral,98,25
+5053,2026-04-21,user_29,"Super happy with QuantaCab, would recommend to everyone #Feedback",positive,93,16
+5107,2026-04-21,user_14,"Really disappointed with QuantaCab, the app keeps crashing #CustomerCare",negative,2,45
+5024,2026-04-22,user_13,"Paid for VerdantBank and got a poor experience, very frustrating #Update",negative,98,67
+5080,2026-04-22,user_23,"Paid for VerdantBank and got a poor experience, very frustrating #CustomerCare",negative,170,34
+5084,2026-04-22,user_30,"Super happy with QuantaCab, would recommend to everyone #CustomerCare",positive,14,26
+5135,2026-04-22,user_10,"QuantaCab just made my day, brilliant service #Pricing",positive,41,80
+5166,2026-04-22,user_09,Reading reviews of VerdantBank before deciding #CustomerCare,neutral,102,13
+5056,2026-04-23,user_26,NimbusPhone will host a webinar on Friday #Service,neutral,98,50
+5064,2026-04-23,user_24,"NimbusPhone is overpriced and slow, not worth it #CustomerCare",negative,50,4
+5040,2026-04-24,user_20,"Five stars for QuantaCab, smooth and reliable #CustomerCare",positive,197,57
+5119,2026-04-25,user_01,"Really disappointed with VerdantBank, the app keeps crashing #TechNews",negative,153,47
+5162,2026-04-25,user_34,"Super happy with NimbusPhone, would recommend to everyone #Service",positive,104,37
+5163,2026-04-25,user_22,"Worst update ever from NimbusPhone, nothing works now #TechNews",negative,69,19
+5175,2026-04-25,user_13,Reading reviews of VerdantBank before deciding #Feedback,neutral,0,60
+5004,2026-04-26,user_22,"NimbusPhone support ignored me for three days, terrible #Feedback",negative,215,44
+5034,2026-04-26,user_25,Just saw the new QuantaCab announcement today #CustomerCare,neutral,164,20
+5062,2026-04-26,user_07,Just saw the new QuantaCab announcement today #Trending,neutral,73,65
+5164,2026-04-26,user_39,Reading reviews of QuantaCab before deciding #Trending,neutral,97,76
+5180,2026-04-26,user_19,"NimbusPhone is overpriced and slow, not worth it #CustomerCare",negative,188,76
+5013,2026-04-27,user_31,"Paid for VerdantBank and got a poor experience, very frustrating #CustomerCare",negative,68,30
+5037,2026-04-27,user_02,"Five stars for QuantaCab, smooth and reliable #Feedback",positive,14,4
+5125,2026-04-27,user_26,"Amazing support from NimbusPhone, solved my issue in minutes #TechNews",positive,145,18
+5159,2026-04-27,user_13,"Another outage at VerdantBank, this is unacceptable #Service",negative,146,13
+5128,2026-04-28,user_20,"Another outage at NimbusPhone, this is unacceptable #CustomerCare",negative,17,24
+5102,2026-04-29,user_11,"VerdantBank keeps getting better, great update this week #Service",positive,190,19
+5165,2026-04-29,user_39,"Amazing support from VerdantBank, solved my issue in minutes #Feedback",positive,106,31

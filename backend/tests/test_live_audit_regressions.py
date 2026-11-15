@@ -107,7 +107,7 @@ def test_catalog_counts_are_the_actual_frontend_experiments():
     from app.routers.lab_catalog import LAB_CATALOG_DATA
     source=json.loads((Path(__file__).resolve().parents[2]/'frontend/lib/lab-catalog.json').read_text(encoding='utf-8-sig'))
     assert {c['slug']:c['experiment_count'] for c in LAB_CATALOG_DATA} == {c['slug']:len(c['experiments']) for c in source}
-    assert sum(c['experiment_count'] for c in LAB_CATALOG_DATA)==30
+    assert sum(c['experiment_count'] for c in LAB_CATALOG_DATA)==40
     assert 'ubuntu' not in {c['slug'] for c in LAB_CATALOG_DATA}
     cpp=next(c for c in source if c['slug']=='c-cpp')['experiments'][0]
     assert all(word in cpp['starterPrompt'].lower() for word in ('linked list','stack','binary search tree'))

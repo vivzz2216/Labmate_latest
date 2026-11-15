@@ -55,7 +55,7 @@ class TheoryProcessingTests(unittest.IsolatedAsyncioTestCase):
             db.add(user)
             db.flush()
             db.add(UserProfile(user_id=user.id, course="Computer Engineering", institution="Real University",
-                               profile_metadata={"usn": "USN-9876"}))
+                               profile_metadata={"usn": "USN-9876", "year": "3rd Year", "graduation_year": "2027"}))
             upload = Upload(user_id=user.id, filename="manual.docx", original_filename="manual.docx",
                             file_path=str(self.source_path), file_type="docx", file_size=self.source_path.stat().st_size)
             db.add(upload)
@@ -117,7 +117,10 @@ class TheoryProcessingTests(unittest.IsolatedAsyncioTestCase):
              patch("app.services.assignment_workflow.generation_service.generate_json", generated), \
              patch("app.services.assignment_workflow.settings.REPORT_DIR", str(self.root / "reports")):
             await process_assignment(self.workflow_id)
-        prompt = generated.await_args.args[1]
-        self.assertIn("Asha Rao", prompt)
-        self.assertNotIn("USN-2024-001", prompt)
-        self.assertNotIn("Engineering College", prompt)
+        # A legacy auto-generated profile is not a student's own details. The run is
+        # refused before generation, so placeholder values can never reach a prompt.
+        generated.assert_not_awaited()
+        with self.factory() as db:
+            workflow = db.get(AssignmentWorkflow, self.workflow_id)
+            self.assertEqual(workflow.status, "failed")
+            self.assertIn("Complete your student profile", workflow.error)

@@ -2,18 +2,27 @@
 import ast
 import re
 
+from .notebook_magics import neutralize_magics
+
+# A line that is only an import statement is the manual's own sample code, not an instruction to the student.
+CODE_IMPORT = re.compile(
+    r'^\s*(?:import\s+[\w.]+(?:\s+as\s+\w+)?(?:\s*,\s*[\w.]+(?:\s+as\s+\w+)?)*'
+    r'|from\s+[\w.]+\s+import\s+[\w.*, ()]+)\s*;?\s*$')
+
 LIBRARIES = {
     'pyspark': r'pyspark',
     'numpy': r'numpy', 'pandas': r'pandas', 'sklearn': r'scikit[ -]?learn|sklearn',
     'scipy': r'scipy', 'matplotlib': r'matplotlib', 'seaborn': r'seaborn',
     'nltk': r'nltk', 'skfuzzy': r'scikit[ -]?fuzzy|skfuzzy', 'pgmpy': r'pgmpy',
     'torch': r'pytorch|torch', 'tensorflow': r'tensorflow', 'keras': r'keras',
+    'networkx': r'networkx', 'bs4': r'beautiful[ ]?soup|bs4',
 }
 
 
 def missing_required_libraries(question, code):
     groups = []
-    for sentence in re.split(r'[\n.!?]+', question):
+    prose = '\n'.join(line for line in question.splitlines() if not CODE_IMPORT.match(line))
+    for sentence in re.split(r'[\n.!?]+', prose):
         if not re.search(r'\b(?:use|using|import|with|require[sd]?|train|build|implement|fit|develop)\b', sentence, re.I):
             continue
         if re.search(r'\b(?:optional|may use|can use|if available)\b', sentence, re.I):
@@ -54,7 +63,7 @@ def missing_required_libraries(question, code):
         return []
 
     try:
-        tree = ast.parse(code)
+        tree = ast.parse(neutralize_magics(code))
     except SyntaxError:
         return sorted({name for g in groups for name in g})
 

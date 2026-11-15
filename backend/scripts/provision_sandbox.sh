@@ -15,6 +15,12 @@ else
   echo 'TensorFlow skipped: AVX is unavailable on this worker CPU.' >> /var/log/labmate-runtime-pip.log
 fi
 /opt/labmate-runtime/venv/bin/pip check >> /var/log/labmate-runtime-pip.log 2>&1
+# NLTK corpora for the Social Media Analytics lab (VADER sentiment lexicon, stop words, tokenizer). Fetched here, by the
+# operator; a submitted notebook can never download them.
+mkdir -p /opt/labmate-runtime/nltk_data
+/opt/labmate-runtime/venv/bin/python -m nltk.downloader -d /opt/labmate-runtime/nltk_data vader_lexicon stopwords punkt_tab >> /var/log/labmate-runtime-pip.log 2>&1
+# The downloader reports a failed download without a failing exit status, so check the file itself.
+test -f /opt/labmate-runtime/nltk_data/sentiment/vader_lexicon.zip
 PLAYWRIGHT_BROWSERS_PATH=/opt/labmate-runtime/browsers /opt/labmate-runtime/venv/bin/python -m playwright install --with-deps chromium
 cd /opt/labmate-runtime
 # Dependencies are installed by the operator, never by submitted code. Jobs have no egress.

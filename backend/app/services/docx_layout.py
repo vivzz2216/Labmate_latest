@@ -37,7 +37,45 @@ def apply_student_metadata(document, student_name: str, roll_no: str = "", depar
         pass
 
 
-def embed_theory_block(document, question_text: str, answer_text: str, question_num: int = 1):
+def _add_table(document, table):
+    """A small bordered table ({'headers': [...], 'rows': [[...]]}) with a shaded header row.
+
+    Borders are written directly, because a manual's own Word template may not define the 'Table Grid' style.
+    """
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    headers, rows = table["headers"], table["rows"]
+    grid = document.add_table(rows=1 + len(rows), cols=len(headers))
+    properties = grid._tbl.tblPr
+    borders = OxmlElement("w:tblBorders")
+    for edge in ("top", "left", "bottom", "right", "insideH", "insideV"):
+        element = OxmlElement("w:" + edge)
+        element.set(qn("w:val"), "single")
+        element.set(qn("w:sz"), "4")
+        element.set(qn("w:color"), "94A3B8")
+        borders.append(element)
+    properties.append(borders)
+    for column, text in enumerate(headers):
+        cell = grid.rows[0].cells[column]
+        cell.text = ""
+        run = cell.paragraphs[0].add_run(text)
+        run.bold = True
+        run.font.size = Pt(9)
+        shade = OxmlElement("w:shd")
+        shade.set(qn("w:val"), "clear")
+        shade.set(qn("w:fill"), "E2E8F0")
+        cell._tc.get_or_add_tcPr().append(shade)
+    for row_index, row in enumerate(rows, 1):
+        for column, text in enumerate(row):
+            cell = grid.rows[row_index].cells[column]
+            cell.text = ""
+            cell.paragraphs[0].add_run(text).font.size = Pt(9)
+    spacer = document.add_paragraph()
+    spacer.paragraph_format.space_after = Pt(4)
+    return grid
+
+
+def embed_theory_block(document, question_text: str, answer_text: str, question_num: int = 1, table=None):
     """
     Format a theoretical concept or viva answer cleanly in the Word document.
     Enforces clean typography, subtle indentation, and preserves the strict rule
@@ -84,11 +122,105 @@ def embed_theory_block(document, question_text: str, answer_text: str, question_
             run_line.font.size = Pt(10)
             run_line.font.color.rgb = RGBColor(0x33, 0x41, 0x55)  # Slate 700
 
+    if table:
+        _add_table(document, table)
+
     # Subtle space before next item
     p_spacer = document.add_paragraph()
     p_spacer.paragraph_format.space_before = Pt(0)
     p_spacer.paragraph_format.space_after = Pt(8)
     return p_q
+
+
+def embed_conclusion(document, text: str):
+    """The experiment's Conclusion, after every part, in the same typography as the answers."""
+    heading = document.add_paragraph()
+    heading.paragraph_format.keep_with_next = True
+    heading.paragraph_format.space_before = Pt(14)
+    heading.paragraph_format.space_after = Pt(4)
+    run = heading.add_run("Conclusion")
+    run.bold = True
+    run.font.size = Pt(12)
+    run.font.color.rgb = RGBColor(0x0F, 0x17, 0x2A)
+    for line in str(text or "").split("\n"):
+        line = line.strip()
+        if not line:
+            continue
+        paragraph = document.add_paragraph()
+        paragraph.paragraph_format.space_after = Pt(4)
+        paragraph.paragraph_format.line_spacing = 1.15
+        body = paragraph.add_run(line)
+        body.font.size = Pt(10.5)
+        body.font.color.rgb = RGBColor(0x33, 0x41, 0x55)
+    return heading
+
+
+def strip_procedure_heading(text):
+    """The block prints its own "Procedure:" label; drop the model's copy ("Procedure:" or "Procedure: Web Scraping using
+    ParseHub" keeps only "Web Scraping using ParseHub") so the label is not printed twice."""
+    import re
+    lines = str(text or "").strip().split("\n")
+    if lines and re.match(r"^\s*\**\s*procedure\b\s*:?\s*\**\s*", lines[0], re.I):
+        rest = re.sub(r"^\s*\**\s*procedure\b\s*:?\s*\**\s*", "", lines[0], flags=re.I).strip()
+        lines = ([rest] if rest else []) + lines[1:]
+    return "\n".join(lines).strip()
+
+
+def embed_evidence_block(document, title: str, procedure_text: str, number: int = 1,
+                         image_paths=(), captions=(), missing=(), table=None):
+    """A part done in an outside tool: the written procedure, then the student's own screenshots.
+
+    LabMate never draws these images. A screenshot the student has not attached yet is shown as a plain
+    placeholder naming it, so an incomplete report is visibly incomplete instead of looking finished.
+    """
+    heading = document.add_paragraph()
+    heading.paragraph_format.keep_with_next = True
+    heading.paragraph_format.space_before = Pt(12)
+    heading.paragraph_format.space_after = Pt(4)
+    label = heading.add_run(f"Part {number}: ")
+    label.bold = True
+    label.font.size = Pt(11)
+    label.font.color.rgb = RGBColor(0x0F, 0x17, 0x2A)
+    name = heading.add_run(str(title).strip())
+    name.font.size = Pt(11)
+    name.font.color.rgb = RGBColor(0x1E, 0x29, 0x3B)
+
+    text = strip_procedure_heading(procedure_text)
+    if text:
+        tag = document.add_paragraph()
+        tag.paragraph_format.keep_with_next = True
+        tag.paragraph_format.left_indent = Inches(0.15)
+        run = tag.add_run("Procedure:")
+        run.bold = True
+        run.font.size = Pt(10)
+        run.font.color.rgb = RGBColor(0x33, 0x41, 0x55)
+        for line in text.split("\n"):
+            line = line.strip()
+            if not line:
+                continue
+            paragraph = document.add_paragraph()
+            paragraph.paragraph_format.left_indent = Inches(0.2)
+            paragraph.paragraph_format.space_after = Pt(4)
+            paragraph.paragraph_format.line_spacing = 1.15
+            body = paragraph.add_run(line)
+            body.font.size = Pt(10)
+            body.font.color.rgb = RGBColor(0x33, 0x41, 0x55)
+
+    if table:
+        _add_table(document, table)
+    captions = list(captions)
+    for index, path in enumerate(image_paths):
+        embed_screenshot(document, path, caption=captions[index] if index < len(captions) else "Student-supplied screenshot")
+    for slot_label in missing:
+        paragraph = document.add_paragraph()
+        paragraph.paragraph_format.left_indent = Inches(0.2)
+        note = paragraph.add_run(f"[Not attached: {slot_label}. Upload it and generate the report again.]")
+        note.italic = True
+        note.font.size = Pt(10)
+        note.font.color.rgb = RGBColor(0xB4, 0x23, 0x18)
+    spacer = document.add_paragraph()
+    spacer.paragraph_format.space_after = Pt(8)
+    return heading
 from PIL import Image
 
 

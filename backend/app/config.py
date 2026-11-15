@@ -285,6 +285,9 @@ class Settings(BaseSettings):
 
     # Frontend URL (used for redirects when frontend is deployed separately)
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "")
+    # Where LabMate's Power BI Desktop studio page (/power-bi) can be reached from the backend, for the automatic
+    # dashboard capture. Falls back to FRONTEND_URL, then to the local dev server.
+    POWERBI_STUDIO_URL: str = os.getenv("POWERBI_STUDIO_URL", "")
     
     @field_validator('RATE_LIMIT_ENABLED', mode='before')
     @classmethod

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {run,fetchReadRetry,template} from './bridge.mjs';
+import {run,fetchReadRetry,template,needsNotebookExtras} from './bridge.mjs';
 
 process.env.RAILWAY_API_TOKEN='test-token-must-never-enter-vm';
 process.env.RAILWAY_ENVIRONMENT_ID='test-environment';
@@ -20,6 +20,25 @@ test('R exists in the actual image; approved ML cache is opt-in and allowlisted'
   assert.ok(commands.some(c=>c.includes('Rscript --vanilla')));
   assert.ok(commands.at(-1).endsWith('prepare_dl.py mnist'));
   assert.throws(()=>template({template(){return recipe}},Buffer.from('deps'),false,['; curl bad'],'trusted-cache-script'));
+});
+
+test('notebook-extra layer is added only for jobs that import extra libraries',async()=>{
+  const build=notebookExtras=>{const commands=[];const recipe={run(command){commands.push(command);return this}};
+    template({template(){return recipe}},Buffer.from('deps'),false,[],'',notebookExtras);return commands};
+  assert.ok(!build(null).some(c=>c.includes('nltk')));
+  const extra=build(Buffer.from('networkx==3.7\n')).at(-1);
+  assert.ok(extra.includes(Buffer.from('networkx==3.7\n').toString('base64')));
+  assert.ok(extra.includes('--no-deps')&&extra.includes('vader_lexicon')&&extra.includes('test -f'));
+  assert.equal(needsNotebookExtras({code:'import pandas as pd\nfrom nltk.sentiment.vader import SentimentIntensityAnalyzer'}),true);
+  assert.equal(needsNotebookExtras({code:'  import networkx as nx'}),true);
+  assert.equal(needsNotebookExtras({code:'from bs4 import BeautifulSoup'}),true);
+  assert.equal(needsNotebookExtras({code:'import pandas\nprint("import nltk")'}),false);
+  for(const [code,expected] of [['print(7)',false],['import networkx as nx\nprint(7)',true]]) {
+    const commands=[];const recipe={run(command){commands.push(command);return this}};
+    const f=fixture({exitCode:0,stdout:'{"success":true}'});f.sdk.template=()=>recipe;
+    await run({bundle:'',job:{code,language:'colab'}},f.sdk,Buffer.from('deps'),Buffer.from('extra-pins'));
+    assert.equal(commands.some(c=>c.includes(Buffer.from('extra-pins').toString('base64'))),expected);
+  }
 });
 
 test('network retries are bounded and only apply to read queries',async()=>{
