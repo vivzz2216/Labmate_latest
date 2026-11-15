@@ -1,4 +1,4 @@
-import api, { apiService } from "./api";
+import api, { apiService, type UploadResponse } from "./api";
 
 export type LabLanguage =
   | "auto"
@@ -20,6 +20,12 @@ export interface LabQuestion {
   text: string;
   language: LabLanguage;
   track?: string;
+  // Multi-part lab experiments (Social Media Analytics): one question per part.
+  kind?: "theory" | "code" | "evidence";
+  part_title?: string;
+  experiment_no?: number;
+  builtin_datasets?: string[];
+  evidence_slots?: { id: string; label: string }[];
   datasets?: Record<string, string>;
   python_template?: "idle" | "jupyter";
   jupyter_theme?: "light" | "dark";
@@ -102,6 +108,14 @@ export interface LabWorkflow {
 
 export type ManualMode = "code_only" | "theory_and_code";
 
+export interface EvidenceItem {
+  id: number;
+  question_id: number;
+  slot: string;
+  filename: string;
+  size: number;
+}
+
 export interface BatchItem {
   id: string;
   file: File;
@@ -118,6 +132,13 @@ export interface BatchItem {
 export const workflowApi = {
   async clarify(uploadId: number, revision: number, answers: Record<string, string>): Promise<LabWorkflow> {
     return (await api.post(`/api/workflows/${uploadId}/clarify`, { revision, answers })).data;
+  },
+  // Start a lab from typed experiment text (a lab catalogue launch) with no uploaded manual.
+  async startFromPrompt(
+    questions: LabQuestion[],
+    title: string,
+  ): Promise<{ upload: UploadResponse; workflow: LabWorkflow }> {
+    return (await api.post("/api/workflows/from-prompt", { questions, title })).data;
   },
   async extract(uploadId: number): Promise<LabWorkflow> {
     return (await api.post(`/api/workflows/${uploadId}/extract`)).data;
@@ -138,6 +159,30 @@ export const workflowApi = {
     },
   ): Promise<LabWorkflow> {
     return (await api.post(`/api/workflows/${uploadId}/process`, data)).data;
+  },
+  // Screenshots the student made in an outside tool (Power BI, Canva, ParseHub...) for an evidence part.
+  async listEvidence(uploadId: number): Promise<EvidenceItem[]> {
+    return (await api.get(`/api/workflows/${uploadId}/evidence`)).data;
+  },
+  async uploadEvidence(
+    uploadId: number,
+    questionId: number,
+    slot: string,
+    file: File,
+  ): Promise<EvidenceItem & { report_outdated: boolean }> {
+    const form = new FormData();
+    form.append("question_id", String(questionId));
+    form.append("slot", slot);
+    form.append("file", file);
+    return (
+      await api.post(`/api/workflows/${uploadId}/evidence`, form, { headers: { "Content-Type": "multipart/form-data" } })
+    ).data;
+  },
+  async deleteEvidence(uploadId: number, evidenceId: number): Promise<{ report_outdated: boolean }> {
+    return (await api.delete(`/api/workflows/${uploadId}/evidence/${evidenceId}`)).data;
+  },
+  async evidenceImage(uploadId: number, evidenceId: number): Promise<Blob> {
+    return (await api.get(`/api/workflows/${uploadId}/evidence/${evidenceId}/image`, { responseType: "blob" })).data;
   },
   async preview(uploadId: number): Promise<string> {
     return (

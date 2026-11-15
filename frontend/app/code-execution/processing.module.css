@@ -1677,3 +1677,102 @@
     padding: 8px 4px;
   }
 }
+
+/* ========================================================
+   TRACK PLATFORM / IDE TABLE (Step 3 Companion)
+   ======================================================== */
+.platformTableWrap {
+  margin-top: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.65);
+  overflow: hidden;
+}
+
+.platformTableHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+}
+
+.platformTableScroll {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.platformTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10.5px;
+  text-align: left;
+}
+
+.platformTable th {
+  padding: 6px 8px;
+  font-size: 9.5px;
+  font-weight: 600;
+  color: #64748b;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  white-space: nowrap;
+}
+
+.platformTable td {
+  padding: 6px 8px;
+  color: #cbd5e1;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  vertical-align: middle;
+  line-height: 1.35;
+}
+
+.platformTable tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.platformTable tbody tr {
+  transition: background 0.15s ease;
+}
+
+.platformRowClickable {
+  cursor: pointer;
+}
+
+.platformRowClickable:hover {
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.platformRowActive {
+  background: rgba(59, 130, 246, 0.14);
+}
+
+.platformName {
+  font-weight: 600;
+  color: #f8fafc;
+  white-space: nowrap;
+}
+
+.platformRecBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 9.5px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 9999px;
+  white-space: nowrap;
+  background: rgba(255, 255, 255, 0.06);
+  color: #cbd5e1;
+}
+
+.platformRecTop {
+  background: rgba(234, 179, 8, 0.14);
+  color: #fde047;
+  border: 1px solid rgba(234, 179, 8, 0.25);
+}

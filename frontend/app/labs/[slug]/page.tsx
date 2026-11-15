@@ -1,15 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import {
   Layers,
-  ArrowRight,
   Cpu,
   Network,
   CheckCircle2,
-  Search,
   Sparkles,
   Terminal,
   UploadCloud,
@@ -17,78 +15,46 @@ import {
   Database,
   Code2,
   BookOpen,
-  Play,
-  Copy,
-  Check,
   ChevronRight,
+  ArrowRight,
   ShieldCheck,
-  Info,
+  Zap,
 } from "lucide-react";
 import DashboardShell from "@/components/dashboard/DashboardShell";
-import { getLabCategory, type LabExperiment } from "@/lib/labCatalog";
+import { getLabCategory } from "@/lib/labCatalog";
 import styles from "../labs.module.css";
 
 const iconMap: Record<string, any> = {
-  "deep_learning": Cpu,
-  "distributed": Network,
-  "python": Terminal,
-  "java": FileCode2,
-  "cpp": Code2,
-  "web": Code2,
-  "sql": Database,
-  "colab": BookOpen,
-  "r": BookOpen,
+  deep_learning: Cpu,
+  distributed: Network,
+  python: Terminal,
+  java: FileCode2,
+  cpp: Code2,
+  web: Code2,
+  sql: Database,
+  colab: BookOpen,
+  r: BookOpen,
+  sma: Network,
+};
+
+const runtimeLabelMap: Record<string, string> = {
+  deep_learning: "PyTorch & TensorFlow",
+  distributed: "Java Multi-Process",
+  python: "Python 3 Runtime",
+  java: "Java OpenJDK",
+  cpp: "GCC & G++ Toolchain",
+  web: "Node.js & React Web",
+  sql: "MySQL Server",
+  colab: "Jupyter & Colab",
+  r: "R & RStudio",
+  sma: "Python Notebook",
 };
 
 export default function LabSectionDetailPage() {
   const params = useParams();
-  const router = useRouter();
   const slug = (params?.slug as string) || "";
 
   const category = useMemo(() => getLabCategory(slug), [slug]);
-
-  const [search, setSearch] = useState("");
-  const [selectedSubcategory, setSelectedSubcategory] = useState<string>("all");
-  const [copiedId, setCopiedId] = useState<string | null>(null);
-
-  const subcategories = useMemo(() => {
-    if (!category) return [];
-    const set = new Set<string>();
-    category.experiments.forEach((exp) => set.add(exp.category));
-    return Array.from(set);
-  }, [category]);
-
-  const filteredExperiments = useMemo(() => {
-    if (!category) return [];
-    return category.experiments.filter((exp) => {
-      const matchesSearch =
-        search.trim() === "" ||
-        exp.title.toLowerCase().includes(search.toLowerCase()) ||
-        exp.aim.toLowerCase().includes(search.toLowerCase()) ||
-        exp.description.toLowerCase().includes(search.toLowerCase()) ||
-        exp.frameworks.some((fw) => fw.toLowerCase().includes(search.toLowerCase()));
-
-      const matchesSub =
-        selectedSubcategory === "all" || exp.category === selectedSubcategory;
-
-      return matchesSearch && matchesSub;
-    });
-  }, [category, search, selectedSubcategory]);
-
-  const copyPrompt = (exp: LabExperiment) => {
-    navigator.clipboard.writeText(exp.starterPrompt);
-    setCopiedId(exp.id);
-    setTimeout(() => setCopiedId(null), 2000);
-  };
-
-  const launchExperiment = (exp: LabExperiment) => {
-    const query = new URLSearchParams({
-      track: category?.track || "auto",
-      prompt: exp.starterPrompt,
-      exp: exp.id,
-    });
-    router.push(`/code-execution?${query.toString()}`);
-  };
 
   if (!category) {
     return (
@@ -97,12 +63,13 @@ export default function LabSectionDetailPage() {
         subtitle="The requested lab category does not exist."
       >
         <div className={styles.container}>
-          <div className="text-center py-20">
-            <h1 className="text-2xl font-bold text-white mb-4">Lab Category Not Found</h1>
-            <p className="text-zinc-400 mb-6">
+          <div className={styles.emptyFilterState}>
+            <Layers size={32} />
+            <h3>Lab Category Not Found</h3>
+            <p style={{ marginBottom: "1.25rem" }}>
               Could not find any lab track matching &ldquo;{slug}&rdquo;.
             </p>
-            <Link href="/labs" className={styles.primaryBtn}>
+            <Link href="/labs" className={styles.heroPrimaryPill}>
               Back to All Lab Sections
             </Link>
           </div>
@@ -112,79 +79,111 @@ export default function LabSectionDetailPage() {
   }
 
   const Icon = iconMap[category.track] || Layers;
+  const runtimeLabel =
+    runtimeLabelMap[category.track] || category.defaultLanguage.toUpperCase();
 
   return (
     <DashboardShell
       title={category.title}
       subtitle={category.tagline}
-      searchValue={search}
-      onSearchChange={setSearch}
-      searchPlaceholder={`Search within ${category.shortTitle} experiments...`}
     >
       <div className={styles.container}>
-        {/* Breadcrumb Navigation */}
-        <nav className={styles.breadcrumbs} aria-label="Breadcrumb">
-          <Link href="/dashboard">Dashboard</Link>
-          <span className={styles.breadcrumbSeparator}>/</span>
-          <Link href="/labs">Lab Sections</Link>
-          <span className={styles.breadcrumbSeparator}>/</span>
-          <span className={styles.breadcrumbActive}>{category.title}</span>
-        </nav>
+        {/* Cosmic Hero Section Header */}
+        <header className={styles.heroBanner}>
+          <div className={styles.heroArc} aria-hidden="true" />
+          <div className={styles.heroInner}>
+            {/* Breadcrumb Navigation */}
+            <nav className={styles.breadcrumbs} aria-label="Breadcrumb">
+              <Link href="/dashboard">Dashboard</Link>
+              <ChevronRight size={13} className={styles.breadcrumbSeparator} />
+              <Link href="/labs">Lab Sections</Link>
+              <ChevronRight size={13} className={styles.breadcrumbSeparator} />
+              <span className={styles.breadcrumbActive}>{category.title}</span>
+            </nav>
 
-        {/* Section Header */}
-        <header className={styles.header}>
-          <div className={styles.titleRow}>
-            <div className="flex items-center gap-3">
-              <span
-                style={{
-                  display: "inline-flex",
-                  padding: "0.5rem",
-                  borderRadius: "0.5rem",
-                  background: `${category.accentColor}20`,
-                  border: `1px solid ${category.accentColor}40`,
-                }}
-              >
-                <Icon size={28} color={category.accentColor} />
-              </span>
-              <h1 className={styles.title}>{category.title}</h1>
+            <div className={styles.heroGrid}>
+              <div className={styles.heroContent}>
+                <div className={styles.titleRow}>
+                  <span
+                    className={styles.titleIconBox}
+                    style={{
+                      background: `${category.accentColor}22`,
+                      border: `1px solid ${category.accentColor}45`,
+                    }}
+                  >
+                    <Icon size={22} color={category.accentColor} />
+                  </span>
+                  <h1 className={styles.title}>{category.title}</h1>
+                  {category.badge && (
+                    <span
+                      className={`${styles.badge} ${
+                        category.track === "deep_learning"
+                          ? styles.badgePurple
+                          : category.track === "distributed"
+                            ? styles.badgeSky
+                            : ""
+                      }`}
+                    >
+                      <Sparkles size={11} /> {category.badge}
+                    </span>
+                  )}
+                </div>
+
+                <p className={styles.heroSubtitle}>{category.description}</p>
+
+                <div className={styles.heroFeaturesRow}>
+                  <span className={styles.heroFeatureItem}>
+                    <ShieldCheck size={15} /> Sandboxed Runtime
+                  </span>
+                  <span className={styles.heroFeatureItem}>
+                    <Zap size={15} /> Automated Code &amp; Proofs
+                  </span>
+                  <span className={styles.heroFeatureItem}>
+                    <CheckCircle2 size={15} /> DOCX Reports
+                  </span>
+                </div>
+
+                {/* Action CTAs */}
+                <div className={styles.actionsBar}>
+                  <Link
+                    href={`/code-execution?track=${category.track}`}
+                    className={styles.heroPrimaryPill}
+                  >
+                    <UploadCloud size={15} />
+                    <span>Upload {category.shortTitle} Lab Manual</span>
+                  </Link>
+                  <Link
+                    href={`/code-execution?track=${category.track}`}
+                    className={styles.heroSecondaryPill}
+                  >
+                    <span>Open in Execution Studio</span>
+                    <ArrowRight size={15} />
+                  </Link>
+                </div>
+              </div>
+
+              <div className={styles.heroStats}>
+                <div className={styles.heroStatTile}>
+                  <span className={styles.heroStatValue}>{category.shortTitle}</span>
+                  <span className={styles.heroStatLabel}>Lab Track</span>
+                </div>
+                <div className={styles.heroStatTile}>
+                  <span className={styles.heroStatValue}>{runtimeLabel.split(" ")[0]}</span>
+                  <span className={styles.heroStatLabel}>Runtime Engine</span>
+                </div>
+                <div className={styles.heroStatTile}>
+                  <span className={styles.heroStatValue}>DOCX</span>
+                  <span className={styles.heroStatLabel}>Auto Reports</span>
+                </div>
+              </div>
             </div>
-            {category.badge && (
-              <span
-                className={`${styles.badge} ${
-                  category.track === "deep_learning"
-                    ? styles.badgePurple
-                    : category.track === "distributed"
-                    ? styles.badgeSky
-                    : ""
-                }`}
-              >
-                <Sparkles size={12} /> {category.badge}
-              </span>
-            )}
-          </div>
-          <p className={styles.tagline}>{category.tagline}</p>
-          <p className={styles.description}>{category.description}</p>
-
-          {/* Action CTAs */}
-          <div className={styles.actionsBar}>
-            <Link
-              href={`/code-execution?track=${category.track}`}
-              className={styles.primaryBtn}
-            >
-              <UploadCloud size={16} />
-              <span>Upload {category.shortTitle} Lab Manual</span>
-            </Link>
-            <a href="#experiments" className={styles.secondaryBtn}>
-              <span>Browse All {category.experiments.length} Experiments</span>
-              <ChevronRight size={16} />
-            </a>
           </div>
         </header>
 
-        {/* Environment Specs Grid */}
-        <section aria-labelledby="specs-heading" className="mb-8">
-          <h2 id="specs-heading" className="text-xs uppercase tracking-wider text-zinc-500 font-semibold mb-3">
-            Runtime Architecture &amp; Environment
+        {/* Runtime Architecture & Specs Grid */}
+        <section aria-labelledby="specs-heading" className={styles.specsSection}>
+          <h2 id="specs-heading" className={styles.specsHeading}>
+            Runtime Architecture &amp; Specifications
           </h2>
           <div className={styles.specsGrid}>
             {category.environmentSpecs.map((spec, i) => (
@@ -196,147 +195,89 @@ export default function LabSectionDetailPage() {
           </div>
         </section>
 
-        {/* Experiments Section */}
-        <section id="experiments" aria-labelledby="experiments-heading">
-          <div className={styles.experimentSectionHeader}>
-            <div>
-              <h2 id="experiments-heading" className={styles.experimentSectionTitle}>
-                Curriculum Experiment Catalog
-              </h2>
-              <span className={styles.experimentCountBadge}>
-                Showing {filteredExperiments.length} of {category.experiments.length} practicals
-              </span>
-            </div>
+        {/* Core Capabilities */}
+        <section aria-labelledby="capabilities-heading" className={styles.capabilitiesSection}>
+          <h2 id="capabilities-heading" className={styles.specsHeading}>
+            Key Track Capabilities
+          </h2>
+          <div className={styles.capabilitiesGrid}>
+            {category.features.map((feat, idx) => (
+              <div key={idx} className={styles.capabilityCard}>
+                <CheckCircle2
+                  size={16}
+                  color={category.accentColor}
+                  className={styles.capabilityIcon}
+                />
+                <p className={styles.capabilityText}>{feat}</p>
+              </div>
+            ))}
           </div>
+        </section>
 
-          {/* Subcategory & Filter Pills */}
-          <div className={styles.filterRow}>
-            <div className={styles.filterPills}>
-              <button
-                type="button"
-                className={`${styles.filterPill} ${selectedSubcategory === "all" ? styles.filterPillActive : ""}`}
-                onClick={() => setSelectedSubcategory("all")}
-              >
-                All Topics ({category.experiments.length})
-              </button>
-              {subcategories.map((subcat) => (
-                <button
-                  key={subcat}
-                  type="button"
-                  className={`${styles.filterPill} ${selectedSubcategory === subcat ? styles.filterPillActive : ""}`}
-                  onClick={() => setSelectedSubcategory(subcat)}
-                >
-                  {subcat}
-                </button>
+        {/* Multi-part experiments (Social Media Analytics): pick an experiment to launch all of its parts */}
+        {category.experiments.some((experiment) => experiment.parts?.length) && (
+          <section aria-labelledby="experiments-heading" className={styles.capabilitiesSection}>
+            <h2 id="experiments-heading" className={styles.specsHeading}>
+              Experiments
+            </h2>
+            <div className={styles.capabilitiesGrid}>
+              {category.experiments.map((experiment) => (
+                <div key={experiment.id} className={styles.capabilityCard} style={{ display: "block" }}>
+                  <h3 style={{ fontWeight: 600, marginBottom: 4 }}>
+                    Experiment {experiment.number}: {experiment.title}
+                  </h3>
+                  <p className={styles.capabilityText}>{experiment.aim}</p>
+                  <ul style={{ margin: "8px 0", paddingLeft: 18, fontSize: 13, opacity: 0.85 }}>
+                    {(experiment.parts || []).map((part) => (
+                      <li key={part.title}>
+                        {part.kind === "code" ? "Code" : part.kind === "evidence" ? "Your screenshots" : "Written answer"}:{" "}
+                        {part.title}
+                      </li>
+                    ))}
+                  </ul>
+                  {experiment.downloads?.map((name) => (
+                    <a
+                      key={name}
+                      href={`/api/labs/datasets/${name}`}
+                      style={{ display: "block", fontSize: 13, textDecoration: "underline" }}
+                    >
+                      Download practice file: {name}
+                    </a>
+                  ))}
+                  <Link
+                    href={`/code-execution?track=${category.track}&exp=${experiment.id}`}
+                    className={styles.heroPrimaryPill}
+                    style={{ marginTop: 10, display: "inline-flex" }}
+                  >
+                    <span>Launch experiment {experiment.number}</span>
+                    <ArrowRight size={15} />
+                  </Link>
+                </div>
               ))}
             </div>
-            <div className={styles.searchBox}>
-              <Search size={15} />
-              <input
-                type="text"
-                placeholder="Search experiments..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
+          </section>
+        )}
+
+        {/* Launch Studio Callout */}
+        <section className={styles.launchCard}>
+          <div className={styles.launchCardContent}>
+            <h3>Ready to finish your {category.shortTitle} lab?</h3>
+            <p>
+              Upload your syllabus or assignment document (.pdf or .docx).
+              LabMate automatically reads the questions, runs the code in an
+              isolated sandbox, captures high-resolution visual evidence, and
+              assembles your finished Word report.
+            </p>
           </div>
-
-          {/* Experiments List */}
-          <div className={styles.experimentList}>
-            {filteredExperiments.map((exp) => (
-              <article key={exp.id} className={styles.experimentCard}>
-                <div className={styles.experimentHeaderRow}>
-                  <div className={styles.experimentTitleCol}>
-                    <div className={styles.experimentMetaTags}>
-                      <span className={styles.expNumberPill}>Exp {exp.number}</span>
-                      <span className={styles.expCategoryPill}>{exp.category}</span>
-                      <span className={styles.expDifficultyPill}>{exp.difficulty}</span>
-                    </div>
-                    <h3 className={styles.experimentTitle}>{exp.title}</h3>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => copyPrompt(exp)}
-                      className={styles.secondaryBtn}
-                      style={{ padding: "0.45rem 0.75rem", fontSize: "0.8rem" }}
-                      title="Copy student prompt to clipboard"
-                    >
-                      {copiedId === exp.id ? (
-                        <>
-                          <Check size={13} color="#4ade80" />
-                          <span>Copied</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy size={13} />
-                          <span>Copy Prompt</span>
-                        </>
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => launchExperiment(exp)}
-                      className={styles.runLabBtn}
-                    >
-                      <Play size={13} fill="currentColor" />
-                      <span>Run / Solve Lab</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Aim */}
-                <div className={styles.experimentAimBox}>
-                  <span className={styles.experimentAimLabel}>Aim:</span>
-                  <span>{exp.aim}</span>
-                </div>
-
-                {/* Description */}
-                <p className="text-xs text-zinc-400 leading-relaxed mb-2">
-                  {exp.description}
-                </p>
-
-                {/* Expected Outputs */}
-                <div className="mt-3 mb-2">
-                  <span className="text-[11px] uppercase tracking-wider text-zinc-500 font-semibold block mb-1">
-                    Expected Report Deliverables
-                  </span>
-                  <div className="flex flex-col gap-1">
-                    {exp.expectedOutputs.map((out, idx) => (
-                      <div key={idx} className="flex items-center gap-1.5 text-xs text-zinc-300">
-                        <CheckCircle2 size={12} color="#10b981" className="shrink-0" />
-                        <span>{out}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Footer / Framework Tags */}
-                <div className={styles.experimentFooterRow}>
-                  <div className={styles.frameworksList}>
-                    <span className="text-[11px] text-zinc-500 font-medium">Frameworks:</span>
-                    {exp.frameworks.map((fw, idx) => (
-                      <span key={idx} className={styles.frameworkTag}>
-                        {fw}
-                      </span>
-                    ))}
-                  </div>
-                  <span className="text-[11px] text-zinc-500">
-                    Target Runtime: <strong className="text-zinc-400 capitalize">{exp.runtime}</strong>
-                  </span>
-                </div>
-              </article>
-            ))}
-
-            {filteredExperiments.length === 0 && (
-              <div className="text-center py-12 text-zinc-500 text-sm">
-                No experiments found matching &ldquo;{search}&rdquo;. Try another search term.
-              </div>
-            )}
-          </div>
+          <Link
+            href={`/code-execution?track=${category.track}`}
+            className={styles.heroPrimaryPill}
+          >
+            <span>Launch {category.shortTitle} Studio</span>
+            <ArrowRight size={15} />
+          </Link>
         </section>
       </div>
     </DashboardShell>
   );
 }
-

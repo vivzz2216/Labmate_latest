@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -22,6 +22,7 @@ import {
   PanelLeftOpen,
   ShieldCheck,
   Layers,
+  BookOpen,
 } from "lucide-react";
 import { SiC, SiCplusplus, SiHtml5, SiPython } from "react-icons/si";
 import { FaJava } from "react-icons/fa";
@@ -181,6 +182,7 @@ export function EmptyState({
 export const dashboardNavItems = [
   { label: "Dashboard", icon: LayoutDashboard, href: "/dashboard", matchPrefix: "/dashboard" },
   { label: "Lab Sections", icon: Layers, href: "/labs", matchPrefix: "/labs" },
+  { label: "MU Catalogue", icon: BookOpen, href: "/mumbai-university", matchPrefix: "/mumbai-university" },
   { label: "Workspace", icon: FolderGit2, href: "/workspace", matchPrefix: "/workspace" },
   { label: "My Labs", icon: Terminal, href: "/code-execution", matchPrefix: "/code-execution" },
   { label: "Reports", icon: FileText, href: "/reports", matchPrefix: "/reports" },
@@ -299,17 +301,21 @@ export default function DashboardShell({
 
   const displayName = user?.name?.trim() || "Student";
 
-  const navItems = user?.is_admin
-    ? [
-        ...dashboardNavItems,
-        {
-          label: "Owner Admin",
-          icon: ShieldCheck,
-          href: "/admin/dashboard",
-          matchPrefix: "/admin",
-        },
-      ]
-    : dashboardNavItems;
+  const navItems = useMemo(
+    () =>
+      user?.is_admin
+        ? [
+            ...dashboardNavItems,
+            {
+              label: "Owner Admin",
+              icon: ShieldCheck,
+              href: "/admin/dashboard",
+              matchPrefix: "/admin",
+            },
+          ]
+        : dashboardNavItems,
+    [user?.is_admin],
+  );
 
   useEffect(() => {
     navItems.forEach((item) => {
@@ -319,7 +325,7 @@ export default function DashboardShell({
         // ignore prefetch errors
       }
     });
-  }, [router, user?.is_admin]);
+  }, [router, navItems]);
 
   const go = (href: string) => {
     setMobileNavOpen(false);

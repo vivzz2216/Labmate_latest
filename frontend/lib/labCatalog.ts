@@ -1,5 +1,25 @@
 import catalog from "./lab-catalog.json";
 import { LabLanguage } from "./workflow";
+import { SMA_CATEGORY } from "./smaCatalog";
+
+// A multi-part experiment (Social Media Analytics) is launched as one question per part:
+//   theory   - a written answer,
+//   code     - a Python notebook run on LabMate practice data,
+//   evidence - work done in an outside tool; LabMate writes the procedure and the student uploads their own screenshots.
+export type LabPartKind = "theory" | "code" | "evidence";
+
+export interface LabEvidenceSlot {
+  id: string;
+  label: string;
+}
+
+export interface LabPart {
+  kind: LabPartKind;
+  title: string;
+  text: string;
+  builtinDatasets?: string[];
+  evidenceSlots?: LabEvidenceSlot[];
+}
 
 export interface LabExperiment {
   id: string;
@@ -15,6 +35,9 @@ export interface LabExperiment {
   prerequisites?: string[];
   expectedOutputs: string[];
   starterPrompt: string;
+  parts?: LabPart[];
+  // Practice files the student may want to download (for example to load into Power BI).
+  downloads?: string[];
 }
 
 export interface LabCategory {
@@ -32,7 +55,10 @@ export interface LabCategory {
   experiments: LabExperiment[];
 }
 
-export const LAB_CATEGORIES = catalog as LabCategory[];
+export const LAB_CATEGORIES: LabCategory[] = [
+  ...(catalog as LabCategory[]).filter((c) => c.slug !== "social-media-analytics"),
+  SMA_CATEGORY,
+];
 
 export function getLabCategory(slugOrTrack: string): LabCategory | undefined {
   const normalized = slugOrTrack.toLowerCase().replace(/_/g, "-");

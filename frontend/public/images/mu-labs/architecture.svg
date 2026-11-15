@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 220" width="640" height="220" fill="none">
+  <rect width="640" height="220" fill="#0d0f14"/>
+  <circle cx="320" cy="100" r="76" stroke="#181b24" stroke-width="1"/>
+  <circle cx="320" cy="100" r="118" stroke="#141720" stroke-width="1"/>
+  
+      <g transform="translate(270, 48)" fill="none" stroke="#e4e4e7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="20" y="20" width="60" height="60" rx="6" fill="#181b22"/>
+        <rect x="34" y="34" width="32" height="32" rx="3"/>
+        <path d="M36 8v12M50 8v12M64 8v12M36 80v12M50 80v12M64 80v12M8 36h12M8 50h12M8 64h12M80 36h12M80 50h12M80 64h12" opacity="0.7"/>
+      </g>
+    
+  <text x="20" y="198" fill="#8b8e99" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="600" letter-spacing="0.08em">COMPUTER ARCHITECTURE</text>
+</svg>
