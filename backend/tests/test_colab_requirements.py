@@ -9,9 +9,26 @@ from app.services.generation_service import student_personalization_prompt
     ('Use matplotlib and seaborn to make a chart.', 'import matplotlib.pyplot as plt\nplt.plot([1])', ['seaborn']),
     ('Use pgmpy for a Bayesian network.', 'import pgmpy\nprint(2)', ['pgmpy']),
     ('You may use NLTK.', 'import re\nprint(re.findall("x", "x"))', []),
+    # "PyTorch or Keras" offers a choice: either framework satisfies it.
+    ('Implement an MLP using PyTorch or Keras.', 'import torch\nprint(torch.zeros(1))', []),
+    ('Implement an MLP using PyTorch or Keras.', 'from tensorflow import keras\nprint(keras.layers)', []),
+    ('Implement an MLP using PyTorch or Keras.', 'import numpy as np\nprint(np.zeros(1))', ['keras or torch']),
+    # Both are required when the sentence joins them with "and".
+    ('Use PyTorch and Keras.', 'import torch\nprint(torch.zeros(1))', ['keras']),
+    # Keras reached through TensorFlow is still Keras.
+    ('Build a CNN using Keras.', 'from tensorflow import keras\nprint(keras.Sequential())', []),
+    ('Build a CNN using Keras.', 'from tensorflow.keras import layers\nprint(layers.Dense(1))', []),
+    ('Build a CNN using Keras.', 'import tensorflow as tf\nprint(tf.keras.Sequential())', []),
+    ('Build a CNN using Keras.', 'import tensorflow as tf\nprint(tf.zeros(1))', ['keras']),
 ])
 def test_explicit_library_must_be_used(question,code,expected):
     assert missing_required_libraries(question,code)==expected
+
+def test_windows_tensorflow_gpu_warning_is_not_shown_in_notebook_output():
+    from app.services.colab_worker import clean_notebook_text
+    noisy='WARNING:tensorflow:TensorFlow GPU support is not available on native Windows for TensorFlow >= 2.11.\nEpoch 1/5'
+    assert clean_notebook_text(noisy,is_stderr=True)=='Epoch 1/5'
+    assert 'GPU support' in clean_notebook_text(noisy,is_stderr=False)
 
 def test_torch_style_super_initialization_is_allowed_but_introspection_is_not():
     validate_cell('class Model:\n def __init__(self):\n  super().__init__()')
@@ -29,3 +46,13 @@ def test_tensorflow_reports_missing_cpu_feature_instead_of_crashing(monkeypatch)
     with pytest.raises(RuntimeError,match='require AVX'):
         colab_worker.validate_cell('import tensorflow as tf')
     colab_worker.validate_cell('import torch')
+
+
+def test_keras_step_progress_collapses_to_the_finished_bar_like_a_notebook():
+    from app.services.colab_worker import clean_notebook_text
+    bar = "\u2501" * 20
+    text = ("Epoch 1/2\n 1/41 %s 0s 10ms/step - accuracy: 0.1\n13/41 %s 0s 4ms/step - accuracy: 0.2\n41/41 %s 1s 8ms/step - accuracy: 0.3 - val_accuracy: 0.4\n"
+            "Epoch 2/2\n 1/41 %s 0s 3ms/step - accuracy: 0.5\n41/41 %s 0s 4ms/step - accuracy: 0.6\nTest accuracy: 0.9") % ((bar,) * 5)
+    out = clean_notebook_text(text).split("\n")
+    assert out[0] == "Epoch 1/2" and out[1].startswith("41/41") and "val_accuracy: 0.4" in out[1]
+    assert out[2] == "Epoch 2/2" and out[3].startswith("41/41") and out[4] == "Test accuracy: 0.9" and len(out) == 5

@@ -3,12 +3,10 @@ import os
 import re
 import uuid
 from pathlib import Path
-from docx import Document
-from docx.enum.section import WD_ORIENT
 from docx.shared import Inches, Pt, RGBColor
 from ..config import settings
 from ..security.validators import normalize_output_name
-from .docx_layout import apply_student_metadata, save_document_atomic
+from .docx_layout import apply_student_metadata, create_report_document, save_document_atomic
 
 
 def report_number(filename, question):
@@ -62,20 +60,19 @@ def answer_question(question):
 
 
 def clean_report(upload, workflow, source):
-    doc = Document();section = doc.sections[0]
-    section.orientation = WD_ORIENT.LANDSCAPE
-    section.page_width, section.page_height = Inches(11.7), Inches(8.3)
+    doc,source_is_docx = create_report_document(upload, landscape=True)
+    section = doc.sections[-1]
     section.top_margin = section.bottom_margin = Inches(.5)
-    section.left_margin = section.right_margin = Inches(.6)
-    for name in ('Normal','Title','Heading 1','Heading 2'):
-        doc.styles[name].font.name = 'Calibri';doc.styles[name].font.color.rgb = RGBColor(0,0,0)
-        for border in doc.styles[name]._element.xpath('.//w:pBdr'):
-            border.getparent().remove(border)
-    doc.styles['Normal'].font.size = Pt(11)
-    doc.styles['Normal'].paragraph_format.space_after = Pt(6)
-    doc.styles['Heading 1'].font.size = Pt(14)
-    doc.styles['Heading 1'].paragraph_format.space_before = Pt(0)
-    doc.styles['Heading 1'].paragraph_format.space_after = Pt(4)
+    if not source_is_docx:
+        for name in ('Normal','Title','Heading 1','Heading 2'):
+            doc.styles[name].font.name = 'Calibri';doc.styles[name].font.color.rgb = RGBColor(0,0,0)
+            for border in doc.styles[name]._element.xpath('.//w:pBdr'):
+                border.getparent().remove(border)
+        doc.styles['Normal'].font.size = Pt(11)
+        doc.styles['Normal'].paragraph_format.space_after = Pt(6)
+        doc.styles['Heading 1'].font.size = Pt(14)
+        doc.styles['Heading 1'].paragraph_format.space_before = Pt(0)
+        doc.styles['Heading 1'].paragraph_format.space_after = Pt(4)
     for ri,result in enumerate(workflow.results):
         number = report_number(upload.original_filename if len(workflow.results)==1 else '',result.get('question','')) or result['id']
         heading = result.get('question','').split('\n')[0]

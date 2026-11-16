@@ -35,6 +35,8 @@ const iconMap: Record<string, any> = {
   colab: BookOpen,
   ubuntu: Terminal,
   r: BookOpen,
+  sma: Network,
+  networks: Network,
 };
 
 const runtimeLabelMap: Record<string, string> = {
@@ -48,6 +50,8 @@ const runtimeLabelMap: Record<string, string> = {
   colab: "Jupyter & Colab",
   ubuntu: "Linux Shell & GNOME",
   r: "R & RStudio",
+  sma: "Python Notebook",
+  networks: "LabMate Practice Studios",
 };
 
 export default function LabSectionDetailPage() {
@@ -213,6 +217,59 @@ export default function LabSectionDetailPage() {
             ))}
           </div>
         </section>
+
+        {/* Multi-part experiments (Social Media Analytics): pick an experiment to launch all of its parts */}
+        {category.experiments.some((experiment) => experiment.parts?.length) && (
+          <section aria-labelledby="experiments-heading" className={styles.capabilitiesSection}>
+            <h2 id="experiments-heading" className={styles.specsHeading}>
+              Experiments
+            </h2>
+            <div className={styles.capabilitiesGrid}>
+              {category.experiments.map((experiment) => (
+                <div key={experiment.id} className={styles.capabilityCard} style={{ display: "block" }}>
+                  <h3 style={{ fontWeight: 600, marginBottom: 4 }}>
+                    Experiment {experiment.number}: {experiment.title}
+                  </h3>
+                  <p className={styles.capabilityText}>{experiment.aim}</p>
+                  <ul style={{ margin: "8px 0", paddingLeft: 18, fontSize: 13, opacity: 0.85 }}>
+                    {(experiment.parts || []).map((part) => (
+                      <li key={part.title}>
+                        {part.kind === "code" ? "Code" : part.kind === "evidence" ? (part.studio ? "Built automatically" : "Your screenshots") : "Written answer"}:{" "}
+                        {part.title}
+                      </li>
+                    ))}
+                  </ul>
+                  {experiment.downloads?.map((name) => (
+                    <a
+                      key={name}
+                      href={`/api/labs/datasets/${name}`}
+                      style={{ display: "block", fontSize: 13, textDecoration: "underline" }}
+                    >
+                      Download practice file: {name}
+                    </a>
+                  ))}
+                  {experiment.workspaces?.map((workspace) => (
+                    <Link
+                      key={workspace.href}
+                      href={workspace.href}
+                      style={{ display: "block", fontSize: 13, textDecoration: "underline", marginBottom: 4 }}
+                    >
+                      {workspace.label}
+                    </Link>
+                  ))}
+                  <Link
+                    href={`/code-execution?track=${category.track}&exp=${experiment.id}`}
+                    className={styles.heroPrimaryPill}
+                    style={{ marginTop: 10, display: "inline-flex" }}
+                  >
+                    <span>Launch experiment {experiment.number}</span>
+                    <ArrowRight size={15} />
+                  </Link>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* Launch Studio Callout */}
         <section className={styles.launchCard}>

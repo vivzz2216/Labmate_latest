@@ -31,3 +31,8 @@ def ensure_workflow_columns(engine):
         connection.execute(text(
             "CREATE INDEX IF NOT EXISTS ix_assignment_workflows_batch_id "
             "ON assignment_workflows (batch_id)"))
+        columns_after = {column["name"] for column in inspect(connection).get_columns("assignment_workflows")}
+        if {"status", "updated_at", "id"}.issubset(columns_after):
+            connection.execute(text(
+                "CREATE INDEX IF NOT EXISTS idx_workflows_status_updated "
+                "ON assignment_workflows (status, updated_at, id)"))

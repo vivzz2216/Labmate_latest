@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from ..database import get_db
-from ..models import Upload, User
+from ..models import User
 from ..schemas import AnalyzeRequest, AnalyzeResponse, AITaskCandidate
 from ..services.analysis_service import analysis_service
 from ..middleware.auth import get_current_user, verify_upload_ownership

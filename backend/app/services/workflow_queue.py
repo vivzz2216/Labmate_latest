@@ -134,6 +134,11 @@ def fail_claim(workflow_id, claim_token, message):
             .values(status="failed", error=func.coalesce(AssignmentWorkflow.error, message),
                     lease_expires_at=None, updated_at=_now())
         ).rowcount
+        if changed == 1 and settings.BILLING_ENABLED:
+            workflow = db.get(AssignmentWorkflow, workflow_id, populate_existing=True)
+            if workflow:
+                from .billing_service import settle_workflow_credits
+                settle_workflow_credits(db, workflow)
         db.commit()
     return changed == 1
 

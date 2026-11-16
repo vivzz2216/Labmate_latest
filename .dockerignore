@@ -10,7 +10,7 @@
 **/venv
 **/__pycache__
 **/*.pyc
-**/*.db
+**/*.db*
 **/*.sqlite*
 **/uploads
 **/screenshots
@@ -30,4 +30,4 @@ chrome_extension
 **/audit_artifacts
 **/htmlcov
 **/.pytest_cache
-scratch
+**/scratch

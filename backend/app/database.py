@@ -1,15 +1,24 @@
 from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import declarative_base, sessionmaker, Session
 from sqlalchemy.exc import SQLAlchemyError
 from fastapi import HTTPException
 from contextlib import contextmanager
 from typing import Generator
 from .config import settings
-import os
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def effective_pool_size(configured_size: int, workflow_workers: int) -> int:
+    """Connections kept per process.
+
+    Each running workflow holds a database session for its whole run, and the claim loop and
+    heartbeats need a few more. A pool smaller than the worker count makes workflows wait
+    pool_timeout seconds and then fail, so never size it below the workers plus a margin.
+    """
+    return max(int(configured_size), int(workflow_workers) + 3)
+
 
 # Check if DATABASE_URL is set
 if not settings.DATABASE_URL:
@@ -46,7 +55,7 @@ else:
             db_url,
             pool_pre_ping=True,
             pool_recycle=300,
-            pool_size=settings.DB_POOL_SIZE,
+            pool_size=effective_pool_size(settings.DB_POOL_SIZE, settings.WORKFLOW_WORKERS),
             max_overflow=settings.DB_POOL_MAX_OVERFLOW,
             pool_timeout=30,
             echo=False,

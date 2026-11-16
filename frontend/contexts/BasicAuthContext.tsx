@@ -1,7 +1,6 @@
 'use client'
 
-import React, { createContext, useContext, useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import api, { apiService, TokenResponse, BasicAuthUser } from '@/lib/api'
 
 interface User {
@@ -81,11 +80,16 @@ const formatApiErrorDetail = (detail: any): string => {
   return String(detail)
 }
 
+const notifyAuthExtension = () => {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('labmate:auth-changed'))
+  }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [profileComplete, setProfileComplete] = useState(true)
-  const router = useRouter()
 
   const persistTokens = (tokens: TokenResponse) => {
     if (typeof window === 'undefined') return
@@ -111,6 +115,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     setAuthHeaders(access_token, csrf_token)
+    notifyAuthExtension()
   }
 
   const loadStoredTokens = () => {
@@ -134,6 +139,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (typeof window === 'undefined') return
     localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userData))
     setUser(userData)
+    notifyAuthExtension()
   }
 
   const clearStoredSession = () => {
@@ -146,9 +152,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     apiService.invalidateProfileCache()
     apiService.clearSessionCaches()
     setAuthHeaders(null, null)
+    notifyAuthExtension()
   }
 
-  const checkProfileComplete = async (): Promise<boolean> => {
+  const checkProfileComplete = useCallback(async (): Promise<boolean> => {
     try {
       const profile = await apiService.getUserProfile()
       const isComplete = profile?.is_complete || false
@@ -163,15 +170,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       return isComplete
     } catch (error) {
-      console.error('Failed to check profile:', error)
       const status = (error as any)?.response?.status
-      if (status === 401) {
+      if (status === 401 || status === 403) {
         clearStoredSession()
         setUser(null)
+        setProfileComplete(false)
+        return false
       }
+      console.error('Failed to check profile:', error)
       return false
     }
-  }
+  }, [])
 
   const handleAuthSuccess = async (response: TokenResponse, redirectTo = '/dashboard') => {
     const userPayload = response?.user
@@ -185,8 +194,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     persistUser(sanitizedUserData)
 
     // Homepage actions can send the user directly to the upload studio after sign-in.
-    const destination = redirectTo === '/code-execution' || (redirectTo === '/admin/dashboard' && response.user.is_admin === true) || /^\/checkout\?pack=(quick-lab|lab-pack|semester-pack|college-pack|owner-payment-check)$/.test(redirectTo || '') ? redirectTo! : '/dashboard'
-    router.push(destination)
+    const destination = redirectTo === '/code-execution' || (redirectTo === '/admin/dashboard' && response.user.is_admin === true) || /^\/checkout\?pack=(quick-lab|lab-pack|semester-pack|college-pack|owner-payment-check|payment-check)$/.test(redirectTo || '') ? redirectTo! : '/dashboard'
+    if (typeof window !== 'undefined') {
+      window.location.assign(destination)
+    }
   }
 
   useEffect(() => {
@@ -238,6 +249,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const verifiedUser = { ...parsedUser, is_admin: profile?.is_admin === true }
           setUser(verifiedUser)
           localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(verifiedUser))
+          notifyAuthExtension()
         } catch (profileError: any) {
           const status = profileError?.response?.status
           if (status !== 401 && status !== 403) {
@@ -305,7 +317,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       clearStoredSession()
       setUser(null)
-      router.push('/')
+      if (typeof window !== 'undefined') {
+        window.location.assign('/')
+      }
       setLoading(false)
     }
   }

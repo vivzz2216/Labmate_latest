@@ -4,8 +4,7 @@ For production, consider using Celery + Redis
 """
 import asyncio
 import logging
-from typing import Callable, Any, Dict
-from ..cache import redis_client
+from typing import Callable, Any
 
 logger = logging.getLogger(__name__)
 

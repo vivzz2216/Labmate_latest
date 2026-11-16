@@ -6,17 +6,18 @@ event-loop lag, and DB connection stability without external network or LLM API 
 import asyncio
 import time
 import tracemalloc
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from sqlalchemy import create_engine, select, update
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.config import settings
 from app.database import Base
-from app.models import AssignmentWorkflow, Report, Upload, User
+from app.models import AssignmentWorkflow, Upload, User
+from conftest import student_profile
 from app.monitoring import performance_monitor
 from app.services import assignment_workflow as flow
 from app.services import workflow_queue as queue
@@ -43,7 +44,7 @@ def seed_submissions(db, count=25):
     enqueue_times = {}
     with db.factory() as session:
         for i in range(count):
-            user = User(email=f"student{i}@university.edu", name=f"Student {i}")
+            user = User(email=f"student{i}@university.edu", name=f"Student {i}", profile=student_profile())
             session.add(user)
             session.flush()
 

@@ -3,7 +3,7 @@ Lab Catalog Router - provides public metadata and curriculum for all LabMate lab
 """
 
 from typing import Any, Dict, List
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 
 router = APIRouter(prefix="/labs", tags=["lab-catalog"])
 
@@ -58,7 +58,7 @@ LAB_CATALOG_DATA: List[Dict[str, Any]] = [
             "Automated unit testing & stdin simulation",
             "Standard university practical syllabus coverage",
         ],
-        "experiment_count": 10,
+        "experiment_count": 1,
     },
     {
         "slug": "java",
@@ -73,7 +73,7 @@ LAB_CATALOG_DATA: List[Dict[str, Any]] = [
             "JDK 17/21 compilation and execution",
             "Windows Notepad + Command Prompt captures",
         ],
-        "experiment_count": 10,
+        "experiment_count": 1,
     },
     {
         "slug": "c-cpp",
@@ -88,7 +88,7 @@ LAB_CATALOG_DATA: List[Dict[str, Any]] = [
             "GCC/G++ 13+ native compilation",
             "Code::Blocks IDE source capture style",
         ],
-        "experiment_count": 10,
+        "experiment_count": 1,
     },
     {
         "slug": "web-development",
@@ -103,7 +103,7 @@ LAB_CATALOG_DATA: List[Dict[str, Any]] = [
             "Full browser rendering via Playwright Chromium/Edge engine",
             "VS Code Dark Modern editor presentation",
         ],
-        "experiment_count": 10,
+        "experiment_count": 1,
     },
     {
         "slug": "sql",
@@ -118,7 +118,7 @@ LAB_CATALOG_DATA: List[Dict[str, Any]] = [
             "Real MySQL 8.x database container execution",
             "MySQL Workbench capture style with query and tabular results",
         ],
-        "experiment_count": 10,
+        "experiment_count": 1,
     },
     {
         "slug": "colab",
@@ -133,7 +133,7 @@ LAB_CATALOG_DATA: List[Dict[str, Any]] = [
             "Jupyter / Colab multi-cell execution runtime",
             "Matplotlib, Seaborn, Pandas, and NumPy integration",
         ],
-        "experiment_count": 10,
+        "experiment_count": 1,
     },
     {
         "slug": "ubuntu",
@@ -171,7 +171,56 @@ LAB_CATALOG_DATA: List[Dict[str, Any]] = [
         ],
         "experiment_count": 8,
     },
+    {
+        "slug": "social-media-analytics",
+        "track": "sma",
+        "title": "Social Media Analytics Labs",
+        "short_title": "Social Media Analytics",
+        "tagline": "Platform research, scraping, data cleaning, EDA, sentiment, network analysis and review mining",
+        "description": "Ten Social Media Analytics practicals in one section. Coding parts run as real Python notebooks on LabMate practice data; research parts are written up; work done in outside tools (ParseHub, Power BI, Canva, Google Trends, Similarweb) is documented with your own screenshots.",
+        "default_language": "colab",
+        "badge": "New",
+        "accent_color": "#0d9488",
+        "features": [
+            "Python notebooks with pandas, seaborn, NLTK (VADER), NetworkX and BeautifulSoup",
+            "Bundled practice data and practice web pages; no network access during a run",
+            "Theory answers, comparison tables and written analysis next to the code parts",
+            "Upload your own Power BI, Canva, ParseHub and Similarweb screenshots into the report",
+        ],
+        "experiment_count": 10,
+    },
+    {
+        "slug": "computer-networks",
+        "track": "networks",
+        "title": "Computer Networks Labs",
+        "short_title": "Computer Networks",
+        "tagline": "Packet analysis with a Wireshark-style analyser; hubs, switches and routing with a Packet Tracer-style simulator",
+        "description": "Computer Networks practicals built in LabMate's own practice studios. The packets, tables, ARP and ICMP event lists and routing tables are computed by LabMate's engines, so every explanation in the report agrees with its screenshots. The studios are simplified models, labelled as such in every screenshot; they are not Wireshark or Cisco Packet Tracer.",
+        "default_language": "theory",
+        "badge": "New",
+        "accent_color": "#2563eb",
+        "features": [
+            "Packet analyser: decodes real capture bytes, display filters, packet details, hex view and Follow TCP Stream",
+            "Upload the .pcap or .pcapng you saved from Wireshark, or use a built-in practice capture",
+            "Network simulator: hub flooding, switch learning, ARP, ICMP, routers, RIP routing and link failure",
+            "Screenshots, explanations and answer tables generated together and placed in your Word report",
+        ],
+        "experiment_count": 3,
+    },
 ]
+
+
+@router.get("/datasets/{name}")
+async def download_practice_dataset(name: str) -> Response:
+    """Download one of the invented Social Media Analytics practice files (for Power BI, or to open the practice pages)."""
+    from ..services.sma_datasets import DATASETS, dataset_path
+    if name not in DATASETS:
+        raise HTTPException(status_code=404, detail="Practice dataset not found.")
+    path = dataset_path(name)
+    return Response(
+        content=path.read_bytes(), media_type=DATASETS[name],
+        headers={"Content-Disposition": f'attachment; filename="{name}"', "X-Content-Type-Options": "nosniff",
+                 "Content-Security-Policy": "default-src 'none'; sandbox", "Cache-Control": "public, max-age=3600"})
 
 
 @router.get("")

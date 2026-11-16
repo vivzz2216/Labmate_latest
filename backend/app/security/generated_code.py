@@ -14,11 +14,16 @@ def validate_generated_code(code: str, language: str, capability=None, local_mod
         from ..services.notebook_magics import neutralize_magics
         code = neutralize_magics(code)
     if language == "python":
-        tree = ast.parse(code)
-        safe_modules = {"math", "random", "statistics", "decimal", "fractions", "collections", "itertools", "functools", "operator", "string", "re", "json", "csv", "datetime", "copy", "heapq", "bisect", "array", "typing", "dataclasses", "enum", "abc"}
+        try:
+            tree = ast.parse(code)
+        except SyntaxError:
+            # Python compiles the whole file before running any of it, so a file with a syntax error executes nothing. Let the
+            # interpreter report the SyntaxError itself (with its real message and line) instead of a policy violation.
+            return
+        safe_modules = {"math", "random", "statistics", "decimal", "fractions", "collections", "itertools", "functools", "operator", "string", "re", "json", "csv", "datetime", "copy", "heapq", "bisect", "array", "typing", "dataclasses", "enum", "abc", "tkinter", "time", "textwrap", "calendar", "numbers"}
         if capability=='flask':safe_modules.update({'flask','markupsafe',*local_modules})
         if capability=='spark':safe_modules.add('pyspark')
-        if capability=='notebook':safe_modules.update({'numpy','pandas','sklearn','scipy','matplotlib','seaborn','nltk','skfuzzy','pgmpy','torch','tensorflow','keras','time','warnings','io','pprint'})
+        if capability=='notebook':safe_modules.update({'numpy','pandas','sklearn','scipy','matplotlib','seaborn','nltk','skfuzzy','pgmpy','torch','tensorflow','keras','time','warnings','io','pprint','networkx','bs4','PIL'})
         for node in ast.walk(tree):
             if capability=='flask':
                 if isinstance(node,ast.Call) and isinstance(node.func,ast.Attribute) and node.func.attr in {'send_file','send_from_directory','open_resource','open_instance_resource','from_pyfile'}:
@@ -39,7 +44,7 @@ def validate_generated_code(code: str, language: str, capability=None, local_mod
                 and node.value.func.id == "super" and not node.value.keywords
                 and (not node.value.args or (len(node.value.args) == 2 and all(isinstance(a, ast.Name) for a in node.value.args)))
             )
-            if isinstance(node, ast.Attribute) and node.attr.startswith("__") and node.attr != "__version__" and not safe_parent_initializer:
+            if isinstance(node, ast.Attribute) and node.attr.startswith("__") and node.attr not in {"__version__", "__name__", "__qualname__", "__doc__"} and not safe_parent_initializer:
                 raise ValueError("Runtime introspection is not supported in lab execution.")
             if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
                 if node.func.id in {"eval", "exec", "compile", "__import__", "getattr", "setattr", "globals", "locals", "vars", "breakpoint"}:

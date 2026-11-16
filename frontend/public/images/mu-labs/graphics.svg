@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 220" width="640" height="220" fill="none">
+  <rect width="640" height="220" fill="#0d0f14"/>
+  <circle cx="320" cy="100" r="76" stroke="#181b24" stroke-width="1"/>
+  <circle cx="320" cy="100" r="118" stroke="#141720" stroke-width="1"/>
+  
+      <g transform="translate(272, 48)" fill="none" stroke="#e4e4e7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polygon points="48,10 86,32 86,74 48,96 10,74 10,32" fill="#181b22"/>
+        <polyline points="10,32 48,54 86,32"/>
+        <line x1="48" y1="54" x2="48" y2="96"/>
+        <circle cx="48" cy="54" r="3" fill="#e4e4e7"/>
+      </g>
+    
+  <text x="20" y="198" fill="#8b8e99" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="600" letter-spacing="0.08em">COMPUTER GRAPHICS</text>
+</svg>

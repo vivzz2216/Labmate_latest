@@ -150,7 +150,7 @@ class ProviderBudgetManager:
                 if keys:
                     client.delete(*keys)
         except Exception:
-            pass
+            logger.debug("Redis budget key cleanup failed during reset", exc_info=True)
 
     def get_rpm_limit(self, provider: str, model: str) -> int:
         p = provider.lower()

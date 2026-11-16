@@ -40,6 +40,24 @@ class EvidencePlannerTests(unittest.TestCase):
         self.assertEqual(assessment["checks"]["output"], "not_specified")
         self.assertTrue(plan["uncertainties"])
 
+    def test_multi_line_expected_output_flattened_by_extraction_is_compared_line_by_line(self):
+        # The extraction model writes a multi-line expected block as 'A / B / C'; the program prints three lines.
+        text = 'Print the shapes. Expected output: Circle area=19.63 / Rectangle area=24.00 / Total area = 58.635'
+        plan = plan_experiment(text, 'java')
+        def check(out):
+            return verification_summary(plan, True, out)['checks']['output']
+        self.assertEqual(check('Circle area=19.63\nRectangle area=24.00\nTotal area = 58.635\n'), 'passed')
+        self.assertEqual(check('Circle area=19.63  \r\nRectangle area=24.00\r\nTotal area = 58.635'), 'passed')
+        self.assertEqual(check('Circle area=19.63\nRectangle area=24.01\nTotal area = 58.635'), 'failed')
+        self.assertEqual(check('Circle area=19.63\nRectangle area=24.00'), 'failed')
+        single = plan_experiment('Expected output: 10 / 2 = 5', 'python')
+        self.assertEqual(verification_summary(single, True, '10 / 2 = 5')['checks']['output'], 'passed')
+
+    def test_sample_output_wording_is_verified_too(self):
+        plan = plan_experiment("Sample input: 3. Sample output: 6", "python")
+        self.assertEqual(plan["expected_output"], ["6"])
+        self.assertEqual(verification_summary(plan, True, "7")["checks"]["output"], "failed")
+
     def test_gui_expected_number_uses_actual_ui_observation_not_console_or_substring(self):
         plan=plan_experiment('Java Swing calculator. Expected output: 5','java')
         for actual,status in [('5','passed'),('15','failed'),('23','failed')]:
@@ -52,6 +70,15 @@ class EvidencePlannerTests(unittest.TestCase):
         for output in ("15", "-5", "", "5\nwrong final result"):
             self.assertEqual(verification_summary(plan, True, output)["status"], "failed")
         self.assertEqual(verification_summary(plan, True, "5\n")["status"], "verified")
+
+    def test_descriptive_expected_output_is_not_independent_verification(self):
+        plan = plan_experiment(
+            "Java class hierarchy. Expected output: Circle area and Rectangle area printed accurately from subclass overrides.",
+            "java",
+        )
+        summary = verification_summary(plan, True, "Circle area: 78.54\nRectangle area: 24.0\n")
+        self.assertEqual(summary["checks"]["output"], "unverified")
+        self.assertEqual(summary["status"], "execution_tested")
 
     def test_database_evidence_cannot_be_replaced_by_a_screenshot(self):
         plan = plan_experiment("Create a Node.js API that inserts a row into a database", "node")
@@ -96,3 +123,27 @@ class EvidenceTemplateTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("box-shadow", rendered)
         source = await screenshot_service._render_template("", "", "idle", source_code="print(5)", presentation="evidence", view_mode="editor")
         self.assertIn("Rendered source preview", source)
+
+
+class ExpectedOutputBlockTests(unittest.TestCase):
+    def test_output_listed_below_its_label_is_the_expected_output(self):
+        text = ("Aim: x\nExpected input (sample): 5\nExpected output (sample):\nPalindrome: true\nVowels: 10\n"
+                "Java program:\nclass A {}\nTest cases and expected results:")
+        plan = plan_experiment(text, "java")
+        self.assertEqual(plan["expected_output"], ["Palindrome: true", "Vowels: 10"])
+        self.assertEqual(verification_summary(plan, True, "Palindrome: true\nVowels: 10\n")["checks"]["output"], "passed")
+        self.assertEqual(verification_summary(plan, True, "Palindrome: Yes\nVowels: 10\n")["checks"]["output"], "failed")
+
+    def test_numbered_experiment_headings_with_no_are_sections(self):
+        from app.services.manual_sections import numbered_experiments
+        manual = "Lab\nEXPERIMENT NO. 1: Stack\nAim: Write a Java program for a stack.\nExpected output (sample):\n5\nEXPERIMENT NO. 2: Queue\nAim: Write a Java program for a queue.\n"
+        sections = numbered_experiments(manual)
+        self.assertEqual([s["experiment_number"] for s in sections], [1, 2])
+        self.assertIn("Expected output (sample):\n5", sections[0]["text"])
+
+
+class ExpectedBlockBoundaryTests(unittest.TestCase):
+    def test_output_lines_that_look_like_headings_stay_in_the_block(self):
+        text = ("Expected output (sample):\nTranspose of A:\n1 4\nA x B:\n58 64\nResult: 16\nTrace = 5\n"
+                "Java program:\nclass A {}\nTest cases and expected results:\n")
+        self.assertEqual(plan_experiment(text, "java")["expected_output"], ["Transpose of A:", "1 4", "A x B:", "58 64", "Result: 16", "Trace = 5"])

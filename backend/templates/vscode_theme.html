@@ -526,20 +526,18 @@
   'json': 'JSON'
 }.get(ext, 'Plain Text') %}
 
-{# Project configuration based on active file #}
+{# Project configuration based on active file (respect caller overrides) #}
 {% if ext == 'html' or filename in ['validate.js', 'navbar.js', 'style.css'] %}
-  {% set project_name = 'web-dev-lab' %}
-  {% set project_dir_display = 'web-dev-lab' %}
+  {% set default_project_name = 'web-dev-lab' %}
 {% elif ext in ['jsx','tsx'] or 'todo' in filename.lower() or 'app' in filename.lower() and ext != 'js' %}
-  {% set project_name = 'react-todo-app' %}
-  {% set project_dir_display = 'react-todo-app' %}
+  {% set default_project_name = 'react-todo-app' %}
 {% elif ext == 'js' and ('server' in filename.lower() or 'app' in filename.lower() or 'cookie' in filename.lower() or 'route' in filename.lower()) %}
-  {% set project_name = 'node-auth-service' %}
-  {% set project_dir_display = 'node-auth-service' %}
+  {% set default_project_name = 'node-auth-service' %}
 {% else %}
-  {% set project_name = 'web-project' %}
-  {% set project_dir_display = 'web-project' %}
+  {% set default_project_name = 'web-project' %}
 {% endif %}
+{% set project_name = project_name or default_project_name %}
+{% set project_dir_display = project_dir_display or project_name %}
 
 <div class="vscode-window">
 
@@ -1159,7 +1157,7 @@
           </div>
         </div>
         <div class="vs-term-body">
-{% if output_content %}{{ output_content | safe }}{% else %}<span class="tc-prompt">PS C:\Users\{{ username or 'Student' }}\{{ project_name }}&gt;</span> <span class="term-cursor"></span>{% endif %}
+{% if output_content %}{{ output_content }}{% else %}<span class="tc-prompt">PS C:\Users\{{ username or 'Student' }}\{{ project_name }}&gt;</span> <span class="term-cursor"></span>{% endif %}
         </div>
       </div><!-- end vs-terminal -->
 

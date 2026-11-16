@@ -1,14 +1,14 @@
 """Notebook execution and offline rendering; compatibility API for local runners."""
 import re
+import textwrap
 import threading
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from pathlib import Path
-from playwright.sync_api import sync_playwright
 from .notebook_runtime import ColabPythonKernel
 from .lab_resources import resource_file, allowed_resource
-from .browser_capture import acquire_capture_context_sync, launch_capture_browser_sync
+from .browser_capture import acquire_capture_context_sync
 
 
 def ensure_home_loan_dataset(target_dir):
@@ -63,7 +63,7 @@ def render_and_capture_colab(cells,screenshot_path,notebook_title=None,student_n
             'title':format_natural_notebook_title(student_name,subject,exp_no,notebook_title),
             'studentName':student_name,'subject':subject,'expNo':str(exp_no),
             'datasets':{name:True for name in (datasets or {})},'expandFull':expand_full,'unfocusCells':unfocus_cells,'theme':theme,
-            'runtime':{'engine':'local-python','gpu':None,'connected':kernel is not None}}})
+            'runtime':{'engine':'local-python','accelerator':'CPU','gpu':None,'connected':kernel is not None}}})
         if print_readable:
             page.add_style_tag(content='''
                 .notebook-surface {padding:14px 12px 18px 4px}
@@ -79,7 +79,7 @@ def render_and_capture_colab(cells,screenshot_path,notebook_title=None,student_n
         if expand_full:
             needed=page.evaluate('Math.max(document.body.scrollHeight,document.documentElement.scrollHeight)')
             if needed>14000:raise ValueError('Notebook exceeds one screenshot; split it into smaller sections.')
-            if print_readable and needed>1400:raise ValueError('Colab section is too tall for readable print evidence; split the cell or output.')
+            if print_readable and needed>1400:raise ValueError(f'Colab section is too tall for readable print evidence ({needed}px > 1400px); split the cell or output.')
             height=max(viewport_height,needed+8 if print_readable else needed+40);page.set_viewport_size({'width':viewport_width,'height':height})
         page.screenshot(path=screenshot_path)
         if pdf_path:
@@ -113,14 +113,24 @@ def capture_colab_evidence(cells,screenshot_path,source_filename='notebook.py',*
         offset+=len(lines)
         context={'type':'code','code':'\n'.join(lines[-3:]),'execCount':number}
         parts=[]
-        for key in ('stdout','stderr','repr'):
+        for key in ('stdout','stderr','repr','error'):
             text=cell.get(key)
             if text:
-                output_lines=str(text).splitlines()
-                parts.extend({key:'\n'.join(output_lines[i:i+18])} for i in range(0,len(output_lines),18))
+                wrapped_lines=[]
+                for raw_line in str(text).splitlines():
+                    wrapped_lines.extend(
+                        textwrap.wrap(
+                            raw_line,
+                            width=90,
+                            replace_whitespace=False,
+                            drop_whitespace=False,
+                            break_on_hyphens=False,
+                        )
+                        or [""]
+                    )
+                parts.extend({key:'\n'.join(wrapped_lines[i:i+18])} for i in range(0,len(wrapped_lines),18))
         if cell.get('html'):parts.append({'html':cell['html']})
         parts.extend({'plots':[plot]} for plot in cell.get('plots',[]))
-        if cell.get('error'):parts.append({'error':cell['error']})
         for part,output in enumerate(parts or [{}],1):
             capture(dict(context,**output),'notebook',f'Colab execution output — cell {number}, part {part}')
     return frames,offset

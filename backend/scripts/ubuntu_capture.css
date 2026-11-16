@@ -1,0 +1,13 @@
+/* Native GTK windows, sized to the supplied Ubuntu reference screenshots. */
+headerbar { min-height: 34px; padding: 0 0 0 2px; background-color: #fafafa; }
+headerbar button { min-height: 24px; min-width: 24px; padding: 0; margin-top: 4px; margin-bottom: 4px; }
+headerbar .title { font-size: 14px; }
+headerbar .subtitle { font-size: 10px; }
+.ptyxis-window headerbar { min-height: 36px; padding-left: 6px; background-color: #3f0b2f; color: #ffffff; }
+.ptyxis-window vte-terminal { background-color: #2e0c24; color: #ffffff; }
+.ptyxis-window .window-contents { background-color: #2e0c24; }
+headerbar windowcontrols { border-spacing: 13px; }
+headerbar box.end, headerbar box.start { border-spacing: 16px; }
+textview, textview text { background-color: #ffffff; }
+.ptyxis-window vte-terminal > revealer.size { opacity: 0; }
+.org-gnome-TextEditor headerbar box.vertical > centerbox:last-child { font-size: 0; opacity: 0; }

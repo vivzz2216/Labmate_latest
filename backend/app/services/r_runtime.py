@@ -226,14 +226,22 @@ def render_frames(frames, out_dir, stem):
     return rendered
 
 
+def execution_enabled():
+    """Same gate notebooks use: the beta allowlist (or an open local install where that helper exists)."""
+    try:
+        from ..security.operator_access import execution_opted_in
+    except ImportError:
+        return bool(settings.EXECUTION_ALLOWED_EMAILS.strip())
+    return execution_opted_in()
+
+
 async def capture_r(code, filename=None, stdin='', objective='', theme='light'):
     from .runtime_engine import RuntimeResult
     verification = {'kind': 'rstudio', 'required': True, 'status': 'failed', 'engine': 'R', 'runtime': 'Rscript',
                     'evidence_frames': [], 'theme': theme}
     try:
-        from ..security.operator_access import execution_opted_in
         from ..security.generated_code import validate_generated_code
-        if not execution_opted_in():
+        if not execution_enabled():
             raise ValueError('R execution requires an explicit beta execution allowlist.')
         if theme not in {'light', 'dark'}:
             raise ValueError('Choose a light or dark RStudio theme.')

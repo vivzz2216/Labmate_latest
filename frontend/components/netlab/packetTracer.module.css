@@ -1,0 +1,781 @@
+/* Cisco Packet Tracer 8.2 (Windows / Qt Light Classic) Authentic UI Clone */
+
+.ptRoot {
+  display: flex;
+  flex-direction: column;
+  width: 100vw;
+  height: 100vh;
+  background: #e9edf2;
+  color: #15191f;
+  font-family: "Segoe UI", Tahoma, system-ui, -apple-system, sans-serif;
+  font-size: 12px;
+  line-height: 1.3;
+  overflow: hidden;
+  user-select: none;
+}
+
+.ptRoot *,
+.ptRoot *::before,
+.ptRoot *::after {
+  box-sizing: border-box;
+}
+
+/* ---------- Title Bar ---------- */
+.titleBar {
+  height: 28px;
+  background: #ffffff;
+  border-bottom: 1px solid #d6dce5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-left: 8px;
+  flex-shrink: 0;
+}
+
+.titleLeft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.titleText {
+  font-size: 12px;
+  color: #1b222c;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.winCaptions {
+  display: flex;
+  align-items: stretch;
+  height: 100%;
+  flex-shrink: 0;
+}
+
+.winBtn {
+  width: 44px;
+  height: 100%;
+  border: none;
+  background: transparent;
+  color: #222222;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.winBtn:hover {
+  background: #e8e8e8;
+}
+
+.winClose:hover {
+  background: #c42b1c;
+  color: #ffffff;
+}
+
+/* ---------- Menu Bar ---------- */
+.menuBar {
+  height: 22px;
+  background: #f3f4f6;
+  border-bottom: 1px solid #cfd5de;
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+  flex-shrink: 0;
+}
+
+.menuItem {
+  padding: 2px 8px;
+  font-size: 11.5px;
+  color: #1f242c;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  cursor: default;
+}
+
+.menuItem:hover {
+  background: #dfeaf7;
+  border-color: #b4cde8;
+}
+
+/* ---------- Main Toolbar ---------- */
+.mainToolbar {
+  height: 29px;
+  background: linear-gradient(180deg, #fafafa 0%, #eaedf2 100%);
+  border-bottom: 1px solid #c5ccd6;
+  display: flex;
+  align-items: center;
+  padding: 0 6px;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.tbBtn {
+  width: 24px;
+  height: 23px;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.tbBtn:hover:not(:disabled) {
+  background: #dbeafa;
+  border-color: #8ab4e3;
+}
+
+.tbBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.tbSep {
+  width: 1px;
+  height: 17px;
+  background: #c1c8d2;
+  margin: 0 4px;
+}
+
+/* ---------- Logical / Physical Workspace Navigation Bar (#049FD9 Cisco Blue) ---------- */
+.workspaceBar {
+  height: 29px;
+  background: #049fd9;
+  border-bottom: 1px solid #0384b5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px 0 6px;
+  gap: 8px;
+  flex-shrink: 0;
+  color: #ffffff;
+}
+
+.wsBarLeft {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.logPhysTabs {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.logPhysTab {
+  padding: 2px 11px;
+  font-size: 11.5px;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.logPhysActive {
+  background: #ffffff;
+  color: #111827;
+  font-weight: 600;
+  border-color: #ffffff;
+}
+
+.coordBadge {
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  padding: 1px 7px;
+  font-size: 11px;
+  color: #ffffff;
+  border-radius: 10px;
+  font-family: Consolas, monospace;
+}
+
+.wsToolChip {
+  height: 21px;
+  padding: 0 9px;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.16);
+  font-size: 11px;
+  color: #ffffff;
+  cursor: default;
+}
+
+.wsToolChip:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+/* Interactive Experiment Control Bar (hidden in ?capture=1 mode) */
+.labControls {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.labControls select,
+.labControls button {
+  height: 21px;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-radius: 10px;
+  background: #ffffff;
+  color: #0f172a;
+  padding: 0 8px;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.labControls button.ctrlActive {
+  background: #0b4f6c;
+  color: #ffffff;
+  border-color: #ffffff;
+  font-weight: 600;
+}
+
+.labControls label {
+  color: #ffffff;
+  font-weight: 500;
+  font-size: 11px;
+}
+
+.labControls button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* ---------- Middle Split Area (Canvas + Right Tools + Simulation Panel) ---------- */
+.middleArea {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  background: #dfe4ec;
+}
+
+.canvasPane {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+  background: #ffffff;
+  border-right: 1px solid #b8c0ca;
+  overflow: hidden;
+}
+
+.canvasSvg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* ---------- Bottom #049FD9 Cisco Control Strip (Time / Power / Realtime / Sim) ---------- */
+.ptModeStrip {
+  height: 28px;
+  background: #049fd9;
+  border-top: 1px solid #0384b5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+  color: #ffffff;
+  flex-shrink: 0;
+}
+
+.ptStripLeft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stripClock {
+  font-family: Consolas, monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.stripCircleBtn {
+  height: 21px;
+  padding: 0 9px;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.stripCircleBtn:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.modeSwitchWrap {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.modeBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 11px;
+  font-size: 11.5px;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.modeBtnActive {
+  background: #ffffff;
+  color: #111827;
+  font-weight: 600;
+  border-color: #ffffff;
+}
+
+/* Floating Common Tools Right Strip (Vertical) */
+.commonToolsRail {
+  width: 34px;
+  background: #edf0f5;
+  border-right: 1px solid #b8c0ca;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 6px 0;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.railBtn {
+  width: 26px;
+  height: 26px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.railBtn:hover {
+  background: #dbeafa;
+  border-color: #8ab4e3;
+}
+
+.railBtnActive {
+  background: #cde3fa;
+  border-color: #4f8ed1;
+}
+
+.railSep {
+  width: 20px;
+  height: 1px;
+  background: #c5ccd6;
+  margin: 2px 0;
+}
+
+/* ---------- Docked Right Simulation Panel (Authentic PT 8.2 Light Qt Chrome) ---------- */
+.simPanel {
+  width: 380px;
+  flex-shrink: 0;
+  background: #f0f0f0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-left: 1px solid #b4bcc7;
+}
+
+.simHeader {
+  height: 23px;
+  background: #e6e9ed;
+  border-bottom: 1px solid #c0c6ce;
+  color: #111827;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.simBody {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  gap: 6px;
+}
+
+.groupBox {
+  border: 1px solid #bec5cf;
+  border-radius: 3px;
+  background: #f6f8fa;
+  padding: 6px 8px;
+}
+
+.groupTitle {
+  font-size: 11px;
+  font-weight: 600;
+  color: #2c3e50;
+  margin-bottom: 5px;
+}
+
+.playBtns {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.ptControlBtn {
+  height: 25px;
+  border: 1px solid #9da7b4;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #ffffff 0%, #e6ebf1 100%);
+  color: #16202a;
+  font-size: 11px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.ptControlBtn:hover:not(:disabled) {
+  background: #e1eefb;
+  border-color: #6b9fd9;
+}
+
+.ptControlBtn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.eventListWrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #b4bcc7;
+  background: #ffffff;
+}
+
+.eventListTitle {
+  background: #dfe5ed;
+  border-bottom: 1px solid #bcc4cf;
+  padding: 3px 7px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.eventTableScroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.ptTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.ptTable th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: linear-gradient(180deg, #f9fafb 0%, #e7ebf0 100%);
+  border-right: 1px solid #cbd2dc;
+  border-bottom: 1px solid #b8c0ca;
+  text-align: left;
+  font-weight: 600;
+  color: #1e293b;
+  padding: 2px 5px;
+  white-space: nowrap;
+}
+
+.ptTable td {
+  border-right: 1px solid #edf0f4;
+  border-bottom: 1px solid #e6eaf0;
+  padding: 2px 5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.protoSq {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+.filterRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.filterChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 11px;
+}
+
+/* ---------- Bottom Dock (Device Box + Clock/Power + Scenario 0 PDU Window) ---------- */
+.bottomDock {
+  height: 132px;
+  background: #e5eeef;
+  border-top: 1px solid #9aa4b2;
+  display: flex;
+  flex-shrink: 0;
+}
+
+.deviceBox {
+  width: 720px;
+  max-width: 55vw;
+  display: flex;
+  border-right: 1px solid #aeb7c4;
+  background: #edf2f4;
+  flex-shrink: 0;
+}
+
+.catCols {
+  width: 248px;
+  border-right: 1px solid #b8c0cc;
+  display: flex;
+  flex-direction: column;
+  padding: 6px 8px;
+  justify-content: center;
+  gap: 6px;
+  background: #e5eeef;
+  flex-shrink: 0;
+}
+
+.catRow {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+}
+
+.catBtn {
+  height: 30px;
+  border: 1px solid #bcc4d0;
+  border-radius: 3px;
+  background: linear-gradient(180deg, #ffffff 0%, #e5eaf0 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  font-size: 10px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.catBtnActive {
+  background: #cce3f9;
+  border-color: #2f77bd;
+  box-shadow: inset 0 0 0 1px #5fa1e0;
+}
+
+.subCatRow {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+}
+
+.subBtn {
+  height: 28px;
+  padding: 0;
+  border: 1px solid #bcc4d0;
+  border-radius: 3px;
+  background: linear-gradient(180deg, #ffffff 0%, #eaedf2 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.subBtnActive {
+  background: #cce3f9;
+  border-color: #2f77bd;
+  box-shadow: inset 0 0 0 1px #5fa1e0;
+}
+
+.catTitleStrip {
+  font-size: 10.5px;
+  color: #334155;
+  text-align: center;
+  font-weight: 600;
+}
+
+.modelShelf {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  overflow-x: auto;
+  background: #f4f7f9;
+}
+
+.modelCard {
+  min-width: 60px;
+  height: 88px;
+  border: 1px solid #d5dce6;
+  border-radius: 3px;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 4px 4px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.modelCard:hover {
+  border-color: #6b9fd9;
+  background: #f0f7ff;
+}
+
+.modelLabel {
+  font-size: 10.5px;
+  color: #1e293b;
+  text-align: center;
+  font-weight: 500;
+}
+
+.timePowerBox {
+  width: 148px;
+  border-right: 1px solid #aeb7c4;
+  background: #e9edf3;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 8px 9px;
+  flex-shrink: 0;
+}
+
+.clockReadout {
+  background: #ffffff;
+  border: 1px solid #b4bcc7;
+  border-radius: 2px;
+  padding: 4px 6px;
+  text-align: center;
+  font-family: Consolas, monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.pduDock {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+}
+
+.pduBar {
+  height: 24px;
+  background: #dfe5ed;
+  border-bottom: 1px solid #bcc4cf;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.pduScroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* ---------- Routing Table Inspect + IOS CLI Window ---------- */
+.routerWin {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 1020px;
+  max-width: 95%;
+  height: 360px;
+  background: #f2f4f7;
+  border: 1px solid #495d75;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.34);
+  display: flex;
+  flex-direction: column;
+  z-index: 15;
+}
+
+.routerWinBar {
+  height: 26px;
+  background: #e6e9ed;
+  border-bottom: 1px solid #bcc4cf;
+  color: #111827;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+  font-weight: 600;
+}
+
+.routerWinBody {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+}
+
+.routerCliPre {
+  flex: 1.45;
+  margin: 0;
+  background: #0b0e14;
+  color: #d6deeb;
+  padding: 9px 10px;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 11.5px;
+  line-height: 1.45;
+  overflow: auto;
+  border: 1px solid #334155;
+}
+
+/* Interactive Explain Strip */
+.explainBar {
+  padding: 5px 10px;
+  background: #fff9e6;
+  border-top: 1px solid #e2c567;
+  color: #4d3b00;
+  font-size: 12px;
+  line-height: 1.45;
+  flex-shrink: 0;
+}

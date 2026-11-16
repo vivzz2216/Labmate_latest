@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 from datetime import date, datetime, time as dt_time
 from decimal import Decimal
+import logging
 import re
 import secrets
 import threading
@@ -17,6 +18,8 @@ import pymysql
 import pymysql.cursors
 
 from ..config import settings
+
+logger = logging.getLogger(__name__)
 
 MAX_STATEMENTS = 80
 MAX_ROWS = 1000
@@ -34,6 +37,39 @@ SYSTEM_SCHEMA_RE = re.compile(
     r'(?<![\w])(?:[`"])?(?:information_schema|performance_schema|mysql|sys)(?:[`"])?\s*\.',
     re.IGNORECASE,
 )
+
+
+_NUMERIC_TYPES = {0, 1, 2, 3, 4, 5, 8, 9, 13, 246}   # DECIMAL TINY SHORT LONG FLOAT DOUBLE LONGLONG INT24 YEAR NEWDECIMAL
+
+
+def display_value(val: Any) -> str | None:
+    """A value the way the mysql command-line client prints it (DECIMAL keeps its scale, dates use a space, NULL stays None)."""
+    if val is None:
+        return None
+    if isinstance(val, (bytes, bytearray)):
+        return val.decode("utf-8", errors="replace")
+    if isinstance(val, datetime):
+        return val.strftime("%Y-%m-%d %H:%M:%S") + (f".{val.microsecond:06d}" if val.microsecond else "")
+    if isinstance(val, bool):
+        return "1" if val else "0"
+    return str(val)
+
+
+def shown_rows(res: dict[str, Any]) -> list[dict[str, Any]]:
+    """Rows as MySQL prints them: DECIMAL keeps its scale (75000.00, not 75000.0). Other values are unchanged."""
+    rows = res.get("rows") or []
+    shown = res.get("display_rows")
+    cols = res.get("columns") or []
+    if not shown or len(shown) != len(rows):
+        return rows
+    out = []
+    for row, text_row in zip(rows, shown):
+        item = dict(row)
+        for col, text in zip(cols, text_row):
+            if isinstance(row.get(col), float) and text is not None:
+                item[col] = text
+        out.append(item)
+    return out
 
 
 def _json_safe_value(val: Any) -> Any:
@@ -398,7 +434,7 @@ class SQLSession:
             try:
                 self.conn.close()
             except Exception:
-                pass
+                logger.debug("Closing prior SQL session connection failed.", exc_info=True)
             self.conn = None
 
         target_physical = self.schema_map.get(self.active_schema, self.physical_schema)
@@ -422,8 +458,8 @@ class SQLSession:
                 max_exec_ms = max(100, int(self.timeout * 1000))
                 try:
                     cur.execute(f"SET SESSION max_execution_time = {max_exec_ms}")
-                except Exception:
-                    pass
+                except pymysql.MySQLError:
+                    logger.debug("max_execution_time session variable unsupported.", exc_info=True)
         except Exception as exc:
             raise RuntimeError(f"MySQL restricted session connection failed: {exc}") from exc
 
@@ -452,7 +488,7 @@ class SQLSession:
             finally:
                 admin_conn.close()
         except Exception:
-            pass
+            logger.debug("Killing timed-out MySQL query failed.", exc_info=True)
 
     def _cleanup_server_objects(self, admin_conn: pymysql.connections.Connection | None = None) -> None:
         own_conn = False
@@ -471,20 +507,20 @@ class SQLSession:
                     if phys_db.startswith("lab_"):
                         try:
                             cur.execute(f"DROP DATABASE IF EXISTS `{phys_db}`")
-                        except Exception:
-                            pass
+                        except pymysql.MySQLError:
+                            logger.debug("Drop database cleanup failed for %s.", phys_db, exc_info=True)
                 if self.db_user.startswith("labu_"):
                     for host_spec in ("%", "localhost", "127.0.0.1"):
                         try:
                             cur.execute("DROP USER IF EXISTS %s@%s", (self.db_user, host_spec))
-                        except Exception:
-                            pass
+                        except pymysql.MySQLError:
+                            logger.debug("Drop user cleanup failed for %s@%s.", self.db_user, host_spec, exc_info=True)
         finally:
             if own_conn and admin_conn is not None:
                 try:
                     admin_conn.close()
                 except Exception:
-                    pass
+                    logger.debug("Closing MySQL admin connection failed.", exc_info=True)
 
     def reset(self) -> None:
         with self._lock:
@@ -492,7 +528,7 @@ class SQLSession:
                 try:
                     self.conn.close()
                 except Exception:
-                    pass
+                    logger.debug("Closing MySQL connection during reset failed.", exc_info=True)
                 self.conn = None
             self._cleanup_server_objects()
             self.session_token = uuid.uuid4().hex[:12]
@@ -513,7 +549,7 @@ class SQLSession:
                 try:
                     self.conn.close()
                 except Exception:
-                    pass
+                    logger.debug("Closing MySQL connection during close failed.", exc_info=True)
                 self.conn = None
             self._cleanup_server_objects()
 
@@ -624,7 +660,7 @@ class SQLSession:
                         else:
                             tables_meta[obj_name] = obj_info
             except Exception:
-                pass
+                logger.debug("Schema snapshot introspection failed for %s.", phys_schema, exc_info=True)
             out[logical_schema] = {
                 "name": logical_schema,
                 "physicalName": phys_schema,
@@ -856,6 +892,7 @@ class SQLSession:
                         raise TimeoutError(f"Query execution was interrupted (timeout exceeded: {self.timeout:.2f}s limit).")
                     if cur.description:
                         cols = [str(col[0]) for col in cur.description]
+                        numeric_flags = [col[1] in _NUMERIC_TYPES for col in cur.description]
                         fetched = cur.fetchmany(self.max_rows + 1)
                         truncated = len(fetched) > self.max_rows
                         raw_rows = fetched[: self.max_rows]
@@ -904,9 +941,13 @@ class SQLSession:
                         )
                         result['result_sets'] = result_sets
                         result['result_set_count'] = len(result_sets)
+                        if len(result_sets) == 1:
+                            result['display_rows'] = [[display_value(v) for v in r] for r in raw_rows[:len(rows)]]
+                            result['numeric'] = numeric_flags
                         return result
                     affected = cur.rowcount if cur.rowcount is not None and cur.rowcount >= 0 else 0
-                    return self._ok(
+                    ok_info = getattr(getattr(cur, "_result", None), "message", b"") or b""
+                    result = self._ok(
                         kind=kind,
                         table=_extract_table_name(cleaned, kind),
                         columns=[],
@@ -916,6 +957,9 @@ class SQLSession:
                         started=started,
                         stmt=cleaned,
                     )
+                    info_text = ok_info.decode("utf-8", errors="replace") if isinstance(ok_info, (bytes, bytearray)) else str(ok_info)
+                    result['info'] = re.sub(r"^[^A-Za-z]+", "", info_text)   # the packet's length prefix is not text
+                    return result
             finally:
                 timer.cancel()
         except Exception as exc:
@@ -944,7 +988,11 @@ class SQLSession:
                     kind=kind,
                     stmt=cleaned,
                 )
-            return self._failure(err_str, started, kind=kind, stmt=cleaned)
+            failure = self._failure(err_str, started, kind=kind, stmt=cleaned)
+            if isinstance(exc, pymysql.MySQLError) and len(exc.args) >= 2 and isinstance(exc.args[0], int):
+                failure["error_code"] = exc.args[0]
+                failure["error_text"] = str(exc.args[1])
+            return failure
 
     def _ok(
         self,
@@ -1066,6 +1114,7 @@ class SQLSession:
                 "rowcount": res.get("rowcount", 0),
                 "columns": res.get("columns", []),
                 "rows": res.get("rows", []),
+                "shown_rows": shown_rows(res),
                 "result_sets": res.get("result_sets", []),
                 "result_set_count": res.get("result_set_count", 1),
                 "truncated": res.get("truncated", False),
@@ -1080,7 +1129,7 @@ class SQLSession:
                 stdout_lines.append(f"\n-- Query {len(select_results)}: {stmt_text}")
                 stdout_lines.append(header)
                 stdout_lines.append("-" * max(len(header), 12))
-                for r in receipt["rows"][:25]:
+                for r in receipt["shown_rows"][:25]:
                     stdout_lines.append(
                         " | ".join("NULL" if r.get(c) is None else str(r.get(c)) for c in receipt["columns"])
                     )
@@ -1175,6 +1224,16 @@ def verify_sql_exercise(objective: str, code: str, execution_result: dict[str, A
     from .sql_result_checks import independent_checks
     for check in independent_checks(statements):
         add_check(check['name'], check['passed'], check['detail'])
+    if re.search(r'\bGROUP\s+BY\b|\bcomplex\s+queries\b', objective, re.I):
+        from .sql_result_checks import practical_table_checks
+        for check in practical_table_checks(statements):
+            add_check(check['name'], check['passed'], check['detail'])
+        names = [s.get('statement','') for s in statements if re.match(r'^CREATE\s+DATABASE\b', s.get('statement',''), re.I)]
+        add_check('Experiment database selected', bool(names) and any(s.get('type') == 'USE' and s.get('success') for s in statements),
+                  'Create an experiment-related database and select it using USE before creating tables.')
+        if not re.search(r'\bmini[ -]?project\b', objective, re.I):
+            add_check('Experiment database name', not any(re.search(r'\bmini_project(?:_demo)?\b', n, re.I) for n in names),
+                      'Use an experiment-related name such as grouped_queries_lab instead of mini_project_demo.')
     add_check('Complete query output', not any(s.get('truncated') for s in statements),
               'All result rows fit the execution limits.' if not any(s.get('truncated') for s in statements) else 'A query output exceeded the capture limits. Reduce sample size before claiming complete evidence.')
     if re.search(r'\btriggers?\b', objective, re.I) and not re.search(r'\bviews?\b', objective, re.I):

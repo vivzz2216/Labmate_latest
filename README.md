@@ -1,47 +1,79 @@
 # LabMate
 
-## Railway deployment
+LabMate is a web app for programming labs. A student uploads a PDF or DOCX lab manual; LabMate
+extracts the questions, generates and runs the code in an isolated sandbox, captures IDE-style
+screenshots of the real output, and builds a downloadable Word report.
 
-Use [RAILWAY.md](RAILWAY.md) for the current, verified service roots, variables, private networking, and persistent-volume layout. Older deployment notes under `docs/` describe previous setups.
+Supported lab types: Python, Java, C/C++, web (HTML, React, Node, Flask), MySQL, notebooks and
+deep learning, distributed Java, and Ubuntu.
 
-LabMate is a web app for programming labs. It accepts PDF and DOCX assignments, organizes questions, helps produce and run code, captures output, and prepares downloadable reports.
-
-## Project layout
+## Architecture
 
 | Path | Purpose |
 | --- | --- |
-| `frontend/` | Next.js application, including the homepage and student workspace |
-| `backend/` | FastAPI API, parsers, execution services, screenshots, and reports |
-| `docs/` | Setup, workflow, deployment, and security notes |
-| `docs/archive/` | Historical reviews and one-off setup summaries |
-| `docker-compose.yml` | PostgreSQL, backend, and frontend services |
-| `env.example` | Environment variable template |
+| `frontend/` | Next.js 15 app (App Router, TypeScript, Tailwind) with a same-origin `/api` proxy to the backend |
+| `backend/app/` | FastAPI API, workflow queue and workers, runtimes, screenshot capture, report generation |
+| `backend/scripts/` | Sandbox broker, worker provisioning and operator tooling |
+| `backend/railway_runtime/` | Railway sandbox bridge (one microVM per job) |
+| `backend/tests/` | Backend test suite |
+| `google_colab/`, `sql_workbench/` | Static lab UIs rendered by the screenshot service |
+| `chrome_extension/` | Chrome extension that sends a Drive file to LabMate |
+| `infra/` | Terraform for the execution worker |
 
-## Run with Docker
+Student code never runs in the API process. Jobs go to an isolated Linux worker (SSH broker with
+namespaces and cgroups) or to a Railway sandbox. The workflow queue is stored in PostgreSQL, so
+workers can run as a separate, horizontally scaled service.
 
-1. Copy `env.example` to `.env` and set the required secrets and service keys. Never commit the completed `.env` file.
-2. Start Docker Desktop.
-3. Run `docker compose up --build` from this directory.
-4. Open `http://localhost:3000`. The API is at `http://localhost:8000`, with API documentation at `http://localhost:8000/docs`.
+## Quick start
 
-The existing `start_labmate.ps1` is a Windows helper for the Docker setup. A loopback-only, no-Docker audit launcher is available at `backend/scripts/audit_app.py`; it uses SQLite and emulated Redis and is intended for local testing. See `LABMATE_AUDIT_REPORT.md` for commands and execution-isolation limits.
+Requirements: Python 3.11, Node 22, PostgreSQL and Redis (or Docker).
 
-## Development
+```bash
+cp backend/.env.example backend/.env   # then set SECRET_KEY, DATABASE_URL, REDIS_URL and a provider key
+docker compose up --build              # frontend :3000, API :8000, docs at :8000/docs
+```
 
-From `frontend/`, run `npm ci` and `npm run dev`. Run `npm run build` before shipping changes. The frontend requires Node 22 as specified in `frontend/package.json`.
+Without Docker:
 
-From `backend/`, install `requirements.txt`, configure environment variables, and run `uvicorn app.main:app --reload --port 8000`. PostgreSQL is the configured database in Docker; it is not a student-facing programming language. The executor contains handlers for Python, Java, C/C++, and web-related work, but availability depends on the local runtime and configured services.
+```bash
+cd backend && pip install -r requirements.txt && uvicorn app.main:app --reload --port 8000
+cd frontend && npm ci && npm run dev
+```
+
+`backend/scripts/audit_app.py` starts a loopback-only launcher with SQLite and emulated Redis for
+local testing.
+
+## Tests and checks
+
+```bash
+cd backend && python -m pytest -o addopts="" tests -q
+cd frontend && npx tsc --noEmit && npm run lint
+```
+
+To check every lab end to end (manual in, generated code run, screenshots, Word report out), run
+`python backend/scripts/verify_labs.py` (add `--labs python sql` to pick labs; add
+`--parallel 10 --workers 12 --heavy 12` for a concurrency test with separate accounts). It calls the
+configured LLM provider, so it uses real quota. On Windows it needs a JDK (`JAVA_COMMAND`), a C
+compiler (`C_COMPILER`, `CPP_COMPILER`), MySQL, and an environment with `torch` and `tensorflow-cpu`.
+
+## Documentation
+
+| Document | Contents |
+| --- | --- |
+| [docs/REPOSITORY_MAP.md](docs/REPOSITORY_MAP.md) | Where every folder and service lives; request flow |
+| [RAILWAY.md](RAILWAY.md) | Deployment, variables, private networking, scaling out to many students |
+| [PAYMENTS.md](PAYMENTS.md) | Razorpay packs, webhooks, test-to-live procedure |
+| [docs/ISOLATED_RUNTIME.md](docs/ISOLATED_RUNTIME.md) | Sandbox boundary and worker provisioning |
+| [docs/LOCAL_WORKER.md](docs/LOCAL_WORKER.md) | Local VM worker notes |
+| [docs/BACKEND_ENGINE.md](docs/BACKEND_ENGINE.md) | Execution and reporting engine |
+| [docs/LLM_PROVIDERS.md](docs/LLM_PROVIDERS.md) | Provider routing, fallbacks and limits |
+| [docs/SCREENSHOT_INTELLIGENCE.md](docs/SCREENSHOT_INTELLIGENCE.md) | Evidence planning and capture |
+| [docs/TEMPLATE_ARCHITECTURE.md](docs/TEMPLATE_ARCHITECTURE.md) | Capture templates and categories |
+| [docs/PIPELINE_BRIDGE_CONTRACT.md](docs/PIPELINE_BRIDGE_CONTRACT.md) | Browser bridge contract for the lab UIs |
+| [CLAUDE.md](CLAUDE.md) | Contributor and assistant guide |
 
 ## Notes
 
-- Free-only OpenRouter and optional OpenCode failover are implemented. OpenRouter needs a backend key; OpenCode currently denies external free-tier calls. See [Free API setup](FREE_API_SETUP.md) for activation, ordering, and actual verification limits.
-
-- Read `FLASK_JAVA_UI_VERIFICATION_2026-10-18.md` for the current Flask and AWT/Swing adapters and Dark Modern source capture checks. JavaFX, Tkinter and database experiments remain unsupported. The controlled runtime is not a per-run security VM; earlier audit snapshots remain relevant before expanding access.
-- Railway execution now requires exact invited accounts in `EXECUTION_ALLOWED_EMAILS`; an empty list closes execution on Railway. This is a controlled-beta admission gate, not per-run isolation. See `RAILWAY.md` for the updated generation, verification, and backup-provider settings.
-
-- The homepage product panel is an illustrative example, not a live assignment or measured product claim.
-- Code execution and generated content should be reviewed before submitting coursework.
-- Older status reports and troubleshooting notes were preserved under `docs/archive/` for reference.
-# Student packs
-
-LabMate includes optional one-time Razorpay experiment packs and a credit balance in the assignment studio. See [payment setup and pricing](PAYMENTS.md) and [payment verification](PAYMENTS_VERIFICATION_2026-10-18.md). Billing is disabled by default; local integration testing uses simulated payments only.
+- Execution on Railway is limited to the accounts in `EXECUTION_ALLOWED_EMAILS`; an empty list
+  closes execution.
+- Generated code and reports should be reviewed before submitting coursework.

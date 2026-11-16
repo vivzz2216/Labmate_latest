@@ -12,4 +12,9 @@ if [ "$(id -u)" = 0 ] && [ -f /.dockerenv ]; then
     chown -R -P 10001:10001 /data/uploads /data/reports /data/screenshots /data/react_temp /data/logs
     exec gosu 10001:10001 /bin/sh /app/start.sh
 fi
+# LABMATE_ROLE=worker runs the workflow consumers only (no HTTP server), after the privilege drop above.
+# Use it for a separate Railway service with WORKFLOW_WORKERS=<per-process count> and WORKFLOW_WORKERS=0 on the API.
+if [ "${LABMATE_ROLE:-api}" = worker ]; then
+    exec python -m app.services.workflow_queue
+fi
 exec python -m uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-8000}" --proxy-headers --limit-concurrency 128 --timeout-keep-alive 5 --timeout-graceful-shutdown 30

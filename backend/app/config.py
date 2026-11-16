@@ -255,10 +255,40 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def initialize_storage_paths(self):
+        import shutil
+        from pathlib import Path
+
+        backend_root = Path(__file__).resolve().parent.parent
         for name, folder in (("UPLOAD_DIR", "uploads"), ("SCREENSHOT_DIR", "screenshots"),
                              ("REPORT_DIR", "reports"), ("REACT_TEMP_DIR", "react_temp"), ("LOG_DIR", "logs")):
             if name not in self.model_fields_set:
                 setattr(self, name, os.path.join(self.DATA_DIR, folder))
+            else:
+                current = str(getattr(self, name, "") or "")
+                if current.replace("\\", "/") in {f"./{folder}", folder}:
+                    setattr(self, name, str(backend_root / folder))
+
+        cache_root = Path.home() / ".cache" / "labmate-tools"
+        exe = ".exe" if os.name == "nt" else ""
+        toolchain_candidates = {
+            "C_COMPILER": [cache_root / "cpp" / "mingw64" / "bin" / f"gcc{exe}"],
+            "CPP_COMPILER": [cache_root / "cpp" / "mingw64" / "bin" / f"g++{exe}"],
+            "JAVA_COMMAND": [
+                Path(f"C:/temp_jdk17/bin/java{exe}"),
+                *sorted(cache_root.glob(f"java/*/bin/java{exe}"), reverse=True),
+            ],
+            "JAVAC_COMMAND": [
+                Path(f"C:/temp_jdk17/bin/javac{exe}"),
+                *sorted(cache_root.glob(f"java/*/bin/javac{exe}"), reverse=True),
+            ],
+        }
+        for attr, candidates in toolchain_candidates.items():
+            cmd = str(getattr(self, attr, "") or "")
+            if cmd and not Path(cmd).is_file() and shutil.which(cmd) is None:
+                for candidate in candidates:
+                    if candidate.is_file():
+                        setattr(self, attr, str(candidate))
+                        break
         return self
 
     @model_validator(mode="after")
@@ -300,7 +330,13 @@ class Settings(BaseSettings):
 
     # Frontend URL (used for redirects when frontend is deployed separately)
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "")
-    
+    # Where LabMate's Power BI Desktop studio page (/power-bi) can be reached from the backend, for the automatic
+    # dashboard capture. Falls back to FRONTEND_URL, then to the local dev server.
+    POWERBI_STUDIO_URL: str = os.getenv("POWERBI_STUDIO_URL", "")
+    # Where the Computer Networks studios (/networks/wireshark, /networks/packet-tracer) are served, for the automatic screenshots.
+    # Falls back to POWERBI_STUDIO_URL, then FRONTEND_URL, then the local dev server.
+    STUDIO_URL: str = os.getenv("STUDIO_URL", "")
+
     @field_validator('RATE_LIMIT_ENABLED', mode='before')
     @classmethod
     def parse_rate_limit_enabled(cls, v):

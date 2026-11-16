@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import hmac
 import json
@@ -5,6 +6,7 @@ import re
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -16,9 +18,15 @@ from ..middleware.csrf import require_csrf_token
 from ..models import PackPurchase, PaymentWebhookEvent, User
 from ..security.execution_access import check_execution_access
 from ..services import billing_service as billing
-from ..security.operator_access import is_admin_user
+from ..services.manual_limits import MAX_MANUAL_EXERCISES
 
 router = APIRouter(prefix='/billing', tags=['billing'])
+
+
+async def billing_task(operation, *args):
+    # These workflows use synchronous SQLAlchemy. Keep lock waits off the ASGI
+    # event loop so concurrent requests can finish and release their locks.
+    return await run_in_threadpool(lambda: asyncio.run(operation(*args)))
 
 
 class OrderInput(BaseModel):
@@ -38,6 +46,7 @@ class VerifyInput(BaseModel):
 def plans():
     return {'packs': [{**p, 'currency': 'INR'} for p in billing.public_packs()],
         'trial_credits': max(0, min(settings.BILLING_TRIAL_CREDITS, 100)),
+        'credit_unit': 'manual', 'max_questions_per_manual': MAX_MANUAL_EXERCISES,
         'mode': settings.RAZORPAY_MODE,
         'checkout_available': billing.configuration_ready() and settings.RAZORPAY_MODE == 'live',
         'billing_enabled': settings.BILLING_ENABLED}
@@ -45,9 +54,7 @@ def plans():
 
 @router.get('/plans/owner-check')
 def owner_payment_check(user: User = Depends(get_current_user)):
-    if not is_admin_user(user):
-        raise HTTPException(404, 'Payment pack not found.')
-    return {**billing.owner_payment_check_pack(), 'currency': 'INR'}
+    raise HTTPException(404, 'Payment pack not found.')
 
 
 @router.get('/wallet')
@@ -59,10 +66,10 @@ def balance(user: User = Depends(get_current_user), db: Session = Depends(get_db
 async def order(data: OrderInput, user: User = Depends(get_current_user),
                 db: Session = Depends(get_db), csrf: bool = Depends(require_csrf_token)):
     try:
-        check_execution_access(user)
+        check_execution_access(user, require_profile=False)
     except ValueError:
         raise HTTPException(403, 'Packs are currently available to invited beta accounts only.') from None
-    return await billing.create_order(db, user.id, data.pack_id, str(data.request_key))
+    return await billing_task(billing.create_order, db, user.id, data.pack_id, str(data.request_key))
 
 
 @router.get('/orders/{purchase_id}')
@@ -73,14 +80,14 @@ def order_status(purchase_id: UUID, user: User = Depends(get_current_user), db: 
 @router.post('/orders/{purchase_id}/verify')
 async def verify(purchase_id: UUID, data: VerifyInput, user: User = Depends(get_current_user),
                  db: Session = Depends(get_db), csrf: bool = Depends(require_csrf_token)):
-    return await billing.verify_checkout(db, user.id, str(purchase_id), data.razorpay_order_id,
+    return await billing_task(billing.verify_checkout, db, user.id, str(purchase_id), data.razorpay_order_id,
         data.razorpay_payment_id, data.razorpay_signature)
 
 
 @router.post('/orders/{purchase_id}/reconcile')
 async def reconcile(purchase_id: UUID, user: User = Depends(get_current_user),
                     db: Session = Depends(get_db), csrf: bool = Depends(require_csrf_token)):
-    return await billing.reconcile_order(db, user.id, str(purchase_id))
+    return await billing_task(billing.reconcile_order, db, user.id, str(purchase_id))
 
 
 @router.post('/orders/{purchase_id}/test-pay')
@@ -103,6 +110,10 @@ async def webhook(request: Request, db: Session = Depends(get_db)):
         body.extend(chunk)
         if len(body) > 131072: raise HTTPException(413, 'Webhook payload is too large.')
     signature = request.headers.get('X-Razorpay-Signature', '')
+    return await billing_task(process_webhook, db, bytes(body), signature, secret)
+
+
+async def process_webhook(db, body, signature, secret):
     expected = hmac.new(secret.encode(), bytes(body), hashlib.sha256).hexdigest()
     if not hmac.compare_digest(expected, signature):
         raise HTTPException(400, 'Invalid webhook signature.')
@@ -121,6 +132,8 @@ async def webhook(request: Request, db: Session = Depends(get_db)):
         return value.get('entity', {}) if isinstance(value, dict) and isinstance(value.get('entity', {}), dict) else {}
     payment_id = entity('payment').get('id') or entity('refund').get('payment_id')
     order_id = entity('payment').get('order_id') or entity('order').get('id')
+    if order_id and not re.fullmatch(r'order_[A-Za-z0-9]{1,56}', str(order_id)):
+        raise HTTPException(400, 'Invalid order identifier.')
     if payment_id:
         if not re.fullmatch(r'pay_[A-Za-z0-9]{1,56}', str(payment_id)): raise HTTPException(400, 'Invalid payment identifier.')
         payment = await billing.gateway_request('GET', '/payments/' + payment_id)

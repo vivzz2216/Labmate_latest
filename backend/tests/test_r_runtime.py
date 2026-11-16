@@ -8,6 +8,12 @@ from app.services import r_runtime
 from app.services.evidence_planner import experiment_category, plan_experiment, select_evidence
 from app.services.manual_sections import section_language
 
+@pytest.fixture(autouse=True)
+def _open_execution(monkeypatch):
+    from app.config import settings
+    monkeypatch.setattr(settings, 'EXECUTION_ALLOWED_EMAILS', 'r@example.com')
+
+
 needs_r = pytest.mark.skipif(r_runtime.find_rscript() is None, reason='Rscript is not installed')
 
 

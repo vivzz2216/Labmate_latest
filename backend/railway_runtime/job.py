@@ -1,21 +1,32 @@
 """Trusted entrypoint in a fresh Railway VM. Submitted code runs in namespaces."""
 import json
+import os
 import re
-import resource
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
-sys.path.insert(0, '/opt/labmate-runtime')
-from broker import command
+try:
+    import resource
+except ImportError:
+    resource = None
+
+RUNTIME_DIR = os.environ.get('LABMATE_RUNTIME_DIR', '/opt/labmate-runtime')
+
+
+def _broker_command():
+    if RUNTIME_DIR not in sys.path:
+        sys.path.insert(0, RUNTIME_DIR)
+    from broker import command
+    return command
 
 
 def run(request):
     job = json.loads(request)
     if not isinstance(job, dict):
         raise ValueError('Expected a job object.')
-    cmd = command(Path('/unused'), 'railway', managed_vm=True)
+    cmd = _broker_command()(Path('/unused'), 'railway', managed_vm=True)
     if job.get('operation') == 'health':
         if set(job) != {'operation', 'nonce'} or not isinstance(job['nonce'], str) or not re.fullmatch('[a-f0-9]{32}', job['nonce']):
             raise ValueError('Invalid health probe.')
@@ -38,9 +49,10 @@ def run(request):
 
 
 if __name__ == '__main__':
-    resource.setrlimit(resource.RLIMIT_FSIZE, (32 * 1024**2, 32 * 1024**2))
-    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
-    resource.setrlimit(resource.RLIMIT_NPROC, (160, 160))
+    if resource is not None:
+        resource.setrlimit(resource.RLIMIT_FSIZE, (32 * 1024**2, 32 * 1024**2))
+        resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+        resource.setrlimit(resource.RLIMIT_NPROC, (160, 160))
     request = sys.stdin.buffer.read(12 * 1024**2 + 1)
     if len(request) > 12 * 1024**2:
         raise ValueError('Job exceeds input budget.')

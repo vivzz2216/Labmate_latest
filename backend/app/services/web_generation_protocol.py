@@ -15,7 +15,7 @@ Keep simple mini-projects compact and fully functional; avoid hundreds of lines 
 Actions: fill,click,click_confirm,select,reload,goto,reset_storage,screenshot,assert_visible,assert_absent,assert_count,assert_value,assert_attribute,assert_order,assert_http,assert_url,assert_checked,assert_no_overflow. For page actions locator is empty. reload/reset_storage/screenshot/assert_no_overflow have empty value. click/assert_visible/assert_absent also have empty value. Put the accessible name or visible text in locator.
 assert_count value is integer text. assert_value checks INPUT/SELECT/TEXTAREA value only, NEVER headings, links, URLs or checkboxes. assert_url checks a relative /path. assert_checked value is true or false. assert_attribute value is JSON string {"name":"data-theme","equals":"dark"}; allowed attributes class,data-theme,aria-expanded,aria-current,aria-pressed,href,alt. assert_order locates multiple cards/items; value is a JSON array string of expected text fragments in order. assert_http value is JSON string {"method":"GET","path":"/api/events","status":200}.
 A scenario has name, requirement_ids, viewport {width,height}, and steps. Use ONLY supplied behavior IDs; source checks (CSS, semantics, components, props, keys, image alt, README) run separately. Never expect README on the webpage. Cover EVERY behavior ID. Maximum 12 scenarios, 24 steps each, 140 total steps; prefer 2-4 concise scenarios and under 65 steps. Each starts at / in a fresh page; storage persists. Use reset_storage when needed. Capture initial/important intermediate states; final capture is automatic.
-Responsive: BOTH 390x844 and 1366x768 scenarios must be tagged responsive and assert_no_overflow. Routes: goto normal, dynamic and invalid paths, assert destination headings/URLs, click shared navigation. Repeated row controls need unique names/test IDs, e.g. Complete Buy milk, Delete Buy milk.
+VIEWPORT POLICY: Default to desktop 1366x768. Do not add mobile/responsive scenarios or screenshots unless the supplied behavior IDs include responsive. When responsive IS required, BOTH 390x844 and 1366x768 scenarios must be tagged responsive and assert_no_overflow. Routes: goto normal, dynamic and invalid paths, assert destination headings/URLs, click shared navigation. Repeated row controls need unique names/test IDs, e.g. Complete Buy milk, Delete Buy milk.
 Edit: create -> Edit -> change -> Save/Update -> assert new text and old absence. Delete: assert existing -> Delete/confirm -> assert_absent. Persistence: assert a NEW item BEFORE reload and again AFTER reload in the SAME scenario. Search/filter: assert counts or excluded item absence. Sort: click/select ascending AND descending then assert_order; initial order alone is insufficient. Catalogue: assert_count of at least eight default product cards. Validation: assert invalid and successful states with real field errors. Theme: style a unique root with data-theme={theme}, click toggle, assert THAT root attribute changed. Biography: assert shown and hidden states.
 Controls need stable accessible labels. Use select for dropdowns, explicit label for/id, and novalidate plus visible field errors for HTML forms. Use text inputs when testing nonnumeric strings; browsers reject fill("abc") on input[type=number]. Choose numeric types and display formatting from the original experiment, and keep exact visible assertions consistent with the rendered result (including integer versus decimal formatting). Native window.confirm must use {"action":"click_confirm","locator_type":"role:button","locator":"Delete note title","value":"Delete this note?"} with the EXACT confirmation message in value, followed by assert_absent of the deleted item. The runner checks and accepts that one dialog; ordinary click does not accept confirmations. Upcoming deadlines need past and future sample dates; verify the filter excludes past entries.
 Data-fetch labs use REAL provided endpoint /__labmate__/users (array id/name/email). ?state=error returns 503; ?state=slow delays 2 seconds. App URL ?test_mode=error|slow selects those states; Retry requests normal success. Test loading, error, Retry, search and no results with actual HTTP assertions. Never substitute Promise.resolve.
@@ -50,6 +50,7 @@ def canonical_web_data(raw, schema, requirements, project_type=None):
     for key in {'language', 'project_type', 'server_entrypoint', 'api_tests', 'browser_tests'} - set(schema['properties']):
         data.pop(key, None)
     source_ids = {r['id'] for r in requirements if r['kind'] == 'source'}
+    responsive = any(r['id'] == 'responsive' for r in requirements)
     readme=data.pop('readme',None)
     if readme is not None:
         if not isinstance(readme,str) or not readme.strip():
@@ -69,8 +70,13 @@ def canonical_web_data(raw, schema, requirements, project_type=None):
                 continue
             test.pop('version', None)
             test.setdefault('viewport', {'width': 1366, 'height': 768})
+            # Keep behavioral tests, but capture them on desktop when mobile was not requested.
+            if not responsive and isinstance(test.get('viewport'), dict):
+                width = test['viewport'].get('width')
+                if type(width) is int and width < 1024:
+                    test['viewport'] = {'width': 1366, 'height': 768}
             if isinstance(test.get('requirement_ids'), list):
-                test['requirement_ids'] = [i for i in test['requirement_ids'] if i not in source_ids]
+                test['requirement_ids'] = [i for i in test['requirement_ids'] if i not in source_ids and (responsive or i != 'responsive')]
             if not isinstance(test.get('steps'), list):
                 continue
             expanded = []

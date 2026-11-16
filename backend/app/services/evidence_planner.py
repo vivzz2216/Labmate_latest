@@ -23,7 +23,7 @@ TEMPLATE_CATEGORIES = {
     "java_awt": {"source": "source_preview", "result": "gui", "available": True},
     "java_swing": {"source": "source_preview", "result": "gui", "available": True},
     "javafx": {"source": "source_preview", "result": "gui", "available": False},
-    "tkinter": {"source": "source_preview", "result": "gui", "available": False},
+    "tkinter": {"source": "source_preview", "result": "gui", "available": True},
     "flask": {"source": "source_preview", "result": "browser", "available": True},
 }
 
@@ -35,7 +35,7 @@ def experiment_category(language, objective="", code=""):
     if language in {'r','rstudio','rlang'}:return 'rstudio'
     if language=='sql':return 'database'
     if language in {'python', 'colab'} and re.search(r'\b(?:pyspark|torch|pytorch|tensorflow|keras)\b', text, re.I):return 'notebook'
-    if language=='colab' or language=='python' and re.search(r'\b(?:colab|jupyter|deep\s+learning|neural\s+network|perceptron|autoencoder|backpropagation|cnn|rnn|lstm|mlp)\b|\.ipynb\b',objective,re.I):return 'notebook'
+    if language=='colab' or language=='python' and re.search(r'\b(?:colab|jupyter|deep\s+learning|neural\s+network|perceptron|autoencoder|backpropagation|cnn|rnn|lstm|mlp|gradient\s+descent|adam\s+optimizer|rmsprop)\b|\.ipynb\b',objective,re.I):return 'notebook'
     if language == "java":
         gui_terms=r'(?:graphical user interface|Java UI|GUI|JavaFX|Swing|AWT)'
         negated=r'\b(?:no|without|avoid|do\s+not\s+(?:use|create|build))\s+(?:an?\s+)?'+gui_terms+r'\b(?:\s*(?:,|or|and)\s*'+gui_terms+r'\b)*'
@@ -75,12 +75,145 @@ def intermediate_states_required(objective):
     return asks_for('before') and asks_for('after')
 
 
+def _lines(text):
+    """Lines with trailing blanks removed and surrounding empty lines dropped, so spacing at line ends never decides a result."""
+    return "\n".join(line.strip() for line in str(text).replace("\r\n", "\n").split("\n")).strip("\n")
+
+
+def strip_echoed_input(output, stdin):
+    """The output without the lines the console echoed for input() (Python's runner shows typed input the way a terminal does)."""
+    pending = [line.strip() for line in str(stdin or "").replace("\r\n", "\n").split("\n") if line.strip()]
+    kept, position = [], 0
+    for line in str(output).replace("\r\n", "\n").split("\n"):
+        if position < len(pending) and line.strip() == pending[position]:
+            position += 1
+            continue
+        kept.append(line)
+    return "\n".join(kept)
+
+
+def output_matches(actual, expected):
+    """Whether the program output equals (or ends with) the manual's expected output.
+
+    Extraction often flattens a multi-line expected block into one line with ' / ' between the lines, so the flattened form is
+    expanded back into lines as well; a literal ' / ' inside a single line of output still matches as written.
+    """
+    actual = _lines(actual)
+    for candidate in (expected, expected.replace(" / ", "\n")):
+        candidate = _lines(candidate)
+        if candidate and (actual == candidate or actual.endswith("\n" + candidate)):
+            return True
+    return False
+
+
+def sql_results_match(actual, expected_lines):
+    """Compare a SQL run's output with the result sets a manual lists.
+
+    A run prints one table per query, each ended by a "(N row(s) returned)" line, so the manual's expected results are separate blocks,
+    never one contiguous text. A caption line ("Inner join:") starts a new expected block whose first line is the column header and
+    whose other lines are rows. Each block must equal the rows of one result set of the run, and blocks must appear in the manual's
+    order. Row order inside a block is not compared: without ORDER BY SQL does not define it. Column headers are not compared either,
+    since a manual rarely fixes aliases; the values are what an experiment is about."""
+    squash = lambda text: re.sub(r"\s+", " ", str(text)).strip()
+    caption = re.compile(r"[A-Za-z][^|]*:$")
+    ignored = re.compile(r"^empty set$|^\((?:error|no rows)", re.I)
+    blocks, header_next = [], True
+    for raw in expected_lines:
+        line = squash(raw)
+        if not line:
+            continue
+        if caption.search(line):
+            blocks.append([])
+            header_next = True
+            continue
+        if ignored.search(line):
+            continue
+        if not blocks:
+            blocks.append([])
+        if header_next:
+            header_next = False        # column header
+            continue
+        blocks[-1].append(line)
+    blocks = [block for block in blocks if block]
+    if not blocks:
+        return True
+    # Result sets of the run: the lines of each table between its dashed rule and its "(N row(s) returned)" line.
+    sets, current, in_table = [], [], False
+    for raw in str(actual).replace("\r\n", "\n").split("\n"):
+        line = squash(raw)
+        if re.fullmatch(r"-{3,}", line):
+            in_table, current = True, []
+        elif re.fullmatch(r"\(\d+ row\(s\) returned\)", line):
+            if in_table:
+                sets.append(sorted(current))
+            in_table = False
+        elif in_table and line:
+            current.append(line)
+    position = 0
+    for block in blocks:
+        wanted = sorted(block)
+        while position < len(sets) and sets[position] != wanted:
+            position += 1
+        if position >= len(sets):
+            return False
+        position += 1
+    return True
+
+
+def distributed_output_matches(actual, expected_lines):
+    """Distributed runs print timestamped log lines, and the output of several processes is merged in the order they ran, so the lines of one
+    program are not one contiguous block. Every expected line must appear, in order, after the timestamps are removed."""
+    strip = lambda line: re.sub(r"^\s*\[\d{1,2}:\d{2}:\d{2}(?:[.,]\d+)?\]\s*", "", str(line)).strip()
+    have = [strip(line) for line in str(actual).replace("\r\n", "\n").split("\n")]
+    position = 0
+    for raw in expected_lines:
+        line = strip(raw)
+        if not line:
+            continue
+        try:
+            position = have.index(line, position) + 1
+        except ValueError:
+            return False
+    return True
+
+
+_EXPECTED_HEAD = re.compile(r"(?:expected|sample)\s+(?:output|stdout)\s*(?:\([^)\n]*\))?\s*:\s*(.*)$", re.I)
+# A line that starts the next part of a manual (a heading ending in a colon, or the input sample), ending an expected-output block.
+_BLOCK_END = re.compile(
+    r"^(?:(?:sample|expected)\s+input\b|experiment\b|"
+    r"(?:(?:java|python|c|c\+\+|sql|r)\s+)?(?:program|code|solution|source\s+code|test\s+cases?(?:\s+and\s+expected\s+results)?|"
+    r"requirements?|problem\s+statement|procedure|algorithm|conclusion|observations?|viva(?:\s+questions)?|evidence\s+to\s+submit|"
+    r"verification\s+checklist)\s*:\s*$)", re.I)
+
+
+def expected_outputs(objective):
+    """Expected output lines named in the experiment text.
+
+    "Expected output: text" on one line gives that text. A label with nothing after it ("Expected output (sample):") is followed by
+    the lines of the expected output, up to the next heading, so a manual that lists the output below its label is verified too.
+    """
+    lines = str(objective).split("\n")
+    found, index = [], 0
+    while index < len(lines):
+        match = _EXPECTED_HEAD.search(lines[index])
+        if match:
+            first = match.group(1).strip().strip('"\'`')
+            if first:
+                found.append(first)
+            else:
+                follow = index + 1
+                while follow < len(lines) and lines[follow].strip() and not _BLOCK_END.match(lines[follow].strip()):
+                    found.append(lines[follow].strip())
+                    follow += 1
+                index = follow - 1
+        index += 1
+    return found
+
+
 def plan_experiment(objective, language, code=""):
     category = experiment_category(language, objective, code)
     config = TEMPLATE_CATEGORIES[category]
-    expected = []
-    for match in re.finditer(r"(?:expected\s+output|expected\s+stdout)\s*:\s*([^\n]+)", objective, re.I):
-        expected.append(match.group(1).strip().strip('"\'`'))
+    expected = expected_outputs(objective)
     interaction = bool(re.search(r"\b(click|button|submit|validation|calculator|interactive|toggle|search|filter|to.do)\b", objective, re.I))
     requirements = [{"id": "source", "description": "Relevant source implementation", "evidence": "source_preview"},
                     {"id": "execution", "description": "Actual execution or rendered application", "evidence": config["result"]}]
@@ -145,28 +278,64 @@ def select_evidence(plan, candidates):
     return {"selected": selected, "redundant": redundant, "invalid": invalid, "missing_requirements": missing}
 
 
-def verification_summary(plan, success, output, browser_verification=None, viewports=None):
+def verification_summary(plan, success, output, browser_verification=None, viewports=None, stdin=None):
     checks = {"execution": "passed" if success else "failed", "output": "not_specified",
               "render": "not_applicable", "interaction": "not_required"}
     failures = []
     if plan['category']=='rstudio' and (browser_verification or {}).get('status')!='passed':
         failures.append('Real R execution and RStudio workspace evidence did not pass.')
-    if plan['category']=='ubuntu' and (browser_verification or {}).get('status')!='passed':
-        failures.append('Real Ubuntu execution and native terminal/editor evidence did not pass.')
+    if plan['category']=='ubuntu':
+        ubuntu=browser_verification or {}
+        checks['execution']=ubuntu.get('execution_status',checks['execution'])
+        checks['native_capture']=ubuntu.get('capture_status','unverified')
+        checks['requirements']=ubuntu.get('requirements_status','unverified')
+        if ubuntu.get('status')!='passed':
+            if checks['execution']=='passed' and checks['native_capture']=='passed':
+                failures.append('Permitted commands and native captures passed; the listed experiment requirements remain unverified.')
+            else:failures.append('Real Ubuntu execution and native terminal/editor evidence did not pass.')
     if not plan["supported"]:
         failures.append(f"{plan['category']} has no isolated execution and capture adapter.")
+    failed_check = re.search(
+        r'(?im)^\s*(?:CHECK\s+FAILED\b|FAIL(?:ED)?\s*:\s*(?!expected\b)|'
+        r'CHECK[^\n]*\s(?:->|\])\s*FAIL\b|[^\n]*\bmatch\s*[:=]\s*false\s*$)',
+        output or '',
+    )
     if plan["expected_output"]:
-        actual = output.replace("\r\n", "\n").rstrip()
+        actual = strip_echoed_input(output, stdin).rstrip() if stdin and plan.get("language") == "python" else output.replace("\r\n", "\n").rstrip()
         expected = "\n".join(plan["expected_output"])
-        if plan['category'] in {'java_awt','java_swing','flask'}:
+        descriptive_expected = bool(
+            re.search(
+                r"\b(?:printed|showing|demonstrat\w*|accurately|console\s+log|received\s+response|loss\s+curve|accuracy|subclass\s+overrides|format|displayed)\b",
+                expected,
+                re.I,
+            )
+        )
+        if plan['category'] in {'java_awt','java_swing','flask','tkinter'}:
             observed='\n'.join(str(t.get('observed_text','')) for t in (browser_verification or {}).get('tests',[]) if t.get('status')=='passed')
             def present(value):
                 return bool(re.search(r'(?<![\w.+-])'+re.escape(value)+r'(?![\w.])',observed)) if re.fullmatch(r'-?\d+(?:\.\d+)?',value) else value in observed
             checks['output']='passed' if all(present(value) for value in plan['expected_output']) else 'failed'
-        else:checks["output"] = "passed" if actual == expected or actual.endswith("\n" + expected) else "failed"
+        elif descriptive_expected:
+            checks["output"] = "unverified" if actual else "failed"
+        elif plan.get("language") == "sql":
+            checks["output"] = "passed" if sql_results_match(actual, plan["expected_output"]) else "failed"
+        elif plan.get("language") == "distributed":
+            checks["output"] = "passed" if distributed_output_matches(actual, plan["expected_output"]) else "failed"
+        else:
+            checks["output"] = "passed" if output_matches(actual, expected) else "failed"
         if checks["output"] == "failed":
             failures.append("Actual output does not contain the explicit expected output from the manual.")
-    if plan["category"] in {"browser", "react", "flask", "java_awt", "java_swing"}:
+    # A single-program simulation (token ring, election, clocks, ...) is verified by its exact expected output. Programs that must really talk
+    # over sockets, RMI or between processes also need the independent behaviour check, since printed text alone does not prove the exchange.
+    networked = bool(re.search(r"\b(?:sockets?|rmi|server|client|ports?|registry|datagram|tcp|udp)\b", str(plan.get("objective", "")), re.I))
+    if plan.get("language") == "distributed" and (browser_verification or {}).get("status") != "passed" and (networked or checks["output"] != "passed"):
+        if checks["output"] not in {"passed", "failed"}:
+            checks["output"] = "unverified"          # a real output mismatch stays "failed" so it can be corrected
+        failures.append("Distributed execution completed, but its required behavior has not been independently verified.")
+    if failed_check:
+        checks["output"] = "failed"
+        failures.append("Program output reported a failed internal or verification check.")
+    if plan["category"] in {"browser", "react", "flask", "java_awt", "java_swing", "tkinter"}:
         checks["render"] = "passed" if success else "failed"
         required = any(r["id"] == "interaction" for r in plan["requirements"]) or bool((browser_verification or {}).get("required"))
         if required:

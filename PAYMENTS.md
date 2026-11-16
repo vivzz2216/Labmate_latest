@@ -1,14 +1,17 @@
-# LabMate experiment packs
+# LabMate manual packs
 
 The homepage offers one-time purchases through Razorpay Standard Checkout.
 
-| Pack | Total | Experiment credits |
+| Pack | Total | Manual credits |
 | --- | ---: | ---: |
-| Quick Lab | ₹29 | 10 |
-| Lab Pack | ₹79 | 35 |
-| Semester Pack | ₹149 | 80 |
+| Single Manual | ₹29 | 1 |
+| Freshers Pack | ₹99 | 5 |
+| Intermediate Pack | ₹249 | 15 |
+| Semester Pack | ₹499 | 35 |
 
-Each account receives three trial credits per payment mode. Credits have no expiry or recurring charge. One successfully completed experiment consumes one credit. Before starting, the workflow reserves credits for the remaining experiments; settlement returns credits for failed or unfinished experiments. Existing completed report downloads cost no additional credits. A resumed workflow pays only for newly completed experiments. Refunded purchases reverse their proportional credits, rounding up; an account can have a negative balance if refunded credits were already spent.
+One credit covers one uploaded manual containing at most **15 questions or exercises**. Oversized manuals are rejected, never silently truncated; split them before uploading. Explicitly numbered independent exercises inside a grouped task also count towards the limit. Individual SQL statements, command steps and implementation instructions are not separate questions.
+
+A run reserves one credit. It is consumed only after the entire manual passes verification and its report completes. Failed, paused or unfinished runs return that credit; retrying the same completed upload and downloading its report never charge again. Each file in a batch is a separate manual. Existing balances and saved purchase quantities/amounts are preserved. Trial credits stay controlled by BILLING_TRIAL_CREDITS (currently 100); this change does not reset accounts. Credits never expire and there are no recurring charges. Refunded purchases reverse their proportional credits, rounding up; an account can have a negative balance if refunded credits were already spent.
 
 ## Configuration
 
@@ -16,7 +19,7 @@ Set these **backend-only** variables using the server's secret environment store
 
 ```dotenv
 BILLING_ENABLED=true
-BILLING_TRIAL_CREDITS=3
+BILLING_TRIAL_CREDITS=100
 RAZORPAY_MODE=test
 RAZORPAY_KEY_ID=<your test key ID>
 RAZORPAY_KEY_SECRET=<your test key secret>
@@ -25,7 +28,7 @@ RAZORPAY_WEBHOOK_SECRET=<a separate random webhook secret>
 
 Do not put the key secret or webhook secret in frontend variables or source control. The public checkout key ID is returned with an authenticated order. The supplied test credentials are saved only in the ignored local backend environment. The current local test database is separate from Railway.
 
-Apply `backend/migrations/007_experiment_credits.sql` to an existing PostgreSQL installation before enabling packs. The application also creates missing tables at startup through SQLAlchemy. Back up production first. No existing user or workflow rows are rewritten. SQLite local development uses the same models; the SQL migration targets PostgreSQL.
+The application provisions billing tables and indexes automatically at startup through SQLAlchemy `create_all` and `backend/app/workflow_schema.py`. Back up production first before enabling packs. No existing user or workflow rows are rewritten. SQLite local development and Railway PostgreSQL use the same models.
 
 On Railway, configure the backend service variables, retain the database and data volume, and redeploy the backend and frontend together. Keep `EXECUTION_ALLOWED_EMAILS` populated for the controlled beta: purchasing a pack does not grant execution admission. Legacy `/api/run` and task-submit execution routes return 402 while billing is enabled; use the durable `/code-execution` assignment workflow, which enforces reservations.
 
@@ -43,13 +46,13 @@ Test and live wallets, orders and ledger entries are separate. To accept real pa
 
 ## Launch-price rationale
 
-These are starting prices to validate with students, not established willingness-to-pay data. An entry price below ₹30 makes one manual approachable, while larger packs reduce the per-experiment price without promising unlimited AI usage. Keep provider and runtime costs under review during the beta.
+These are starting prices to validate with students, not established willingness-to-pay data. An entry price below ₹30 makes one manual approachable, while larger packs reduce the per-manual price without promising unlimited AI usage. Keep provider and runtime costs under review during the beta.
 
 Public comparison pages checked on 18 October 2026 advertised [BlackBook](https://www.blackbook.study/) at ₹129 per report, [StudyLab](https://studylab-pearl.vercel.app/) at ₹199 per month, and [ReportOS](https://reportosapp.com/) starter reports at ₹249. These products have different scopes and are directional comparisons. [Razorpay pricing](https://razorpay.com/pricing/) lists processing fees; the pack total shown to students is server-controlled and does not add a checkout surcharge. Validate margins including applicable fees and business tax obligations before changing from test mode.
 
 ## Verification
 
-See `PAYMENTS_VERIFICATION_2026-10-18.md` for the exact tested environment, test results, and remaining activation work. The gateway integration follows [Razorpay Standard Checkout](https://razorpay.com/docs/payments/payment-gateway/web-integration/standard/integration-steps/) and [webhook validation](https://razorpay.com/docs/webhooks/validate-test/).
+The gateway integration follows [Razorpay Standard Checkout](https://razorpay.com/docs/payments/payment-gateway/web-integration/standard/integration-steps/) and [webhook validation](https://razorpay.com/docs/webhooks/validate-test/).
 
 
 ## Test checkout recovery (21 October 2026)

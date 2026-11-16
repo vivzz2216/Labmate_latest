@@ -5,7 +5,6 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from app.config import settings
 from app.services import worker_health as health
 
 

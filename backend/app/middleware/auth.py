@@ -1,7 +1,7 @@
 """
 Authentication and authorization middleware
 """
-from fastapi import Depends, HTTPException, status, Header, Request
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from typing import Optional
@@ -10,7 +10,7 @@ import asyncio
 
 from ..database import get_db
 from ..models import User, Upload, AIJob, Report
-from ..security.jwt import verify_token, get_user_id_from_token
+from ..security.jwt import get_user_id_from_token
 from ..security.operator_access import is_admin_user
 
 logger = logging.getLogger(__name__)

@@ -1,15 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from ..database import get_db
-from ..models import Upload, Job, Screenshot, User
+from ..models import Job, Screenshot, User
 from ..schemas import RunRequest, RunResponse, JobStatus
 from ..services.parser_service import parser_service
 from ..services.executor_service import executor_service
 from ..services.screenshot_service import screenshot_service
-from ..middleware.auth import get_current_user, verify_upload_ownership
+from ..middleware.auth import verify_upload_ownership
 from ..security.execution_access import legacy_execution_user as execution_user
 from ..middleware.csrf import require_csrf_token
-from ..config import settings
 from ..security.signed_assets import screenshot_url as signed_screenshot_url
 import os
 import time

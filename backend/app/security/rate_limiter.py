@@ -1,7 +1,6 @@
 """
 Rate limiting utilities
 """
-from datetime import datetime, timedelta
 from typing import Dict, Tuple
 import time
 

@@ -1,9 +1,7 @@
-import os
 import re
-import uuid
 import json
 import logging
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any
 from sqlalchemy.orm import Session
 from ..models import AIJob, AITask, Upload, User
 from ..schemas import TaskSubmission, TaskResult
@@ -237,7 +235,7 @@ class TaskService:
                 task.task_type, output or logs, exit_code, task.user_code
             )
             task.caption = caption
-        except:
+        except Exception:
             task.caption = f"Code execution {'successful' if exit_code == 0 else 'failed'}"
         
         task.status = "completed" if success else "failed"
@@ -305,7 +303,7 @@ class TaskService:
                     task.task_type, f"React SPA with {len(routes)} routes", exit_code, ""
                 )
                 task.caption = caption
-            except:
+            except Exception:
                 task.caption = f"React SPA project with {len(routes)} routes captured successfully"
         else:
             task.caption = "React project execution failed"

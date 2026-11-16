@@ -1,0 +1,667 @@
+/* ========================================================
+   LABMATE LAB SECTIONS & CATALOG UI
+   Flagship dark cosmic hero + crisp minimalist 3-column cards
+   with full Light/Dark DashboardShell theme support.
+   ======================================================== */
+
+.container {
+  width: 100%;
+  max-width: 1380px;
+  margin: 0 auto;
+  padding: 0 0 4rem;
+  color: var(--text-main, #f4f4f5);
+  font-family: inherit;
+}
+
+/* ========================================================
+   HERO BANNER (Full-bleed Cosmic Arc Card)
+   ======================================================== */
+.heroBanner {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1.125rem;
+  padding: 2rem 2.5rem 2.25rem;
+  margin-bottom: 1.75rem;
+  background:
+    radial-gradient(68% 130% at 78% 105%, rgba(56, 102, 224, 0.28) 0%, rgba(28, 42, 92, 0.14) 45%, transparent 72%),
+    radial-gradient(45% 95% at 52% 110%, rgba(99, 102, 241, 0.18) 0%, transparent 65%),
+    linear-gradient(135deg, #07090f 0%, #0b101d 55%, #0c1324 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+  color: #f8fafc;
+}
+
+/* Subtle glowing planet-horizon arc */
+.heroArc {
+  position: absolute;
+  right: -12%;
+  bottom: -65%;
+  width: 68%;
+  height: 155%;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 35% 30%,
+    rgba(96, 165, 250, 0.22) 0%,
+    rgba(59, 130, 246, 0.09) 28%,
+    rgba(15, 23, 42, 0.4) 58%,
+    transparent 75%
+  );
+  border-top: 1.5px solid rgba(147, 197, 253, 0.35);
+  box-shadow: inset 0 12px 40px rgba(96, 165, 250, 0.18);
+  pointer-events: none;
+}
+
+.heroInner {
+  position: relative;
+  z-index: 1;
+}
+
+/* Breadcrumbs inside Hero */
+.breadcrumbs {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.8rem;
+  color: rgba(203, 213, 225, 0.65);
+  margin-bottom: 1.35rem;
+}
+
+.breadcrumbs a {
+  color: rgba(203, 213, 225, 0.72);
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.15s ease;
+}
+
+.breadcrumbs a:hover {
+  color: #ffffff;
+}
+
+.breadcrumbSeparator {
+  color: rgba(148, 163, 184, 0.45);
+  font-size: 0.75rem;
+}
+
+.breadcrumbActive {
+  color: #f8fafc;
+  font-weight: 600;
+}
+
+.heroGrid {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2.5rem;
+  flex-wrap: wrap;
+}
+
+.heroContent {
+  flex: 1;
+  min-width: 300px;
+  max-width: 640px;
+}
+
+.titleRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+  margin-bottom: 0.65rem;
+}
+
+.titleIconBox {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 0.75rem;
+  flex-shrink: 0;
+}
+
+.title {
+  font-size: 2.25rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: #ffffff;
+  margin: 0;
+  line-height: 1.15;
+}
+
+.heroSubtitle {
+  font-size: 1rem;
+  color: rgba(203, 213, 225, 0.78);
+  line-height: 1.55;
+  margin: 0 0 1.15rem 0;
+}
+
+.heroFeaturesRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  margin-bottom: 1.5rem;
+  font-size: 0.8125rem;
+  color: rgba(226, 232, 240, 0.8);
+}
+
+.heroFeatureItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.heroFeatureItem svg {
+  color: rgba(148, 163, 184, 0.85);
+}
+
+.actionsBar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.heroPrimaryPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  background: #ffffff;
+  color: #090d16;
+  padding: 0.6rem 1.3rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border-radius: 9999px;
+  text-decoration: none;
+  border: 1px solid #ffffff;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  box-shadow: 0 4px 18px rgba(255, 255, 255, 0.14);
+}
+
+.heroPrimaryPill:hover {
+  background: #f1f5f9;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 22px rgba(255, 255, 255, 0.22);
+}
+
+.heroSecondaryPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  background: rgba(255, 255, 255, 0.06);
+  color: #e2e8f0;
+  padding: 0.6rem 1.3rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border-radius: 9999px;
+  text-decoration: none;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.heroSecondaryPill:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.28);
+  color: #ffffff;
+}
+
+/* Right-side Divider Stats */
+.heroStats {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 0.5rem 0;
+}
+
+.heroStatTile {
+  display: flex;
+  flex-direction: column;
+  padding: 0 1.75rem;
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.heroStatTile:first-child {
+  border-left: none;
+  padding-left: 0;
+}
+
+.heroStatTile:last-child {
+  padding-right: 0.5rem;
+}
+
+.heroStatValue {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #ffffff;
+  line-height: 1.15;
+}
+
+.heroStatLabel {
+  font-size: 0.775rem;
+  font-weight: 500;
+  color: rgba(148, 163, 184, 0.85);
+  margin-top: 0.3rem;
+}
+
+/* ========================================================
+   FILTER & SEARCH TOOLBAR
+   ======================================================== */
+.filterRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.filterPills {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.filterPill {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  padding: 0.48rem 1.05rem;
+  border-radius: 9999px;
+  background: var(--card-bg, rgba(255, 255, 255, 0.04));
+  color: var(--text-muted, #94a3b8);
+  border: 1px solid var(--card-border, rgba(255, 255, 255, 0.09));
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.filterPill:hover {
+  color: var(--text-heading, #ffffff);
+  border-color: rgba(148, 163, 184, 0.35);
+}
+
+.filterPillActive {
+  background: #ffffff;
+  color: #090d16;
+  border-color: #ffffff;
+  font-weight: 600;
+  box-shadow: 0 2px 10px rgba(255, 255, 255, 0.12);
+}
+
+:global([data-theme="light"]) .filterPillActive {
+  background: #0f172a;
+  color: #ffffff;
+  border-color: #0f172a;
+}
+
+.filterPillActive:hover {
+  color: #090d16;
+}
+
+:global([data-theme="light"]) .filterPillActive:hover {
+  color: #ffffff;
+}
+
+.searchBox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--card-bg, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--card-border, rgba(255, 255, 255, 0.1));
+  border-radius: 9999px;
+  padding: 0.45rem 0.95rem;
+  min-width: 210px;
+  max-width: 280px;
+  color: var(--text-muted, #94a3b8);
+  transition: border-color 0.15s ease;
+}
+
+.searchBox:focus-within {
+  border-color: var(--link-color, #3b82f6);
+}
+
+.searchBox input {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-heading, #f8fafc);
+  font-size: 0.8125rem;
+  width: 100%;
+}
+
+.searchBox input::placeholder {
+  color: var(--text-dim, #64748b);
+}
+
+/* ========================================================
+   3-COLUMN CATEGORY CARDS GRID (/labs)
+   ======================================================== */
+.categoryGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.15rem;
+}
+
+@media (max-width: 1120px) {
+  .categoryGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.categoryCard {
+  background: var(--card-bg, #0d111a);
+  border: 1px solid var(--card-border, rgba(255, 255, 255, 0.08));
+  box-shadow: var(--card-shadow, 0 4px 20px rgba(0, 0, 0, 0.2));
+  border-radius: 0.9rem;
+  padding: 1.35rem 1.4rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.categoryCard:hover {
+  transform: translateY(-2px);
+  border-color: rgba(148, 163, 184, 0.28);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.28);
+}
+
+:global([data-theme="light"]) .categoryCard:hover {
+  border-color: #3b82f6;
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.08);
+}
+
+.categoryCardTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1.1rem;
+}
+
+.categoryIconWrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 0.65rem;
+  flex-shrink: 0;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.22rem 0.65rem;
+  border-radius: 9999px;
+  background: rgba(59, 130, 246, 0.14);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  white-space: nowrap;
+}
+
+.badgePurple {
+  background: rgba(139, 92, 246, 0.16);
+  color: #c4b5fd;
+  border-color: rgba(139, 92, 246, 0.3);
+}
+
+.badgeSky {
+  background: rgba(14, 165, 233, 0.16);
+  color: #7dd3fc;
+  border-color: rgba(14, 165, 233, 0.3);
+}
+
+.badgeEmerald {
+  background: rgba(16, 185, 129, 0.15);
+  color: #6ee7b7;
+  border-color: rgba(16, 185, 129, 0.28);
+}
+
+:global([data-theme="light"]) .badge {
+  color: #2563eb;
+}
+:global([data-theme="light"]) .badgePurple {
+  color: #7c3aed;
+}
+:global([data-theme="light"]) .badgeSky {
+  color: #0284c7;
+}
+:global([data-theme="light"]) .badgeEmerald {
+  color: #059669;
+}
+
+.categoryCardTitle {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-heading, #f8fafc);
+  margin: 0 0 0.45rem 0;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+
+.categoryCardTagline {
+  font-size: 0.835rem;
+  color: var(--text-muted, #94a3b8);
+  margin: 0 0 1.25rem 0;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.categoryCardFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--panel-header-border, rgba(255, 255, 255, 0.06));
+}
+
+.cardMetaRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+  font-size: 0.75rem;
+  color: var(--text-dim, #64748b);
+}
+
+.cardMetaItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
+.cardArrowBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--card-border, rgba(255, 255, 255, 0.1));
+  color: var(--text-muted, #94a3b8);
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.categoryCard:hover .cardArrowBtn {
+  background: #ffffff;
+  border-color: #ffffff;
+  color: #090d16;
+}
+
+:global([data-theme="light"]) .categoryCard:hover .cardArrowBtn {
+  background: #0f172a;
+  border-color: #0f172a;
+  color: #ffffff;
+}
+
+/* ========================================================
+   EMPTY FILTER STATE
+   ======================================================== */
+.emptyFilterState {
+  text-align: center;
+  padding: 3.5rem 1.5rem;
+  background: var(--card-bg, rgba(13, 17, 26, 0.7));
+  border: 1px dashed var(--card-border, rgba(255, 255, 255, 0.12));
+  border-radius: 1rem;
+  color: var(--text-muted, #94a3b8);
+}
+
+.emptyFilterState h3 {
+  color: var(--text-heading, #f8fafc);
+  margin: 0.5rem 0 0.35rem;
+  font-size: 1.05rem;
+}
+
+/* ========================================================
+   DETAIL PAGE: SPECS & EXPERIMENTS (/labs/[slug])
+   ======================================================== */
+.specsSection {
+  margin-bottom: 2rem;
+}
+
+.specsHeading {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim, #64748b);
+  margin: 0 0 0.75rem 0;
+}
+
+.specsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.85rem;
+}
+
+.specCard {
+  background: var(--card-bg, #0d111a);
+  border: 1px solid var(--card-border, rgba(255, 255, 255, 0.08));
+  box-shadow: var(--card-shadow, none);
+  border-radius: 0.8rem;
+  padding: 0.95rem 1.15rem;
+}
+
+.specLabel {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-dim, #64748b);
+  margin-bottom: 0.3rem;
+}
+
+.specValue {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-heading, #f8fafc);
+  line-height: 1.35;
+}
+
+/* ========================================================
+   TRACK CAPABILITIES & LAUNCH CTA (/labs/[slug])
+   ======================================================== */
+.capabilitiesSection {
+  margin-bottom: 2rem;
+}
+
+.capabilitiesGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 0.85rem;
+}
+
+.capabilityCard {
+  background: var(--card-bg, #0d111a);
+  border: 1px solid var(--card-border, rgba(255, 255, 255, 0.08));
+  border-radius: 0.8rem;
+  padding: 1rem 1.25rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.capabilityIcon {
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+}
+
+.capabilityText {
+  font-size: 0.85rem;
+  color: var(--text-main, #cbd5e1);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.launchCard {
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.12) 0%, rgba(13, 17, 26, 0.85) 100%);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  border-radius: 1rem;
+  padding: 1.75rem 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  margin-top: 2rem;
+}
+
+.launchCardContent {
+  flex: 1;
+  min-width: 280px;
+}
+
+.launchCardContent h3 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0 0 0.4rem 0;
+}
+
+.launchCardContent p {
+  font-size: 0.875rem;
+  color: rgba(203, 213, 225, 0.8);
+  line-height: 1.55;
+  margin: 0;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .heroBanner {
+    padding: 1.5rem 1.25rem;
+  }
+  .title {
+    font-size: 1.65rem;
+  }
+  .heroStats {
+    width: 100%;
+    padding-top: 0.75rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  .heroStatTile {
+    padding: 0 1rem;
+  }
+  .categoryGrid {
+    grid-template-columns: 1fr;
+  }
+  .experimentHeaderRow {
+    flex-direction: column;
+  }
+}

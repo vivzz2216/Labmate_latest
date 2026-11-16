@@ -1,0 +1,16 @@
+{
+  "updated_at": "2026-11-12T18:45:54.659721+00:00",
+  "active_focus": "Backend bug fixes, profile-aware test fixtures, lab runtime check",
+  "recent_changes": [
+    "backend/app/services/dc_runtime.py",
+    "backend/app/services/browser_capture.py",
+    "backend/app/services/lab_capture.py",
+    "backend/app/routers/workflows.py",
+    "backend/tests/conftest.py"
+  ],
+  "environment_notes": [
+    "Run backend/pytest with Python 3.11 via uv + local_requirements.txt",
+    "Backend: http://127.0.0.1:8000 | Frontend: http://localhost:3000"
+  ],
+  "handoff_notes": "Fixed dc_runtime (process leaks, undrained server pipe, lost imports), stable browser capture temp root, held health-probe tasks, removed dead payment-check branches, narrowed notebook sandbox to Fonts, login timing, failed-SQL error frame kept in reports, python_template stored only when jupyter (resume kept results). Tests use conftest.student_profile(). Full suite 861 passed. Open: lab catalog launch has no upload so Run does nothing; track=web is not a language; notebook and Ubuntu labs need a non-empty allowlist even on open local installs."
+}

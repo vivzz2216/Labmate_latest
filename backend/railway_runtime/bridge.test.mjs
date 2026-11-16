@@ -1,9 +1,40 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {run,fetchReadRetry} from './bridge.mjs';
+import {run,fetchReadRetry,template,needsR,needsNotebookExtras} from './bridge.mjs';
 
 process.env.RAILWAY_API_TOKEN='test-token-must-never-enter-vm';
 process.env.RAILWAY_ENVIRONMENT_ID='test-environment';
+
+test('Spark dependencies are installed only for Spark jobs',()=>{
+  for(const spark of [false,true]) {
+    const commands=[];const recipe={run(command){commands.push(command);return this}};
+    template({template(){return recipe}},Buffer.from('deps'),spark);
+    assert.equal(commands.some(c=>c.includes('pyspark==3.5.7')),spark);
+  }
+});
+
+test('R and notebook-extra layers are added only for the jobs that need them',async()=>{
+  const build=options=>{const commands=[];const recipe={run(command){commands.push(command);return this}};
+    template({template(){return recipe}},Buffer.from('deps'),false,options);return commands};
+  const base=build();
+  assert.ok(!base.some(c=>c.includes('r-base-core')||c.includes('nltk')));
+  assert.equal(build({r:true}).filter(c=>c.includes('r-base-core')&&c.includes('r-cran-ggplot2')).length,1);
+  const extra=build({notebookExtras:Buffer.from('networkx==3.7\n')}).at(-1);
+  assert.ok(extra.includes(Buffer.from('networkx==3.7\n').toString('base64')));
+  assert.ok(extra.includes('--no-deps')&&extra.includes('vader_lexicon')&&extra.includes('test -f'));
+  assert.equal(needsR({language:'R'}),true);assert.equal(needsR({language:'colab'}),false);assert.equal(needsR({}),false);
+  assert.equal(needsNotebookExtras({code:'import pandas as pd\nfrom nltk.sentiment.vader import SentimentIntensityAnalyzer'}),true);
+  assert.equal(needsNotebookExtras({code:'  import networkx as nx'}),true);
+  assert.equal(needsNotebookExtras({code:'from bs4 import BeautifulSoup'}),true);
+  assert.equal(needsNotebookExtras({code:'import pandas\nprint("import nltk")'}),false);
+  // The extra requirements are read only when a job needs them, and reach the template for that job.
+  for(const [code,expected] of [['print(7)',false],['import networkx as nx\nprint(7)',true]]) {
+    const commands=[];const recipe={run(command){commands.push(command);return this}};
+    const f=fixture({exitCode:0,stdout:'{"success":true}'});f.sdk.template=()=>recipe;
+    await run({bundle:'',job:{code,language:'colab'}},f.sdk,Buffer.from('deps'),Buffer.from('extra-pins'));
+    assert.equal(commands.some(c=>c.includes(Buffer.from('extra-pins').toString('base64'))),expected);
+  }
+});
 
 test('network retries are bounded and only apply to read queries',async()=>{
   let calls=0;

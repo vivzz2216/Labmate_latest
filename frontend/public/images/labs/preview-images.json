@@ -1,0 +1,86 @@
+{
+  "idle": {
+    "src": "/images/labs/idle-hd.webp",
+    "width": 1700,
+    "height": 646,
+    "displayWidth": 850
+  },
+  "idle-shell": {
+    "src": "/images/labs/idle-shell-hd.webp",
+    "width": 1700,
+    "height": 666,
+    "displayWidth": 850
+  },
+  "jupyter": {
+    "src": "/images/labs/jupyter-hd.webp",
+    "width": 2000,
+    "height": 858,
+    "displayWidth": 1000
+  },
+  "java": {
+    "src": "/images/labs/java-hd.webp",
+    "width": 1920,
+    "height": 712,
+    "displayWidth": 960
+  },
+  "java-output": {
+    "src": "/images/labs/java-output-hd.webp",
+    "width": 1800,
+    "height": 696,
+    "displayWidth": 900
+  },
+  "cpp": {
+    "src": "/images/labs/cpp-hd.webp",
+    "width": 2048,
+    "height": 1280,
+    "displayWidth": 1024
+  },
+  "cpp-output": {
+    "src": "/images/labs/cpp-output-hd.webp",
+    "width": 1960,
+    "height": 764,
+    "displayWidth": 980
+  },
+  "web-code": {
+    "src": "/images/labs/web-code-hd.webp",
+    "width": 2256,
+    "height": 1138,
+    "displayWidth": 1128
+  },
+  "web-output": {
+    "src": "/images/labs/web-output-hd.webp",
+    "width": 2560,
+    "height": 1456,
+    "displayWidth": 1280
+  },
+  "colab-light": {
+    "src": "/images/labs/colab-light-hd.webp",
+    "width": 2200,
+    "height": 940,
+    "displayWidth": 1100
+  },
+  "colab-dark": {
+    "src": "/images/labs/colab-dark-hd.webp",
+    "width": 2200,
+    "height": 940,
+    "displayWidth": 1100
+  },
+  "mysql": {
+    "src": "/images/labs/mysql-hd.webp",
+    "width": 2560,
+    "height": 1520,
+    "displayWidth": 1280
+  },
+  "jupyter-light": {
+    "src": "/images/labs/jupyter-light-reference.webp",
+    "width": 2000,
+    "height": 940,
+    "displayWidth": 1000
+  },
+  "jupyter-dark": {
+    "src": "/images/labs/jupyter-dark-reference.webp",
+    "width": 2000,
+    "height": 940,
+    "displayWidth": 1000
+  }
+}

@@ -1,0 +1,54 @@
+[
+  {
+    "id": "ADR-001",
+    "title": "Python 3.11 via uv for Windows local backend & tests",
+    "status": "active",
+    "reason": "Python 3.14 hits Windows fatal exception 0xc06d007e in platform._wmi_query when importing SQLAlchemy.",
+    "files": [
+      "backend/app/database.py",
+      "backend/requirements.txt"
+    ]
+  },
+  {
+    "id": "ADR-002",
+    "title": "Portable Temurin JDK 17 Windows 11 DLL issue & MinGW TEMP path",
+    "status": "active",
+    "reason": "Portable JDK binaries under backend/audit_artifacts fail with 0xC0000142 on Windows 11; MinGW gcc/g++ work cleanly when TEMP points to writable backend/react_temp.",
+    "files": [
+      "backend/.env",
+      "backend/app/services/runtime_engine.py"
+    ]
+  },
+  {
+    "id": "ADR-003",
+    "title": "FakeRedis local fallback & execution isolation gate",
+    "status": "active",
+    "reason": "Local dev falls back to FakeRedis when 127.0.0.1:6379 is absent; backend/.env sets EXECUTION_ISOLATION=required.",
+    "files": [
+      "backend/app/cache.py",
+      "backend/app/services/isolated_runtime.py"
+    ]
+  },
+  {
+    "id": "ADR-004",
+    "title": "RootLayout AuthProvider avoids Next useRouter invariant",
+    "status": "active",
+    "reason": "BasicAuthContext uses window.location.assign instead of Next useRouter inside RootLayout to avoid E238 router-not-mounted errors.",
+    "files": [
+      "frontend/contexts/BasicAuthContext.tsx",
+      "frontend/app/layout.tsx"
+    ]
+  },
+  {
+    "id": "ADR-005",
+    "title": "Strict Quarantine & Active Asset Protection Policy",
+    "status": "active",
+    "reason": "Keep backend/labmate.db, .env files, 94 active uploads, 537 active screenshots, and .env compiler folders untouched.",
+    "files": [
+      "backend/labmate.db",
+      ".env",
+      "backend/.env",
+      "frontend/.env.local"
+    ]
+  }
+]

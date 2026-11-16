@@ -3,7 +3,6 @@
 This separates windows from the user's desktop; it is not an untrusted-code VM.
 No screen-grab API ever reads the user's active desktop.
 """
-import asyncio
 import base64
 from contextlib import contextmanager
 import os
@@ -14,7 +13,7 @@ import time
 import uuid
 
 from ..config import settings
-from .browser_scenarios import normalize_v2,validate_coverage_plan
+from .browser_scenarios import normalize_v2
 
 GUI_ACTIONS={'fill','click','select','screenshot','assert_visible','assert_absent','assert_value','assert_count','assert_checked'}
 

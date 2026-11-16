@@ -6,6 +6,7 @@ from pathlib import Path
 from zipfile import ZipFile
 
 from docx import Document
+from docx.enum.section import WD_ORIENT, WD_SECTION
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Inches, Length, Pt, RGBColor, Twips
 import docx.oxml.simpletypes as _docx_simpletypes
@@ -36,7 +37,53 @@ def apply_student_metadata(document, student_name: str, roll_no: str = "", depar
         pass
 
 
-def embed_theory_block(document, question_text: str, answer_text: str, question_num: int = 1):
+def _add_table(document, table):
+    """A small bordered table ({'headers': [...], 'rows': [[...]]}) with a shaded header row.
+
+    Borders are written directly, because a manual's own Word template may not define the 'Table Grid' style.
+    """
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    headers, rows = table["headers"], table["rows"]
+    if table.get("title"):
+        caption = document.add_paragraph()
+        caption.paragraph_format.keep_with_next = True
+        caption.paragraph_format.space_before = Pt(8)
+        caption.paragraph_format.space_after = Pt(3)
+        label = caption.add_run(str(table["title"]))
+        label.bold = True
+        label.font.size = Pt(10)
+    grid = document.add_table(rows=1 + len(rows), cols=len(headers))
+    properties = grid._tbl.tblPr
+    borders = OxmlElement("w:tblBorders")
+    for edge in ("top", "left", "bottom", "right", "insideH", "insideV"):
+        element = OxmlElement("w:" + edge)
+        element.set(qn("w:val"), "single")
+        element.set(qn("w:sz"), "4")
+        element.set(qn("w:color"), "94A3B8")
+        borders.append(element)
+    properties.append(borders)
+    for column, text in enumerate(headers):
+        cell = grid.rows[0].cells[column]
+        cell.text = ""
+        run = cell.paragraphs[0].add_run(text)
+        run.bold = True
+        run.font.size = Pt(9)
+        shade = OxmlElement("w:shd")
+        shade.set(qn("w:val"), "clear")
+        shade.set(qn("w:fill"), "E2E8F0")
+        cell._tc.get_or_add_tcPr().append(shade)
+    for row_index, row in enumerate(rows, 1):
+        for column, text in enumerate(row):
+            cell = grid.rows[row_index].cells[column]
+            cell.text = ""
+            cell.paragraphs[0].add_run(text).font.size = Pt(9)
+    spacer = document.add_paragraph()
+    spacer.paragraph_format.space_after = Pt(4)
+    return grid
+
+
+def embed_theory_block(document, question_text: str, answer_text: str, question_num: int = 1, table=None):
     """
     Format a theoretical concept or viva answer cleanly in the Word document.
     Enforces clean typography, subtle indentation, and preserves the strict rule
@@ -83,15 +130,191 @@ def embed_theory_block(document, question_text: str, answer_text: str, question_
             run_line.font.size = Pt(10)
             run_line.font.color.rgb = RGBColor(0x33, 0x41, 0x55)  # Slate 700
 
+    if table:
+        _add_table(document, table)
+
     # Subtle space before next item
     p_spacer = document.add_paragraph()
     p_spacer.paragraph_format.space_before = Pt(0)
     p_spacer.paragraph_format.space_after = Pt(8)
     return p_q
+
+
+def embed_conclusion(document, text: str):
+    """The experiment's Conclusion, after every part, in the same typography as the answers."""
+    heading = document.add_paragraph()
+    heading.paragraph_format.keep_with_next = True
+    heading.paragraph_format.space_before = Pt(14)
+    heading.paragraph_format.space_after = Pt(4)
+    run = heading.add_run("Conclusion")
+    run.bold = True
+    run.font.size = Pt(12)
+    run.font.color.rgb = RGBColor(0x0F, 0x17, 0x2A)
+    for line in str(text or "").split("\n"):
+        line = line.strip()
+        if not line:
+            continue
+        paragraph = document.add_paragraph()
+        paragraph.paragraph_format.space_after = Pt(4)
+        paragraph.paragraph_format.line_spacing = 1.15
+        body = paragraph.add_run(line)
+        body.font.size = Pt(10.5)
+        body.font.color.rgb = RGBColor(0x33, 0x41, 0x55)
+    return heading
+
+
+def strip_procedure_heading(text):
+    """The block prints its own "Procedure:" label; drop the model's copy ("Procedure:" or "Procedure: Web Scraping using
+    ParseHub" keeps only "Web Scraping using ParseHub") so the label is not printed twice."""
+    import re
+    lines = str(text or "").strip().split("\n")
+    if lines and re.match(r"^\s*\**\s*procedure\b\s*:?\s*\**\s*", lines[0], re.I):
+        rest = re.sub(r"^\s*\**\s*procedure\b\s*:?\s*\**\s*", "", lines[0], flags=re.I).strip()
+        lines = ([rest] if rest else []) + lines[1:]
+    return "\n".join(lines).strip()
+
+
+def _note_paragraph(document, heading, text):
+    paragraph = document.add_paragraph()
+    paragraph.paragraph_format.left_indent = Inches(0.2)
+    paragraph.paragraph_format.space_after = Pt(4)
+    paragraph.paragraph_format.line_spacing = 1.15
+    if heading:
+        label = paragraph.add_run(heading + " ")
+        label.bold = True
+        label.font.size = Pt(10)
+    body = paragraph.add_run(text)
+    body.font.size = Pt(10)
+    body.font.color.rgb = RGBColor(0x33, 0x41, 0x55)
+    return paragraph
+
+
+def embed_evidence_block(document, title: str, procedure_text: str, number: int = 1,
+                         image_paths=(), captions=(), missing=(), table=None,
+                         tables_before=(), explanations=(), observations=(), notes=(), tables_after=()):
+    """A part done in an outside tool: the written procedure, then the student's own screenshots.
+
+    LabMate never draws these images. A screenshot the student has not attached yet is shown as a plain
+    placeholder naming it, so an incomplete report is visibly incomplete instead of looking finished.
+    """
+    heading = document.add_paragraph()
+    heading.paragraph_format.keep_with_next = True
+    heading.paragraph_format.space_before = Pt(12)
+    heading.paragraph_format.space_after = Pt(4)
+    label = heading.add_run(f"Part {number}: ")
+    label.bold = True
+    label.font.size = Pt(11)
+    label.font.color.rgb = RGBColor(0x0F, 0x17, 0x2A)
+    name = heading.add_run(str(title).strip())
+    name.font.size = Pt(11)
+    name.font.color.rgb = RGBColor(0x1E, 0x29, 0x3B)
+
+    text = strip_procedure_heading(procedure_text)
+    if text:
+        tag = document.add_paragraph()
+        tag.paragraph_format.keep_with_next = True
+        tag.paragraph_format.left_indent = Inches(0.15)
+        run = tag.add_run("Procedure:")
+        run.bold = True
+        run.font.size = Pt(10)
+        run.font.color.rgb = RGBColor(0x33, 0x41, 0x55)
+        for line in text.split("\n"):
+            line = line.strip()
+            if not line:
+                continue
+            paragraph = document.add_paragraph()
+            paragraph.paragraph_format.left_indent = Inches(0.2)
+            paragraph.paragraph_format.space_after = Pt(4)
+            paragraph.paragraph_format.line_spacing = 1.15
+            body = paragraph.add_run(line)
+            body.font.size = Pt(10)
+            body.font.color.rgb = RGBColor(0x33, 0x41, 0x55)
+
+    if table:
+        _add_table(document, table)
+    for before in tables_before:
+        _add_table(document, before)
+    captions, explanations = list(captions), list(explanations)
+    for index, path in enumerate(image_paths):
+        embed_screenshot(document, path, caption=captions[index] if index < len(captions) else "Student-supplied screenshot")
+        if index < len(explanations) and explanations[index]:
+            _note_paragraph(document, "Explanation:", explanations[index])
+    for text in observations:
+        _note_paragraph(document, "Observation:", text)
+    for after in tables_after:
+        _add_table(document, after)
+    for text in notes:
+        _note_paragraph(document, "Note:", text)
+    for slot_label in missing:
+        paragraph = document.add_paragraph()
+        paragraph.paragraph_format.left_indent = Inches(0.2)
+        note = paragraph.add_run(f"[Not attached: {slot_label}. Upload it and generate the report again.]")
+        note.italic = True
+        note.font.size = Pt(10)
+        note.font.color.rgb = RGBColor(0xB4, 0x23, 0x18)
+    spacer = document.add_paragraph()
+    spacer.paragraph_format.space_after = Pt(8)
+    return heading
 from PIL import Image
 
 
-def embed_screenshot(document, image_path, caption=None, reserved_height=0.8):
+def create_report_document(upload, landscape=False):
+    """Start a report with the complete uploaded manual, then a separate results section."""
+    file_type = str(getattr(upload, "file_type", "")).lower()
+    file_path = str(getattr(upload, "file_path", "") or "")
+    source_is_docx = file_type == "docx" and os.path.isfile(file_path)
+
+    if source_is_docx:
+        document = Document(file_path)
+        report_section = document.add_section(WD_SECTION.NEW_PAGE)
+    else:
+        document = Document()
+        source_section = document.sections[0]
+        source_section.orientation = WD_ORIENT.PORTRAIT
+        source_section.page_width = Inches(8.5)
+        source_section.page_height = Inches(11)
+        source_section.left_margin = source_section.right_margin = Inches(.55)
+        source_section.top_margin = source_section.bottom_margin = Inches(.5)
+
+        if file_type == "pdf" and os.path.isfile(file_path):
+            import pdfplumber
+
+            document.add_paragraph(f"Uploaded input: {getattr(upload, 'original_filename', '')}")
+            with pdfplumber.open(file_path) as pdf:
+                for index, page in enumerate(pdf.pages):
+                    image = page.to_image(resolution=130).original
+                    buffer = io.BytesIO()
+                    image.save(buffer, format="PNG")
+                    buffer.seek(0)
+                    available_width = source_section.page_width - source_section.left_margin - source_section.right_margin
+                    available_height = source_section.page_height - source_section.top_margin - source_section.bottom_margin - Inches(.35)
+                    scale = min(float(available_width) / image.width, float(available_height) / image.height)
+                    paragraph = document.add_paragraph()
+                    paragraph.paragraph_format.page_break_before = index > 0
+                    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    paragraph.add_run().add_picture(
+                        buffer,
+                        width=int(image.width * scale),
+                        height=int(image.height * scale),
+                    )
+            report_section = document.add_section(WD_SECTION.NEW_PAGE)
+        else:
+            report_section = source_section
+
+    if landscape:
+        report_section.orientation = WD_ORIENT.LANDSCAPE
+        report_section.page_width = Inches(11.7)
+        report_section.page_height = Inches(8.3)
+    else:
+        report_section.orientation = WD_ORIENT.PORTRAIT
+        report_section.page_width = Inches(8.5)
+        report_section.page_height = Inches(11)
+    report_section.left_margin = report_section.right_margin = Inches(.7 if landscape else .65)
+    report_section.top_margin = report_section.bottom_margin = Inches(.5 if landscape else .6)
+    return document, source_is_docx
+
+
+def embed_screenshot(document, image_path, caption=None, reserved_height=0.8, max_width=None):
     with Image.open(image_path) as image:
         pixels_w, pixels_h = image.size
         dpi = image.info.get("dpi", (96, 96))
@@ -103,6 +326,8 @@ def embed_screenshot(document, image_path, caption=None, reserved_height=0.8):
         page_height = max(Inches(1), section.page_height - section.top_margin - section.bottom_margin - Inches(reserved_height))
         natural_w = Inches(pixels_w / (dpi_x or 96))
         display_w = max(Inches(1), min(natural_w, page_width))
+        if max_width is not None:
+            display_w = min(display_w, Inches(max_width))
         max_slice_h = max(1, int(pixels_w * page_height / display_w))
 
         # If the screenshot is only slightly taller than page_height (within 25%),
@@ -153,6 +378,10 @@ def embed_screenshot(document, image_path, caption=None, reserved_height=0.8):
             paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
             paragraph.paragraph_format.keep_together = True
             paragraph.paragraph_format.keep_with_next = bool(caption)
+            if max_width is not None:
+                paragraph.paragraph_format.space_before = Pt(0)
+                paragraph.paragraph_format.space_after = Pt(2)
+                paragraph.paragraph_format.line_spacing = 1.0
 
             if s_top == 0 and s_bottom == pixels_h:
                 source = str(image_path)

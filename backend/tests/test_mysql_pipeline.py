@@ -404,8 +404,9 @@ DROP VIEW product_data;
         expected_start = s_end + 1
     assert expected_start - 1 == total_lines
 
-    # Check 7 SELECT queries + 1 final DROP VIEW step = 8 result frames
-    assert len(result_frames) == 8
+    # Keep the seven SELECT results; standalone cleanup adds no report screenshot.
+    assert len(result_frames) == 7
+    assert all(f['statement'].lstrip().upper().startswith('SELECT') for f in result_frames)
 
     # Check every generated screenshot exists and is 1440x900
     for f in frames:

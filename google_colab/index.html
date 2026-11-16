@@ -199,6 +199,7 @@
           <span class="connect-label" id="connect-label">Connect</span>
           <!-- Connected RAM/Disk Meters (shown when runtime connects) -->
           <div class="connected-meters" id="connected-meters" style="display: none;">
+            <span class="runtime-accel-badge" id="runtime-accel-badge">CPU</span>
             <svg class="connected-check" viewBox="0 0 24 24" width="16" height="16">
               <circle cx="12" cy="12" r="10" fill="#81c995"/>
               <path d="M9.5 16.2L5.8 12.5 7.2 11.1 9.5 13.4 16.8 6.1 18.2 7.5z" fill="#131314"/>
@@ -221,7 +222,7 @@
 
         <!-- Runtime Resource Dropdown Popover -->
         <div class="runtime-popover" id="runtime-popover">
-          <div class="rt-pop-title" id="rt-pop-status">Connected to Python 3 Google Compute Engine backend</div>
+          <div class="rt-pop-title" id="rt-pop-status">Connected to Python 3 Google Compute Engine backend (CPU)</div>
           <div class="rt-pop-row">
             <span>System RAM</span>
             <span id="rt-ram-text">1.4 / 12.7 GB</span>

@@ -1,12 +1,17 @@
 "use client";
 
+import { MAX_MANUAL_EXERCISES } from "@/lib/billing";
+
 import { useCallback, useEffect, useRef, useState, Suspense } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import CreditStatus from '@/components/billing/CreditStatus';
 import AgentPlanPanel from '@/components/workflow/AgentPlanPanel';
 import ExecutionStatus from '@/components/workflow/ExecutionStatus';
+import EvidenceSlots from '@/components/workflow/EvidenceSlots';
 import { useRouter, useSearchParams } from "next/navigation";
+import { workspaceLocation, LAB_IDE_ASSOCIATIONS, resolveLabIde, labIdeHref } from "@/lib/mumbaiUniversity/labIdeAssociations";
+import LabIdeSelector from "@/components/catalogue/LabIdeSelector";
 
 const DotGrid = dynamic<any>(() => import("@/components/visual/DotGrid"), {
   ssr: false,
@@ -86,6 +91,8 @@ const TRACK_LANGUAGE_MAP: Record<string, LabLanguage[]> = {
   sql: ["auto", "sql"],
   ubuntu: ["auto", "ubuntu"],
   r: ["auto", "r"],
+  sma: ["auto", "colab", "python"],
+  "social-media-analytics": ["auto", "colab", "python"],
 };
 
 interface PlatformGuideRow {
@@ -339,10 +346,14 @@ function AssignmentContent() {
   const trackParam = searchParams.get("track") || "";
   const expParam = searchParams.get("exp") || "";
   const promptParam = searchParams.get("prompt") || "";
+  const muLabId = searchParams.get("muLab") || "";
+  const muAssociation = LAB_IDE_ASSOCIATIONS[muLabId];
+  const sourceIde = resolveLabIde(muLabId, searchParams.get("ide"));
   const isDistributedTrack = ["distributed", "distributed-computing", "distributed_computing"].includes(
     trackParam.toLowerCase(),
   );
   const availableLanguages = getAllowedLanguages(trackParam);
+  const workspaceHref = (assignment?: number | null, ide = sourceIde) => workspaceLocation(searchParams.toString(), assignment, ide);
   const inputRef = useRef<HTMLInputElement>(null);
   const [upload, setUpload] = useState<UploadResponse | null>(null);
   const [workflow, setWorkflow] = useState<LabWorkflow | null>(null);
@@ -356,6 +367,12 @@ function AssignmentContent() {
   const [colabTheme, setColabTheme] = useState<"light" | "dark">("dark");
   const [jupyterTheme, setJupyterTheme] = useState<"light" | "dark">("light");
   const [pythonTemplate, setPythonTemplate] = useState<"idle" | "jupyter">("idle");
+  useEffect(()=>{
+    const href = labIdeHref(muLabId, sourceIde);
+    if (href && !href.startsWith("/code-execution")) { router.replace(href); return; }
+    if (muAssociation) setLanguage(muAssociation.language);
+    if (muAssociation?.language === "python") setPythonTemplate(sourceIde === "jupyter" ? "jupyter" : "idle");
+  },[muLabId,muAssociation,sourceIde,router]);
   const [browserTheme, setBrowserTheme] = useState<"edge" | "chrome">("edge");
   const [instructions, setInstructions] = useState("");
   const [filename, setFilename] = useState("lab_report");
@@ -401,6 +418,36 @@ function AssignmentContent() {
       if (trackParam === "deep_learning" || trackParam === "deep-learning") setColabTheme("dark");
     }
 
+    // A multi-part experiment (Social Media Analytics) launches as one question per part: theory answers,
+    // notebook code, and evidence parts whose screenshots the student attaches.
+    const launched = trackParam && expParam ? getLabCategory(trackParam)?.experiments.find((item) => item.id === expParam) : undefined;
+    if (launched?.parts?.length) {
+      const seedKey = `exp:${trackParam}:${expParam}`;
+      if (promptSeededRef.current !== seedKey) {
+        promptSeededRef.current = seedKey;
+        setQuestions((prev) =>
+          prev.length > 0
+            ? prev
+            : launched.parts!.map((part, index) => ({
+                id: index + 1,
+                text: part.text,
+                language: part.kind === "code" ? "colab" : "theory",
+                track: trackParam,
+                kind: part.kind,
+                part_title: part.title,
+                experiment_no: launched.number,
+                ...(part.builtinDatasets?.length ? { builtin_datasets: part.builtinDatasets } : {}),
+                ...(part.evidenceSlots?.length ? { evidence_slots: part.evidenceSlots } : {}),
+                ...(part.studio ? { studio: part.studio, studio_args: part.studioArgs ?? {} } : {}),
+              })),
+        );
+        setManualMode(launched.parts.some((part) => part.kind !== "code") ? "theory_and_code" : "code_only");
+        setFilename(sanitizeOutputName(launched.title, "lab_report"));
+        setShowQuestions(true);
+      }
+      return;
+    }
+
     if (promptParam && promptSeededRef.current !== promptParam) {
       promptSeededRef.current = promptParam;
       setQuestions((prev) =>
@@ -425,15 +472,15 @@ function AssignmentContent() {
     if(!['queued','extracting','processing'].includes(data.status))setProcessingTriggered(false);
     if (data.status === "ready" || restoreFields) setQuestions(data.questions);
     if (restoreFields) {
-      setLanguage(isDistributedTrack ? "distributed" : data.language);
+      setLanguage(muAssociation?.language || (isDistributedTrack ? "distributed" : data.language));
       setColabTheme(data.questions.find((question) => question.colab_theme)?.colab_theme || "dark");
       setJupyterTheme(data.questions.find((question) => question.jupyter_theme)?.jupyter_theme || "light");
-      setPythonTemplate(data.questions.find((question) => question.python_template)?.python_template || "idle");
+      setPythonTemplate(muAssociation?.language === 'python' ? (sourceIde === 'jupyter' ? 'jupyter' : 'idle') : data.questions.find((question) => question.python_template)?.python_template || 'idle');
       setBrowserTheme(data.questions.find((question) => question.browser_theme)?.browser_theme || "edge");
       setInstructions(data.instructions);
       setFilename(sanitizeOutputName(data.output_name));
     }
-  }, [isDistributedTrack]);
+  }, [isDistributedTrack, muAssociation, sourceIde]);
 
   const userId = user?.id;
   const uploadId = upload?.id;
@@ -547,8 +594,7 @@ function AssignmentContent() {
       const uploaded = await apiService.uploadFile(file);
       setUpload(uploaded);
       setFilename(outputName(uploaded.original_filename));
-      const trackQuery = trackParam ? `&track=${encodeURIComponent(trackParam)}` : "";
-      router.replace(`/code-execution?assignment=${uploaded.id}${trackQuery}`, {
+      router.replace(workspaceHref(uploaded.id), {
         scroll: false,
       });
       await extract(uploaded.id);
@@ -651,14 +697,15 @@ function AssignmentContent() {
             let runWf = await workflowApi.process(uploaded.id, {
               questions: wf.questions.map((question) => ({
                 ...question,
-                language: isDistributedMode && question.language !== "theory" ? "distributed" : question.language,
+                language: question.language === "theory" ? "theory" : muAssociation?.language || (isDistributedMode ? "distributed" : question.language),
                 track: question.track || trackParam || undefined,
                 colab_theme: colabTheme,
                 browser_theme: browserTheme,
                 python_template: pythonTemplate,
+                ...(sourceIde && ["vscode", "codeblocks", "notepad", "workbench"].includes(sourceIde) ? { source_ide: sourceIde as "vscode" | "codeblocks" | "notepad" | "workbench" } : {}),
                 jupyter_theme: jupyterTheme,
               })),
-              language: isDistributedMode ? "distributed" : "auto",
+              language: muAssociation?.language || (isDistributedMode ? "distributed" : "auto"),
               instructions: "",
               output_name: outputName(item.file.name),
               screenshot_style: screenshotStyle,
@@ -758,8 +805,44 @@ function AssignmentContent() {
     }
   };
 
+  // Launched from a lab page there is no manual, so the typed experiment becomes one. This runs before the
+  // first run, or earlier when the student attaches a screenshot to an evidence part.
+  const startingRef = useRef<Promise<UploadResponse> | null>(null);
+  const startFromLab = (): Promise<UploadResponse> => {
+    if (!startingRef.current) {
+      startingRef.current = (async () => {
+        const started = await workflowApi.startFromPrompt(
+          questions.map(({ id, text, language: questionLanguage, track, kind, part_title, experiment_no, builtin_datasets, evidence_slots, studio, studio_args }) => ({
+            id,
+            text,
+            language: questionLanguage === "theory" ? "theory" : muAssociation?.language || (isDistributedMode ? "distributed" : questionLanguage),
+            track: track || trackParam || undefined,
+            ...(kind ? { kind } : {}),
+            ...(part_title ? { part_title } : {}),
+            ...(experiment_no ? { experiment_no } : {}),
+            ...(builtin_datasets?.length ? { builtin_datasets } : {}),
+            ...(evidence_slots?.length ? { evidence_slots } : {}),
+            ...(studio ? { studio, studio_args: studio_args ?? {} } : {}),
+          })),
+          labTitle(trackParam, expParam),
+        );
+        setUpload(started.upload);
+        router.replace(workspaceHref(started.upload.id), { scroll: false });
+        return started.upload;
+      })().catch((startError) => {
+        startingRef.current = null;
+        throw startError;
+      });
+    }
+    return startingRef.current;
+  };
+
   const process = async () => {
     if (!questions.length || busy || running) return;
+    if (questions.length > MAX_MANUAL_EXERCISES) {
+      setError(`A manual may contain at most ${MAX_MANUAL_EXERCISES} questions or exercises. Split it into smaller manuals.`);
+      return;
+    }
     if (questions.some((question) => !question.text.trim())) {
       setError("Every question needs some text.");
       setShowQuestions(true);
@@ -773,34 +856,18 @@ function AssignmentContent() {
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
     try {
-      let target = upload;
-      if (!target) {
-        // Launched from a lab page: there is no manual, so the typed experiment
-        // becomes one before it runs.
-        const started = await workflowApi.startFromPrompt(
-          questions.map(({ id, text, language: questionLanguage, track }) => ({
-            id,
-            text,
-            language: isDistributedMode && questionLanguage !== "theory" ? "distributed" : questionLanguage,
-            track: track || trackParam || undefined,
-          })),
-          labTitle(trackParam, expParam),
-        );
-        target = started.upload;
-        setUpload(target);
-        const trackQuery = trackParam ? `&track=${encodeURIComponent(trackParam)}` : "";
-        router.replace(`/code-execution?assignment=${target.id}${trackQuery}`, { scroll: false });
-      }
-      const effectiveLanguage: LabLanguage = isDistributedMode ? "distributed" : language;
+      const target = upload ?? (await startFromLab());
+      const effectiveLanguage: LabLanguage = muAssociation?.language || (isDistributedMode ? "distributed" : language);
       applyWorkflow(
         await workflowApi.process(target.id, {
           questions: questions.map((question) => ({
             ...question,
-            language: isDistributedMode && question.language !== "theory" ? "distributed" : question.language,
+            language: question.language === "theory" ? "theory" : muAssociation?.language || (isDistributedMode ? "distributed" : question.language),
             track: question.track || trackParam || undefined,
             colab_theme: colabTheme,
             browser_theme: browserTheme,
             python_template: pythonTemplate,
+                ...(sourceIde && ["vscode", "codeblocks", "notepad", "workbench"].includes(sourceIde) ? { source_ide: sourceIde as "vscode" | "codeblocks" | "notepad" | "workbench" } : {}),
             jupyter_theme: jupyterTheme,
           })),
           language: effectiveLanguage,
@@ -854,7 +921,7 @@ function AssignmentContent() {
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
     setError("");
-    router.replace(trackParam ? `/code-execution?track=${encodeURIComponent(trackParam)}` : "/code-execution");
+    router.replace(workspaceHref());
   };
   const stageIndex = complete
     ? 4
@@ -929,7 +996,7 @@ function AssignmentContent() {
         <header className={styles.header}>
           <div className={styles.headerLead}>
             <Link href="/" className={styles.brand} aria-label="LabMate home">
-              <LabMateLogo size="sm" theme="dark" />
+              <LabMateLogo size="md" theme="dark" />
             </Link>
             <div className={styles.headerCopy}>
               <h1>Code execution</h1>
@@ -1205,27 +1272,23 @@ function AssignmentContent() {
           <div className={styles.step}>
             <span className={styles.stepNumber}>3</span>
             <div>
-              <h2>Programming language</h2>
-              <p>
-                {isDistributedMode
-                  ? "Java is enforced with VS Code as the default IDE."
-                  : "Use the detected language or choose one."}
-              </p>
-              <select
-                aria-label="Programming language"
-                value={isDistributedTrack ? "distributed" : language}
-                disabled={running || busy || isDistributedTrack}
-                onChange={(event) =>
-                  setLanguage(event.target.value as LabLanguage)
-                }
-              >
-                {availableLanguages.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-              {platformGuide && (
+              <h2>{muAssociation ? "IDE template" : "Programming language"}</h2>
+              {muAssociation ? <>
+                <p>{availableLanguages.find(option => option.value === muAssociation.language)?.label || muAssociation.language} is selected for this lab.</p>
+                <LabIdeSelector labId={muLabId} preferredIde={sourceIde} disabled={running || busy || batchProcessing}
+                  onSelect={ide => {
+                    const href = labIdeHref(muLabId, ide)!;
+                    router.replace(href.startsWith('/code-execution') ? workspaceHref(upload?.id, resolveLabIde(muLabId, ide)) : href + (upload?.id ? "&assignment=" + upload.id : ""), { scroll: false });
+                  }} />
+              </> : <>
+                <p>{isDistributedMode ? "Java is enforced with VS Code as the default IDE." : "Use the detected language or choose one."}</p>
+                <select aria-label="Programming language" value={isDistributedTrack ? "distributed" : language}
+                  disabled={running || busy || isDistributedTrack}
+                  onChange={event => setLanguage(event.target.value as LabLanguage)}>
+                  {availableLanguages.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </select>
+              </>}
+              {!muAssociation && platformGuide && (
                 <div className={styles.platformTableWrap}>
                   <div className={styles.platformTableHeader}>
                     <span>{platformGuide.title}</span>
@@ -1298,6 +1361,7 @@ function AssignmentContent() {
               )}
               {(language === "python" || (language === "auto" && availableLanguages.some((item) => item.value === "python") && !trackParam.includes("deep") && (!questions.length || questions.some((question) => question.language === "python")))) && (
                 <div style={{ marginTop: "12px" }}>
+                  {!muAssociation && <>
                   <label className={styles.screenshotLabel} htmlFor="python-template">Python screenshot template</label>
                   <select id="python-template" value={pythonTemplate} disabled={running || busy || batchProcessing}
                     onChange={event => setPythonTemplate(event.target.value as "idle" | "jupyter")}>
@@ -1305,6 +1369,7 @@ function AssignmentContent() {
                     <option value="jupyter">Jupyter Notebook</option>
                   </select>
                   <p style={{fontSize: "12px", color: "#a1a1aa", marginTop: "8px"}}>Choose the look of your Python code and output screenshots.</p>
+                  </>}
                   {pythonTemplate === "jupyter" && <>
                     <label className={styles.screenshotLabel} htmlFor="jupyter-theme">Jupyter theme</label>
                     <select id="jupyter-theme" value={jupyterTheme} disabled={running || busy || batchProcessing}
@@ -1312,7 +1377,7 @@ function AssignmentContent() {
                       <option value="light">Light</option><option value="dark">Dark</option>
                     </select>
                   </>}
-                  {pythonTemplate === "idle" && <>
+                  {pythonTemplate === "idle" && sourceIde !== "vscode" && <>
                   <label className={styles.screenshotLabel}>Python IDLE screenshot layout</label>
                   <select
                     aria-label="Python screenshot layout style"
@@ -1333,7 +1398,7 @@ function AssignmentContent() {
             <span className={styles.stepNumber}>4</span>
             <div>
               <h2>Extracted questions</h2>
-              <p>Review and edit before processing.</p>
+              <p>1 credit per manual · Maximum {MAX_MANUAL_EXERCISES} questions or exercises. Split larger manuals before uploading.</p>
               <button
                 className={styles.questionsButton}
                 onClick={() => setShowQuestions(!showQuestions)}
@@ -1347,11 +1412,32 @@ function AssignmentContent() {
               </button>
               {showQuestions && (
                 <div className={styles.questionEditor}>
-                  {questions.map((question, index) => (
-                    <label key={question.id}>
+                  {questions.map((question, index) => {
+                    // An evidence part holds its own file inputs, which must not sit inside a <label>.
+                    const Wrapper = question.kind === "evidence" ? "div" : "label";
+                    return (
+                    <Wrapper key={question.id}>
                       <strong>
-                        Question {index + 1} · {isDistributedMode && question.language !== "theory" ? "Java (VS Code)" : question.language}
+                        {question.part_title ? `Part ${index + 1} · ${question.part_title} · ` : `Question ${index + 1} · `}
+                        {question.kind === "evidence"
+                          ? question.studio
+                            ? "built in the practice environment"
+                            : "your screenshots"
+                          : isDistributedMode && question.language !== "theory"
+                            ? "Java (VS Code)"
+                            : muAssociation?.language || question.language}
                       </strong>
+                      {question.kind === "evidence" && (
+                        <EvidenceSlots
+                          question={question}
+                          uploadId={upload?.id ?? null}
+                          ensureUpload={async () => (await startFromLab()).id}
+                          onReportOutdated={(id) => {
+                            workflowApi.status(id).then((fresh) => applyWorkflow(fresh)).catch(() => undefined);
+                          }}
+                          disabled={running || busy}
+                        />
+                      )}
                       <textarea
                         value={question.text}
                         onChange={(event) =>
@@ -1364,8 +1450,9 @@ function AssignmentContent() {
                           )
                         }
                       />
-                    </label>
-                  ))}
+                    </Wrapper>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -1423,7 +1510,7 @@ function AssignmentContent() {
           )}
           <button
             className={styles.startButton}
-            disabled={!questions.length || running || busy || complete || workflow?.status==='awaiting_clarification'}
+            disabled={!questions.length || questions.length > MAX_MANUAL_EXERCISES || running || busy || complete || workflow?.status==='awaiting_clarification'}
             onClick={process}
           >
             {running || busy ? (

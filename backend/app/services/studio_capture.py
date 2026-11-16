@@ -1,0 +1,103 @@
+"""Screenshots of LabMate's network studios (the Wireshark-style analyser and the Packet Tracer-style simulator).
+
+A studio page is a normal frontend route (/networks/wireshark, /networks/packet-tracer). It exposes a small hook,
+window.__labmate, with load(state) to hand it everything to draw and show(step) to display one step. A headless browser opens
+the page, loads the state computed by the Python engines, shows each step in turn and screenshots it. The browser may only talk to
+the studio's own origin, and nothing here can fail a report: when the page is unreachable StudioCaptureUnavailable is raised and the
+caller keeps the written part without images.
+"""
+import asyncio
+import logging
+from pathlib import Path
+from urllib.parse import urlsplit
+
+from ..config import settings
+from .browser_capture import launch_capture_browser
+
+logger = logging.getLogger(__name__)
+
+VIEWPORT = {"width": 1600, "height": 900}
+SCALE = 1.25
+OVERALL_TIMEOUT_SECONDS = 150
+HIDE_DEV_OVERLAY = "nextjs-portal, [data-nextjs-toast], [data-next-badge-root], #__next-build-watcher {display: none !important}"
+ROUTES = {"wireshark": "/networks/wireshark", "packettracer": "/networks/packet-tracer"}
+
+
+class StudioCaptureUnavailable(RuntimeError):
+    """The studio page could not be reached or did not draw the requested step."""
+
+
+def studio_origin():
+    base = (settings.STUDIO_URL or settings.POWERBI_STUDIO_URL or settings.FRONTEND_URL or "http://localhost:3000").strip().rstrip("/")
+    parts = urlsplit(base)
+    if parts.scheme not in {"http", "https"} or not parts.netloc:
+        raise StudioCaptureUnavailable("The studio address is not a valid http(s) URL.")
+    return base
+
+
+def studio_url(tool):
+    if tool not in ROUTES:
+        raise StudioCaptureUnavailable("Unknown studio.")
+    return studio_origin() + ROUTES[tool] + "?capture=1"
+
+
+async def _capture(tool, state, steps, out_dir):
+    from playwright.async_api import Error as PlaywrightError, async_playwright
+    url = studio_url(tool)
+    origin = "{0.scheme}://{0.netloc}".format(urlsplit(url))
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    shots = []
+    async with async_playwright() as playwright:
+        browser = await launch_capture_browser(playwright)
+        try:
+            context = await browser.new_context(viewport=VIEWPORT, device_scale_factor=SCALE, accept_downloads=False,
+                                                service_workers="block", java_script_enabled=True)
+
+            async def only_studio_origin(route):
+                target = route.request.url
+                if target.startswith(("data:", "blob:")) or target.startswith(origin):
+                    await route.continue_()
+                else:
+                    await route.abort()
+            await context.route("**/*", only_studio_origin)
+            page = await context.new_page()
+            try:
+                response = await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+            except PlaywrightError as error:
+                raise StudioCaptureUnavailable("The studio page could not be reached.") from error
+            if response is None or response.status >= 400:
+                raise StudioCaptureUnavailable("The studio page returned an error.")
+            try:
+                # The hook appears once React has attached; evaluate again until it does.
+                await page.wait_for_function("() => window.__labmate && window.__labmate.ready === true", timeout=30000)
+                await page.evaluate("state => window.__labmate.load(state)", state)
+            except PlaywrightError as error:
+                raise StudioCaptureUnavailable("The studio did not become ready.") from error
+            await page.add_style_tag(content=HIDE_DEV_OVERLAY)
+            for number, step in enumerate(steps, 1):
+                try:
+                    await page.evaluate("step => window.__labmate.show(step)", step)
+                    await page.wait_for_function("() => window.__labmate.settled === true", timeout=10000)
+                except PlaywrightError as error:
+                    raise StudioCaptureUnavailable("The studio could not draw step %s." % step.get("id", number)) from error
+                await page.wait_for_timeout(250)
+                path = out_dir / ("%02d_%s.png" % (number, "".join(c if c.isalnum() else "_" for c in str(step.get("id", number)))[:40]))
+                await page.screenshot(path=str(path), full_page=False)
+                shots.append({"id": step.get("id"), "path": str(path)})
+            return shots
+        finally:
+            await browser.close()
+
+
+async def capture_studio(tool, state, steps, out_dir):
+    """Screenshots, one per step, as [{"id", "path"}]. Raises StudioCaptureUnavailable when the studio cannot produce them."""
+    try:
+        return await asyncio.wait_for(_capture(tool, state, steps, out_dir), OVERALL_TIMEOUT_SECONDS)
+    except asyncio.TimeoutError as error:
+        raise StudioCaptureUnavailable("The studio took too long to render.") from error
+    except StudioCaptureUnavailable:
+        raise
+    except Exception as error:   # browser missing, crashed, ...: never take the report down with it
+        logger.warning("Studio capture failed: %s", type(error).__name__)
+        raise StudioCaptureUnavailable("The capture browser is not available.") from error

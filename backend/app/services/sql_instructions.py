@@ -12,11 +12,17 @@ def sql_instructions(question: str) -> str:
         'SELECT, then SELECT evidence after each required operation (including SHOW CREATE TABLE for DDL). '
         'Use only a private logical database. Do not access server system schemas or run shell commands. '
         'Use CREATE DATABASE IF NOT EXISTS and USE for a logical demo database when needed. Never DROP DATABASE unless the exercise explicitly requires it. The runtime supplies a fresh isolated schema for each run. '
+        'PRACTICAL RECORD ORDER: Create an experiment-related database and USE it; never call it mini_project or mini_project_demo unless a mini project is explicitly requested. '
+        'Create each required table, INSERT its records, then SELECT * FROM that table before starting topic queries. '
+        'When resetting a table is requested, use DROP TABLE IF EXISTS on that experiment table immediately before CREATE, not as final cleanup. '
+        'Display EVERY populated table with an unfiltered SELECT *, without LIMIT, so all input records are visible. '
+        'Keep operations in logical execution order. Capture SELECT queries with their complete results; standalone CREATE, DROP, USE and INSERT need no separate confirmation screenshot. '
         'Do not DROP the database or main tables at the end; runtime isolation handles cleanup after evidence capture. '
         'Use YYYY-MM-DD dates. For SQL fixtures, use realistic neutral domain names instead of repeating the account name. '
         'SQL header fields without genuine supplied values must be omitted, including the generic name Student. '
         'Do not include invented student/class/institution details in comments. '
         'Do not add unrelated Customers/Employees joins or product views to other exercises. '
+        'Use beginner-friendly SQL: short descriptive names, simple CREATE/INSERT/SELECT statements, and brief labels for each requested example. Avoid decorative comments, unnecessary quoting or extra project logic. '
     )
     if re.search(r'\b(?:constraints?|DDL)\b', text, re.I):
         instructions += (
@@ -24,8 +30,9 @@ def sql_instructions(question: str) -> str:
             'ensure referenced parent tables retain a PRIMARY KEY on their referenced ID column before child tables add FOREIGN KEY. '
             'In MySQL 8, expressions and date functions in column DEFAULT clauses MUST be enclosed in parentheses, e.g. `DEFAULT (CURRENT_DATE)` or use literal constants. '
         )
-    if re.search(r'\bHAVING\b', text, re.I):
-        instructions += 'For HAVING COUNT(CustomerID)>5, put at least SIX customers in one country so the saved result demonstrates a passing group. '
+    if re.search(r'\bHAVING\b|\bGROUP\s+BY\b', text, re.I):
+        instructions += ('Choose sample rows so each demonstrated HAVING predicate has at least one matching group. '
+                         'For HAVING COUNT(CustomerID)>5, put at least SIX customers in one country so the saved result demonstrates a passing group. ')
     if re.search(r'\bDML\b', text, re.I):
         instructions += 'Demonstrate a single-row UPDATE with a key-based WHERE clause and capture before/after SELECT results. Use the same table name consistently. '
     if re.search(r'\btriggers?\b', text, re.I):

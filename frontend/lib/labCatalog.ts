@@ -1,4 +1,28 @@
 import { LabLanguage } from "./workflow";
+import { SMA_CATEGORY } from "./smaCatalog";
+import { NETWORKS_CATEGORY } from "./networkCatalog";
+
+// A multi-part experiment (Social Media Analytics) is launched as one question per part:
+//   theory   - a written answer,
+//   code     - a Python notebook run on LabMate practice data,
+//   evidence - work done in an outside tool; LabMate writes the procedure and the student uploads their own screenshots.
+export type LabPartKind = "theory" | "code" | "evidence";
+
+export interface LabEvidenceSlot {
+  id: string;
+  label: string;
+}
+
+export interface LabPart {
+  kind: LabPartKind;
+  title: string;
+  text: string;
+  builtinDatasets?: string[];
+  evidenceSlots?: LabEvidenceSlot[];
+  // A part LabMate builds itself in a practice studio (Computer Networks): the packet analyser or the network simulator.
+  studio?: "wireshark" | "packettracer";
+  studioArgs?: Record<string, string>;
+}
 
 export interface LabExperiment {
   id: string;
@@ -14,6 +38,11 @@ export interface LabExperiment {
   prerequisites?: string[];
   expectedOutputs: string[];
   starterPrompt: string;
+  parts?: LabPart[];
+  // Practice files the student may want to download (for example to load into Power BI).
+  downloads?: string[];
+  // Practice studios the student can open and use directly (Computer Networks).
+  workspaces?: { label: string; href: string }[];
 }
 
 export interface LabCategory {
@@ -1009,6 +1038,8 @@ export const LAB_CATEGORIES: LabCategory[] = [
       },
     ],
   },
+  SMA_CATEGORY,
+  NETWORKS_CATEGORY,
 ];
 
 export function getLabCategory(slugOrTrack: string): LabCategory | undefined {

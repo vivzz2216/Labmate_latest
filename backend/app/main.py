@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.middleware.gzip import GZipMiddleware
 from contextlib import asynccontextmanager
 import os
@@ -9,7 +9,7 @@ import asyncio
 import logging
 from .config import settings
 from .database import engine, Base
-from .routers import upload, parse, run, compose, download, analyze, tasks, assignments, basic_auth, ai_review, admin, feedback, workflows, billing
+from .routers import upload, parse, run, compose, download, analyze, tasks, assignments, basic_auth, ai_review, admin, feedback, workflows, billing, lab_catalog, netlab, ide_java, ide_mysql
 from .middleware.rate_limit import RateLimitMiddleware
 from .middleware.body_limit import RequestBodyLimitMiddleware
 from .services.background_tasks import start_background_workers, stop_background_workers
@@ -87,6 +87,9 @@ async def lifespan(app: FastAPI):
     await performance_monitor.start_monitoring()
     start_background_workers(num_workers=3)
     start_workflow_workers()
+    from .services.worker_health import worker_health
+    # Held on app.state: the loop keeps only weak references to tasks.
+    app.state.worker_health_probe = asyncio.create_task(worker_health.check(force=True))
     try:
         yield
     finally:
@@ -158,7 +161,7 @@ async def liveness_check():
 async def health_check(response: Response):
     # Database and Redis clients are synchronous; probes must not stall login/polling.
     from .services.worker_health import worker_health
-    result, worker = await asyncio.gather(asyncio.to_thread(_health_check_sync, response), worker_health.check())
+    result, worker = await asyncio.gather(asyncio.to_thread(_health_check_sync, response), worker_health.check(wait_timeout=2.0))
     result['services']['execution_worker'] = worker['status']
     result['execution_ready'] = worker['available']
     return result
@@ -310,6 +313,10 @@ app.include_router(ai_review.router, prefix="/api/ai-review", tags=["ai-review"]
 app.include_router(admin.router, prefix="/api", tags=["admin"])
 app.include_router(feedback.router, prefix="/api", tags=["feedback"])
 app.include_router(workflows.router, prefix="/api", tags=["assignment-workflow"])
+app.include_router(lab_catalog.router, prefix="/api", tags=["lab-catalog"])
+app.include_router(netlab.router, prefix="/api", tags=["netlab"])
+app.include_router(ide_java.router, prefix="/api", tags=["ide-java"])
+app.include_router(ide_mysql.router, prefix="/api", tags=["ide-mysql"])
 
 # Serve frontend for all non-API routes (must come after API routes to prevent interception)
 
@@ -331,38 +338,9 @@ async def api_health_check():
     logger.debug(f"API health check response: {response}")
     return response
 
-@app.get("/api/test-patterns")
-async def test_patterns():
-    """Test endpoint to verify question pattern matching"""
-    import re
-    from .services.composer_service import ComposerService
-    
-    composer = ComposerService()
-    test_texts = [
-        "1.Write a Python program to demonstrate the use of iterator and generator functions.",
-        "2.Write a Python program to calculate sum of first 5 natural numbers using recursion.",
-        "B. Questions/Programs:",
-        "Question 1: Write a program",
-        "Task 2: Demonstrate recursion"
-    ]
-    
-    results = {}
-    for text in test_texts:
-        pattern_match = composer._find_question_pattern(text)
-        results[text] = {
-            "matched": pattern_match is not None,
-            "task_number": pattern_match
-        }
-    
-    return {"pattern_tests": results}
-
-
 @app.get("/{path:path}", include_in_schema=False)
 async def serve_frontend(path: str):
-    """
-    Serve the static frontend for any non-API route.
-    FIXED: Placed after API routes so it no longer intercepts API GET requests.
-    """
+    """Redirect non-API routes to FRONTEND_URL when configured; otherwise return 404."""
     if path.startswith(("api/", "health", "docs", "uploads", "screenshots", "reports", "public")):
         raise HTTPException(status_code=404, detail="Not found")
 
@@ -370,38 +348,4 @@ async def serve_frontend(path: str):
     if getattr(settings, "FRONTEND_URL", ""):
         return RedirectResponse(url=settings.FRONTEND_URL.rstrip("/") + "/" + path.lstrip("/"), status_code=307)
 
-    frontend_index = "/app/frontend/index.html"
-    if os.path.exists(frontend_index):
-        try:
-            with open(frontend_index, 'r', encoding='utf-8') as f:
-                html = f.read()
-
-            shim = '''<script>(function(){
-try{
-    if(window.WebSocket){
-        var OriginalWebSocket = window.WebSocket;
-        window.WebSocket = function(){
-            return {
-                addEventListener: function(){},
-                removeEventListener: function(){},
-                send: function(){},
-                close: function(){},
-                onopen: null, onmessage: null, onclose: null, onerror: null
-            };
-        };
-        window.__LABMATE_STUBBED_WS = true;
-        window.__LABMATE_ORIGINAL_WS = OriginalWebSocket;
-    }
-}catch(e){}
-})();</script>'''
-
-            if "</head>" in html:
-                html = html.replace("</head>", shim + "</head>")
-            else:
-                html = shim + html
-
-            return HTMLResponse(content=html, status_code=200)
-        except Exception:
-            return FileResponse(frontend_index)
-    else:
-        return {"message": "Frontend not built. Please build the frontend first."}
+    raise HTTPException(status_code=404, detail="Not found")

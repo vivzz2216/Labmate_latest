@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   FileText,
@@ -204,22 +204,12 @@ export default function UserDashboard() {
     text: string;
   } | null>(null);
 
-  useEffect(() => {
-    if (!authLoading && !user) {
-      router.push("/");
-      return;
-    }
+  const userId = user?.id;
+  const userName = user?.name || "";
 
-    if (user) {
-      setName((prev) => prev || user.name || "");
-      fetchAssignments();
-      fetchProfile();
-    }
-  }, [user?.id, authLoading, router]);
-
-  const fetchAssignments = async () => {
-    if (!user?.id) return;
-    const cached = apiService.peekUserAssignments(user.id) as Assignment[] | null;
+  const fetchAssignments = useCallback(async () => {
+    if (!userId) return;
+    const cached = apiService.peekUserAssignments(userId) as Assignment[] | null;
     if (cached) {
       setAssignments(cached);
       setLoading(false);
@@ -228,7 +218,7 @@ export default function UserDashboard() {
     }
 
     try {
-      const data: any = await apiService.getUserAssignments(user.id);
+      const data: any = await apiService.getUserAssignments(userId);
       const list = Array.isArray(data)
         ? data
         : (data?.assignments ?? data?.data ?? []);
@@ -239,18 +229,20 @@ export default function UserDashboard() {
           err instanceof Error ? err.message : "Failed to fetch assignments",
         );
       }
-      console.error("Error fetching assignments:", err);
+      if ((err as any)?.response?.status !== 401 && (err as any)?.response?.status !== 403) {
+        console.error("Error fetching assignments:", err);
+      }
     } finally {
       setLoading(false);
     }
-  };
+  }, [userId]);
 
-  const fetchProfile = async () => {
+  const fetchProfile = useCallback(async () => {
     try {
       setProfileLoading(true);
       const data = await apiService.getUserProfile();
       const profile = data?.profile || data || {};
-      const resolvedName = profile.name || user?.name || "";
+      const resolvedName = profile.name || userName;
       if (resolvedName) {
         setName(resolvedName);
       }
@@ -277,11 +269,26 @@ export default function UserDashboard() {
         );
       }
     } catch (err) {
-      console.error("Failed to load profile settings:", err);
+      if ((err as any)?.response?.status !== 401 && (err as any)?.response?.status !== 403) {
+        console.error("Failed to load profile settings:", err);
+      }
     } finally {
       setProfileLoading(false);
     }
-  };
+  }, [userName]);
+
+  useEffect(() => {
+    if (!authLoading && !userId) {
+      router.push("/");
+      return;
+    }
+
+    if (userId) {
+      setName((prev) => prev || userName);
+      fetchAssignments();
+      fetchProfile();
+    }
+  }, [userId, userName, authLoading, router, fetchAssignments, fetchProfile]);
 
   const saveProfileAndPrompt = async (customPromptValue?: string) => {
     setSavingProfile(true);
@@ -611,7 +618,7 @@ export default function UserDashboard() {
             <div className={dashStyles.panelHeader}>
               <div>
                 <h2>Account &amp; Appearance</h2>
-                <p>Session details, experiment credits, and interface theme</p>
+                <p>Session details, manual credits, and interface theme</p>
               </div>
             </div>
 

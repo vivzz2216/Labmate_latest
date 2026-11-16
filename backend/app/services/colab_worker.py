@@ -4,6 +4,7 @@ Google Colab Dedicated Execution, Screenshot, Print-PDF & Word (.docx) Pipeline
 Supports:
   - Option 1: Auto-Dataset Provisioning & Synthesis from Code AST/Column references
   - Option 2: Teacher-Supplied Dataset Paste/Upload (.csv) + Verbatim Code Upload (.py / .ipynb)
+  - Offline CPU Deep-Learning Support (PyTorch, TensorFlow, Keras) with built-in offline sample datasets
   - Anti-AI Student Personalization: Dynamic Avatar Initial (A, R, P, S...) + Natural Filename (DSLab_Name_Exp6.ipynb)
   - Multi-Student Isolated Worker Queue: Per-student isolated runtime directories + bounded worker concurrency
 """
@@ -21,14 +22,12 @@ import threading
 import time
 import traceback
 import warnings
-import uuid
 import hashlib
 import builtins
 import platform
 from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from contextlib import redirect_stdout, redirect_stderr
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -53,9 +52,7 @@ def _detect_x86_avx():
 _CPU_HAS_AVX = _detect_x86_avx()
 
 
-
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-COLAB_HTML_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "index.html")
 
 _KERNEL_LOCK = threading.Lock()
 _RENDER_LOCK = threading.Lock()
@@ -89,6 +86,149 @@ def configure_colab_matplotlib_theme():
             'axes.edgecolor':'#5f6368','axes.labelcolor':'#202124','text.color':'#202124',
             'xtick.color':'#3c4043','ytick.color':'#3c4043','grid.color':'#dadce0',
             'legend.facecolor':'white','legend.edgecolor':'#dadce0','savefig.facecolor':'white'})
+
+
+def clean_notebook_text(text: str, is_stderr: bool = False) -> str:
+    """Normalize Keras/tqdm carriage-return progress bars and strip C++ runtime noise."""
+    if not text:
+        return ""
+    cleaned = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", text).replace("\x08", "")
+    lines = []
+    for raw_line in cleaned.split("\n"):
+        if "\r" in raw_line:
+            parts = [p for p in raw_line.split("\r") if p.strip()]
+            raw_line = parts[-1] if parts else ""
+        if is_stderr and re.search(
+            r"(?:^[IW]0000\s|oneDNN custom operations|This TensorFlow binary is optimized|cpu_feature_guard\.cc|cuda_dnn\.cc|cuda_blas\.cc|TensorFlow GPU support is not available)",
+            raw_line,
+        ):
+            continue
+        lines.append(raw_line.rstrip())
+    # A notebook redraws Keras' step progress bar in place, so a run of "13/41 ━━━ ..." lines shows only the last one (the finished bar).
+    step_bar = re.compile(r"^\s*\d+/\d+\s+\S*[━=>.\-]{5,}")
+    collapsed = []
+    for line in lines:
+        if collapsed and step_bar.match(line) and step_bar.match(collapsed[-1]):
+            collapsed[-1] = line
+        else:
+            collapsed.append(line)
+    return "\n".join(collapsed).strip()
+
+
+def _offline_keras_dataset(name: str, num_words: Optional[int] = None):
+    """Deterministic offline built-in mini-datasets matching canonical Keras shapes."""
+    rng = np.random.default_rng(42)
+    n_train, n_test = 120, 30
+    if name in {"mnist", "fashion_mnist"}:
+        y_train = (np.arange(n_train) % 10).astype(np.uint8)
+        y_test = (np.arange(n_test) % 10).astype(np.uint8)
+        x_train = rng.integers(0, 40, size=(n_train, 28, 28), dtype=np.uint8)
+        x_test = rng.integers(0, 40, size=(n_test, 28, 28), dtype=np.uint8)
+        for i, label in enumerate(y_train):
+            r = (int(label) * 2) % 24
+            x_train[i, r : r + 4, :] = 220
+        for i, label in enumerate(y_test):
+            r = (int(label) * 2) % 24
+            x_test[i, r : r + 4, :] = 220
+        return (x_train, y_train), (x_test, y_test)
+    if name in {"cifar10", "cifar100"}:
+        classes = 100 if name == "cifar100" else 10
+        y_train = (np.arange(n_train) % classes).reshape(-1, 1).astype(np.uint8)
+        y_test = (np.arange(n_test) % classes).reshape(-1, 1).astype(np.uint8)
+        x_train = rng.integers(0, 50, size=(n_train, 32, 32, 3), dtype=np.uint8)
+        x_test = rng.integers(0, 50, size=(n_test, 32, 32, 3), dtype=np.uint8)
+        for i, label in enumerate(y_train[:, 0]):
+            c = int(label) % 3
+            r = (int(label) * 3) % 28
+            x_train[i, r : r + 4, :, c] = 230
+        for i, label in enumerate(y_test[:, 0]):
+            c = int(label) % 3
+            r = (int(label) * 3) % 28
+            x_test[i, r : r + 4, :, c] = 230
+        return (x_train, y_train), (x_test, y_test)
+    if name in {"imdb", "reuters"}:
+        vocab = max(50, min(int(num_words or 1000), 5000))
+        classes = 46 if name == "reuters" else 2
+        y_train = (np.arange(n_train) % classes).astype(np.int64)
+        y_test = (np.arange(n_test) % classes).astype(np.int64)
+        x_train = np.empty(n_train, dtype=object)
+        x_test = np.empty(n_test, dtype=object)
+        for i, label in enumerate(y_train):
+            base = 4 + (int(label) * 7) % (vocab - 20)
+            x_train[i] = [1, *[int(base + (j % 5)) for j in range(24)]]
+        for i, label in enumerate(y_test):
+            base = 4 + (int(label) * 7) % (vocab - 20)
+            x_test[i] = [1, *[int(base + (j % 5)) for j in range(24)]]
+        return (x_train, y_train), (x_test, y_test)
+    features = 8 if name == "california_housing" else 13
+    x_train = rng.normal(0.0, 1.0, size=(n_train, features)).astype(np.float32)
+    x_test = rng.normal(0.0, 1.0, size=(n_test, features)).astype(np.float32)
+    weights = np.linspace(1.5, -1.0, features, dtype=np.float32)
+    y_train = (20.0 + x_train @ weights + rng.normal(0, 0.2, size=n_train)).astype(np.float32)
+    y_test = (20.0 + x_test @ weights + rng.normal(0, 0.2, size=n_test)).astype(np.float32)
+    return (x_train, y_train), (x_test, y_test)
+
+
+def _configure_dl_libraries_for_code(code: str, builtin_records: Dict[str, str]):
+    """Configure CPU threads and offline dataset loaders when DL libraries are used."""
+    if not re.search(r"\b(?:torch|tensorflow|keras)\b", code or ""):
+        return
+    if re.search(r"\btorch\b", code or ""):
+        try:
+            import torch
+            torch.set_num_threads(1)
+        except Exception:
+            pass
+    if re.search(r"\b(?:tensorflow|keras)\b", code or ""):
+        modules_to_patch = []
+        try:
+            import keras
+            if hasattr(keras, "datasets"):
+                modules_to_patch.append(keras.datasets)
+        except Exception:
+            pass
+        try:
+            import tensorflow as tf
+            try:
+                tf.config.threading.set_intra_op_parallelism_threads(1)
+                tf.config.threading.set_inter_op_parallelism_threads(1)
+            except Exception:
+                pass
+            if hasattr(tf, "keras") and hasattr(tf.keras, "datasets"):
+                modules_to_patch.append(tf.keras.datasets)
+        except Exception:
+            pass
+        for ds_root in modules_to_patch:
+            for ds_name in (
+                "mnist",
+                "fashion_mnist",
+                "cifar10",
+                "cifar100",
+                "imdb",
+                "reuters",
+                "boston_housing",
+                "california_housing",
+            ):
+                mod = getattr(ds_root, ds_name, None)
+                if mod is None:
+                    continue
+                def _make_loader(dataset_key):
+                    def _load_data(*args, **kwargs):
+                        num_words = kwargs.get("num_words")
+                        data = _offline_keras_dataset(dataset_key, num_words=num_words)
+                        # The stand-in must be visible in the notebook output and the report;
+                        # accuracy on it says nothing about the real dataset.
+                        print(f"Note: this runtime is offline. keras.datasets.{dataset_key}.load_data() returned a small "
+                              f"built-in sample ({len(data[0][0])} training and {len(data[1][0])} test items), "
+                              f"not the full {dataset_key} dataset.")
+                        digest = hashlib.sha256(dataset_key.encode("utf-8")).hexdigest()
+                        builtin_records[f"keras.datasets.{dataset_key}"] = digest
+                        return data
+                    return _load_data
+                try:
+                    setattr(mod, "load_data", _make_loader(ds_name))
+                except Exception:
+                    pass
 
 
 # ==============================================================================
@@ -278,6 +418,7 @@ class NotebookKernelWorker:
         self.teacher_datasets: Dict[str, Union[str, bytes]] = dict(teacher_datasets or {})
         self.allow_synthetic = allow_synthetic
         self.synthetic_datasets = set()
+        self.builtin_datasets: Dict[str, str] = {}
         self.reset()
 
     def upload_dataset(self, filename: str, content: Union[str, bytes]):
@@ -287,6 +428,7 @@ class NotebookKernelWorker:
 
     def reset(self):
         self.exec_counter = 0
+        self.builtin_datasets = {}
         self.namespace: Dict[str, Any] = {
             "__name__": "__main__",
             "sklearn": sklearn,
@@ -343,6 +485,7 @@ class NotebookKernelWorker:
         try:
             configure_colab_matplotlib_theme()
             with redirect_stdout(stdout_buf), redirect_stderr(stderr_buf), warnings.catch_warnings():
+                _configure_dl_libraries_for_code(code, self.builtin_datasets)
                 # Under pandas Copy on Write, chained inplace operations can
                 # warn and leave data unchanged while the cell exits normally.
                 category=getattr(pd.errors,'ChainedAssignmentError',None)
@@ -379,21 +522,38 @@ class NotebookKernelWorker:
         elapsed = time.perf_counter() - start_ts
         exec_time_str = f"{int(round(elapsed))}s" if elapsed >= 0.5 else "0s"
 
+        csv_records = [
+            {
+                "name": str(path.relative_to(Path(self.work_dir))).replace("\\", "/"),
+                "source": (
+                    "provided"
+                    if any(dataset_path(name, self.work_dir) == path for name in self.teacher_datasets)
+                    else "synthetic"
+                    if str(path.relative_to(Path(self.work_dir))) in self.synthetic_datasets
+                    else "generated"
+                ),
+                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+            }
+            for path in Path(self.work_dir).rglob("*.csv")
+            if path.is_file() and path.stat().st_size <= 4 * 1024 * 1024
+        ]
+        builtin_records = [
+            {"name": name, "source": "builtin_offline_sample", "sha256": digest}
+            for name, digest in sorted(self.builtin_datasets.items())
+        ]
+
         return {
             "type": "code",
             "code": code.strip(),
-            "stdout": stdout_buf.getvalue().rstrip(),
-            "stderr": stderr_buf.getvalue().rstrip(),
+            "stdout": clean_notebook_text(stdout_buf.getvalue(), is_stderr=False),
+            "stderr": clean_notebook_text(stderr_buf.getvalue(), is_stderr=True),
             "repr": last_repr,
             "html": html_out,
             "plots": plots_b64,
             "error": error_msg,
             "execCount": self.exec_counter,
             "execTime": exec_time_str,
-            "datasets": [{"name": str(path.relative_to(Path(self.work_dir))),
-                          "source": "provided" if any(dataset_path(name,self.work_dir)==path for name in self.teacher_datasets) else "synthetic" if str(path.relative_to(Path(self.work_dir))) in self.synthetic_datasets else "generated",
-                          "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
-                         for path in Path(self.work_dir).rglob('*.csv') if path.is_file() and path.stat().st_size <= 4 * 1024 * 1024],
+            "datasets": csv_records + builtin_records,
         }
 
 
@@ -402,7 +562,8 @@ def validate_cell(code):
         raise ValueError('Notebook cells are limited to 50000 characters.')
     safe = {'numpy','pandas','sklearn','scipy','matplotlib','seaborn','math','statistics','random','collections',
             'itertools','functools','decimal','fractions','datetime','json','csv','sys','warnings',
-            're','string','typing','io','operator','copy','pprint','time','nltk','skfuzzy','pgmpy','torch','tensorflow','keras'}
+            're','string','typing','io','operator','copy','pprint','time','nltk','skfuzzy','pgmpy','torch','tensorflow','keras',
+            'networkx','bs4','PIL'}
     for node in ast.walk(ast.parse(code)):
         if isinstance(node, (ast.Import, ast.ImportFrom)):
             modules = [x.name for x in node.names] if isinstance(node, ast.Import) else [node.module or '']
@@ -411,10 +572,27 @@ def validate_cell(code):
             unsafe = [m for m in modules if m.split('.')[0] not in safe]
             if unsafe:
                 raise PermissionError(f'Import {unsafe} is unavailable in the restricted notebook runtime.')
+        if isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Attribute):
+                if node.func.attr in {'cuda', 'assert_gpu_available', 'set_device', 'get_device_name'}:
+                    raise RuntimeError('GPU execution is unavailable in the CPU lab runtime. Configure this experiment to run on CPU.')
+                if node.func.attr in {'to', 'device'}:
+                    str_args = [
+                        a.value for a in node.args if isinstance(a, ast.Constant) and isinstance(a.value, str)
+                    ] + [
+                        kw.value.value for kw in node.keywords if isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, str)
+                    ]
+                    if any(re.match(r'^\s*(?:cuda(?::\d+)?|/?(?:device:)?gpu(?::\d+)?)\s*$', s, re.I) for s in str_args):
+                        raise RuntimeError('GPU execution is unavailable in the CPU lab runtime. Configure this experiment to run on CPU.')
+                if node.func.attr in {'download', 'fetch_openml', 'fetch_20newsgroups', 'fetch_lfw_people', 'fetch_california_housing', 'get_file'}:
+                    raise RuntimeError('Network dataset and model downloads are disabled in the offline CPU lab runtime; use supplied or built-in offline datasets.')
+            elif isinstance(node.func, ast.Name) and node.func.id in {'fetch_openml', 'fetch_20newsgroups', 'fetch_lfw_people', 'fetch_california_housing'}:
+                raise RuntimeError('Network dataset and model downloads are disabled in the offline CPU lab runtime; use supplied or built-in offline datasets.')
         is_super_init = (isinstance(node, ast.Attribute) and node.attr == '__init__'
                          and isinstance(node.value, ast.Call) and isinstance(node.value.func, ast.Name)
-                         and node.value.func.id == 'super' and not node.value.args and not node.value.keywords)
-        if isinstance(node, ast.Attribute) and node.attr.startswith('_') and not is_super_init:
+                         and node.value.func.id == 'super' and not node.value.keywords
+                         and (not node.value.args or (len(node.value.args) == 2 and all(isinstance(a, ast.Name) for a in node.value.args))))
+        if isinstance(node, ast.Attribute) and node.attr.startswith('_') and node.attr != '__version__' and not is_super_init:
             raise PermissionError('Private runtime introspection is unavailable in notebook cells.')
         if isinstance(node, ast.Name) and node.id.startswith('__') and node.id != '__name__':
             raise PermissionError('Runtime introspection is unavailable in notebook cells.')
@@ -424,26 +602,64 @@ def validate_cell(code):
 
 
 def restrict_runtime(root):
+    sys.dont_write_bytecode = True
     root = Path(root).resolve()
+    os.environ['HOME'] = str(root)
+    os.environ['USERPROFILE'] = str(root)
+    os.environ['KERAS_HOME'] = str(root / '.keras')
+    os.environ['TORCH_HOME'] = str(root / '.torch')
     reads = [Path(sys.prefix).resolve(), Path(sys.base_prefix).resolve(), root,
              Path('/opt/labmate-runtime/site-packages').resolve(),
-             Path('/usr/share/fonts'), Path('/usr/local/share/fonts'), Path('/etc/fonts'), Path('/usr/share/zoneinfo')]
+             Path('/usr/share/fonts'), Path('/usr/local/share/fonts'), Path('/etc/fonts'), Path('/usr/share/zoneinfo'),
+             Path('/sys/devices/system/cpu'), Path('/dev')]
+    for entry in sys.path:
+        if entry:
+            try:
+                p = Path(entry).resolve()
+                if p.exists():
+                    reads.append(p)
+            except OSError:
+                pass
     if os.environ.get('SYSTEMROOT'):
-        reads.append(Path(os.environ['SYSTEMROOT'])/'Fonts')
+        reads.append((Path(os.environ['SYSTEMROOT'])/'Fonts').resolve())
+    if os.environ.get('NLTK_DATA') and Path(os.environ['NLTK_DATA']).is_dir():
+        reads.append(Path(os.environ['NLTK_DATA']).resolve())
+
+    immutable_read_prefixes = tuple(
+        os.path.normcase(str(p)).rstrip('\\/') + os.sep
+        for p in reads
+        if p != root
+    )
+
+    linux_proc_files = {
+        Path('/proc/self/maps').resolve(),
+        Path('/proc/cpuinfo').resolve(),
+        Path('/proc/meminfo').resolve(),
+        Path('/proc/self/status').resolve(),
+        Path('/proc/self/cgroup').resolve(),
+    } if sys.platform.startswith('linux') else set()
 
     def checked(path, write=False):
         if isinstance(path, int):
             return
-        target = Path(os.fsdecode(path)).resolve()
-        # threadpoolctl (used by scikit-learn) inspects only this process's
-        # loaded libraries. Do not allow other processes' maps or any writes.
-        if not write and sys.platform.startswith('linux') and target == Path('/proc/self/maps').resolve():
+        raw = os.fsdecode(path)
+        if os.name == 'nt' and raw.upper() in {'NUL', 'CON', r'\\.\NUL'}:
+            return
+        if not write and os.path.isabs(raw) and '..' not in raw:
+            norm_raw = os.path.normcase(os.path.normpath(raw))
+            if norm_raw.startswith(immutable_read_prefixes) and not os.path.islink(raw):
+                return
+        target = Path(raw).resolve()
+        # Allow read-only CPU/process topology files inspected by NumPy, scikit-learn, PyTorch, and TensorFlow.
+        if not write and sys.platform.startswith('linux') and (target in linux_proc_files or str(target).startswith(('/proc/self/', '/sys/devices/system/cpu'))):
             return
         allowed = [root] if write else reads
         if not any(target.is_relative_to(base) for base in allowed):
             raise PermissionError('File access outside the private notebook workspace is denied.')
 
     def audit(event, args):
+        if event == 'socket.gethostname':
+            return
         if event.startswith(('socket.', 'subprocess.', 'os.exec', 'os.spawn', 'os.posix_spawn')) or event in {
                 'os.system','os.fork','os.forkpty','os.symlink','os.link'}:
             raise PermissionError('Network and process access are unavailable in the notebook runtime.')
@@ -458,7 +674,7 @@ def restrict_runtime(root):
     sys.addaudithook(audit)
     try:
         import resource
-        resource.setrlimit(resource.RLIMIT_AS, (3*1024**3,3*1024**3))
+        resource.setrlimit(resource.RLIMIT_AS, (6*1024**3,6*1024**3))
         resource.setrlimit(resource.RLIMIT_CPU, (300,300))
         resource.setrlimit(resource.RLIMIT_FSIZE, (16*1024**2,16*1024**2))
     except ImportError:
@@ -511,6 +727,9 @@ def main():
                 result = kernel.execute_cell(request['code'])
             else:
                 raise ValueError('Unknown notebook command.')
+        except PermissionError as exc:
+            result = {'type':'code','code':request.get('code','') if isinstance(request,dict) else '',
+                      'stdout':'','stderr':'','plots':[],'repr':None,'html':None,'error':f"{type(exc).__name__}: {exc}"}
         except BaseException:
             result = {'type':'code','code':request.get('code','') if isinstance(request,dict) else '',
                       'stdout':'','stderr':'','plots':[],'repr':None,'html':None,'error':traceback.format_exc()[:65536]}

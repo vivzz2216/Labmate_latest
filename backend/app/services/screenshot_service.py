@@ -2,21 +2,36 @@ import ast
 import asyncio
 import base64
 import os
+from pathlib import Path
 import uuid
 import textwrap
 import re
-import json
 from typing import Tuple
 from html import escape as html_escape
-from playwright.async_api import async_playwright
 from pygments import highlight
 from pygments.lexers import PythonLexer
-from pygments.lexers import JavaLexer, CLexer, CppLexer, JavascriptLexer, HtmlLexer
+from pygments.lexers import JavaLexer, CLexer, CppLexer, JavascriptLexer, HtmlLexer, CssLexer
 from pygments.formatters import HtmlFormatter
-from jinja2 import Environment, FileSystemLoader, Template
+from jinja2 import Environment, FileSystemLoader
 from markupsafe import Markup
 from ..config import settings
-from .browser_capture import acquire_capture_context, launch_capture_browser
+from .browser_capture import acquire_capture_context
+
+
+def _terminal_command(filename):
+    """The command a student types in VS Code's terminal to build and run this file (shown after the PowerShell prompt)."""
+    name = str(filename).replace('\\', '/').split('/')[-1]
+    stem, dot, ext = name.rpartition('.')
+    ext = ext.lower() if dot else ''
+    if ext == 'c':
+        return f'gcc {name} -o {stem}; .\\{stem}.exe'
+    if ext in {'cpp', 'cc', 'cxx'}:
+        return f'g++ {name} -o {stem}; .\\{stem}.exe'
+    if ext == 'java':
+        return f'javac {name}; java {stem}'
+    if ext == 'py':
+        return f'python {name}'
+    return ''
 
 
 class ScreenshotService:
@@ -62,6 +77,7 @@ class ScreenshotService:
             theme_map = {
                 'python': 'idle',
                 'idle': 'idle',
+                'jupyter': 'jupyter',
                 'java': 'notepad',
                 'notepad': 'notepad',
                 'c': 'codeblocks',
@@ -174,8 +190,12 @@ class ScreenshotService:
                 code_to_highlight = "\n".join(all_code_lines[start_line - 1 : actual_end])
             
             # Generate syntax-highlighted HTML
-            highlighted_code = self._highlight_code(code_to_highlight, theme,
-                preserve_whitespace=kwargs.get('presentation')=='ide_evidence')
+            highlighted_code = self._highlight_code(
+                code_to_highlight,
+                theme,
+                filename=filename,
+                preserve_whitespace=kwargs.get('presentation') == 'ide_evidence',
+            )
             
             clean_kwargs = {k: v for k, v in kwargs.items() if k not in ("start_line", "end_line")}
             html_content = await self._render_template(
@@ -203,6 +223,8 @@ class ScreenshotService:
                     vp_width, min_height = 840, 520
                 else:
                     vp_width, min_height = 1000, 700
+            elif theme == 'jupyter':
+                vp_width, min_height = 1100, 440
             elif theme == 'notepad':
                 if view_mode == 'editor':
                     vp_width, min_height = 1040, 520
@@ -225,7 +247,8 @@ class ScreenshotService:
 
             if kwargs.get("presentation") in {'evidence','vscode_evidence'}:
                 vp_width, min_height = 960, 160
-                if kwargs.get('presentation')=='vscode_evidence':vp_width,min_height=1128,260
+                if kwargs.get('presentation') == 'vscode_evidence':
+                    vp_width, min_height = (1128, 260) if view_mode == 'editor' else (1128, 520)
             screenshot_path = os.path.join(
                 screenshot_dir, 
                 f"screenshot_{uuid.uuid4().hex[:8]}.png"
@@ -435,14 +458,16 @@ class ScreenshotService:
         if parsed.hostname in {"127.0.0.1", "localhost", "::1"} and parsed.scheme in {"http", "https"}:
             address = urlunsplit((parsed.scheme, "localhost" + (f":{parsed.port}" if parsed.port else ""), parsed.path or "/", parsed.query, parsed.fragment))
         else:
-            address = "about:blank"
+            # This is a rendered browser frame; show the supplied source name
+            # without inventing a file path or a network origin.
+            address = Path(str(filename or '').replace('\\', '/')).name or "Local page"
         directory = os.path.dirname(source)
         header_path = os.path.join(directory, f"browser_header_{uuid.uuid4().hex}.png")
         framed_path = os.path.join(directory, f"browser_{browser_theme}_{uuid.uuid4().hex}.png")
         template = Environment(loader=FileSystemLoader(self.template_dir), autoescape=True).get_template("browser_frame_theme.html")
         html = template.render(frame_width=width, browser_theme=browser_theme,
                                browser_name="Microsoft Edge" if browser_theme == "edge" else "Google Chrome",
-                               page_title=(page_title or filename or "Local page")[:160], address=address[:1500])
+                               page_title=(page_title or Path(str(filename or '').replace('\\', '/')).name or "Local page")[:160], address=address[:1500])
         try:
             ok, _, _ = await self._take_screenshot(html, header_path, width, 88)
             if not ok:
@@ -460,10 +485,39 @@ class ScreenshotService:
                 os.remove(header_path)
     
     
-    def _highlight_code(self, code: str, theme: str = "idle", *, preserve_whitespace: bool = False) -> str:
-        """Apply syntax highlighting based on theme/language"""
+    def _highlight_code(
+        self,
+        code: str,
+        theme: str = "idle",
+        *,
+        filename: str = "",
+        preserve_whitespace: bool = False,
+    ) -> str:
+        """Apply syntax highlighting based on file extension and theme."""
         try:
-            # Map theme to appropriate lexer
+            ext = Path(filename).suffix.lower() if filename else ""
+            ext_lexer_map = {
+                '.css': CssLexer(),
+                '.html': HtmlLexer(),
+                '.htm': HtmlLexer(),
+                '.xml': HtmlLexer(),
+                '.svg': HtmlLexer(),
+                '.js': JavascriptLexer(),
+                '.jsx': JavascriptLexer(),
+                '.mjs': JavascriptLexer(),
+                '.cjs': JavascriptLexer(),
+                '.ts': JavascriptLexer(),
+                '.tsx': JavascriptLexer(),
+                '.json': JavascriptLexer(),
+                '.c': CLexer(),
+                '.h': CLexer(),
+                '.cpp': CppLexer(),
+                '.cc': CppLexer(),
+                '.cxx': CppLexer(),
+                '.hpp': CppLexer(),
+                '.java': JavaLexer(),
+                '.py': PythonLexer(),
+            }
             lexer_map = {
                 'idle': PythonLexer(),
                 'notepad': JavaLexer(),
@@ -473,8 +527,8 @@ class ScreenshotService:
                 'node': JavascriptLexer(),
                 'vscode': HtmlLexer() if re.search(r'<!doctype|<html', code, re.I) else JavascriptLexer()
             }
-            
-            lexer = lexer_map.get(theme, PythonLexer())
+
+            lexer = ext_lexer_map.get(ext) or lexer_map.get(theme, PythonLexer())
             if preserve_whitespace:
                 lexer.stripnl = False
                 lexer.ensurenl = False
@@ -516,6 +570,9 @@ class ScreenshotService:
                     'class="n"': 'class="variable"',
                     'class="o"': 'class="operator"',
                 }
+            elif theme == 'jupyter':
+                # Keep Pygments token classes for the notebook's light syntax palette.
+                replacements = {}
             elif theme == 'notepad':
                 # Java Notepad colors
                 replacements = {
@@ -624,7 +681,7 @@ class ScreenshotService:
                     else:lexer=get_lexer_for_filename(filename,**options)
                 except Exception:
                     requested=kwargs.get('language')
-                    requested={'react':'javascript','node':'javascript','flask':'python','java_gui':'java'}.get(requested,requested)
+                    requested={'react':'javascript','node':'javascript','flask':'python','java_gui':'java','distributed':'java'}.get(requested,requested)
                     lexer = get_lexer_by_name(requested or {"idle": "python", "notepad": "java", "codeblocks": "cpp", "vscode": "javascript"}.get(theme, "text"),**options)
             except Exception:
                 lexer = TextLexer(stripnl=False,ensurenl=False,tabsize=0)
@@ -638,13 +695,14 @@ class ScreenshotService:
                     or any(a[1]>=b[0] for a,b in zip(ranges,ranges[1:]))):
                 raise ValueError('Source excerpts must be ordered nonoverlapping ranges from the actual file.')
             rendered_code='';last=0
-            for first,final in ranges:
-                if first>last+1:rendered_code+=f'<span class="omission">… lines {last+1}–{first-1} omitted …</span>'
-                part=highlight(''.join(lines[first-1:final]),lexer,formatter)
-                if kwargs.get('line_numbers',True):
-                    part=''.join(f'<span class="line"><span class="number">{i}</span><span class="line-code">{line}</span></span>' for i,line in enumerate(part.splitlines(),first))
-                rendered_code+=part;last=final
-            if last<len(lines):rendered_code+=f'<span class="omission">… lines {last+1}–{len(lines)} omitted …</span>'
+            if view_mode == 'editor':
+                for first,final in ranges:
+                    if first>last+1:rendered_code+=f'<span class="omission">… lines {last+1}–{first-1} omitted …</span>'
+                    part=highlight(''.join(lines[first-1:final]),lexer,formatter)
+                    if kwargs.get('line_numbers',True):
+                        part=''.join(f'<span class="line"><span class="number">{i}</span><span class="line-code">{line}</span></span>' for i,line in enumerate(part.splitlines(),first))
+                    rendered_code+=part;last=final
+                if last<len(lines):rendered_code+=f'<span class="omission">… lines {last+1}–{len(lines)} omitted …</span>'
             template = Environment(loader=FileSystemLoader(self.template_dir), autoescape=True).get_template('vscode_evidence.html' if vs else 'evidence_theme.html')
             logo=''
             if vs:
@@ -653,20 +711,39 @@ class ScreenshotService:
             names=list((project_files or {filename:source_code}).keys())
             kind=file_kind(filename)
             icon_data=assets() if vs else {}
-            return template.render(filename=filename, view_mode=view_mode, palette=palette,
-                                   source_files=names,source_ranges=ranges,total_lines=len(lines),vscode_logo=logo,
-                                   explorer_rows=explorer_rows(names,filename) if vs else [],basename=filename.replace('\\','/').split('/')[-1],
-                                   path_parts=filename.replace('\\','/').split('/'),file_kind=kind,indent_size=indentation(source_code),
-                                   language_label={'react':'JavaScript JSX','javascript':'JavaScript','python':'Python','java':'Java','html':'HTML','css':'CSS'}.get(kind,kind.title()),
-                                   icon_symbols=icon_data.get('symbols',{}),codicon_font=icon_data.get('codicon_font',''),seti_font=icon_data.get('seti_font',''),
-                                   file_symbol=icon_data.get('files',{}).get(kind,icon_data.get('files',{}).get('default',{})),
-                                   foreground="#f4f4f5" if palette == "dark" else "#18181b",
-                                   background="#18181b" if palette == "dark" else "#ffffff",
-                                   bar_background="#27272a" if palette == "dark" else "#f4f4f5",
-                                   error_color="#fca5a5" if palette == "dark" else "#a40000",
-                                   highlight_css=formatter.get_style_defs(), highlighted_code=Markup(rendered_code),
-                                   output_content=output or "", error_content=error or "",
-                                   evidence_kind=kwargs.get("evidence_kind", "terminal"))
+            common_context = dict(
+                filename=filename,
+                view_mode=view_mode,
+                basename=filename.replace('\\', '/').split('/')[-1],
+                highlight_css=Markup(formatter.get_style_defs()),
+                highlighted_code=Markup(rendered_code),
+                output_content=output or "",
+                error_content=error or "",
+            )
+            if vs:
+                return template.render(
+                    **common_context,
+                    source_ranges=ranges,
+                    vscode_logo=logo,
+                    explorer_rows=explorer_rows(names, filename),
+                    path_parts=filename.replace('\\', '/').split('/'),
+                    indent_size=indentation(source_code),
+                    language_label={'react': 'JavaScript JSX', 'javascript': 'JavaScript', 'python': 'Python', 'java': 'Java', 'html': 'HTML', 'css': 'CSS'}.get(kind, kind.title()),
+                    run_command=_terminal_command(filename),
+                    icon_symbols=icon_data.get('symbols', {}),
+                    codicon_font=icon_data.get('codicon_font', ''),
+                    seti_font=icon_data.get('seti_font', ''),
+                    file_symbol=icon_data.get('files', {}).get(kind, icon_data.get('files', {}).get('default', {})),
+                )
+            return template.render(
+                **common_context,
+                palette=palette,
+                foreground="#f4f4f5" if palette == "dark" else "#18181b",
+                background="#18181b" if palette == "dark" else "#ffffff",
+                bar_background="#27272a" if palette == "dark" else "#f4f4f5",
+                error_color="#fca5a5" if palette == "dark" else "#a40000",
+                evidence_kind=kwargs.get("evidence_kind", "terminal"),
+            )
         
         # Select template file
         template_file = f"{theme}_theme.html"
@@ -679,7 +756,7 @@ class ScreenshotService:
         # Render template
         template = Environment(loader=FileSystemLoader(self.template_dir), autoescape=True).get_template(os.path.basename(template_path))
         
-        if theme == "idle":
+        if theme in {"idle", "jupyter"}:
             output_content = output or ""
             if kwargs.get("input_echoed"):
                 # The runtime already captured a real, ordered input/output
@@ -707,6 +784,13 @@ class ScreenshotService:
         start_line = kwargs.get("start_line", 1)
         end_line = kwargs.get("end_line", len(source_code.splitlines()) if source_code else 1)
 
+        raw_plot = str(kwargs.get("jupyter_plot") or "").strip()
+        jupyter_plot = (
+            raw_plot
+            if re.fullmatch(r"data:image/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+", raw_plot)
+            else ""
+        )
+
         html_content = template.render(
             code_content=Markup(highlighted_code),
             highlighted_code=Markup(highlighted_code),
@@ -716,11 +800,18 @@ class ScreenshotService:
             filename=safe_filename,
             screenshot_style=screenshot_style,
             project_files=project_files or {},
+            project_name=kwargs.get("project_name", ""),
+            project_dir_display=kwargs.get("project_dir_display", ""),
+            preview_image=kwargs.get("preview_image", ""),
             session_segments=session_segments,
             view_mode=view_mode if view_mode in {"split", "shell", "editor", "output"} else "split",
             start_line=start_line,
             end_line=end_line,
             source_code=source_code or "",
+            jupyter_title=os.path.splitext(safe_filename)[0] + ".ipynb",
+            jupyter_theme="dark" if kwargs.get("palette") == "dark" else "light",
+            jupyter_plot=jupyter_plot,
+            collapse_input=view_mode in {"shell", "output"} and len((source_code or "").splitlines()) > 40,
         )
         
         return html_content
@@ -1047,7 +1138,7 @@ print("Screenshot test successful!")
             # Clean up test file
             try:
                 os.unlink(path)
-            except:
+            except OSError:
                 pass
         
         return success and width > 0 and height > 0

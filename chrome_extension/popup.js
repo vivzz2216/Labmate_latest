@@ -82,7 +82,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Logout
   logoutBtn.addEventListener("click", () => {
-    chrome.storage.local.remove(["labmate_token", "labmate_user"], () => {
+    chrome.storage.local.remove(["labmate_token", "labmate_csrf_token", "labmate_user"], () => {
       currentToken = null;
       updateAuthState(null, null);
     });

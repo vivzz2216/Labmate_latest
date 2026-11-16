@@ -16,13 +16,27 @@ import contextlib
 import logging
 import os
 import threading
-from typing import Any, AsyncIterator, Iterator, Optional
+import tempfile
+from typing import AsyncIterator, Iterator
 from playwright.async_api import Browser as AsyncBrowser, BrowserContext as AsyncContext, Error as AsyncPlaywrightError, async_playwright
 from playwright.sync_api import Browser as SyncBrowser, BrowserContext as SyncContext, Error as SyncPlaywrightError, sync_playwright
 
 from .resource_budget import browser_capture_budget
 
 logger = logging.getLogger(__name__)
+
+# Python falls back to a writable directory when Windows TEMP is inaccessible;
+# the Playwright Node driver does not. Set its environment before starting it.
+# Each launch still creates its own random profile below this root. The root is one
+# stable directory shared by every start: a fresh mkdtemp per process left a
+# directory behind whenever the backend was killed or reloaded before atexit ran.
+if os.name == 'nt':
+    _capture_temp_root = tempfile.gettempdir()
+    if os.path.basename(_capture_temp_root) != 'labmate-browser-tmp':
+        _capture_temp_root = os.path.join(_capture_temp_root, 'labmate-browser-tmp')
+    os.makedirs(_capture_temp_root, exist_ok=True)
+    for _temp_key in ('TEMP', 'TMP', 'TMPDIR'):
+        os.environ[_temp_key] = _capture_temp_root
 
 # The venv-bundled Node driver is blocked from creating browser profiles on some
 # Windows installations. Use the installed vendor Node without overriding an
@@ -33,11 +47,15 @@ if os.name == 'nt' and not os.environ.get('PLAYWRIGHT_NODEJS_PATH'):
         os.environ['PLAYWRIGHT_NODEJS_PATH'] = system_node
 
 
+class CaptureBrowserUnavailable(RuntimeError):
+    """Capture infrastructure failed; changing student source cannot fix it."""
+
+
 def _launch_failure(original):
     detail = str(original).lower()
     if any(word in detail for word in ('eperm', 'eacces', 'permission denied', 'access is denied')):
-        return RuntimeError('Capture browser cannot access its temporary/profile directory. Configure writable TEMP and TMP directories for the backend process.')
-    return RuntimeError('No capture browser is available. Run python -m playwright install chromium.')
+        return CaptureBrowserUnavailable('Capture browser cannot access its temporary/profile directory. Configure writable TEMP and TMP directories for the backend process.')
+    return CaptureBrowserUnavailable('No capture browser is available. Run python -m playwright install chromium.')
 
 
 def launch_capture_browser_sync(playwright):
@@ -88,7 +106,7 @@ class _AsyncBrowserPool:
                     if self._browser.is_connected():
                         return self._browser
                 except Exception:
-                    pass
+                    logger.debug("Async browser health check failed; recycling browser.", exc_info=True)
                 # Stale or disconnected browser
                 await self._close_locked()
 
@@ -102,7 +120,7 @@ class _AsyncBrowserPool:
                 try:
                     await pw.stop()
                 except Exception:
-                    pass
+                    logger.debug("Async playwright stop failed after launch error.", exc_info=True)
                 raise
 
     async def _close_locked(self):
@@ -110,13 +128,13 @@ class _AsyncBrowserPool:
             try:
                 await self._browser.close()
             except Exception:
-                pass
+                logger.debug("Async browser close failed.", exc_info=True)
             self._browser = None
         if self._playwright is not None:
             try:
                 await self._playwright.stop()
             except Exception:
-                pass
+                logger.debug("Async playwright stop failed.", exc_info=True)
             self._playwright = None
 
     async def close(self):
@@ -137,7 +155,7 @@ class _SyncBrowserPool:
                 if browser.is_connected():
                     return browser
             except Exception:
-                pass
+                logger.debug("Sync browser health check failed; recycling browser.", exc_info=True)
             self.close()
 
         pw = sync_playwright().start()
@@ -150,7 +168,7 @@ class _SyncBrowserPool:
             try:
                 pw.stop()
             except Exception:
-                pass
+                logger.debug("Sync playwright stop failed after launch error.", exc_info=True)
             raise
 
     def close(self):
@@ -159,14 +177,14 @@ class _SyncBrowserPool:
             try:
                 browser.close()
             except Exception:
-                pass
+                logger.debug("Sync browser close failed.", exc_info=True)
             self._local.browser = None
         pw = getattr(self._local, "playwright", None)
         if pw is not None:
             try:
                 pw.stop()
             except Exception:
-                pass
+                logger.debug("Sync playwright stop failed.", exc_info=True)
             self._local.playwright = None
 
 
@@ -209,7 +227,7 @@ async def acquire_capture_context(**context_kwargs) -> AsyncIterator[AsyncContex
             try:
                 await context.close()
             except Exception:
-                pass
+                logger.debug("Async browser context close failed.", exc_info=True)
 
 
 @contextlib.contextmanager
@@ -232,7 +250,7 @@ def acquire_capture_context_sync(**context_kwargs) -> Iterator[SyncContext]:
             try:
                 context.close()
             except Exception:
-                pass
+                logger.debug("Sync browser context close failed.", exc_info=True)
             _sync_pool._local.contexts -= 1
             # A short-lived notebook thread must not strand its browser/driver.
             if _sync_pool._local.contexts == 0:

@@ -1,8 +1,7 @@
-import asyncio
 import threading
 import pytest
-from app.services.browser_capture import acquire_capture_context, acquire_capture_context_sync, _get_async_pool, _sync_pool
-from app.services.resource_budget import browser_capture_budget, heavy_execution_budget, BudgetTimeout
+from app.services.browser_capture import acquire_capture_context, acquire_capture_context_sync, _get_async_pool
+from app.services.resource_budget import browser_capture_budget, heavy_execution_budget
 
 
 @pytest.mark.asyncio

@@ -16,7 +16,7 @@ import subprocess
 import sys
 import time
 
-ROOT = Path.home() / '.cache' / 'labmate-worker'
+ROOT = Path(os.environ.get('LABMATE_WORKER_STATE_DIR') or Path.home() / '.cache' / 'labmate-worker')
 LEGACY = Path.home() / '.cache' / 'labmate-ubuntu'
 BACKEND = Path(__file__).resolve().parents[1]
 

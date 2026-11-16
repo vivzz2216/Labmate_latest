@@ -34,6 +34,8 @@ const iconMap: Record<string, any> = {
   colab: BookOpen,
   ubuntu: Terminal,
   r: BookOpen,
+  sma: Network,
+  networks: Network,
 };
 
 const runtimeLabelMap: Record<string, string> = {
@@ -47,6 +49,8 @@ const runtimeLabelMap: Record<string, string> = {
   colab: "Jupyter / Colab",
   ubuntu: "Ubuntu / Bash",
   r: "R / RStudio",
+  sma: "Social Media Analytics",
+  networks: "Practice studios",
 };
 
 function badgeClass(track: string) {

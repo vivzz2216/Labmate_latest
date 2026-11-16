@@ -1,0 +1,230 @@
+{
+  "schema_version": "1.0.0",
+  "project": {
+    "name": "LabMate AI (labmate_latest)",
+    "summary": "Automated lab manual parser, multi-language sandbox execution studio, screenshot capture engine, and Word (.docx) report generator.",
+    "stack": {
+      "backend": "Python (FastAPI, SQLAlchemy 2.0, Pydantic 2, Playwright, python-docx, pdfplumber)",
+      "frontend": "Next.js 15.5.28, React 18.2, TypeScript 5.2, Tailwind CSS, Axios",
+      "runtimes": [
+        "python",
+        "java",
+        "c",
+        "cpp",
+        "html",
+        "react",
+        "node",
+        "flask",
+        "sql",
+        "colab",
+        "distributed",
+        "ubuntu"
+      ]
+    },
+    "entry_points": {
+      "backend_api": "backend/app/main.py",
+      "workflow_orchestrator": "backend/app/services/assignment_workflow.py",
+      "execution_dispatcher": "backend/app/services/runtime_engine.py",
+      "frontend_home": "frontend/app/page.tsx",
+      "frontend_studio": "frontend/app/code-execution/page.tsx",
+      "frontend_labs_hub": "frontend/app/labs/page.tsx"
+    }
+  },
+  "architecture_map": {
+    "other": {
+      "files": 60,
+      "loc": 50951,
+      "routes": 0,
+      "key_files": [
+        "--quiet/pypdf/_utils.py",
+        "--quiet/pypdf/generic/__init__.py",
+        "--quiet/pypdf/errors.py",
+        "--quiet/pypdf/constants.py",
+        "--quiet/pypdf/generic/_base.py"
+      ]
+    },
+    "backend_core": {
+      "files": 18,
+      "loc": 5047,
+      "routes": 7,
+      "key_files": [
+        "backend/app/config.py",
+        "backend/app/models.py",
+        "backend/app/database.py",
+        "backend/app/schemas.py",
+        "backend/app/netlab/pcap.py"
+      ]
+    },
+    "security_auth": {
+      "files": 17,
+      "loc": 1386,
+      "routes": 0,
+      "key_files": [
+        "backend/app/middleware/auth.py",
+        "backend/app/middleware/csrf.py",
+        "backend/app/security/generated_code.py",
+        "backend/app/security/execution_access.py",
+        "backend/app/security/operator_access.py"
+      ]
+    },
+    "api_routers": {
+      "files": 19,
+      "loc": 3684,
+      "routes": 66,
+      "key_files": [
+        "backend/app/routers/__init__.py",
+        "backend/app/routers/workflows.py",
+        "backend/app/routers/basic_auth.py",
+        "backend/app/routers/upload.py",
+        "backend/app/routers/lab_catalog.py"
+      ]
+    },
+    "workflow_services": {
+      "files": 48,
+      "loc": 11260,
+      "routes": 0,
+      "key_files": [
+        "backend/app/services/__init__.py",
+        "backend/app/services/generation_service.py",
+        "backend/app/services/assignment_workflow.py",
+        "backend/app/services/evidence_planner.py",
+        "backend/app/services/storage_service.py"
+      ]
+    },
+    "billing": {
+      "files": 1,
+      "loc": 371,
+      "routes": 0,
+      "key_files": [
+        "backend/app/services/billing_service.py"
+      ]
+    },
+    "capture_reports": {
+      "files": 11,
+      "loc": 3826,
+      "routes": 0,
+      "key_files": [
+        "backend/app/services/screenshot_service.py",
+        "backend/app/services/browser_capture.py",
+        "backend/app/services/lab_capture.py",
+        "backend/app/services/docx_layout.py",
+        "backend/app/services/browser_scenarios.py"
+      ]
+    },
+    "execution_runtimes": {
+      "files": 24,
+      "loc": 8528,
+      "routes": 0,
+      "key_files": [
+        "backend/app/services/runtime_engine.py",
+        "backend/app/services/web_project.py",
+        "backend/app/services/sql_runtime.py",
+        "backend/app/services/notebook_runtime.py",
+        "backend/app/services/isolated_runtime.py"
+      ]
+    },
+    "workers_scripts": {
+      "files": 25,
+      "loc": 3758,
+      "routes": 0,
+      "key_files": [
+        "backend/scripts/ubuntu_curriculum.py",
+        "backend/scripts/r_manual_cases.py",
+        "backend/scripts/sma_manual_cases.py",
+        "backend/railway_runtime/bridge.mjs",
+        "backend/scripts/verify_labs.py"
+      ]
+    },
+    "backend_tests": {
+      "files": 116,
+      "loc": 16292,
+      "routes": 0,
+      "key_files": [
+        "backend/tests/test_sma_lab.py",
+        "backend/tests/test_billing.py",
+        "backend/tests/test_netlab_wireshark.py",
+        "backend/tests/test_mysql_pipeline.py",
+        "backend/tests/test_workflow_claims.py"
+      ]
+    },
+    "extensions_templates": {
+      "files": 7,
+      "loc": 2804,
+      "routes": 0,
+      "key_files": [
+        "google_colab/app.js",
+        "sql_workbench/app.js",
+        "chrome_extension/content.js",
+        "chrome_extension/extension.test.mjs",
+        "chrome_extension/popup.js"
+      ]
+    },
+    "frontend_pages": {
+      "files": 29,
+      "loc": 5783,
+      "routes": 26,
+      "key_files": [
+        "frontend/app/code-execution/page.tsx",
+        "frontend/app/user-dashboard/page.tsx",
+        "frontend/app/workspace/page.tsx",
+        "frontend/app/dashboard/page.tsx",
+        "frontend/app/page.tsx"
+      ]
+    },
+    "frontend_components": {
+      "files": 100,
+      "loc": 39236,
+      "routes": 0,
+      "key_files": [
+        "frontend/components/ide/android-studio/StudioIcons.tsx",
+        "frontend/components/ide/intellij/ExpUiIcons.tsx",
+        "frontend/components/brand/LabMateLogo.tsx",
+        "frontend/components/ide/intellij/types.ts",
+        "frontend/components/dashboard/DashboardShell.tsx"
+      ]
+    },
+    "frontend_lib": {
+      "files": 33,
+      "loc": 23181,
+      "routes": 0,
+      "key_files": [
+        "frontend/lib/powerbi/types.ts",
+        "frontend/contexts/BasicAuthContext.tsx",
+        "frontend/lib/api.ts",
+        "frontend/lib/ide/intellijRunner.ts",
+        "frontend/lib/ide/sqliteEngine.ts"
+      ]
+    },
+    "frontend_other": {
+      "files": 10,
+      "loc": 1769,
+      "routes": 0,
+      "key_files": [
+        "frontend/tests/ideClones.test.ts",
+        "frontend/tests/mumbaiUniversity.test.ts",
+        "frontend/public/sqljs/sql-wasm.js",
+        "frontend/tests/androidStudio.test.ts",
+        "frontend/tests/powerBiEngine.test.ts"
+      ]
+    }
+  },
+  "shards": {
+    "meta": ".memory/meta.json",
+    "symbols": ".memory/symbols.json",
+    "dependencies": ".memory/dependencies.json",
+    "modules": ".memory/modules.json",
+    "decisions": ".memory/decisions.json",
+    "session": ".memory/session.json"
+  },
+  "stats": {
+    "total_files": 518,
+    "python_files": 336,
+    "typescript_files": 165,
+    "javascript_files": 17,
+    "routes_indexed": 99,
+    "decisions_count": 5,
+    "indexed_at": "2026-11-16T12:36:57.399444+00:00",
+    "git_head": "3f7eb68",
+    "last_duration_ms": 26.53
+  }
+}

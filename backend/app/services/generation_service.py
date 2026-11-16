@@ -51,10 +51,14 @@ def student_personalization_prompt(student_name, roll_no, department, institutio
     blocks = []
     if lines:
         blocks.append(
-            "Student details are available for a header or when the assignment explicitly requires them. "
+            "Student details are available for headers and personally relevant practical content. "
             "Do not force these details into unrelated sample records or output:\n"
             + "\n".join(lines) + "\n"
-            "Use varied, natural example data when the assignment does not specify values."
+            "Use varied, natural example data when the assignment does not specify values. "
+            "When a file or text exercise leaves filenames or content unspecified, use the provided student name "
+            "and experiment number, for example FirstName_Exp2.txt, with relevant student and experiment details. "
+            "Preserve exact filenames, literals and language entrypoints required by the assignment. "
+            "Do not invent personal identifiers or place profile values into shell commands without safe quoting."
         )
     if custom_manual:
         blocks.append(

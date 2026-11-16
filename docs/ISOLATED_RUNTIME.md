@@ -7,9 +7,10 @@ external network are absent. Private loopback permits genuine browser/server tes
 The trusted, non-dumpable orchestrator owns PID 1; student descendants cannot open its
 receipt descriptor through /proc. The real boundary probe verifies this restriction too.
 
-Per-job bounds: 220-second broker deadline, 1.5 GiB aggregate cgroup RAM, zero swap,
-160 tasks, one CPU, 512 MiB workspace tmpfs, 128 MiB temporary tmpfs, 32 MiB receipt,
-40 validated PNG frames. Existing per-process restrictions remain in force.
+Per-job bounds: 220-second broker deadline, zero swap, one CPU, 512 MiB workspace tmpfs,
+128 MiB temporary tmpfs, 32 MiB receipt, 40 validated PNG frames. On the SSH worker the cgroup
+allows 2 GiB RAM and 256 tasks (`sandbox_broker.py`). On a Railway sandbox the VM has 1 vCPU and
+2 GB and the job runs under an `RLIMIT_NPROC` of 160 (`railway_runtime/job.py`). Existing per-process restrictions remain in force.
 The API imposes a 240-second SSH deadline. Broker cleanup kills the complete job cgroup.
 No installation or package download occurs inside submitted jobs; Node dependencies are preinstalled.
 
@@ -52,6 +53,10 @@ HEAVY_EXECUTION_GLOBAL_LIMIT=1
 BROWSER_CAPTURE_LOCAL_LIMIT=1
 BROWSER_CAPTURE_GLOBAL_LIMIT=1
 ```
+
+These limits of 1 match the single SSH worker, which runs one job at a time and answers a second
+with "busy". They are the right values for this transport. Higher limits belong to
+`EXECUTION_BACKEND=railway_sandbox`; see "Scaling out" in `RAILWAY.md`.
 
 Set the same server-only random `TRUSTED_PROXY_KEY` on frontend and backend. The frontend
 authenticates its relay of Railway's X-Real-IP so students have separate admission buckets.

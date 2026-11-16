@@ -13,9 +13,10 @@ RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
     && ln -s /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
     && apt-get update \
     && apt-get install -y --no-install-recommends gosu gcc g++ default-jdk xvfb xauth fonts-dejavu-core libmagic1 ca-certificates openssh-client poppler-utils tesseract-ocr \
+       r-base-core r-recommended r-cran-ggplot2 r-cran-dplyr r-cran-tidyr r-cran-tibble r-cran-scales r-cran-reshape2 r-cran-e1071 r-cran-randomforest \
     && rm -rf /var/lib/apt/lists/*
 
-COPY backend/requirements.txt ./requirements.txt
+COPY backend/requirements.txt backend/requirements-colab-extra.txt ./
 RUN pip install --no-cache-dir -r requirements.txt \
     && python -m playwright install --with-deps chromium \
     && rm -rf /var/lib/apt/lists/*
@@ -24,12 +25,13 @@ COPY backend/templates ./templates
 COPY backend/scripts/sandbox_job.py backend/scripts/sandbox_broker.py ./runtime_scripts/
 COPY backend/railway_runtime ./railway_runtime
 RUN cd /app/railway_runtime && npm ci --omit=dev --ignore-scripts --no-audit --no-fund
-COPY backend/migrations ./migrations
 COPY backend/start.sh ./start.sh
 COPY google_colab/index.html google_colab/app.js google_colab/style.css ./lab_resources/google_colab/
 COPY google_colab/assets ./lab_resources/google_colab/assets
 COPY sql_workbench/index.html sql_workbench/app.js sql_workbench/style.css ./lab_resources/sql_workbench/
 COPY sql_workbench/assets ./lab_resources/sql_workbench/assets
+COPY rstudio/index.html rstudio/app.js rstudio/style.css ./lab_resources/rstudio/
+COPY rstudio/assets ./lab_resources/rstudio/assets
 RUN groupadd -g 10001 labmate && useradd -u 10001 -g 10001 --no-create-home --shell /usr/sbin/nologin labmate \
     && mkdir -p /data && chmod +x /app/start.sh
 

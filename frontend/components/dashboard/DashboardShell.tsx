@@ -22,6 +22,7 @@ import {
   PanelLeftOpen,
   ShieldCheck,
   Layers,
+  BookOpen,
 } from "lucide-react";
 import { SiC, SiCplusplus, SiHtml5, SiPython } from "react-icons/si";
 import { FaJava } from "react-icons/fa";
@@ -181,6 +182,7 @@ export function EmptyState({
 export const dashboardNavItems = [
   { label: "Dashboard", icon: LayoutDashboard, href: "/dashboard", matchPrefix: "/dashboard" },
   { label: "Lab Sections", icon: Layers, href: "/labs", matchPrefix: "/labs" },
+  { label: "MU Catalogue", icon: BookOpen, href: "/mumbai-university", matchPrefix: "/mumbai-university" },
   { label: "Workspace", icon: FolderGit2, href: "/workspace", matchPrefix: "/workspace" },
   { label: "My Labs", icon: Terminal, href: "/code-execution", matchPrefix: "/code-execution" },
   { label: "Reports", icon: FileText, href: "/reports", matchPrefix: "/reports" },
@@ -355,8 +357,8 @@ export default function DashboardShell({
               data-tooltip="LabMate"
             >
               <LabMateLogo
-                size="sm"
-                theme="dark"
+                size="md"
+                theme={theme === "light" ? "light" : "dark"}
                 showWordmark={false}
               />
             </Link>
@@ -369,8 +371,8 @@ export default function DashboardShell({
                 title="LabMate Dashboard"
               >
                 <LabMateLogo
-                  size="sm"
-                  theme="dark"
+                  size="md"
+                  theme={theme === "light" ? "light" : "dark"}
                   showWordmark={true}
                 />
               </Link>
@@ -506,7 +508,7 @@ export default function DashboardShell({
               <Menu size={20} />
             </button>
             <div className={styles.topbarHeadingWrap}>
-              <h1>{title}</h1>
+              <h1 title={title}>{title}</h1>
               {subtitle && <span className={styles.topbarSubtitle}>{subtitle}</span>}
             </div>
           </div>

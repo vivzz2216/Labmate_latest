@@ -4,7 +4,7 @@ import json
 from jsonschema import validate,ValidationError
 from .generation_service import generation_service,GenerationError,strict_json_schema
 from .web_project import WEB_SCHEMA,web_requirements
-from .browser_scenarios import normalize_v2,validate_coverage_plan
+from .browser_scenarios import validate_coverage_plan
 from .java_gui_runtime import GUI_ACTIONS,validate_gui_project,normalize_gui_tests
 from .evidence_planner import experiment_category
 from .source_evidence import source_capture_plan

@@ -1,0 +1,2068 @@
+.studioRoot {
+  --as-bg-canvas: #1e1f22;
+  --as-bg-chrome: #2b2d30;
+  --as-bg-hover: #393b40;
+  --as-bg-active-pill: #43454a;
+  --as-bg-selected-focused: #2e436e;
+  --as-bg-selected-unfocused: #43454a;
+  --as-bg-current-line: #26282e;
+  --as-bg-test-tint: #273828;
+  --as-border: #1e1f22;
+  --as-border-subtle: #43454a;
+  --as-border-comp: #4e5157;
+  --as-accent: #3574f0;
+  --as-accent-soft: #25324d;
+  --as-android-green: #3ddc84;
+  --as-android-green-bg: #25362d;
+  --as-text-primary: #dfe1e5;
+  --as-text-code: #bcbec4;
+  --as-text-secondary: #9da0a8;
+  --as-text-muted: #868a91;
+  --as-text-hint: #6f737a;
+  --as-icon-primary: #ced0d6;
+  --as-gutter-num: #4b5059;
+  --as-green: #57965c;
+  --as-green-bg: #253627;
+  --as-red: #db5c5c;
+  --as-red-bg: #5e3838;
+  --as-yellow: #e0a82e;
+  --as-purple: #a571e6;
+  --as-orange: #c77d55;
+
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: var(--as-bg-canvas);
+  color: var(--as-text-primary);
+  font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-size: 13px;
+  line-height: 18px;
+  user-select: none;
+  position: relative;
+}
+
+.studioRoot *,
+.studioRoot *::before,
+.studioRoot *::after {
+  box-sizing: border-box;
+}
+
+.studioRoot ::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+.studioRoot ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.studioRoot ::-webkit-scrollbar-thumb {
+  background: rgba(134, 138, 145, 0.34);
+  border-radius: 99px;
+}
+
+.studioRoot ::-webkit-scrollbar-thumb:hover {
+  background: rgba(169, 173, 180, 0.56);
+}
+
+/* ---------- Main Window Header / Top Toolbar (40px) ---------- */
+.mainHeader {
+  height: 40px;
+  min-height: 40px;
+  background: var(--as-bg-chrome);
+  border-bottom: 1px solid var(--as-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px 0 10px;
+  gap: 8px;
+  z-index: 40;
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.headerMenuBtn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--as-icon-primary);
+}
+
+.headerMenuBtn:hover {
+  background: var(--as-bg-hover);
+}
+
+.headerBrandBtn {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.headerBrandBtn:hover {
+  background: var(--as-bg-hover);
+}
+
+.headerDropdownWrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.projectButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  padding: 0 8px 0 6px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--as-text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.projectButton:hover,
+.projectButtonOpen {
+  background: var(--as-bg-hover);
+}
+
+.projectMonogram {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #ffffff;
+  flex-shrink: 0;
+}
+
+.vcsButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--as-text-primary);
+  font-size: 13px;
+  font-weight: 400;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.vcsButton:hover {
+  background: var(--as-bg-hover);
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+}
+
+.deviceSelectorBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--as-text-primary);
+  font-size: 12.5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.deviceSelectorBtn:hover,
+.deviceSelectorBtnOpen {
+  background: var(--as-bg-hover);
+}
+
+.runWidgetGroup {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  border-radius: 6px;
+  padding: 0 2px;
+  gap: 1px;
+  transition: background 120ms ease;
+}
+
+.runWidgetRunning {
+  background: rgba(87, 150, 92, 0.24);
+  border: 1px solid rgba(87, 150, 92, 0.45);
+}
+
+.runConfigTrigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 7px;
+  border-radius: 5px;
+  border: none;
+  background: transparent;
+  color: var(--as-text-primary);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.runConfigTrigger:hover {
+  background: var(--as-bg-hover);
+}
+
+.toolbarIconBtn {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--as-icon-primary);
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.toolbarIconBtn:hover:not(:disabled) {
+  background: var(--as-bg-hover);
+}
+
+.toolbarIconBtn:disabled {
+  opacity: 0.42;
+  cursor: default;
+}
+
+.toolbarIconBtnActive {
+  background: var(--as-bg-active-pill);
+}
+
+.toolbarSeparator {
+  width: 1px;
+  height: 16px;
+  background: var(--as-border-subtle);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+.profilePillBtn {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid #4e5157;
+  background: linear-gradient(135deg, #2e436e, #3574f0);
+  color: #ffffff;
+  font-size: 10.5px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  margin-left: 2px;
+}
+
+.profilePillBtn:hover {
+  border-color: #6b9bfa;
+}
+
+/* ---------- Popover Dropdown Menus ---------- */
+.dropdownMenu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 245px;
+  background: #2b2d30;
+  border: 1px solid var(--as-border-subtle);
+  border-radius: 8px;
+  padding: 5px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.56);
+  z-index: 120;
+}
+
+.dropdownMenuRight {
+  left: auto;
+  right: 0;
+}
+
+.dropdownSectionLabel {
+  padding: 5px 10px 3px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--as-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.dropdownDivider {
+  height: 1px;
+  background: var(--as-border-subtle);
+  margin: 4px 6px;
+}
+
+.dropdownItem {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--as-text-primary);
+  font-size: 12.5px;
+  padding: 6px 10px;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dropdownItem:hover {
+  background: var(--as-bg-selected-focused);
+}
+
+.dropdownItemLeft {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.dropdownMeta {
+  font-size: 11px;
+  color: var(--as-text-muted);
+  flex-shrink: 0;
+}
+
+/* ---------- Main Workspace Shell ---------- */
+.workbenchRow {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+  background: var(--as-bg-canvas);
+}
+
+.toolStripe {
+  width: 40px;
+  min-width: 40px;
+  background: var(--as-bg-chrome);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+  flex-shrink: 0;
+  z-index: 20;
+}
+
+.toolStripeLeft {
+  border-right: 1px solid var(--as-border);
+}
+
+.toolStripeRight {
+  border-left: 1px solid var(--as-border);
+}
+
+.stripeGroup {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+}
+
+.stripeDivider {
+  width: 22px;
+  height: 1px;
+  background: var(--as-border-subtle);
+  margin: 4px 0;
+}
+
+.stripeBtn {
+  position: relative;
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  border: none;
+  background: transparent;
+  color: var(--as-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition: background 110ms ease, color 110ms ease;
+}
+
+.stripeBtn:hover {
+  background: var(--as-bg-hover);
+  color: #ffffff;
+}
+
+.stripeBtnActive {
+  background: var(--as-accent);
+  color: #ffffff;
+}
+
+.stripeBtnActive:hover {
+  background: #4480f2;
+  color: #ffffff;
+}
+
+.stripeDot {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--as-accent);
+  border: 1px solid var(--as-bg-chrome);
+}
+
+.stripeDotRed {
+  background: var(--as-red);
+}
+
+/* ---------- Center Column (Sidebars + Editor + Bottom Tool Window) ---------- */
+.centerColumn {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.upperRow {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+/* ---------- Side Tool Windows (Left Project / Commit / Resource Manager) ---------- */
+.sideToolPanel {
+  background: var(--as-bg-chrome);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.sidePanelHeader {
+  height: 36px;
+  min-height: 36px;
+  padding: 0 8px 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #35373b;
+}
+
+.sideViewDropdownBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 6px;
+  border-radius: 5px;
+  border: none;
+  background: transparent;
+  color: var(--as-text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sideViewDropdownBtn:hover {
+  background: var(--as-bg-hover);
+}
+
+.sideHeaderActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.panelActionIcon {
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  border: none;
+  background: transparent;
+  color: var(--as-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.panelActionIcon:hover {
+  background: var(--as-bg-hover);
+  color: var(--as-text-primary);
+}
+
+/* ---------- Project Tree ---------- */
+.treeScroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 4px 6px 12px;
+}
+
+.treeRow {
+  width: 100%;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--as-text-primary);
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding-right: 8px;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.treeRow:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.treeRowTestTint {
+  background: var(--as-bg-test-tint);
+}
+
+.treeRowTestTint:hover {
+  background: #2e4230;
+}
+
+.treeRowSelected {
+  background: var(--as-bg-selected-focused) !important;
+  color: #ffffff;
+}
+
+.treeChevron {
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.treeIconWrap {
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.treeLabelBold {
+  font-weight: 600;
+}
+
+.treeLabelText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.treeHintSuffix {
+  color: var(--as-text-muted);
+  font-size: 11.5px;
+  margin-left: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------- Splitters ---------- */
+.vSplitter {
+  width: 4px;
+  cursor: col-resize;
+  background: var(--as-bg-canvas);
+  flex-shrink: 0;
+  transition: background 120ms ease;
+}
+
+.vSplitter:hover,
+.vSplitterActive {
+  background: var(--as-accent);
+}
+
+.hSplitter {
+  height: 4px;
+  cursor: row-resize;
+  background: var(--as-bg-canvas);
+  border-top: 1px solid #161719;
+  flex-shrink: 0;
+  transition: background 120ms ease;
+}
+
+.hSplitter:hover,
+.hSplitterActive {
+  background: var(--as-accent);
+}
+
+/* ---------- Center Editor Section ---------- */
+.editorSection {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--as-bg-canvas);
+  overflow: hidden;
+}
+
+.editorTabBar {
+  height: 40px;
+  min-height: 40px;
+  background: var(--as-bg-canvas);
+  border-bottom: 1px solid var(--as-bg-chrome);
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  padding-right: 8px;
+  flex-shrink: 0;
+}
+
+.editorTabsScroll {
+  display: flex;
+  align-items: stretch;
+  overflow-x: auto;
+  overflow-y: hidden;
+  min-width: 0;
+}
+
+.editorTab {
+  position: relative;
+  height: 40px;
+  padding: 0 10px 0 12px;
+  border: none;
+  border-right: 1px solid rgba(67, 69, 74, 0.32);
+  background: var(--as-bg-canvas);
+  color: var(--as-text-secondary);
+  font-size: 12.5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.editorTab:hover {
+  background: #25272a;
+  color: var(--as-text-primary);
+}
+
+.editorTabActive {
+  background: #25272b;
+  color: var(--as-text-primary);
+  font-weight: 500;
+}
+
+.tabActiveIndicator {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 4px;
+  border-radius: 3px 3px 0 0;
+  background: var(--as-accent);
+}
+
+.tabDirtyDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--as-accent);
+}
+
+.tabCloseBtn {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: var(--as-text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  margin-left: 2px;
+}
+
+.tabCloseBtn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+.editorTabRightControls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+/* Segmented Control: Code | Split | Design */
+.segmentedGroup {
+  display: inline-flex;
+  align-items: center;
+  background: var(--as-bg-chrome);
+  border: 1px solid #3c3e43;
+  border-radius: 6px;
+  padding: 2px;
+  gap: 1px;
+}
+
+.segmentedBtn {
+  height: 24px;
+  padding: 0 7px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--as-text-secondary);
+  font-size: 11.5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.segmentedBtn:hover {
+  color: var(--as-text-primary);
+}
+
+.segmentedBtnActive {
+  background: var(--as-bg-hover);
+  color: #ffffff;
+  font-weight: 500;
+}
+
+.editorMainArea {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+  background: var(--as-bg-canvas);
+}
+
+/* ---------- Code Editor Gutter + Highlighted Textarea ---------- */
+.codePaneWrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+  background: var(--as-bg-canvas);
+}
+
+.inspectionPill {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  z-index: 12;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 5px;
+  background: rgba(43, 45, 48, 0.9);
+  border: 1px solid rgba(78, 81, 87, 0.7);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--as-text-primary);
+  cursor: pointer;
+}
+
+.inspectionPill:hover {
+  background: var(--as-bg-hover);
+}
+
+.editorGutter {
+  width: 62px;
+  min-width: 62px;
+  background: var(--as-bg-canvas);
+  border-right: 1px solid #2b2d30;
+  padding: 8px 6px 24px 0;
+  overflow: hidden;
+  flex-shrink: 0;
+  font-family: var(--font-mono), "JetBrains Mono", "Consolas", monospace;
+  font-size: 12px;
+  line-height: 21px;
+  user-select: none;
+}
+
+.gutterRow {
+  height: 21px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-left: 8px;
+  padding-right: 4px;
+}
+
+.gutterLineNum {
+  min-width: 22px;
+  text-align: right;
+  color: var(--as-gutter-num);
+  cursor: pointer;
+}
+
+.gutterLineNumActive {
+  color: #a1a3ab;
+}
+
+.gutterIconSlot {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gutterBtn {
+  width: 16px;
+  height: 16px;
+  border: none;
+  background: transparent;
+  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.gutterBtn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.breakpointDot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #cc4e4e;
+  border: 1px solid #f07b7b;
+}
+
+.editorCodeArea {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.currentLineHighlight {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 21px;
+  background: var(--as-bg-current-line);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.studioRoot .editorHighlightPre {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  margin: 0;
+  padding: 8px 36px 24px 12px;
+  font-family: var(--font-mono), "JetBrains Mono", "Consolas", monospace;
+  font-size: 13px;
+  line-height: 21px;
+  letter-spacing: 0px;
+  tab-size: 4;
+  white-space: pre;
+  color: var(--as-text-code);
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.studioRoot textarea.editorTextarea {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 8px 36px 24px 12px;
+  border: 0;
+  outline: none;
+  resize: none;
+  background: transparent !important;
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+  caret-color: #ced0d6;
+  font-family: var(--font-mono), "JetBrains Mono", "Consolas", monospace;
+  font-size: 13px;
+  line-height: 21px;
+  letter-spacing: 0px;
+  tab-size: 4;
+  white-space: pre;
+  overflow: auto;
+}
+
+.studioRoot textarea.editorTextarea::selection {
+  background: rgba(46, 67, 110, 0.78);
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+}
+
+/* Kotlin / XML / Gradle Syntax Tokens (ExpUI Dark) */
+.tokKeyword {
+  color: #cf8e6d;
+}
+.tokString {
+  color: #6aab73;
+}
+.tokNumber {
+  color: #2aacb8;
+}
+.tokComment {
+  color: #7a7e85;
+}
+.tokAnnotation {
+  color: #b3ae60;
+}
+.tokCall {
+  color: #56a8f5;
+}
+.tokProperty {
+  color: #c77dbb;
+}
+.tokTag {
+  color: #d5b778;
+}
+.tokXmlAttr {
+  color: #bcbec4;
+}
+.tokXmlNs {
+  color: #6f94c6;
+}
+.tokNormal {
+  color: #bcbec4;
+}
+
+/* ---------- Compose @Preview & XML Layout Designer Surface ---------- */
+.designSurfaceRoot {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: #1e1f22;
+  border-left: 1px solid #2f3136;
+  overflow: hidden;
+}
+
+.designToolbar {
+  height: 32px;
+  min-height: 32px;
+  background: var(--as-bg-chrome);
+  border-bottom: 1px solid #35373b;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px;
+  gap: 6px;
+}
+
+.designToolbarGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.previewStatusBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 5px;
+  background: #253627;
+  color: #87c78c;
+  font-size: 11.5px;
+  font-weight: 500;
+}
+
+.previewToolBtn {
+  height: 24px;
+  padding: 0 7px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--as-text-primary);
+  font-size: 11.5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+}
+
+.previewToolBtn:hover {
+  background: var(--as-bg-hover);
+}
+
+.previewToolBtnActive {
+  background: var(--as-bg-selected-focused);
+  color: #ffffff;
+}
+
+.composeCanvasArea {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 20px;
+  background-color: #1e1f22;
+  background-image: radial-gradient(rgba(134, 138, 145, 0.16) 1px, transparent 1px);
+  background-size: 16px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.previewCardFrame {
+  background: #25262a;
+  border: 1px solid #3a3d42;
+  border-radius: 10px;
+  padding: 10px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.42);
+}
+
+.previewCardTitle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11.5px;
+  color: var(--as-text-secondary);
+  margin-bottom: 8px;
+}
+
+/* XML Layout Inspector 3-column Body */
+.xmlDesignerBody {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+.xmlLeftDock {
+  width: 148px;
+  min-width: 132px;
+  background: var(--as-bg-chrome);
+  border-right: 1px solid #35373b;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.xmlSectionBar {
+  height: 26px;
+  padding: 0 8px;
+  background: #26282b;
+  border-bottom: 1px solid #35373b;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--as-text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.xmlPaletteCols {
+  display: grid;
+  grid-template-columns: 58px 1fr;
+  height: 155px;
+  border-bottom: 1px solid #35373b;
+}
+
+.xmlCategoryList {
+  border-right: 1px solid #35373b;
+  overflow: auto;
+  padding: 4px;
+}
+
+.xmlPaletteItem {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--as-text-secondary);
+  font-size: 11px;
+  text-align: left;
+  padding: 4px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.xmlPaletteItem:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--as-text-primary);
+}
+
+.xmlPaletteItemActive {
+  background: var(--as-bg-selected-focused);
+  color: #ffffff;
+}
+
+.xmlCenterStage {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  background: #1e1f22;
+}
+
+.xmlSurfacePhone {
+  width: 226px;
+  min-height: 390px;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 2px solid #43454a;
+  background: #fefefe;
+  color: #1c1b1f;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.45);
+}
+
+.xmlSurfaceBlueprint {
+  background: #164473;
+  color: #c2e0ff;
+  border-color: #4f94d4;
+  background-image:
+    linear-gradient(to right, rgba(130, 195, 255, 0.09) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(130, 195, 255, 0.09) 1px, transparent 1px);
+  background-size: 14px 14px;
+}
+
+.xmlRightAttrs {
+  width: 158px;
+  min-width: 142px;
+  background: var(--as-bg-chrome);
+  border-left: 1px solid #35373b;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: auto;
+}
+
+.attrGroup {
+  border-bottom: 1px solid #35373b;
+  padding: 8px 10px;
+}
+
+.attrGroupTitle {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--as-text-secondary);
+  margin-bottom: 6px;
+}
+
+.attrRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 5px;
+  font-size: 11.5px;
+}
+
+.attrKey {
+  color: var(--as-text-secondary);
+}
+
+.attrInput {
+  width: 108px;
+  height: 22px;
+  background: var(--as-bg-canvas);
+  border: 1px solid var(--as-border-comp);
+  border-radius: 4px;
+  padding: 0 6px;
+  color: var(--as-text-primary);
+  font-size: 11.5px;
+}
+
+/* ---------- Bottom Tool Window (Logcat, Build, Run, Terminal, Problems, VCS) ---------- */
+.bottomToolWindow {
+  background: var(--as-bg-chrome);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.bottomHeaderBar {
+  height: 34px;
+  min-height: 34px;
+  background: var(--as-bg-chrome);
+  border-bottom: 1px solid #35373b;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px 0 12px;
+  gap: 8px;
+}
+
+.bottomTitleTabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.bottomWinTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--as-text-primary);
+  margin-right: 6px;
+}
+
+.bottomTabBtn {
+  position: relative;
+  height: 34px;
+  padding: 0 10px;
+  border: none;
+  background: transparent;
+  color: var(--as-text-secondary);
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.bottomTabBtn:hover {
+  color: var(--as-text-primary);
+}
+
+.bottomTabBtnActive {
+  color: #ffffff;
+  font-weight: 500;
+}
+
+.bottomTabBtnActive::after {
+  content: "";
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: 0;
+  height: 3px;
+  border-radius: 2px 2px 0 0;
+  background: var(--as-accent);
+}
+
+/* Logcat Filter Bar + Vertical Rail + Console */
+.logcatFilterToolbar {
+  min-height: 36px;
+  background: var(--as-bg-chrome);
+  border-bottom: 1px solid #35373b;
+  padding: 4px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.logcatDeviceSelect {
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: 1px solid #43454a;
+  background: #232528;
+  color: var(--as-text-primary);
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.logcatDeviceSelect:hover {
+  border-color: #5b5f66;
+}
+
+.logcatQueryBox {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid #43454a;
+  background: var(--as-bg-canvas);
+  padding: 0 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.logcatQueryBox:focus-within {
+  border-color: var(--as-accent);
+}
+
+.logcatPillTag {
+  height: 19px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: #4d694c;
+  color: #fefefe;
+  font-size: 11.5px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.logcatLevelPill {
+  background: #305d78;
+}
+
+.logcatQueryInput {
+  flex: 1;
+  min-width: 80px;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--as-text-primary);
+  font-family: var(--font-mono), "JetBrains Mono", monospace;
+  font-size: 12px;
+}
+
+.logcatBodyRow {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+  background: var(--as-bg-canvas);
+}
+
+.logcatLeftToolbar {
+  width: 34px;
+  min-width: 34px;
+  background: var(--as-bg-chrome);
+  border-right: 1px solid #35373b;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 4px 0;
+  gap: 3px;
+  overflow-y: auto;
+}
+
+.logcatConsoleScroll {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 6px 8px;
+  background: var(--as-bg-canvas);
+  font-family: var(--font-mono), "JetBrains Mono", "Consolas", monospace;
+  font-size: 12px;
+  line-height: 19px;
+  user-select: text;
+}
+
+.logcatRow {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  white-space: pre;
+}
+
+.logcatRowWrap {
+  white-space: pre-wrap;
+}
+
+.logcatRow:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.logcatTimestamp {
+  color: #868a91;
+  flex-shrink: 0;
+}
+
+.logcatPid {
+  color: #868a91;
+  min-width: 86px;
+  flex-shrink: 0;
+}
+
+.logcatTag {
+  min-width: 145px;
+  max-width: 145px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+}
+
+.logcatPkg {
+  color: #a9b7c6;
+  min-width: 195px;
+  max-width: 195px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+}
+
+.logcatLevelBadge {
+  display: inline-block;
+  min-width: 22px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 11px;
+  line-height: 16px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+/* ---------- Right Tool Panel (Running Devices Emulator, Gradle, Device Manager, Gemini) ---------- */
+.rightToolPanel {
+  background: var(--as-bg-chrome);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.emulatorToolbar {
+  min-height: 32px;
+  background: #26282b;
+  border-bottom: 1px solid #35373b;
+  padding: 3px 6px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+
+.emulatorCanvas {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--as-bg-canvas);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  position: relative;
+}
+
+.phoneBezel {
+  width: 244px;
+  min-height: 468px;
+  background: #101114;
+  border: 2px solid #3b3e45;
+  border-radius: 30px;
+  padding: 10px 8px 12px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.68);
+  display: flex;
+  flex-direction: column;
+  transition: transform 200ms ease, opacity 200ms ease, width 200ms ease;
+}
+
+.phoneBezelLandscape {
+  width: 332px;
+  min-height: 215px;
+}
+
+.phoneBezelFoldable {
+  width: 320px;
+  border-radius: 18px;
+}
+
+.phoneTopBar {
+  height: 22px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #dfe1e5;
+  position: relative;
+}
+
+.phoneCameraPunch {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #040506;
+  border: 1px solid #2b2d30;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.phoneScreenSurface {
+  flex: 1;
+  border-radius: 18px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: #121318;
+  color: #f3eff7;
+  position: relative;
+}
+
+.phoneScreenOff {
+  background: #060607 !important;
+  justify-content: center;
+  align-items: center;
+}
+
+.phoneNavBar {
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 0 28px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(14, 15, 18, 0.85);
+}
+
+.phoneNavBtn {
+  border: none;
+  background: transparent;
+  color: #c4c7c5;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.phoneNavBtn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+/* ---------- Bottom Status Bar (26px) ---------- */
+.statusBar {
+  height: 26px;
+  min-height: 26px;
+  background: var(--as-bg-chrome);
+  border-top: 1px solid var(--as-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+  font-size: 11.5px;
+  color: var(--as-text-secondary);
+  flex-shrink: 0;
+}
+
+.statusLeft {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.statusBreadcrumbBtn {
+  border: none;
+  background: transparent;
+  color: var(--as-text-secondary);
+  font-size: 11.5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.statusBreadcrumbBtn:hover {
+  background: var(--as-bg-hover);
+  color: var(--as-text-primary);
+}
+
+.statusRight {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.statusChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--as-text-secondary);
+}
+
+/* ---------- Modals (SDK Manager / Search Everywhere / About) ---------- */
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.56);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+
+.modalDialog {
+  width: 680px;
+  max-width: 92vw;
+  max-height: 82vh;
+  background: #2b2d30;
+  border: 1px solid #4e5157;
+  border-radius: 10px;
+  box-shadow: 0 24px 56px rgba(0, 0, 0, 0.72);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.modalHeader {
+  height: 40px;
+  padding: 0 14px;
+  border-bottom: 1px solid #393b40;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+}
+
+.modalBody {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px 14px;
+}
+
+.modalFooter {
+  height: 44px;
+  padding: 0 14px;
+  border-top: 1px solid #393b40;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.primaryBtn {
+  height: 28px;
+  padding: 0 14px;
+  border-radius: 6px;
+  border: none;
+  background: var(--as-accent);
+  color: #ffffff;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.primaryBtn:hover {
+  background: #4682f5;
+}
+
+.secondaryBtn {
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 6px;
+  border: 1px solid #4e5157;
+  background: #333539;
+  color: var(--as-text-primary);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.secondaryBtn:hover {
+  background: var(--as-bg-hover);
+}
+
+.toastBanner {
+  position: fixed;
+  right: 52px;
+  bottom: 36px;
+  background: #2b2d30;
+  border: 1px solid #4e5157;
+  border-left: 3px solid var(--as-android-green);
+  border-radius: 8px;
+  padding: 9px 14px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.52);
+  font-size: 12.5px;
+  color: var(--as-text-primary);
+  z-index: 220;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ---------- Workspace, Right Dock, Emulator, Device Manager, Gradle & Modal Classes ---------- */
+.mainArea {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+.centerStack {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.rightDock {
+  width: 300px;
+  min-width: 280px;
+  background: var(--as-bg-chrome);
+  border-left: 1px solid var(--as-border);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.toolWindowHeader {
+  height: 36px;
+  min-height: 36px;
+  padding: 0 8px 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #35373b;
+  background: var(--as-bg-chrome);
+}
+
+.toolWindowTitleGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.toolWindowActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.iconBtn {
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  border: none;
+  background: transparent;
+  color: var(--as-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.iconBtn:hover {
+  background: var(--as-bg-hover);
+  color: var(--as-text-primary);
+}
+
+.emulatorBody {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--as-bg-canvas);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+}
+
+.emulatorBezel {
+  width: 236px;
+  min-height: 440px;
+  background: #101114;
+  border: 2px solid #3b3e45;
+  border-radius: 28px;
+  padding: 10px 8px 12px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.68);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.emulatorCameraCutout {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #040506;
+  border: 1px solid #2b2d30;
+  align-self: center;
+  margin-bottom: 4px;
+}
+
+.emulatorStatusBar {
+  height: 20px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #dfe1e5;
+}
+
+.emulatorScreenContent {
+  flex: 1;
+  border-radius: 16px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: #f7f2fa;
+  color: #1c1b1f;
+}
+
+.emulatorAppBar {
+  height: 36px;
+  padding: 0 12px;
+  background: #6750a4;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.emulatorCard {
+  margin: 12px;
+  padding: 14px;
+  border-radius: 12px;
+  background: #ffffff;
+  border: 1px solid #e7e0ec;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.emulatorInteractiveBtn {
+  margin-top: 4px;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 16px;
+  border: none;
+  background: #6750a4;
+  color: #ffffff;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.emulatorInteractiveBtn:hover {
+  background: #7f67be;
+}
+
+.emulatorGesturePill {
+  width: 72px;
+  height: 4px;
+  border-radius: 2px;
+  background: #5f6368;
+  align-self: center;
+  margin-top: 8px;
+}
+
+.deviceList {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.deviceCard {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #232528;
+  border: 1px solid #393b40;
+  cursor: pointer;
+}
+
+.deviceCard:hover {
+  background: #2e3136;
+}
+
+.deviceMeta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.deviceTitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--as-text-primary);
+}
+
+.deviceSub {
+  font-size: 10.5px;
+  color: var(--as-text-secondary);
+}
+
+.gradleTaskList {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 6px;
+}
+
+.gradleTaskRow {
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--as-text-secondary);
+  cursor: pointer;
+}
+
+.gradleTaskRow:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--as-text-primary);
+}
+
+.statusBreadcrumbs {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 10px;
+}
+
+.statusCrumbSep {
+  color: var(--as-text-muted);
+  margin: 0 2px;
+}
+
+.statusItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sdkTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.sdkTable th,
+.sdkTable td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid #35373b;
+}
+
+.sdkTable th {
+  color: var(--as-text-secondary);
+  font-weight: 600;
+  background: #232528;
+}
+
+.modalBtn {
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 6px;
+  border: 1px solid #4e5157;
+  background: #333539;
+  color: var(--as-text-primary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.modalBtn:hover {
+  background: var(--as-bg-hover);
+}
+
+.modalBtnPrimary {
+  background: var(--as-accent);
+  border-color: var(--as-accent);
+  color: #ffffff;
+  font-weight: 500;
+}
+
+.modalBtnPrimary:hover {
+  background: #4682f5;
+}

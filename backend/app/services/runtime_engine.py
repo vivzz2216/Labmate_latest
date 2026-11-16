@@ -415,7 +415,7 @@ class RuntimeEngine:
                 return RuntimeResult(False,error='Notebook execution requires an explicit beta execution allowlist.',exit_code=126)
             from .lab_capture import capture_notebook
             cfg = project_config or {}
-            return await capture_notebook(code, datasets=cfg.get('datasets'), exp_no=cfg.get('exp_no', '01'), student_name=cfg.get('student_name', 'Student'), subject=cfg.get('subject', 'DSLab'), notebook_title=cfg.get('notebook_title'),theme=cfg.get('colab_theme','dark'),source_filename=filename or 'notebook.py')
+            return await capture_notebook(code, datasets=cfg.get('datasets'), exp_no=cfg.get('exp_no', '01'), student_name=cfg.get('student_name', 'Student'), subject=cfg.get('subject', 'DSLab'), notebook_title=cfg.get('notebook_title'), theme=cfg.get('colab_theme', 'dark'), notebook_template=cfg.get('notebook_template', 'colab'), jupyter_theme=cfg.get('jupyter_theme', 'light'), source_filename=filename or 'notebook.py')
         if not capability["supported"]:
             return RuntimeResult(False, error=f"Unsupported capability: {capability['category']} requires an isolated display/server adapter and genuine capture support; it was not executed.",
                                  exit_code=69, stages={"execution": "not_run", "capability": capability["category"]})
@@ -447,6 +447,9 @@ class RuntimeEngine:
                 from .web_project import web_requirements
                 config.setdefault('requirements',web_requirements(objective,'java'))
                 return await capture_java_gui(directory,config)
+            if capability['category'] == 'tkinter':
+                from .tk_gui_runtime import capture_tkinter
+                return await capture_tkinter(directory, code, filename, objective)
             if project_config and project_config.get('project_type')=='flask':
                 from .flask_runtime import capture_flask
                 return await capture_flask(self,directory,project_config)
@@ -474,7 +477,7 @@ class RuntimeEngine:
                     command = [docker, "run", "--rm", "-i", "--name", container, "--network", "none", "--memory", settings.MEMORY_LIMIT,
                                "--cpus", "0.5", "--pids-limit", "64", "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true",
                                "--tmpfs", "/tmp:rw,size=64m", "--mount", f"type=bind,source={mount},target=/workspace", "--workdir", "/workspace",
-                               settings.DOCKER_IMAGE, "python", "-I", "-u", "-c", PYTHON_INPUT_ECHO_RUNNER, name]
+                               settings.DOCKER_IMAGE, "python", "-I", "-X", "utf8", "-u", "-c", PYTHON_INPUT_ECHO_RUNNER, name]
                     try:
                         result = await run_process(command, directory, inputs)
                     finally:
@@ -482,7 +485,8 @@ class RuntimeEngine:
                 else:
                     # Restricted local fallback has no credential environment, an isolated cwd, and kernel resource bounds.
                     limits = {"max_memory_bytes": 512 * 1024 * 1024, "max_cpu_seconds": 15}
-                    result = await run_process([sys.executable, "-I", "-u", "-c", PYTHON_INPUT_ECHO_RUNNER, source], directory, inputs, resource_limits=limits)
+                    # -I ignores PYTHONIOENCODING, so UTF-8 is requested explicitly (printing a check mark or a rupee sign must not crash).
+                    result = await run_process([sys.executable, "-I", "-X", "utf8", "-u", "-c", PYTHON_INPUT_ECHO_RUNNER, source], directory, inputs, resource_limits=limits)
                 if collect_files:
                     result.files = collect_files(directory, context, name)
                 return result

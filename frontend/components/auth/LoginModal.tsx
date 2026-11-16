@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { X, Mail, Lock, User, Eye, EyeOff } from "lucide-react";
+import LabMateLogo from "@/components/brand/LabMateLogo";
 import { useAuth } from "@/contexts/BasicAuthContext";
 import { isValidEmail, validatePasswordStrength } from "@/lib/sanitize";
 
@@ -109,10 +110,15 @@ export default function LoginModal({ isOpen, onClose, redirectTo = "/dashboard" 
             isLogin ? "Sign in to LabMate" : "Create a LabMate account"
           }
         >
-          <div className="flex justify-between items-center mb-8">
-            <h2 className="text-3xl font-bold text-slate-900">
-              {isLogin ? "Welcome Back" : "Create Account"}
-            </h2>
+          <div className="flex justify-between items-start mb-6">
+            <div>
+              <div className="mb-3">
+                <LabMateLogo size="md" theme="light" />
+              </div>
+              <h2 className="text-2xl font-bold text-slate-900">
+                {isLogin ? "Welcome Back" : "Create Account"}
+              </h2>
+            </div>
             <button
               onClick={onClose}
               className="text-slate-500 hover:text-slate-900 transition-colors p-1 hover:bg-slate-100 rounded-lg"

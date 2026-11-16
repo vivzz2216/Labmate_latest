@@ -4,23 +4,23 @@ import hmac
 import json
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from copy import deepcopy
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.config import settings
 from app.database import Base, get_db
 from app.middleware.auth import get_current_user
 from app.middleware.csrf import require_csrf_token
-from app.models import (AssignmentWorkflow, CreditLedger, CreditWallet, PackPurchase, Upload, User, WorkflowCreditHold)
+from app.models import (AssignmentWorkflow, CreditLedger, CreditWallet, PackPurchase, Upload, User)
 from app.routers import billing as routes
 from app.services import billing_service as billing
+from app.services.manual_limits import ManualLimitError, exercise_count, validate_manual
 
 
 @pytest.fixture
@@ -29,6 +29,7 @@ def env(tmp_path,monkeypatch):
         'RAZORPAY_KEY_ID':'rzp_test_fixture','RAZORPAY_KEY_SECRET':'fixture-secret',
         'RAZORPAY_WEBHOOK_SECRET':'fixture-webhook-secret','EXECUTION_ALLOWED_EMAILS':''}.items():
         monkeypatch.setattr(settings,name,value)
+    monkeypatch.setattr(settings,'LOCAL_OPEN_EXECUTION',False)
     monkeypatch.delenv('RAILWAY_ENVIRONMENT_ID',raising=False)
     engine=create_engine('sqlite:///'+str(tmp_path/'payments.db'),connect_args={'check_same_thread':False,'timeout':20})
     Base.metadata.create_all(engine);factory=sessionmaker(bind=engine,expire_on_commit=False,autoflush=False)
@@ -76,14 +77,47 @@ def webhook(env,kind='payment.captured',payload=None,bad=False):
 
 def test_catalogue_and_wallet_are_server_owned(env):
     data=env.client.get('/api/billing/plans').json()
-    assert [(p['amount'],p['credits']) for p in data['packs'][:3]]==[(2900,10),(7900,35),(14900,80)]
+    assert [(p['name'],p['amount'],p['credits']) for p in data['packs']] == [('Single Manual',2900,1),('Freshers Pack',9900,5),('Intermediate Pack',24900,15),('Semester Pack',49900,35)]
+    assert data['credit_unit']=='manual' and data['max_questions_per_manual']==15
     college=next(p for p in data['packs'] if p['id']=='college-pack')
-    assert college['regular_amount']==59900 and college['credits']==300
-    assert college['amount'] in {39900,59900} and college['offer_active']==(college['amount']==39900)
+    assert college['regular_amount']==49900 and college['credits']==35
+    assert college['amount']==49900 and not college['offer_active']
     assert 'fixture-secret' not in json.dumps(data) and data['mode']=='test'
     assert credits(env)['available']==3
     assert credits(env)['available']==3
     with env.factory() as db:assert db.query(CreditLedger).filter_by(kind='trial').count()==1
+
+
+def test_existing_free_allowance_upgrades_once_and_preserves_purchased_credits(env, monkeypatch):
+    assert credits(env)['available'] == 3
+    with env.factory() as db:
+        row = db.get(CreditWallet, (1, 'test'))
+        row.balance += 10
+        db.commit()
+    monkeypatch.setattr(settings, 'BILLING_TRIAL_CREDITS', 100)
+    assert credits(env)['available'] == 110
+    assert credits(env)['available'] == 110
+    with env.factory() as db:
+        assert db.query(CreditLedger).filter_by(kind='trial_upgrade').one().delta == 97
+
+
+def test_new_users_get_one_hundred_free_credits_once(env, monkeypatch):
+    monkeypatch.setattr(settings, 'BILLING_TRIAL_CREDITS', 100)
+    assert credits(env)['available'] == 100
+    assert credits(env)['available'] == 100
+
+
+def test_concurrent_free_credit_upgrades_do_not_duplicate_grant(env, monkeypatch):
+    assert credits(env)['available'] == 3
+    monkeypatch.setattr(settings, 'BILLING_TRIAL_CREDITS', 100)
+    def read_wallet(_):
+        with env.factory() as db:
+            value = billing.wallet(db, 1)['available']
+            db.commit()
+            return value
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        assert list(pool.map(read_wallet, range(8))) == [100] * 8
+    assert credits(env)['available'] == 100
 
 
 def test_amount_and_credits_cannot_be_injected(env):
@@ -98,7 +132,7 @@ def test_create_is_idempotent_and_uses_paise(env):
     env.gateway.return_value={'id':'order_created','amount':2900,'currency':'INR'}
     data={'pack_id':'quick-lab','request_key':str(uuid.uuid4())}
     first=env.client.post('/api/billing/orders',json=data);assert first.status_code==200,first.text
-    assert first.json()['amount']==2900 and first.json()['credits']==10
+    assert first.json()['amount']==2900 and first.json()['credits']==1
     assert env.client.post('/api/billing/orders',json=data).json()['id']==first.json()['id']
     env.gateway.assert_awaited_once()
     call=env.gateway.call_args
@@ -214,15 +248,15 @@ def test_reservation_settlement_and_resume_do_not_charge_failures_twice(env):
     wid=add_workflow(env)
     with env.factory() as db:
         w=db.get(AssignmentWorkflow,wid);billing.reserve_workflow_credits(db,w,1);db.commit()
-        assert billing.wallet(db,1)['available']==1
+        assert billing.wallet(db,1)['available']==2
         billing.reserve_workflow_credits(db,w,1);db.commit()  # durable worker reservation
         w.results=[{'id':1,'status':'completed'},{'id':2,'status':'failed'}];db.commit()
         billing.settle_workflow_credits(db,w);db.commit();billing.settle_workflow_credits(db,w);db.commit()
-        assert billing.wallet(db,1)['available']==2 and billing.wallet(db,1)['reserved']==0
+        assert billing.wallet(db,1)['available']==3 and billing.wallet(db,1)['reserved']==0
         billing.reserve_workflow_credits(db,w,1);db.commit()
-        w.results=[{'id':1,'status':'completed'},{'id':2,'status':'completed'}];db.commit()
+        w.results=[{'id':1,'status':'completed'},{'id':2,'status':'completed'}];w.status='completed';db.commit()
         billing.settle_workflow_credits(db,w);db.commit()
-        assert billing.wallet(db,1)['available']==1 and billing.wallet(db,1)['reserved']==0
+        assert billing.wallet(db,1)['available']==2 and billing.wallet(db,1)['reserved']==0
 
 
 def test_entire_failed_run_returns_all_reserved_credits(env):
@@ -235,13 +269,14 @@ def test_entire_failed_run_returns_all_reserved_credits(env):
 
 def test_concurrent_runs_cannot_overspend_the_same_balance(env):
     ids=[add_workflow(env,n) for n in [1,2]]
-    with env.factory() as db:billing.wallet(db,1);db.commit()
+    with env.factory() as db:
+        billing.wallet(db,1);db.get(CreditWallet,(1,'test')).balance=1;db.commit()
     def reserve(wid):
         with env.factory() as db:
             try:billing.reserve_workflow_credits(db,db.get(AssignmentWorkflow,wid),1);db.commit();return True
             except HTTPException as e:db.rollback();assert e.status_code==402;return False
     with ThreadPoolExecutor(max_workers=2) as pool:assert sum(pool.map(reserve,ids))==1
-    assert credits(env)['available']==1 and credits(env)['reserved']==2
+    assert credits(env)['available']==0 and credits(env)['reserved']==1
 
 
 def test_checkout_requires_authentication_csrf_and_beta_access(env,monkeypatch):
@@ -311,5 +346,273 @@ def test_gateway_failure_never_fabricates_a_test_order(env):
     assert recovered.status_code == 200
     assert recovered.json()['gateway_order_id'] == 'order_recovered'
     assert credits(env)['available'] == 3
+
+
+def test_owner_payment_check_is_hidden_and_rejects_regular_users(env):
+    assert all(p['id'] != 'owner-payment-check' for p in env.client.get('/api/billing/plans').json()['packs'])
+    assert env.client.get('/api/billing/plans/owner-check').status_code == 404
+    response = env.client.post('/api/billing/orders', json={
+        'pack_id': 'owner-payment-check', 'request_key': str(uuid.uuid4())})
+    assert response.status_code == 404
+    env.gateway.assert_not_called()
+
+
+def test_owner_payment_check_is_disabled_for_admin(env, monkeypatch):
+    monkeypatch.setattr(settings, 'ADMIN_USERID', 'buyer@example.test')
+    monkeypatch.setattr(settings, 'ADMIN_PASSWORD', 'fixture-owner-password')
+    pack = env.client.get('/api/billing/plans/owner-check')
+    assert pack.status_code == 404
+    data = {'pack_id': 'owner-payment-check', 'request_key': str(uuid.uuid4())}
+    assert env.client.post('/api/billing/orders', json=data).status_code == 404
+    env.gateway.assert_not_called()
+    monkeypatch.setattr(settings, 'RAZORPAY_MODE', 'live')
+    monkeypatch.setattr(settings, 'RAZORPAY_KEY_ID', 'rzp_live_fixture')
+    result = env.client.post('/api/billing/orders', json=data)
+    assert result.status_code == 404
+    env.gateway.assert_not_called()
+
+
+def enable_public_payment_check(monkeypatch):
+    monkeypatch.setattr(settings, 'RAZORPAY_PAYMENT_CHECK_ENABLED', True)
+    monkeypatch.setattr(settings, 'RAZORPAY_MODE', 'live')
+    monkeypatch.setattr(settings, 'RAZORPAY_KEY_ID', 'rzp_live_fixture')
+
+
+def test_public_payment_check_switch_and_regular_account(env, monkeypatch):
+    data = {'pack_id': 'payment-check', 'request_key': str(uuid.uuid4())}
+    monkeypatch.setattr(settings, 'RAZORPAY_PAYMENT_CHECK_ENABLED', False)
+    assert env.client.post('/api/billing/orders', json=data).status_code == 404
+    assert all(p['id'] != 'payment-check' for p in env.client.get('/api/billing/plans').json()['packs'])
+    enable_public_payment_check(monkeypatch)
+    assert all(p['id'] != 'payment-check' for p in env.client.get('/api/billing/plans').json()['packs'])
+    assert env.client.post('/api/billing/orders', json=data).status_code == 404
+    env.gateway.assert_not_called()
+
+
+def test_existing_one_rupee_order_can_still_be_verified(env):
+    pid = purchase(env)
+    with env.factory() as db:
+        row = db.get(PackPurchase, pid)
+        row.pack_id = 'payment-check'
+        row.amount = 100
+        row.credits = 1
+        db.commit()
+    env.gateway.return_value = payment(amount=100)
+    result = env.client.post('/api/billing/orders/'+pid+'/verify', json=signed())
+    assert result.status_code == 200, result.text
+    assert result.json()['status'] == 'paid'
+    assert credits(env)['available'] == 4
+
+
+@pytest.mark.parametrize('change', [{'captured': False}, {'id': 'pay_other'}, {'amount_refunded': True}])
+def test_inconsistent_provider_payment_never_grants_credits(env, change):
+    pid = purchase(env)
+    env.gateway.return_value = payment(**change)
+    assert env.client.post('/api/billing/orders/'+pid+'/verify', json=signed()).status_code == 400
+    assert credits(env)['available'] == 3
+
+
+def test_malformed_webhook_order_is_rejected(env):
+    response = webhook(env, 'order.paid', {'order': {'entity': {'id': ['invalid']}}})
+    assert response.status_code == 400
+    env.gateway.assert_not_called()
+
+
+def test_simultaneous_checkout_requests_create_one_gateway_order(env):
+    env.gateway.return_value = {'id': 'order_created', 'amount': 2900, 'currency': 'INR'}
+    data = {'pack_id': 'quick-lab', 'request_key': str(uuid.uuid4())}
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        results = list(pool.map(lambda _: env.client.post('/api/billing/orders', json=data), range(5)))
+    assert all(r.status_code in {200, 409} for r in results)
+    assert any(r.status_code == 200 for r in results)
+    assert sum(call.args[0] == 'POST' for call in env.gateway.await_args_list) == 1
+    with env.factory() as db:
+        assert db.query(PackPurchase).filter_by(request_key=data['request_key']).count() == 1
+
+
+def test_simultaneous_payment_callbacks_grant_credits_once(env):
+    pid = purchase(env)
+    env.gateway.return_value = payment()
+    with env.factory() as db:
+        billing.wallet(db, 1)
+        db.commit()
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        results = list(pool.map(lambda _: env.client.post('/api/billing/orders/'+pid+'/verify', json=signed()), range(5)))
+    assert all(r.status_code == 200 and r.json()['status'] == 'paid' for r in results)
+    assert credits(env)['available'] == 13
+    with env.factory() as db:
+        assert db.query(CreditLedger).filter_by(kind='pack_purchase').count() == 1
+
+
+@pytest.mark.parametrize('size', [1, 10, 15])
+def test_one_credit_per_completed_manual_and_retries_are_free(env, size):
+    wid = add_workflow(env)
+    with env.factory() as db:
+        w = db.get(AssignmentWorkflow, wid)
+        w.questions = [{'id': i, 'text': 'Write a Python program to add numbers.'} for i in range(1, size+1)]
+        billing.reserve_workflow_credits(db, w, 1)
+        db.commit()
+        assert billing.wallet(db, 1)['available'] == 2
+        assert billing.wallet(db, 1)['reserved'] == 1
+        w.results = [{'id': i, 'status': 'completed'} for i in range(1, size+1)]
+        w.status = 'completed'
+        billing.settle_workflow_credits(db, w)
+        db.commit()
+        # Same upload can be retried/downloaded with zero further credit usage.
+        for _ in range(2):
+            billing.reserve_workflow_credits(db, w, 1)
+            db.commit()
+            billing.settle_workflow_credits(db, w)
+            db.commit()
+        assert billing.wallet(db, 1)['available'] == 2
+        assert billing.wallet(db, 1)['reserved'] == 0
+        assert db.query(CreditLedger).filter_by(kind='manual_completed').count() == 1
+
+
+@pytest.mark.parametrize('status', ['failed', 'paused', 'awaiting_clarification'])
+def test_even_complete_answers_do_not_charge_for_an_unfinished_report(env, status):
+    wid = add_workflow(env)
+    with env.factory() as db:
+        w = db.get(AssignmentWorkflow, wid)
+        billing.reserve_workflow_credits(db, w, 1)
+        db.commit()
+        w.results = [{'id': 1, 'status': 'completed'}, {'id': 2, 'status': 'completed'}]
+        w.status = status
+        billing.settle_workflow_credits(db, w)
+        db.commit()
+        assert billing.wallet(db, 1)['available'] == 3
+        assert billing.wallet(db, 1)['reserved'] == 0
+
+
+@pytest.mark.parametrize('billing_enabled', [True, False])
+def test_sixteen_questions_rejected_before_reserving_even_if_billing_is_off(env, monkeypatch, billing_enabled):
+    monkeypatch.setattr(settings, 'BILLING_ENABLED', billing_enabled)
+    wid = add_workflow(env)
+    with env.factory() as db:
+        w = db.get(AssignmentWorkflow, wid)
+        w.questions = [{'id': i, 'text': 'Write a Python program.'} for i in range(16)]
+        with pytest.raises(ManualLimitError, match='maximum is 15'):
+            billing.reserve_workflow_credits(db, w, 1)
+        assert db.query(CreditLedger).filter_by(kind='run_reserved').count() == 0
+
+
+def test_grouped_exercises_cannot_bypass_limit_but_sql_steps_are_not_questions():
+    q = [{'id': 1, 'text': 'Experiment 1\n' + '\n'.join(f'{n}. Write a Python program to add {n}.' for n in range(1,17))}]
+    assert exercise_count(q) == 16
+    with pytest.raises(ManualLimitError):
+        validate_manual(q)
+    assert validate_manual([{'text': '\n'.join(f'{n}. SELECT * FROM customers;' for n in range(30))}]) == 1
+
+
+def test_same_workflow_reservation_race_holds_only_one_credit(env):
+    wid = add_workflow(env)
+    assert credits(env)['available'] == 3
+    def reserve(_):
+        with env.factory() as db:
+            billing.reserve_workflow_credits(db, db.get(AssignmentWorkflow, wid), 1)
+            db.commit()
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        list(pool.map(reserve, range(5)))
+    assert credits(env)['available'] == 2
+    assert credits(env)['reserved'] == 1
+
+
+def test_legacy_saved_purchase_keeps_its_name_amount_and_credit_quantity(env):
+    pid = purchase(env)
+    saved = env.client.get('/api/billing/orders/' + pid).json()
+    assert (saved['pack_name'], saved['amount'], saved['credits']) == ('Quick Lab', 2900, 10)
+
+
+def test_legacy_held_question_credits_settle_to_one_manual_credit(env):
+    from app.models import WorkflowCreditHold
+    wid = add_workflow(env)
+    with env.factory() as db:
+        billing.wallet(db, 1)
+        db.get(CreditWallet, (1,'test')).balance = 0
+        db.get(CreditWallet, (1,'test')).reserved = 3
+        db.add(WorkflowCreditHold(workflow_id=wid, user_id=1, mode='test', run_token=str(uuid.uuid4()),
+                                  amount=3, baseline_ids=[], state='held'))
+        db.commit()
+        w = db.get(AssignmentWorkflow, wid)
+        w.status = 'completed'
+        w.results = [{'id': 1,'status':'completed'}, {'id':2,'status':'completed'}]
+        billing.settle_workflow_credits(db, w)
+        db.commit()
+        assert billing.wallet(db, 1)['available'] == 2
+        assert billing.wallet(db, 1)['reserved'] == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('route', ['numbered', 'model', 'fallback'])
+async def test_extraction_rejects_sixteen_in_every_path_without_truncation(env, monkeypatch, route):
+    from app.services import assignment_workflow as flow
+    wid = add_workflow(env)
+    questions = [{'id': i, 'text': f'Write a Python program to add {i}.', 'language':'python'} for i in range(1,17)]
+    monkeypatch.setattr(flow, 'SessionLocal', env.factory)
+    monkeypatch.setattr(flow, 'document_text', lambda upload: 'Write a Python program to add numbers.')
+    monkeypatch.setattr(flow, 'numbered_experiments', lambda text: questions if route == 'numbered' else [])
+    generate = AsyncMock(return_value={'questions': questions})
+    if route == 'fallback':
+        generate.side_effect = flow.GenerationError('Fixture provider unavailable')
+    monkeypatch.setattr(flow.generation_service, 'generate_json', generate)
+    parser = AsyncMock(return_value=questions)
+    monkeypatch.setattr(flow.parser_service, 'parse_file', parser)
+    monkeypatch.setattr(flow, 'local_upload_path', lambda path: path)
+    await flow._extract_assignment(wid)
+    with env.factory() as db:
+        w = db.get(AssignmentWorkflow, wid)
+        assert w.status == 'failed'
+        assert 'maximum is 15' in w.error
+        assert not w.questions
+    if route != 'fallback':
+        parser.assert_not_called()
+
+
+def test_both_submission_schemas_enforce_fifteen_questions():
+    from pydantic import ValidationError
+    from app.routers.workflows import ProcessInput, PromptStartInput
+    questions = [{'id':i, 'text':'Write a Python program.', 'language':'python'} for i in range(1,17)]
+    for schema in [ProcessInput, PromptStartInput]:
+        assert len(schema(questions=questions[:15]).questions) == 15
+        with pytest.raises(ValidationError, match='at most 15'):
+            schema(questions=questions)
+
+
+@pytest.mark.asyncio
+async def test_grouped_oversized_exercise_submission_is_422_and_never_reserves(env):
+    from app.routers import workflows
+    from starlette.background import BackgroundTasks
+    from starlette.requests import Request
+    wid = add_workflow(env)
+    grouped = '\n'.join(f'{i}. Write a Python program to add {i}.' for i in range(1,17))
+    with env.factory() as db:
+        w = db.get(AssignmentWorkflow, wid)
+        w.status = 'ready'
+        db.commit()
+        data = workflows.ProcessInput(questions=[{'id':1,'text':grouped,'language':'python'}])
+        with pytest.raises(HTTPException) as failure:
+            await workflows.process(w.upload_id, data, Request({'type':'http','headers':[]}),
+                                    BackgroundTasks(), db.get(User,1), db, True)
+        assert failure.value.status_code == 422 and 'maximum is 15' in failure.value.detail
+        assert db.query(CreditLedger).filter_by(kind='run_reserved').count() == 0
+
+
+def test_already_paid_manual_retry_does_not_require_positive_balance(env):
+    wid = add_workflow(env)
+    with env.factory() as db:
+        w = db.get(AssignmentWorkflow, wid)
+        billing.reserve_workflow_credits(db,w,1)
+        db.commit()
+        w.status = 'completed'
+        w.results = [{'id':1,'status':'completed'}, {'id':2,'status':'completed'}]
+        billing.settle_workflow_credits(db,w)
+        db.commit()
+        db.get(CreditWallet,(1,'test')).balance = -1
+        db.commit()
+        billing.check_workflow_credits_available(db,w,1)
+        billing.reserve_workflow_credits(db,w,1)
+        db.commit()
+        assert billing.wallet(db,1)['available'] == -1
+        assert billing.wallet(db,1)['reserved'] == 0
 
 

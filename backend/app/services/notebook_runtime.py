@@ -13,8 +13,35 @@ import time
 from pathlib import Path
 
 
+def _notebook_python_executable():
+    override = os.environ.get('LABMATE_NOTEBOOK_PYTHON')
+    if override and Path(override).is_file():
+        return override
+    if os.name == 'nt' and sys.version_info >= (3, 14):
+        py312 = Path.home() / 'AppData' / 'Local' / 'labmate-py312' / 'Scripts' / 'python.exe'
+        if py312.is_file():
+            return str(py312)
+    return sys.executable
+
+
+# The whole program gets CELL_TIMEOUT_SEC. Interpreter start-up is not part of the student's program, so it has
+# its own allowance: on a slow machine it takes 25 seconds, and charging it to the cell left too little for
+# importing TensorFlow (about 40 seconds there) and then training.
+CELL_TIMEOUT_SEC = 90
+STARTUP_TIMEOUT_SEC = 60
+
+
+def compute_budget_instruction():
+    """Tell the model how much work fits, so a solution is sized to the limit instead of discovering it."""
+    return (f'COMPUTE BUDGET: the notebook runs on one CPU thread and the whole program has {CELL_TIMEOUT_SEC} seconds. '
+            'Importing TensorFlow or PyTorch can take 40 of them, so keep the training work under about 30 seconds: '
+            'at most 2,000 training samples, images no larger than 28x28, text sequences of at most 50 tokens with a '
+            'vocabulary of at most 2,000 words, layers of at most 64 units (32 for LSTM or GRU), and at most 5 epochs '
+            '(3 for recurrent models). ')
+
+
 class ColabPythonKernel:
-    def __init__(self, work_dir=None, teacher_datasets=None, timeout_sec=45, allow_synthetic=False, theme='dark'):
+    def __init__(self, work_dir=None, teacher_datasets=None, timeout_sec=CELL_TIMEOUT_SEC, allow_synthetic=False, theme='dark'):
         from .isolated_runtime import require_worker
         require_worker()
         if theme not in {'light','dark'}:raise ValueError('Invalid Colab theme.')
@@ -37,15 +64,24 @@ class ColabPythonKernel:
         allowed={'PATH','PATHEXT','SYSTEMROOT','WINDIR','COMSPEC','LANG','LC_ALL'}
         environment={k:v for k,v in os.environ.items() if k.upper() in allowed}
         environment.update(LABMATE_NOTEBOOK_THEME=self.theme,TMP=self.work_dir,TEMP=self.work_dir,TMPDIR=self.work_dir,
-            HOME=self.work_dir,
-            MPLCONFIGDIR=str(Path(self.work_dir)/'.matplotlib'),PYTHONIOENCODING='utf-8',
-            OPENBLAS_NUM_THREADS='1',OMP_NUM_THREADS='1',MKL_NUM_THREADS='1',NUMEXPR_NUM_THREADS='1')
+            # getpass.getuser() (called while importing torch) needs a user name; Windows has no pwd module.
+            HOME=self.work_dir,USERPROFILE=self.work_dir,USERNAME='student',LOGNAME='student',KERAS_HOME=str(Path(self.work_dir)/'.keras'),
+            TORCH_HOME=str(Path(self.work_dir)/'.torch'),
+            MPLCONFIGDIR=str(Path(self.work_dir)/'.matplotlib'),PYTHONIOENCODING='utf-8',PYTHONDONTWRITEBYTECODE='1',
+            OPENBLAS_NUM_THREADS='1',OMP_NUM_THREADS='1',MKL_NUM_THREADS='1',NUMEXPR_NUM_THREADS='1',
+            CUDA_VISIBLE_DEVICES='',TF_CPP_MIN_LOG_LEVEL='2',TF_ENABLE_ONEDNN_OPTS='0',
+            TF_NUM_INTRAOP_THREADS='1',TF_NUM_INTEROP_THREADS='1',TORCH_CPP_LOG_LEVEL='ERROR')
+        # NLTK corpora (VADER lexicon, stop words) are installed by the operator; a run can never download them.
+        nltk_data = os.environ.get('LABMATE_NLTK_DATA') or '/opt/labmate-runtime/nltk_data'
+        if Path(nltk_data).is_dir():
+            environment['NLTK_DATA'] = nltk_data
         flags={'creationflags':subprocess.CREATE_NO_WINDOW} if os.name=='nt' else {'start_new_session':True}
         if os.name!='nt' and os.geteuid()==0:
             # Drop root privileges in the image; local non-root callers retain their UID.
             os.chown(self.work_dir,65534,65534)
             flags.update(user=65534,group=65534,extra_groups=[],umask=0o077)
-        self._process=subprocess.Popen([sys.executable,'-I','-u',str(Path(__file__).with_name('colab_worker.py'))],
+        python_exe = _notebook_python_executable()
+        self._process=subprocess.Popen([python_exe,'-I','-B','-u',str(Path(__file__).with_name('colab_worker.py'))],
             stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,text=True,encoding='utf-8',
             cwd=self.work_dir,env=environment,**flags)
         if os.name=='nt':
@@ -111,17 +147,23 @@ class ColabPythonKernel:
 
     def execute_cell(self, code, timeout_sec=None):
         with self._lock:
-            deadline=time.monotonic()+(self.timeout_sec if timeout_sec is None else timeout_sec)
+            limit=self.timeout_sec if timeout_sec is None else timeout_sec
             self.exec_counter+=1
+            starting=False
             try:
-                if self._process is None: self._start(deadline)
+                if self._process is None:
+                    starting=True
+                    self._start(time.monotonic()+STARTUP_TIMEOUT_SEC)
+                    starting=False
+                deadline=time.monotonic()+limit
                 result=self._send({'command':'execute','code':code},deadline)
                 result.setdefault('execCount',self.exec_counter)
                 return result
             except (TimeoutError,RuntimeError,OSError,ValueError) as error:
                 self.terminate()
+                message='Notebook runtime did not start in time.' if starting and isinstance(error,TimeoutError) else str(error)
                 return {'type':'code','code':code,'stdout':'','stderr':'','repr':None,'html':None,'plots':[],
-                        'error':str(error),'execCount':self.exec_counter,'execTime':'timeout' if isinstance(error,TimeoutError) else 'failed'}
+                        'error':message,'execCount':self.exec_counter,'execTime':'timeout' if isinstance(error,TimeoutError) else 'failed'}
 
     def reset(self):
         with self._lock:

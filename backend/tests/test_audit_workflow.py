@@ -9,6 +9,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
 from app.models import AssignmentWorkflow, Report, Upload, User
+from conftest import student_profile
 from app.services.assignment_workflow import process_assignment
 from app.services.evidence_planner import plan_experiment, select_evidence
 from PIL import Image
@@ -33,7 +34,7 @@ async def test_failed_requirement_produces_diagnostic_without_false_success(case
         requested = 'java'
         objective = 'Create a Java Swing calculator with a button'
     with factory() as db:
-        user = User(email='audit@example.com', name='Audit Student')
+        user = User(email='audit@example.com', name='Audit Student', profile=student_profile())
         db.add(user); db.flush()
         upload = Upload(user_id=user.id, filename='manual.docx', original_filename='manual.docx', file_path=str(source), file_type='docx', file_size=source.stat().st_size)
         db.add(upload); db.flush()

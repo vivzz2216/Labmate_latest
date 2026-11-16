@@ -20,35 +20,49 @@ export default function CheckoutPanel({packId}: {packId: string}) {
   const [message, setMessage] = useState('');
   const [loginOpen, setLoginOpen] = useState(false);
   const [retry, setRetry] = useState(0);
+  const [packError, setPackError] = useState('');
+  const ownerCheck = packId === 'owner-payment-check';
   const confirming = useRef(false);
   const lastFailure = useRef('');
   const active = useRef(true);
   const requestKey = useRef('');
   const storageKey = user ? `labmate_checkout_${user.id}` : '';
   const requestStorageKey = storageKey + '_' + packId + '_request';
-  const pack: Pack|undefined = catalogue?.packs.find(p => p.id === packId);
+  const currentPack = catalogue?.packs.find(p => p.id === packId);
+  // A saved order keeps its quoted amount and quantity even after repricing.
+  const pack: Pack|undefined = currentPack && order?.pack_id === packId
+    ? {...currentPack, name: order.pack_name, credits: order.credits, amount: order.amount,
+        regular_amount: order.amount, offer_active: false}
+    : currentPack;
 
   useEffect(() => {
     active.current = true;
     return () => { active.current = false; };
   }, []);
 
+  const userId = user?.id;
   useEffect(() => {
     const controller = new AbortController();
+    setCatalogue(null);
+    setPackError('');
+    if (ownerCheck && loading) return () => controller.abort();
     billingApi.catalogue(controller.signal)
       .then(async data => {
-        if (packId === 'owner-payment-check' && user?.is_admin) {
+        if (ownerCheck && userId) {
           try {
             const ownerPack = await billingApi.ownerCheck(controller.signal);
             if (!controller.signal.aborted) setCatalogue({...data, packs: [...data.packs, ownerPack]});
             return;
-          } catch { /* The protected owner pack stays unavailable without an admin session. */ }
+          } catch (error: any) {
+            if (controller.signal.aborted) return;
+            if (error?.response?.status !== 404) setPackError(paymentError(error));
+          }
         }
         if (!controller.signal.aborted) setCatalogue(data);
       })
       .catch(e => { if (!controller.signal.aborted) setMessage(paymentError(e)); });
     return () => controller.abort();
-  }, [retry, packId, user?.is_admin]);
+  }, [retry, packId, ownerCheck, userId, loading]);
 
   useEffect(() => {
     setOrder(null);
@@ -82,7 +96,7 @@ export default function CheckoutPanel({packId}: {packId: string}) {
     setOrder(saved);
     setBalance(saved.wallet);
     if (saved.status === 'paid') {
-      setMessage(`Payment verified. ${saved.credits} experiment credits added to your account.`);
+      setMessage(`Payment verified. ${saved.credits} manual credits added to your account.`);
     } else if (saved.status.includes('refunded')) {
       setMessage('This payment has a refund adjustment. Your balance has been updated.');
     } else {
@@ -139,7 +153,7 @@ export default function CheckoutPanel({packId}: {packId: string}) {
         amount: saved.amount,
         currency: saved.currency,
         name: 'LabMate',
-        description: `${saved.pack_name} · ${saved.credits} experiment credits`,
+        description: `${saved.pack_name} · ${saved.credits} manual credits`,
         order_id: saved.gateway_order_id,
         prefill: {name: user.name, email: user.email},
         image: new URL('/images/labmate-logo-transparent.png', window.location.origin).toString(),
@@ -183,7 +197,7 @@ export default function CheckoutPanel({packId}: {packId: string}) {
 
   const paid = order?.status === 'paid';
   const refunded = order?.status.includes('refunded');
-  const isFestive = pack?.offer_active || packId === 'college-pack';
+  const isFestive = Boolean(pack?.offer_active);
   const regularAmount = pack ? (pack.regular_amount ?? pack.amount) : 0;
   const savings = pack && regularAmount > pack.amount ? regularAmount - pack.amount : 0;
 
@@ -211,8 +225,8 @@ export default function CheckoutPanel({packId}: {packId: string}) {
           <h1>{paid ? 'Payment confirmed' : `${pack?.name ?? 'Pack'} checkout`}</h1>
           <p className={styles.checkoutLead}>
             {paid
-              ? `Your ${order?.credits ?? pack?.credits ?? 0} experiment credits are active. Upload your lab manual to generate code and Word reports.`
-              : `Add ${pack?.credits ?? 'your'} experiment credits to your LabMate account. Credits activate after payment verification and never expire.`}
+              ? `Your ${order?.credits ?? pack?.credits ?? 0} manual credits are active. Upload your lab manual to generate code and Word reports.`
+              : `Add ${pack?.credits ?? 'your'} manual credits to your LabMate account. Credits activate after payment verification and never expire.`}
           </p>
 
           {isFestive && pack && !paid && (
@@ -228,14 +242,14 @@ export default function CheckoutPanel({packId}: {packId: string}) {
 
           <h2 className={styles.includedTitle}>What is included</h2>
           <ul className={styles.included}>
-            <li><Check size={16} aria-hidden="true" />{pack?.credits ?? 'Experiment'} experiment credits</li>
+            <li><Check size={16} aria-hidden="true" />{pack?.credits ?? 'Manual'} manual credits</li>
             <li><Check size={16} aria-hidden="true" />Code generated and executed in sandbox</li>
             <li><Check size={16} aria-hidden="true" />Terminal execution output screenshots</li>
             <li><Check size={16} aria-hidden="true" />Formatted Word (.docx) lab record</li>
             <li><Check size={16} aria-hidden="true" />Unused credits never expire</li>
           </ul>
           <p className={styles.fine}>
-            A credit is used only when an experiment completes. Failed and unfinished experiments return their reserved credits.
+            One credit covers one completed manual with up to 15 questions or exercises. Larger manuals must be split. Failed or unfinished manuals return their reserved credit; retries and downloads do not charge again.
           </p>
         </section>
 
@@ -247,7 +261,19 @@ export default function CheckoutPanel({packId}: {packId: string}) {
           </div>
 
           {!catalogue && !message && <p role="status" className={styles.loadingPack}>Loading your pack…</p>}
-          {catalogue && !pack && (
+          {catalogue && !pack && ownerCheck && (
+            <div className={styles.notFoundPack} role="alert">
+              <p>{packError || (user
+                ? 'The ₹1 live payment check is available only to the owner account. Sign in with your owner account to continue.'
+                : 'Sign in with your owner account to access the ₹1 live payment check.')}</p>
+              {packError ? (
+                <button className={styles.statusButton} onClick={() => setRetry(v => v + 1)}>Retry loading</button>
+              ) : (
+                <button className={styles.payButton} onClick={() => setLoginOpen(true)}>Sign in as owner</button>
+              )}
+            </div>
+          )}
+          {catalogue && !pack && !ownerCheck && (
             <div className={styles.notFoundPack} role="alert">
               <p>This pack could not be found.</p>
               <Link href="/#pricing" className={styles.returnLink}>Choose a pack</Link>
@@ -259,7 +285,7 @@ export default function CheckoutPanel({packId}: {packId: string}) {
               <div className={styles.lineItem}>
                 <div>
                   <p className={styles.lineName}>{pack.name}</p>
-                  <p className={styles.lineSub}>{pack.credits} experiment credits</p>
+                  <p className={styles.lineSub}>{pack.credits} manual credits</p>
                 </div>
                 <span className={styles.lineAmount}>{rupees(regularAmount)}</span>
               </div>
@@ -311,7 +337,7 @@ export default function CheckoutPanel({packId}: {packId: string}) {
                 <button
                   className={styles.payButton}
                   onClick={pay}
-                  disabled={loading || busy || !catalogue.checkout_available}
+                  disabled={loading || busy || (Boolean(user) && !catalogue.checkout_available)}
                 >
                   {busy ? (
                     <><Loader2 size={17} className={styles.spinner} aria-hidden="true" /> Please wait…</>

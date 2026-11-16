@@ -7,7 +7,6 @@ import re
 import uuid
 from pathlib import Path
 
-from PIL import Image
 from ..config import settings
 
 
@@ -52,6 +51,7 @@ async def read_bounded(stream, limit):
 
 
 def import_receipt(receipt, isolation='linux_namespaces'):
+    from PIL import Image
     from .runtime_engine import RuntimeResult
     if not isinstance(receipt, dict) or not isinstance(receipt.get('success'), bool):
         raise ValueError('Invalid isolated runtime receipt.')

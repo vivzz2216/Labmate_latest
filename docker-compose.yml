@@ -59,35 +59,26 @@ services:
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - BETA_KEY=${BETA_KEY}
       - SECRET_KEY=${SECRET_KEY}
-      - UPLOAD_DIR=/app/uploads
-      - SCREENSHOT_DIR=/app/screenshots
-      - REPORT_DIR=/app/reports
-      - REACT_TEMP_DIR=/app/react_temp
+      - DATA_DIR=/data
       - HOST_PROJECT_ROOT=${PWD}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - OPENAI_MODEL=gpt-4o-mini
-      - OPENAI_MAX_TOKENS=4000
       - JAVA_COMMAND=java
       - JAVAC_COMMAND=javac
       - C_COMPILER=gcc
       - CPP_COMPILER=g++
-      - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}
-      - FIREBASE_PRIVATE_KEY=${FIREBASE_PRIVATE_KEY}
-      - FIREBASE_CLIENT_EMAIL=${FIREBASE_CLIENT_EMAIL}
       - RATE_LIMIT_ENABLED=false
       - RATE_LIMIT_PER_MINUTE=1000
       - WORKFLOW_WORKERS=0
     volumes:
-      - ./backend/uploads:/app/uploads
-      - ./backend/screenshots:/app/screenshots
-      - ./backend/reports:/app/reports
-      - ./backend/react_temp:/app/react_temp  # Temp directory for React projects
+      - ./backend/uploads:/data/uploads
+      - ./backend/screenshots:/data/screenshots
+      - ./backend/reports:/data/reports
+      - ./backend/react_temp:/data/react_temp  # Temp directory for React projects
     depends_on:
       postgres:
         condition: service_healthy
       # redis:  # Uncomment if using local Redis
       #   condition: service_healthy
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
+    command: ["/app/start.sh"]
 
   worker:
     build:
@@ -97,27 +88,26 @@ services:
       - ./backend/.env
     environment:
       - DATABASE_URL=${DATABASE_URL:-postgresql://${POSTGRES_USER:-labmate}:${POSTGRES_PASSWORD:-labmate_password}@postgres:5432/${POSTGRES_DB:-labmate_db}}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - SECRET_KEY=${SECRET_KEY}
-      - UPLOAD_DIR=/app/uploads
-      - SCREENSHOT_DIR=/app/screenshots
-      - REPORT_DIR=/app/reports
-      - REACT_TEMP_DIR=/app/react_temp
+      - DATA_DIR=/data
+      - LABMATE_ROLE=worker
       - WORKFLOW_WORKERS=2
       - JAVA_COMMAND=java
       - JAVAC_COMMAND=javac
       - C_COMPILER=gcc
       - CPP_COMPILER=g++
     volumes:
-      - ./backend/uploads:/app/uploads
-      - ./backend/screenshots:/app/screenshots
-      - ./backend/reports:/app/reports
-      - ./backend/react_temp:/app/react_temp
+      - ./backend/uploads:/data/uploads
+      - ./backend/screenshots:/data/screenshots
+      - ./backend/reports:/data/reports
+      - ./backend/react_temp:/data/react_temp
     depends_on:
       postgres:
         condition: service_healthy
       backend:
         condition: service_started
-    command: python -m app.services.workflow_queue
+    command: ["/app/start.sh"]
 
   frontend:
     build: ./frontend
@@ -125,8 +115,8 @@ services:
       - "3000:3000"
     environment:
       - NODE_ENV=production
-      - NEXT_PUBLIC_API_URL=http://host.docker.internal:8000
-      - NEXT_PUBLIC_FIREBASE_CONFIG=${NEXT_PUBLIC_FIREBASE_CONFIG}
+      - BACKEND_URL=http://backend:8000
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
     depends_on:
       - backend
 

@@ -1,10 +1,10 @@
 """Opt-in DCL exercises confined to ephemeral users and this run's schemas."""
 import re
 import secrets
-import time
 
 ACCOUNT = r"['`]?([A-Za-z][A-Za-z0-9_]{0,30})['`]?(?:\s*@\s*['`]?(localhost|127\.0\.0\.1)['`]?)?"
-PRIVILEGES = re.compile(r'(?:ALL(?: PRIVILEGES)?|(?:SELECT|INSERT|UPDATE|DELETE)(?:\s*\([A-Za-z0-9_`, ]+\))?)(?:\s*,\s*(?:SELECT|INSERT|UPDATE|DELETE)(?:\s*\([A-Za-z0-9_`, ]+\))?)*', re.I)
+_COL_LIST = r"`?[A-Za-z][A-Za-z0-9_]*`?(?:\s*,\s*`?[A-Za-z][A-Za-z0-9_]*`?)*"
+PRIVILEGES = re.compile(rf'(?:ALL(?: PRIVILEGES)?|(?:SELECT|INSERT|UPDATE|DELETE)(?:\s*\(\s*{_COL_LIST}\s*\))?)(?:\s*,\s*(?:SELECT|INSERT|UPDATE|DELETE)(?:\s*\(\s*{_COL_LIST}\s*\))?)*', re.I)
 
 
 def execute_dcl(session, sql, started):
@@ -18,7 +18,7 @@ def execute_dcl(session, sql, started):
     try:
         create = re.fullmatch(r'CREATE\s+USER\s+(?:IF NOT EXISTS\s+)?' + ACCOUNT + r"\s+IDENTIFIED BY\s+'[^'\\]{1,100}'", sql, re.I)
         show = re.fullmatch(r'SHOW\s+GRANTS\s+FOR\s+' + ACCOUNT, sql, re.I)
-        change = re.fullmatch(r'(GRANT|REVOKE)\s+(.+?)\s+ON\s+(?:([A-Za-z0-9_`]+)\s*\.\s*)?([A-Za-z0-9_`]+|\*)\s+(?:TO|FROM)\s+' + ACCOUNT, sql, re.I)
+        change = re.fullmatch(r'(GRANT|REVOKE)\s+(.+?)\s+ON\s+(?:(`?[A-Za-z0-9_]+`?)\s*\.\s*)?(`?[A-Za-z0-9_]+`?|\*)\s+(?:TO|FROM)\s+' + ACCOUNT, sql, re.I)
         drop = re.fullmatch(r'DROP\s+USER\s+(?:IF EXISTS\s+)?' + ACCOUNT, sql, re.I)
         if not any((create, show, change, drop)):
             raise ValueError('Use CREATE USER, SHOW GRANTS, schema-scoped GRANT/REVOKE or DROP USER. Global grants, grant options and arbitrary hosts are prohibited.')
@@ -47,9 +47,11 @@ def execute_dcl(session, sql, started):
                         physical = session.schema_map.get(session._find_logical_schema(logical.strip('`')))
                     else:
                         physical = session.schema_map.get(session.active_schema)
-                    if not physical:
+                    if not physical or not re.fullmatch(r'[A-Za-z0-9_]+', physical):
                         raise ValueError('Grants are confined to the current run schemas.')
                     table = table.strip('`')
+                    if table != '*' and not re.fullmatch(r'[A-Za-z0-9_]+', table):
+                        raise ValueError('Invalid table identifier in privilege statement.')
                     target = '*' if table == '*' else '`' + table + '`'
                     cur.execute(f'{verb} {privileges} ON `{physical}`.{target} ' + ('TO' if verb.upper() == 'GRANT' else 'FROM') + ' %s@%s', (actual, 'localhost'))
                 elif show:

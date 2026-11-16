@@ -11,17 +11,27 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from playwright.async_api import async_playwright
-
 from ..config import settings
-from .browser_capture import acquire_capture_context, launch_capture_browser
+from .browser_capture import CaptureBrowserUnavailable, acquire_capture_context
 from .lab_resources import allowed_resource, resource_file
+from .notebook_magics import neutralize_magics
 from .notebook_runtime import ColabPythonKernel
 from .sql_runtime import SQLSession, verify_sql_exercise
 
 CODE_LINES_PER_PAGE = 22
 RESULT_ROWS_PER_PAGE = 12
 RESULT_EDITOR_WINDOW_LINES = 10
+
+
+def sql_result_label(statement):
+    sql = statement.upper()
+    if 'HAVING' in sql: return 'HAVING example'
+    if len(re.findall(r'\bSELECT\b', sql)) > 1: return 'Nested query example'
+    if re.search(r'\bGROUP\s+BY\b', sql): return 'GROUP BY example'
+    for function in ('COUNT', 'AVG', 'SUM', 'MAX', 'MIN'):
+        if re.search(r'\b'+function+r'\s*\(', sql): return function+' example'
+    match = re.match(r'\s*SELECT\s+\*\s+FROM\s+`?(\w+)', statement, re.I)
+    return 'Display '+match.group(1) if match else 'Query result'
 
 
 def notebook_cells(code):
@@ -44,12 +54,12 @@ def notebook_cells(code):
                 if not isinstance(source, str):
                     raise ValueError("Invalid notebook source.")
                 result.append(
-                    {"type": cell["cell_type"], "code": source}
+                    {"type": cell["cell_type"], "code": neutralize_magics(source)}
                     if cell["cell_type"] == "code"
                     else {"type": "markdown", "content": source}
                 )
             return result
-    return [{"type": "code", "code": code}]
+    return [{"type": "code", "code": neutralize_magics(code)}]
 
 
 def _summarize_sql_statement(stmt: str, leading_comment: str = "") -> str:
@@ -169,10 +179,18 @@ async def capture_sql(
                             "tableName": st.get("tableName", "Result"),
                             "schemaName": st.get("schemaName", "lab"),
                             "columns": st["columns"],
-                            "rows": row_slice if (is_target and row_slice is not None) else st["rows"][:RESULT_ROWS_PER_PAGE],
+                            "rows": row_slice if (is_target and row_slice is not None) else (st.get("shown_rows") or st["rows"])[:RESULT_ROWS_PER_PAGE],
                         }
                     )
             return tabs
+
+        def _is_unfiltered_select_star(stmt_text: str) -> bool:
+            return bool(re.match(r"^\s*SELECT\s+\*\s+FROM\s+[`\"'\w.]+\s*;?\s*$", (stmt_text or "").strip(), re.I))
+
+        def resolve_tabs_for_statement(target_st: dict[str, Any] | None) -> list[dict[str, Any]]:
+            # Workbench retains earlier SELECT tabs for DDL/DML; it never shows
+            # rows from a statement that has not executed yet.
+            return build_result_tabs_upto(target_st['index']) if target_st else []
 
         evidence_frames: list[dict[str, Any]] = []
         screenshots_map: dict[str, str] = {}
@@ -191,32 +209,79 @@ async def capture_sql(
             await page.wait_for_function("!!window.MySQLWorkbench && typeof window.MySQLWorkbench.renderFrame === 'function'", timeout=5000)
 
             # 1. Render paginated Workbench SQL Script frames (covering lines 1..total_lines without gaps/duplicates)
-            total_code_pages = max(1, math.ceil(total_lines / CODE_LINES_PER_PAGE))
-            preview_tabs = build_result_tabs_upto(len(statements))
-            preview_logs = build_action_logs(len(statements))
+            # End a code section at every SELECT, so each example is visibly
+            # executed with its own grid instead of sharing the last result.
+            boundaries = sorted({s['end_line'] for s in statements if s.get('success') and s.get('type')=='SELECT' and s.get('columns')} | {total_lines})
+            code_pages = []
+            cursor = 1
+            for boundary in boundaries:
+                while cursor <= boundary:
+                    end = min(boundary, cursor + CODE_LINES_PER_PAGE - 1)
+                    code_pages.append((cursor, end));cursor=end+1
+            total_code_pages = len(code_pages)
             final_schemas = receipt.get("schemas") or {}
             final_active_schema = receipt.get("active_schema") or "lab"
 
-            for page_idx in range(total_code_pages):
-                start_line = page_idx * CODE_LINES_PER_PAGE + 1
-                end_line = min(total_lines, (page_idx + 1) * CODE_LINES_PER_PAGE)
-                chunk_text = "\n".join(all_lines[start_line - 1 : end_line])
+            for page_idx, (start_line, end_line) in enumerate(code_pages):
+                # The editor shows a full page: a short section continues under the lines before it instead of starting a new, mostly empty page.
+                shown_start = max(1, min(start_line, end_line - CODE_LINES_PER_PAGE + 1))
+                chunk_text = "\n".join(all_lines[shown_start - 1 : end_line])
                 part_label = f"Part {page_idx + 1} of {total_code_pages}"
                 frame_path = screenshot_dir / f"sql_code_{uuid.uuid4().hex[:12]}_p{page_idx + 1}.png"
+
+                page_statements = [
+                    st for st in statements
+                    if st.get("end_line", 1) <= end_line and st.get("end_line", 1) >= start_line
+                ]
+                page_selects = [
+                    st for st in page_statements
+                    if st.get("success") and st.get("type") == "SELECT" and st.get("columns")
+                ]
+                page_star_selects = [
+                    st for st in page_selects if _is_unfiltered_select_star(st.get("statement", ""))
+                ]
+
+                if page_star_selects:
+                    page_target_st = page_star_selects[-1]
+                elif page_selects:
+                    page_target_st = page_selects[-1]
+                elif page_statements:
+                    page_target_st = page_statements[-1]
+                else:
+                    completed = [st for st in statements if st.get('end_line', 1) <= end_line]
+                    page_target_st = completed[-1] if completed else None
+
+                page_tabs = resolve_tabs_for_statement(page_target_st)
+                visible_page_tabs = page_tabs[-6:] if page_tabs else []
+                active_page_tab = visible_page_tabs[-1] if visible_page_tabs else None
+
+                page_hl_range = None
+                if (
+                    page_target_st
+                    and page_target_st.get("start_line", 0) >= start_line
+                    and page_target_st.get("end_line", 0) <= end_line
+                ):
+                    page_hl_range = [page_target_st["start_line"], page_target_st["end_line"]]
+
+                log_upto = page_target_st['index'] if page_target_st else 0
+                page_logs = build_action_logs(log_upto)
+                page_schemas = page_target_st.get('schemas_snapshot', {}) if page_target_st else {}
+                page_active_schema = page_target_st.get('active_schema', 'lab') if page_target_st else 'lab'
 
                 frame_cfg = {
                     "layoutMode": "code",
                     "connectionTitle": conn_title,
                     "serverVersion": server_version,
-                    "tabTitle": f"{src_filename} (Lines {start_line}–{end_line})",
+                    "tabTitle": f"{src_filename} (Lines {shown_start}–{end_line})",
                     "editorSql": chunk_text,
-                    "startLine": start_line,
-                    "highlightRange": None,
-                    "schemas": final_schemas,
-                    "activeSchema": final_active_schema,
-                    "resultSets": preview_tabs[-6:] if preview_tabs else [],
-                    "activeResultIndex": max(0, len(preview_tabs[-6:]) - 1),
-                    "actionLogs": preview_logs,
+                    "startLine": shown_start,
+                    "highlightRange": page_hl_range,
+                    "schemas": page_schemas,
+                    "activeSchema": page_active_schema,
+                    "focusObject": active_page_tab["tableName"] if active_page_tab else None,
+                    "resultSets": visible_page_tabs,
+                    "activeResultIndex": max(0, len(visible_page_tabs) - 1) if visible_page_tabs else -1,
+                    "actionLogs": page_logs,
                 }
                 await page.evaluate("(cfg) => window.MySQLWorkbench.renderFrame(cfg)", frame_cfg)
                 await page.screenshot(path=str(frame_path))
@@ -228,8 +293,14 @@ async def capture_sql(
                         "kind": "source_preview",
                         "source_file": src_filename,
                         "source_ranges": [(start_line, end_line)],
+                        "result_statement_index": page_target_st['index'] if page_target_st and page_target_st.get('success') and page_target_st.get('type')=='SELECT' else None,
+                        "result_complete": bool(page_target_st and page_target_st.get('success') and page_target_st.get('type')=='SELECT' and page_target_st.get('start_line',0)>=start_line and not page_target_st.get('truncated') and len(page_target_st.get('rows',[]))<=RESULT_ROWS_PER_PAGE),
+                        "active_result_title": active_page_tab["title"] if active_page_tab else None,
+                        "active_result_table": active_page_tab["tableName"] if active_page_tab else None,
+                        "active_result_columns": active_page_tab["columns"] if active_page_tab else [],
+                        "active_result_rows": active_page_tab["rows"] if active_page_tab else [],
                         "caption": (
-                            f"MySQL Workbench SQL Script — {src_filename} (Lines {start_line}–{end_line}, {part_label}) "
+                            f"{sql_result_label(page_target_st['statement']) if page_target_st and page_target_st.get('type')=='SELECT' else 'SQL setup'} — {src_filename} (Lines {shown_start}–{end_line}, {part_label}) "
                             f"[{engine_label} Workbench-style rendered interface]"
                         ),
                     }
@@ -244,12 +315,7 @@ async def capture_sql(
                 is_select = st.get("success") and st.get("type") == "SELECT" and bool(st.get("columns"))
                 is_update = st.get("success") and st.get("type") == "UPDATE"
                 is_failed = not st.get("success")
-                is_final_ddl = (
-                    st["index"] == len(statements)
-                    and st.get("success")
-                    and st.get("type") in {"DROP", "CREATE", "ALTER", "UPDATE", "DELETE"}
-                )
-                if not (is_select or is_update or is_failed or is_final_ddl):
+                if not (is_select or is_update or is_failed):
                     continue
 
                 editor_chunk, win_start, hl_range = _editor_window_for_statement(all_lines, st)
@@ -258,9 +324,31 @@ async def capture_sql(
                 step_active_schema = st.get("active_schema") or final_active_schema
                 stmt_summary = _summarize_sql_statement(st["statement"], st.get("leading_comment", ""))
 
+                command_lines = st['statement'].splitlines()
+                if len(command_lines) > RESULT_EDITOR_WINDOW_LINES:
+                    for part in range(math.ceil(len(command_lines) / CODE_LINES_PER_PAGE)):
+                        first = part * CODE_LINES_PER_PAGE
+                        command_path = screenshot_dir / f"sql_command_{uuid.uuid4().hex[:12]}_s{st['index']}_p{part + 1}.png"
+                        previous = statements[st['index'] - 2] if st['index'] > 1 else None
+                        await page.evaluate('(cfg) => window.MySQLWorkbench.renderFrame(cfg)', {
+                            'layoutMode': 'code', 'connectionTitle': conn_title, 'serverVersion': server_version,
+                            'tabTitle': f"{src_filename} — Step {st['index']} command, part {part + 1}",
+                            'editorSql': '\n'.join(command_lines[first:first + CODE_LINES_PER_PAGE]),
+                            'startLine': st.get('start_line', 1) + first, 'highlightRange': None,
+                            'schemas': previous.get('schemas_snapshot', {}) if previous else {},
+                            'activeSchema': previous.get('active_schema', 'lab') if previous else 'lab',
+                            'resultSets': [], 'activeResultIndex': -1, 'actionLogs': build_action_logs(st['index'] - 1),
+                        })
+                        await page.screenshot(path=str(command_path))
+                        screenshots_map[f"database_command_{st['index']}_{part + 1}"] = str(command_path)
+                        evidence_frames.append({'path': str(command_path), 'kind': 'database', 'phase': 'command',
+                            'statement_index': st['index'], 'statement': st['statement'],
+                            'caption': f"Step {st['index']} complete SQL command — part {part + 1}"})
+                        expected_db_frames += 1
+
                 if is_select:
                     query_counter += 1
-                    rows = st.get("rows") or []
+                    rows = st.get("shown_rows") or st.get("rows") or []
                     total_row_pages = max(1, math.ceil(max(1, len(rows)) / RESULT_ROWS_PER_PAGE))
                     for r_page in range(total_row_pages):
                         expected_db_frames += 1
@@ -270,6 +358,7 @@ async def capture_sql(
                         page_suffix = f" (Rows {r_start + 1}–{r_end})" if total_row_pages > 1 else ""
                         tabs = build_result_tabs_upto(st["index"], row_slice=row_slice, page_suffix=page_suffix)
                         visible_tabs = tabs[-7:]
+                        active_tab = visible_tabs[-1] if visible_tabs else None
                         frame_path = screenshot_dir / f"sql_query_{uuid.uuid4().hex[:12]}_q{query_counter}_p{r_page + 1}.png"
 
                         frame_cfg = {
@@ -309,7 +398,12 @@ async def capture_sql(
                                 "path": str(frame_path),
                                 "kind": "database",
                                 "query_index": query_counter,
+                                "statement_index": st["index"],
                                 "statement": st["statement"],
+                                "active_result_title": active_tab["title"] if active_tab else None,
+                                "active_result_table": active_tab["tableName"] if active_tab else None,
+                                "active_result_columns": active_tab["columns"] if active_tab else [],
+                                "active_result_rows": active_tab["rows"] if active_tab else [],
                                 "caption": (
                                     f"MySQL Workbench {stage}Query {query_counter}: {stmt_summary} ({row_desc}) "
                                     f"[{engine_label} Workbench-style rendered interface]"
@@ -317,13 +411,11 @@ async def capture_sql(
                             }
                         )
                 else:
-                    # Failed statement or final DDL statement (e.g. DROP VIEW product_data)
+                    # Non-SELECT step (DDL, DML, UPDATE, or failed statement)
                     expected_db_frames += 1
-                    # For UPDATE, retain the last SELECT receipt so the affected row is
-                    # visible in its before state beside the highlighted UPDATE statement.
-                    # The following SELECT frame records the after state independently.
-                    tabs = build_result_tabs_upto(st["index"] - 1 if is_update else st["index"])
+                    tabs = resolve_tabs_for_statement(st)
                     visible_tabs = tabs[-7:]
+                    active_tab = visible_tabs[-1] if visible_tabs else None
                     frame_path = screenshot_dir / f"sql_step_{uuid.uuid4().hex[:12]}_s{st['index']}.png"
                     frame_cfg = {
                         "layoutMode": "result",
@@ -335,7 +427,7 @@ async def capture_sql(
                         "highlightRange": hl_range,
                         "schemas": step_schemas,
                         "activeSchema": step_active_schema,
-                        "focusObject": st.get("tableName"),
+                        "focusObject": st.get("tableName") or (active_tab["tableName"] if active_tab else None),
                         "resultSets": visible_tabs,
                         "activeResultIndex": max(0, len(visible_tabs) - 1) if visible_tabs else -1,
                         "actionLogs": step_logs,
@@ -354,6 +446,10 @@ async def capture_sql(
                             "kind": "database",
                             "statement_index": st["index"],
                             "statement": st["statement"],
+                            "active_result_title": active_tab["title"] if active_tab else None,
+                            "active_result_table": active_tab["tableName"] if active_tab else None,
+                            "active_result_columns": active_tab["columns"] if active_tab else [],
+                            "active_result_rows": active_tab["rows"] if active_tab else [],
                             "caption": (
                                 f"MySQL Workbench {'UPDATE' if is_update else 'Execution Step'} {st['index']}: {stmt_summary} ({status_desc}) "
                                 f"[{engine_label} Workbench-style rendered interface]"
@@ -415,6 +511,7 @@ async def capture_sql(
             False,
             error=str(error),
             exit_code=1,
+            stages={'capture': 'unavailable'} if isinstance(error, CaptureBrowserUnavailable) else {},
             verification={
                 "kind": "database",
                 "dialect": "mysql",
@@ -429,12 +526,176 @@ async def capture_sql(
             session.close()
 
 
+def _wrap_notebook_text(text: str, width: int = 90, chunk_lines: int = 18) -> list[str]:
+    """Wrap long notebook stream lines at fixed width and page them into bounded line chunks."""
+    import textwrap
+
+    wrapped: list[str] = []
+    for raw_line in str(text).splitlines():
+        wrapped.extend(
+            textwrap.wrap(
+                raw_line,
+                width=width,
+                replace_whitespace=False,
+                drop_whitespace=False,
+                break_on_hyphens=False,
+            )
+            or [""]
+        )
+    return ["\n".join(wrapped[i : i + chunk_lines]) for i in range(0, len(wrapped), chunk_lines)]
+
+
+async def capture_jupyter_evidence(
+    cells,
+    screenshot_path,
+    source_filename: str = "notebook.py",
+    theme: str = "dark",
+    **metadata,
+):
+    """Render readable sections of one saved execution receipt in JupyterLab theme."""
+    if theme not in {"light", "dark"}:
+        raise ValueError("Choose a light or dark Jupyter theme.")
+    from .screenshot_service import screenshot_service
+
+    student_name = str(metadata.get("student_name") or "Student")
+    group = metadata.get("job_id")
+    frames: list[dict[str, Any]] = []
+    code_cells = [
+        (c.get("code", "") or "").splitlines() or [""]
+        for c in cells
+        if c.get("type") not in {"markdown", "text"}
+    ]
+    full_source = "\n".join("\n".join(cell_lines) for cell_lines in code_cells)
+    offset = 0
+
+    async def capture(
+        code_arg: str,
+        output_arg: str,
+        kind: str,
+        caption: str,
+        *,
+        view_mode: str,
+        details: dict[str, Any] | None = None,
+        **extra_kwargs,
+    ):
+        if len(frames) >= 80:
+            raise ValueError("Notebook exceeds the 80 evidence section limit.")
+        ok, rendered_path, width, height = await screenshot_service.generate_screenshot(
+            code_arg,
+            output_arg,
+            "jupyter",
+            group,
+            student_name,
+            source_filename,
+            view_mode=view_mode,
+            presentation="ide_evidence",
+            language="python",
+            palette=theme,
+            input_echoed=True,
+            **extra_kwargs,
+        )
+        if not ok:
+            raise RuntimeError("Jupyter evidence capture failed.")
+        frame = dict(path=rendered_path, kind=kind, caption=caption, width=width, height=height)
+        if details:
+            frame.update(details)
+        frames.append(frame)
+
+    for number, cell in enumerate(cells, 1):
+        if cell.get("type") in {"markdown", "text"}:
+            await capture(
+                cell.get("code", "") or "",
+                "",
+                "notebook",
+                f"Jupyter Notebook text — cell {number}",
+                view_mode="output",
+            )
+            continue
+
+        lines = (cell.get("code", "") or "").splitlines() or [""]
+        for start in range(0, len(lines), 22):
+            end = min(start + 22, len(lines))
+            await capture(
+                full_source,
+                "",
+                "source_preview",
+                f"Jupyter Notebook code — cell {number}, lines {start + 1}–{end}",
+                view_mode="editor",
+                details={
+                    "source_file": source_filename,
+                    "source_ranges": [(offset + start + 1, offset + end)],
+                },
+                source_ranges=[[offset + start + 1, offset + end]],
+            )
+        offset += len(lines)
+
+        context = "\n".join(lines[-3:])
+        emitted_output = False
+        for key in ("stdout", "repr"):
+            text = cell.get(key)
+            if text:
+                for part, chunk in enumerate(_wrap_notebook_text(text), 1):
+                    emitted_output = True
+                    await capture(
+                        context,
+                        chunk,
+                        "notebook",
+                        f"Jupyter Notebook output — cell {number}, part {part}",
+                        view_mode="output",
+                    )
+        for key in ("stderr", "error"):
+            text = cell.get(key)
+            if text:
+                for part, chunk in enumerate(_wrap_notebook_text(text), 1):
+                    emitted_output = True
+                    await capture(
+                        context,
+                        "",
+                        "notebook",
+                        f"Jupyter Notebook output — cell {number}, error part {part}",
+                        view_mode="output",
+                        error=chunk,
+                    )
+        for idx, plot in enumerate(cell.get("plots") or [], 1):
+            plot_str = str(plot or "").strip()
+            if not re.fullmatch(r"data:image/png;base64,[A-Za-z0-9+/=]+", plot_str):
+                raise ValueError("Invalid Jupyter plot image data.")
+            emitted_output = True
+            await capture(
+                context,
+                "",
+                "notebook",
+                f"Jupyter Notebook plot — cell {number}, plot {idx}",
+                view_mode="output",
+                jupyter_plot=plot_str,
+            )
+        if not emitted_output:
+            await capture(
+                context,
+                "",
+                "notebook",
+                f"Jupyter Notebook execution — cell {number}",
+                view_mode="output",
+            )
+
+    return frames, offset
+
+
 async def capture_notebook(code, datasets=None, output_path=None, **metadata):
     from .isolated_runtime import isolation_required
     if isolation_required():
         from .runtime_engine import runtime_engine
-        config = dict(metadata, datasets=datasets, colab_theme=metadata.get('theme', 'dark'))
+        config = dict(
+            metadata,
+            datasets=datasets,
+            colab_theme=metadata.get('theme', 'dark'),
+            notebook_template=metadata.get('notebook_template', 'colab'),
+            jupyter_theme=metadata.get('jupyter_theme', 'light'),
+        )
         return await runtime_engine.execute(code, 'colab', filename=metadata.get('source_filename', 'notebook.py'), project_config=config)
+    if re.search(r'\bpyspark\b', code, re.I):
+        from .spark_runtime import capture_spark
+        return await capture_spark(code, datasets=datasets, output_path=output_path, **metadata)
     from .colab_pipeline import capture_colab_evidence
     from .runtime_engine import RuntimeResult
 
@@ -444,6 +705,8 @@ async def capture_notebook(code, datasets=None, output_path=None, **metadata):
         else Path(settings.SCREENSHOT_DIR).resolve() / ("notebook_" + uuid.uuid4().hex + ".png")
     )
     theme=metadata.get('theme','dark')
+    notebook_template = str(metadata.pop('notebook_template', 'colab') or 'colab').lower()
+    jupyter_theme = str(metadata.pop('jupyter_theme', 'light') or 'light').lower()
     source_filename=metadata.pop('source_filename','notebook.py')
     kernel = ColabPythonKernel(
         teacher_datasets=datasets,
@@ -461,15 +724,25 @@ async def capture_notebook(code, datasets=None, output_path=None, **metadata):
                 if result.get("error"):
                     break
         success = any(c.get("type") == "code" for c in cells) and not any(c.get("error") for c in cells)
-        frames, source_lines = await asyncio.to_thread(
-            capture_colab_evidence,
-            cells=cells,
-            screenshot_path=str(target),
-            source_filename=source_filename,
-            datasets=datasets,
-            kernel=kernel,
-            **metadata,
-        )
+        if notebook_template == "jupyter":
+            frames, source_lines = await capture_jupyter_evidence(
+                cells=cells,
+                screenshot_path=str(target),
+                source_filename=source_filename,
+                theme=jupyter_theme,
+                student_name=metadata.get("student_name", "Student"),
+                job_id=metadata.get("job_id"),
+            )
+        else:
+            frames, source_lines = await asyncio.to_thread(
+                capture_colab_evidence,
+                cells=cells,
+                screenshot_path=str(target),
+                source_filename=source_filename,
+                datasets=datasets,
+                kernel=kernel,
+                **metadata,
+            )
         ok=bool(frames)
         width=max((frame['width'] for frame in frames),default=0)
         height=max((frame['height'] for frame in frames),default=0)
@@ -492,16 +765,32 @@ async def capture_notebook(code, datasets=None, output_path=None, **metadata):
                 "width": width,
                 "height": height,
                 "runtime": "local-python",
+                "accelerator": "CPU",
                 "gpu": None,
-                "theme":theme,"source_lines":source_lines,"evidence_frames":frames,
+                "renderer": notebook_template,
+                "template": notebook_template,
+                "theme": jupyter_theme if notebook_template == "jupyter" else theme,
+                "source_lines":source_lines,
+                "evidence_frames":frames,
             },
         )
     except Exception as error:
+        exec_errors = "\n".join(str(c["error"]) for c in cells if c.get("error")).strip()
+        combined_error = "\n".join(part for part in (exec_errors, str(error).strip()) if part)
         return RuntimeResult(
             False,
-            error=str(error),
+            error=combined_error,
             exit_code=1,
-            verification={"kind": "notebook", "status": "failed", "cells": cells},
+            verification={
+                "kind": "notebook",
+                "status": "failed",
+                "cells": cells,
+                "runtime": "local-python",
+                "accelerator": "CPU",
+                "gpu": None,
+                "renderer": notebook_template,
+                "template": notebook_template,
+            },
         )
     finally:
         kernel.cleanup()

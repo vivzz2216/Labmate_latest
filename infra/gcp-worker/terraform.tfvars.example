@@ -1,0 +1,8 @@
+# Inactive preparation only. Do not activate a trial or enable without reviewing costs.
+enabled             = false
+project_id          = ""
+ssh_source_ranges   = []
+bundle_url          = ""
+bundle_sha256       = ""
+worker_public_key   = ""
+operator_public_key = ""

@@ -1,0 +1,935 @@
+{
+  "other": {
+    "file_count": 60,
+    "total_loc": 50951,
+    "routes_count": 0,
+    "top_files": [
+      {
+        "path": "--quiet/pypdf/_utils.py",
+        "imported_by": 24,
+        "loc": 792,
+        "summary": "Utility functions for PDF library."
+      },
+      {
+        "path": "--quiet/pypdf/generic/__init__.py",
+        "imported_by": 19,
+        "loc": 117,
+        "summary": "Implementation of generic PDF objects (dictionary, number, string, ...)."
+      },
+      {
+        "path": "--quiet/pypdf/errors.py",
+        "imported_by": 19,
+        "loc": 74,
+        "summary": "All errors/exceptions pypdf raises and all of the warnings it uses."
+      },
+      {
+        "path": "--quiet/pypdf/constants.py",
+        "imported_by": 15,
+        "loc": 837,
+        "summary": "Various constants, enums, and flags to aid readability."
+      },
+      {
+        "path": "--quiet/pypdf/generic/_base.py",
+        "imported_by": 12,
+        "loc": 915,
+        "summary": ""
+      },
+      {
+        "path": "--quiet/pypdf/generic/_font.py",
+        "imported_by": 9,
+        "loc": 977,
+        "summary": ""
+      },
+      {
+        "path": "--quiet/pypdf/generic/_data_structures.py",
+        "imported_by": 8,
+        "loc": 2071,
+        "summary": ""
+      },
+      {
+        "path": "--quiet/pypdf/_configuration.py",
+        "imported_by": 8,
+        "loc": 326,
+        "summary": "Configuration value handling."
+      },
+      {
+        "path": "--quiet/pypdf/_page.py",
+        "imported_by": 7,
+        "loc": 2698,
+        "summary": ""
+      },
+      {
+        "path": "--quiet/pypdf/_text_extraction/__init__.py",
+        "imported_by": 6,
+        "loc": 344,
+        "summary": "Code related to text extraction."
+      }
+    ]
+  },
+  "backend_core": {
+    "file_count": 18,
+    "total_loc": 5047,
+    "routes_count": 7,
+    "top_files": [
+      {
+        "path": "backend/app/config.py",
+        "imported_by": 112,
+        "loc": 352,
+        "summary": ""
+      },
+      {
+        "path": "backend/app/models.py",
+        "imported_by": 63,
+        "loc": 312,
+        "summary": ""
+      },
+      {
+        "path": "backend/app/database.py",
+        "imported_by": 59,
+        "loc": 153,
+        "summary": ""
+      },
+      {
+        "path": "backend/app/schemas.py",
+        "imported_by": 7,
+        "loc": 164,
+        "summary": ""
+      },
+      {
+        "path": "backend/app/netlab/pcap.py",
+        "imported_by": 7,
+        "loc": 147,
+        "summary": "Reader and writer for packet capture files: classic pcap (both byte orders, micro- and nanosecond) and pcapng."
+      },
+      {
+        "path": "backend/app/main.py",
+        "imported_by": 6,
+        "loc": 351,
+        "summary": ""
+      },
+      {
+        "path": "backend/app/netlab/__init__.py",
+        "imported_by": 6,
+        "loc": 1,
+        "summary": "Pure-Python network engines used by the Computer Networks lab studios (no web, database or file-system coupling)."
+      },
+      {
+        "path": "backend/app/cache.py",
+        "imported_by": 5,
+        "loc": 228,
+        "summary": "Redis caching utilities for performance optimization"
+      },
+      {
+        "path": "backend/app/__init__.py",
+        "imported_by": 5,
+        "loc": 1,
+        "summary": ""
+      },
+      {
+        "path": "backend/app/netlab/dissect.py",
+        "imported_by": 3,
+        "loc": 827,
+        "summary": "Protocol dissection of captured Ethernet frames: packet list rows, details trees, hex rows, TCP streams."
+      }
+    ]
+  },
+  "security_auth": {
+    "file_count": 17,
+    "total_loc": 1386,
+    "routes_count": 0,
+    "top_files": [
+      {
+        "path": "backend/app/middleware/auth.py",
+        "imported_by": 30,
+        "loc": 237,
+        "summary": "Authentication and authorization middleware"
+      },
+      {
+        "path": "backend/app/middleware/csrf.py",
+        "imported_by": 25,
+        "loc": 136,
+        "summary": "CSRF protection middleware"
+      },
+      {
+        "path": "backend/app/security/generated_code.py",
+        "imported_by": 16,
+        "loc": 68,
+        "summary": "Validation for restricted local execution when a container runtime is unavailable."
+      },
+      {
+        "path": "backend/app/security/execution_access.py",
+        "imported_by": 15,
+        "loc": 47,
+        "summary": "Admission control for the existing controlled beta process runner."
+      },
+      {
+        "path": "backend/app/security/operator_access.py",
+        "imported_by": 13,
+        "loc": 35,
+        "summary": "Operator identity is configured on the server, never by a browser flag."
+      },
+      {
+        "path": "backend/app/security/validators.py",
+        "imported_by": 9,
+        "loc": 232,
+        "summary": "Input validation and sanitization utilities"
+      },
+      {
+        "path": "backend/app/security/jwt.py",
+        "imported_by": 9,
+        "loc": 201,
+        "summary": "JWT token generation and validation for secure authentication"
+      },
+      {
+        "path": "backend/app/middleware/__init__.py",
+        "imported_by": 6,
+        "loc": 1,
+        "summary": ""
+      },
+      {
+        "path": "backend/app/security/signed_assets.py",
+        "imported_by": 5,
+        "loc": 47,
+        "summary": "Short lived bearer links for screenshots already authorized in API responses."
+      },
+      {
+        "path": "backend/app/middleware/body_limit.py",
+        "imported_by": 3,
+        "loc": 44,
+        "summary": "Bound bodies before multipart spooling and cap simultaneous upload parsers."
+      }
+    ]
+  },
+  "api_routers": {
+    "file_count": 19,
+    "total_loc": 3684,
+    "routes_count": 66,
+    "top_files": [
+      {
+        "path": "backend/app/routers/__init__.py",
+        "imported_by": 20,
+        "loc": 1,
+        "summary": ""
+      },
+      {
+        "path": "backend/app/routers/workflows.py",
+        "imported_by": 13,
+        "loc": 762,
+        "summary": ""
+      },
+      {
+        "path": "backend/app/routers/basic_auth.py",
+        "imported_by": 4,
+        "loc": 625,
+        "summary": ""
+      },
+      {
+        "path": "backend/app/routers/upload.py",
+        "imported_by": 2,
+        "loc": 413,
+        "summary": ""
+      },
+      {
+        "path": "backend/app/routers/lab_catalog.py",
+        "imported_by": 2,
+        "loc": 240,
+        "summary": "Lab Catalog Router - provides public metadata and curriculum for all LabMate lab sections."
+      },
+      {
+        "path": "backend/app/routers/feedback.py",
+        "imported_by": 2,
+        "loc": 77,
+        "summary": ""
+      },
+      {
+        "path": "backend/app/routers/run.py",
+        "imported_by": 0,
+        "loc": 348,
+        "summary": ""
+      },
+      {
+        "path": "backend/app/routers/assignments.py",
+        "imported_by": 0,
+        "loc": 180,
+        "summary": ""
+      },
+      {
+        "path": "backend/app/routers/billing.py",
+        "imported_by": 0,
+        "loc": 154,
+        "summary": ""
+      },
+      {
+        "path": "backend/app/routers/ide_mysql.py",
+        "imported_by": 0,
+        "loc": 139,
+        "summary": "Run the MySQL command-line replica against a real MySQL server."
+      }
+    ]
+  },
+  "workflow_services": {
+    "file_count": 48,
+    "total_loc": 11260,
+    "routes_count": 0,
+    "top_files": [
+      {
+        "path": "backend/app/services/__init__.py",
+        "imported_by": 34,
+        "loc": 1,
+        "summary": ""
+      },
+      {
+        "path": "backend/app/services/generation_service.py",
+        "imported_by": 23,
+        "loc": 376,
+        "summary": "Server-only structured generation through the explicitly selected provider."
+      },
+      {
+        "path": "backend/app/services/assignment_workflow.py",
+        "imported_by": 22,
+        "loc": 1780,
+        "summary": "Persistent assignment extraction, execution, and original-document report assembly."
+      },
+      {
+        "path": "backend/app/services/evidence_planner.py",
+        "imported_by": 22,
+        "loc": 364,
+        "summary": "Deterministic requirements, capability gates and experiment-local evidence selection."
+      },
+      {
+        "path": "backend/app/services/storage_service.py",
+        "imported_by": 18,
+        "loc": 240,
+        "summary": "Durable object storage adapter for Cloudflare R2 / AWS S3 with local disk fallback."
+      },
+      {
+        "path": "backend/app/services/lab_question_filter.py",
+        "imported_by": 17,
+        "loc": 164,
+        "summary": "Conservative, provider-independent filtering of actionable programming exercises."
+      },
+      {
+        "path": "backend/app/services/manual_sections.py",
+        "imported_by": 14,
+        "loc": 136,
+        "summary": "Lossless extraction of explicitly numbered experiments, without a model rewrite."
+      },
+      {
+        "path": "backend/app/services/parser_service.py",
+        "imported_by": 8,
+        "loc": 2231,
+        "summary": ""
+      },
+      {
+        "path": "backend/app/services/source_evidence.py",
+        "imported_by": 8,
+        "loc": 109,
+        "summary": "Capture selected functional source without changing complete executed files."
+      },
+      {
+        "path": "backend/app/services/retry.py",
+        "imported_by": 6,
+        "loc": 80,
+        "summary": "Bounded asynchronous retries with exponential full jitter and Retry-After support."
+      }
+    ]
+  },
+  "billing": {
+    "file_count": 1,
+    "total_loc": 371,
+    "routes_count": 0,
+    "top_files": [
+      {
+        "path": "backend/app/services/billing_service.py",
+        "imported_by": 3,
+        "loc": 371,
+        "summary": "Server-priced packs, captured-payment verification, and transactional credits."
+      }
+    ]
+  },
+  "capture_reports": {
+    "file_count": 11,
+    "total_loc": 3826,
+    "routes_count": 0,
+    "top_files": [
+      {
+        "path": "backend/app/services/screenshot_service.py",
+        "imported_by": 18,
+        "loc": 1171,
+        "summary": ""
+      },
+      {
+        "path": "backend/app/services/browser_capture.py",
+        "imported_by": 15,
+        "loc": 267,
+        "summary": "Managed browser pooling and bounded admission for capture processes."
+      },
+      {
+        "path": "backend/app/services/lab_capture.py",
+        "imported_by": 12,
+        "loc": 796,
+        "summary": "Real MySQL and notebook execution with step-by-step Workbench/Colab evidence capture."
+      },
+      {
+        "path": "backend/app/services/docx_layout.py",
+        "imported_by": 11,
+        "loc": 429,
+        "summary": "Append inline screenshots without modifying the user's styles or section settings."
+      },
+      {
+        "path": "backend/app/services/browser_scenarios.py",
+        "imported_by": 10,
+        "loc": 306,
+        "summary": "Versioned, declarative browser scenarios. No generated scripts are evaluated."
+      },
+      {
+        "path": "backend/app/services/compact_report.py",
+        "imported_by": 5,
+        "loc": 162,
+        "summary": "Short report layout using saved evidence, with no model calls."
+      },
+      {
+        "path": "backend/app/services/report_evidence.py",
+        "imported_by": 2,
+        "loc": 47,
+        "summary": "Keep intentional state captures; avoid redundant automatic final frames."
+      },
+      {
+        "path": "backend/app/services/viewport_policy.py",
+        "imported_by": 2,
+        "loc": 10,
+        "summary": "Only explicitly requested mobile/responsive work needs mobile evidence."
+      },
+      {
+        "path": "backend/app/services/composer_service.py",
+        "imported_by": 1,
+        "loc": 370,
+        "summary": ""
+      },
+      {
+        "path": "backend/app/services/powerbi_capture.py",
+        "imported_by": 1,
+        "loc": 165,
+        "summary": "Automatic Power BI dashboard capture: load the student's CSV into LabMate's Power BI Desktop studio and screenshot it."
+      }
+    ]
+  },
+  "execution_runtimes": {
+    "file_count": 24,
+    "total_loc": 8528,
+    "routes_count": 0,
+    "top_files": [
+      {
+        "path": "backend/app/services/runtime_engine.py",
+        "imported_by": 37,
+        "loc": 993,
+        "summary": "Isolated workspaces, bounded processes, stdin feeding, and real browser captures."
+      },
+      {
+        "path": "backend/app/services/web_project.py",
+        "imported_by": 12,
+        "loc": 343,
+        "summary": "Bounded web project manifests and requirement-to-evidence contracts."
+      },
+      {
+        "path": "backend/app/services/sql_runtime.py",
+        "imported_by": 9,
+        "loc": 1452,
+        "summary": "Isolated real MySQL runtime and semantic verifier for SQL lab assignments."
+      },
+      {
+        "path": "backend/app/services/notebook_runtime.py",
+        "imported_by": 9,
+        "loc": 184,
+        "summary": "Killable stateful notebook workers. No model/application secrets enter cells."
+      },
+      {
+        "path": "backend/app/services/isolated_runtime.py",
+        "imported_by": 9,
+        "loc": 129,
+        "summary": "Send complete runtime jobs to a dedicated Linux namespace worker. No host fallback."
+      },
+      {
+        "path": "backend/app/services/dc_runtime.py",
+        "imported_by": 6,
+        "loc": 473,
+        "summary": "Distributed Computing Runtime Engine."
+      },
+      {
+        "path": "backend/app/services/ubuntu_runtime.py",
+        "imported_by": 6,
+        "loc": 258,
+        "summary": "Real Ubuntu VM adapter. No host-shell or simulated desktop fallback."
+      },
+      {
+        "path": "backend/app/services/colab_requirements.py",
+        "imported_by": 6,
+        "loc": 77,
+        "summary": "Prevent explicitly requested notebook libraries from being silently replaced."
+      },
+      {
+        "path": "backend/app/services/colab_pipeline.py",
+        "imported_by": 5,
+        "loc": 208,
+        "summary": "Notebook execution and offline rendering; compatibility API for local runners."
+      },
+      {
+        "path": "backend/app/services/colab_worker.py",
+        "imported_by": 4,
+        "loc": 740,
+        "summary": "Google Colab Dedicated Execution, Screenshot, Print-PDF & Word (.docx) Pipeline"
+      }
+    ]
+  },
+  "workers_scripts": {
+    "file_count": 25,
+    "total_loc": 3758,
+    "routes_count": 0,
+    "top_files": [
+      {
+        "path": "backend/scripts/ubuntu_curriculum.py",
+        "imported_by": 3,
+        "loc": 247,
+        "summary": "Bounded, offline Unix practical plans; shared by the backend and trusted VM."
+      },
+      {
+        "path": "backend/scripts/r_manual_cases.py",
+        "imported_by": 2,
+        "loc": 242,
+        "summary": "Reference R lab experiments: manual text, reference solution and output checks."
+      },
+      {
+        "path": "backend/scripts/sma_manual_cases.py",
+        "imported_by": 1,
+        "loc": 387,
+        "summary": "Reference programs for the Social Media Analytics lab, used to verify the lab end to end without a language model."
+      },
+      {
+        "path": "backend/railway_runtime/bridge.mjs",
+        "imported_by": 1,
+        "loc": 80,
+        "summary": ""
+      },
+      {
+        "path": "backend/scripts/verify_labs.py",
+        "imported_by": 0,
+        "loc": 423,
+        "summary": "Run a lab manual through the real LabMate pipeline for each lab and report the outcome."
+      },
+      {
+        "path": "backend/scripts/ubuntu_worker.py",
+        "imported_by": 0,
+        "loc": 301,
+        "summary": "Trusted VM-side worker. Run only on a dedicated disposable Ubuntu VM."
+      },
+      {
+        "path": "backend/scripts/build_sma_datasets.py",
+        "imported_by": 0,
+        "loc": 296,
+        "summary": "Build the Social Media Analytics practice data shipped in backend/app/lab_data/sma/."
+      },
+      {
+        "path": "backend/scripts/ubuntu_console.py",
+        "imported_by": 0,
+        "loc": 273,
+        "summary": "Sequential real terminal input and native views of an isolated Ubuntu shell."
+      },
+      {
+        "path": "backend/scripts/local_worker.py",
+        "imported_by": 0,
+        "loc": 220,
+        "summary": "Local worker lifecycle. Never starts cloud resources or executes student code on Windows."
+      },
+      {
+        "path": "backend/scripts/run_r_manuals.py",
+        "imported_by": 0,
+        "loc": 170,
+        "summary": "Create the R lab manuals, run every experiment in real R and build the RStudio-evidence reports."
+      }
+    ]
+  },
+  "backend_tests": {
+    "file_count": 116,
+    "total_loc": 16292,
+    "routes_count": 0,
+    "top_files": [
+      {
+        "path": "backend/tests/test_sma_lab.py",
+        "imported_by": 0,
+        "loc": 747,
+        "summary": "Social Media Analytics lab: practice data, notebook allowlists, requirement counts, evidence uploads and report blocks."
+      },
+      {
+        "path": "backend/tests/test_billing.py",
+        "imported_by": 0,
+        "loc": 570,
+        "summary": ""
+      },
+      {
+        "path": "backend/tests/test_netlab_wireshark.py",
+        "imported_by": 0,
+        "loc": 439,
+        "summary": "Wireshark engine: capture reader, dissector (cross-checked against scapy), display filters, Follow TCP Stream."
+      },
+      {
+        "path": "backend/tests/test_mysql_pipeline.py",
+        "imported_by": 0,
+        "loc": 415,
+        "summary": ""
+      },
+      {
+        "path": "backend/tests/test_workflow_claims.py",
+        "imported_by": 0,
+        "loc": 385,
+        "summary": "Priority 1: durable claim tokens fence every worker write."
+      },
+      {
+        "path": "backend/tests/test_web_project_v2.py",
+        "imported_by": 0,
+        "loc": 357,
+        "summary": ""
+      },
+      {
+        "path": "backend/tests/test_backend_engine.py",
+        "imported_by": 0,
+        "loc": 356,
+        "summary": ""
+      },
+      {
+        "path": "backend/tests/test_network_labs.py",
+        "imported_by": 0,
+        "loc": 354,
+        "summary": "Computer Networks experiments in the workflow: recognising manuals, capture uploads, the studio API, the part builder and the report."
+      },
+      {
+        "path": "backend/tests/test_deep_learning_colab.py",
+        "imported_by": 0,
+        "loc": 343,
+        "summary": "Tests for the CPU-based Deep-Learning Colab workflow."
+      },
+      {
+        "path": "backend/tests/test_release_hardening.py",
+        "imported_by": 0,
+        "loc": 321,
+        "summary": "Regression tests for lockout, event-loop responsiveness, rate limiting and isolation gates."
+      }
+    ]
+  },
+  "extensions_templates": {
+    "file_count": 7,
+    "total_loc": 2804,
+    "routes_count": 0,
+    "top_files": [
+      {
+        "path": "google_colab/app.js",
+        "imported_by": 0,
+        "loc": 1135,
+        "summary": ""
+      },
+      {
+        "path": "sql_workbench/app.js",
+        "imported_by": 0,
+        "loc": 892,
+        "summary": ""
+      },
+      {
+        "path": "chrome_extension/content.js",
+        "imported_by": 0,
+        "loc": 308,
+        "summary": ""
+      },
+      {
+        "path": "chrome_extension/extension.test.mjs",
+        "imported_by": 0,
+        "loc": 258,
+        "summary": ""
+      },
+      {
+        "path": "chrome_extension/popup.js",
+        "imported_by": 0,
+        "loc": 130,
+        "summary": ""
+      },
+      {
+        "path": "chrome_extension/sync_auth.js",
+        "imported_by": 0,
+        "loc": 45,
+        "summary": ""
+      },
+      {
+        "path": "chrome_extension/background.js",
+        "imported_by": 0,
+        "loc": 36,
+        "summary": ""
+      }
+    ]
+  },
+  "frontend_pages": {
+    "file_count": 29,
+    "total_loc": 5783,
+    "routes_count": 26,
+    "top_files": [
+      {
+        "path": "frontend/app/code-execution/page.tsx",
+        "imported_by": 0,
+        "loc": 1661,
+        "summary": ""
+      },
+      {
+        "path": "frontend/app/user-dashboard/page.tsx",
+        "imported_by": 0,
+        "loc": 962,
+        "summary": ""
+      },
+      {
+        "path": "frontend/app/workspace/page.tsx",
+        "imported_by": 0,
+        "loc": 719,
+        "summary": ""
+      },
+      {
+        "path": "frontend/app/dashboard/page.tsx",
+        "imported_by": 0,
+        "loc": 540,
+        "summary": ""
+      },
+      {
+        "path": "frontend/app/page.tsx",
+        "imported_by": 0,
+        "loc": 435,
+        "summary": ""
+      },
+      {
+        "path": "frontend/app/samples/page.tsx",
+        "imported_by": 0,
+        "loc": 354,
+        "summary": ""
+      },
+      {
+        "path": "frontend/app/labs/page.tsx",
+        "imported_by": 0,
+        "loc": 320,
+        "summary": ""
+      },
+      {
+        "path": "frontend/app/labs/[slug]/page.tsx",
+        "imported_by": 0,
+        "loc": 296,
+        "summary": ""
+      },
+      {
+        "path": "frontend/app/admin/dashboard/page.tsx",
+        "imported_by": 0,
+        "loc": 148,
+        "summary": ""
+      },
+      {
+        "path": "frontend/app/mumbai-university/page.tsx",
+        "imported_by": 0,
+        "loc": 135,
+        "summary": ""
+      }
+    ]
+  },
+  "frontend_components": {
+    "file_count": 100,
+    "total_loc": 39236,
+    "routes_count": 0,
+    "top_files": [
+      {
+        "path": "frontend/components/ide/android-studio/StudioIcons.tsx",
+        "imported_by": 8,
+        "loc": 1157,
+        "summary": ""
+      },
+      {
+        "path": "frontend/components/ide/intellij/ExpUiIcons.tsx",
+        "imported_by": 8,
+        "loc": 586,
+        "summary": ""
+      },
+      {
+        "path": "frontend/components/brand/LabMateLogo.tsx",
+        "imported_by": 7,
+        "loc": 57,
+        "summary": ""
+      },
+      {
+        "path": "frontend/components/ide/intellij/types.ts",
+        "imported_by": 7,
+        "loc": 44,
+        "summary": ""
+      },
+      {
+        "path": "frontend/components/dashboard/DashboardShell.tsx",
+        "imported_by": 6,
+        "loc": 586,
+        "summary": ""
+      },
+      {
+        "path": "frontend/components/catalogue/LabIdeSelector.tsx",
+        "imported_by": 6,
+        "loc": 31,
+        "summary": ""
+      },
+      {
+        "path": "frontend/components/ide/db-browser/DbBrowserIcons.tsx",
+        "imported_by": 5,
+        "loc": 1135,
+        "summary": ""
+      },
+      {
+        "path": "frontend/components/powerbi/PowerBiDesktopIcons.tsx",
+        "imported_by": 4,
+        "loc": 447,
+        "summary": ""
+      },
+      {
+        "path": "frontend/components/ide/android-studio/StudioStripes.tsx",
+        "imported_by": 4,
+        "loc": 243,
+        "summary": ""
+      },
+      {
+        "path": "frontend/components/auth/LoginModal.tsx",
+        "imported_by": 3,
+        "loc": 217,
+        "summary": ""
+      }
+    ]
+  },
+  "frontend_lib": {
+    "file_count": 33,
+    "total_loc": 23181,
+    "routes_count": 0,
+    "top_files": [
+      {
+        "path": "frontend/lib/powerbi/types.ts",
+        "imported_by": 17,
+        "loc": 133,
+        "summary": ""
+      },
+      {
+        "path": "frontend/contexts/BasicAuthContext.tsx",
+        "imported_by": 16,
+        "loc": 384,
+        "summary": ""
+      },
+      {
+        "path": "frontend/lib/api.ts",
+        "imported_by": 14,
+        "loc": 762,
+        "summary": ""
+      },
+      {
+        "path": "frontend/lib/ide/intellijRunner.ts",
+        "imported_by": 10,
+        "loc": 2318,
+        "summary": ""
+      },
+      {
+        "path": "frontend/lib/ide/sqliteEngine.ts",
+        "imported_by": 9,
+        "loc": 3470,
+        "summary": ""
+      },
+      {
+        "path": "frontend/lib/ide/androidStudioEngine.ts",
+        "imported_by": 8,
+        "loc": 1796,
+        "summary": ""
+      },
+      {
+        "path": "frontend/lib/mumbaiUniversity/types.ts",
+        "imported_by": 8,
+        "loc": 170,
+        "summary": ""
+      },
+      {
+        "path": "frontend/lib/workflow.ts",
+        "imported_by": 7,
+        "loc": 227,
+        "summary": ""
+      },
+      {
+        "path": "frontend/lib/powerbi/csvEngine.ts",
+        "imported_by": 6,
+        "loc": 543,
+        "summary": ""
+      },
+      {
+        "path": "frontend/lib/labCatalog.ts",
+        "imported_by": 5,
+        "loc": 1062,
+        "summary": ""
+      }
+    ]
+  },
+  "frontend_other": {
+    "file_count": 10,
+    "total_loc": 1769,
+    "routes_count": 0,
+    "top_files": [
+      {
+        "path": "frontend/tests/ideClones.test.ts",
+        "imported_by": 0,
+        "loc": 610,
+        "summary": ""
+      },
+      {
+        "path": "frontend/tests/mumbaiUniversity.test.ts",
+        "imported_by": 0,
+        "loc": 584,
+        "summary": ""
+      },
+      {
+        "path": "frontend/public/sqljs/sql-wasm.js",
+        "imported_by": 0,
+        "loc": 186,
+        "summary": ""
+      },
+      {
+        "path": "frontend/tests/androidStudio.test.ts",
+        "imported_by": 0,
+        "loc": 114,
+        "summary": ""
+      },
+      {
+        "path": "frontend/tests/powerBiEngine.test.ts",
+        "imported_by": 0,
+        "loc": 112,
+        "summary": ""
+      },
+      {
+        "path": "frontend/tailwind.config.ts",
+        "imported_by": 0,
+        "loc": 96,
+        "summary": ""
+      },
+      {
+        "path": "frontend/tests/labIdeAssociations.test.ts",
+        "imported_by": 0,
+        "loc": 49,
+        "summary": ""
+      },
+      {
+        "path": "frontend/next-env.d.ts",
+        "imported_by": 0,
+        "loc": 6,
+        "summary": ""
+      },
+      {
+        "path": "frontend/next.config.js",
+        "imported_by": 0,
+        "loc": 6,
+        "summary": ""
+      },
+      {
+        "path": "frontend/postcss.config.js",
+        "imported_by": 0,
+        "loc": 6,
+        "summary": ""
+      }
+    ]
+  }
+}

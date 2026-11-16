@@ -24,7 +24,7 @@ PASSWORD='owner-fixture-secret'
 @pytest.fixture
 def env(tmp_path,monkeypatch):
     for name,value in {'ADMIN_USERID':OWNER,'ADMIN_PASSWORD':PASSWORD,'CREDIT_EXEMPT_EMAILS':'',
-            'EXECUTION_ALLOWED_EMAILS':OWNER,'BILLING_ENABLED':True,'RAZORPAY_MODE':'test',
+            'EXECUTION_ALLOWED_EMAILS':OWNER,'LOCAL_OPEN_EXECUTION':False,'BILLING_ENABLED':True,'RAZORPAY_MODE':'test',
             'SECRET_KEY':'fixture-secret-key-that-is-at-least-32-characters'}.items():monkeypatch.setattr(settings,name,value)
     engine=create_engine('sqlite:///'+str(tmp_path/'owner.db'),connect_args={'check_same_thread':False})
     Base.metadata.create_all(engine)
@@ -85,7 +85,7 @@ def test_owner_runs_with_zero_balance_and_no_credit_hold(env):
         billing.wallet(db,uid);db.get(CreditWallet,(uid,'test')).balance=0
         upload=Upload(user_id=uid,filename='owner.docx',original_filename='owner.docx',file_path='fixture',file_type='docx',file_size=10)
         db.add(upload);db.flush()
-        workflow=AssignmentWorkflow(upload_id=upload.id,status='ready',questions=[{'id':i,'text':'Print a number.'} for i in range(1,101)])
+        workflow=AssignmentWorkflow(upload_id=upload.id,status='ready',questions=[{'id':i,'text':'Print a number.'} for i in range(1,16)])
         db.add(workflow);db.flush();billing.reserve_workflow_credits(db,workflow,uid)
         assert db.get(WorkflowCreditHold,workflow.id) is None
         assert billing.wallet(db,uid)['available']==0 and billing.wallet(db,uid)['unlimited'] is True

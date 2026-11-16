@@ -1,6 +1,61 @@
 """Independent checks over stored input tables, never model-written row counts."""
 import re
 from collections import Counter
+import json
+
+
+def practical_table_checks(statements):
+    """Require a full input-table result after population, before topic queries."""
+    encode = lambda rows: Counter(json.dumps(r, sort_keys=True, default=str) for r in rows)
+    inserts = {}
+    history = {}
+    for step in statements:
+        if not step.get('success'):
+            continue
+        schema = step.get('active_schema', 'lab')
+        stmt_type = step.get('type')
+        if stmt_type == 'INSERT':
+            table = step.get('tableName', '').lower()
+            if not table:
+                continue
+            snapshot = (step.get('schemas_snapshot') or {}).get(schema, {}).get('tables', {})
+            saved = next((v.get('rows', []) for k, v in snapshot.items() if k.lower() == table), [])
+            inserts[(schema, table)] = (step['index'], saved)
+            history.setdefault((schema, table), []).append((step['index'], encode(saved), saved))
+        elif stmt_type == 'ROLLBACK' or 'ROLLBACK' in step.get('statement', '').upper():
+            all_schemas = step.get('schemas_snapshot') or {}
+            for (s, t) in list(inserts.keys()):
+                if s not in all_schemas and s != schema:
+                    continue
+                t_snap = all_schemas.get(s, {}).get('tables', {})
+                saved = next((v.get('rows', []) for k, v in t_snap.items() if k.lower() == t), [])
+                target_sig = encode(saved)
+                restored = next(((idx, rows) for idx, sig, rows in history.get((s, t), []) if sig == target_sig), None)
+                inserts[(s, t)] = restored if restored is not None else (inserts[(s, t)][0], saved)
+    checks = []
+    for (schema, table), (insert_index, saved) in inserts.items():
+        displayed = False
+        for step in statements:
+            if step['index'] <= insert_index or not step.get('success'):
+                continue
+            match = re.fullmatch(
+                r'SELECT\s+\*\s+FROM\s+(?:(`?\w+`?)\.)?`?(\w+)`?\s*(?:ORDER\s+BY\s+[\w`, .]+)?\s*;?',
+                step.get('statement', '').strip(),
+                re.I,
+            )
+            if step.get('type') == 'SELECT' and not match:
+                break
+            if not match or match.group(2).lower() != table or (match.group(1) or step.get('active_schema', 'lab')).strip('`') != schema:
+                continue
+            displayed = bool(saved) and not step.get('truncated') and encode(saved) == encode(step.get('rows', []))
+            if displayed:
+                break
+        checks.append({
+            'name': f'Input table {table} displayed completely',
+            'passed': displayed,
+            'detail': 'All inserted records are visible.' if displayed else f'After inserting records, run SELECT * FROM `{table}`; without WHERE or LIMIT, before experiment queries.',
+        })
+    return checks
 
 
 def join_expected(statement, tables, mode=None):

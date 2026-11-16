@@ -9,8 +9,20 @@ PROGRAM = re.compile(r"\b(?:program(?:ming)?|code|script|function|application|ap
 EXPLICIT_PROGRAM = re.compile(r"\b(?:write|create|develop|implement|build)\s+(?:a\s+|an\s+)?(?:(?:python|java|c\+\+|c|html|react|node)\s+)?(?:program|code|script|application|web\s+page)\b", re.I)
 
 
+# Only Unix-labelled practical prompts override explanation filtering. Generic
+# theory questions mentioning a shell or Linux remain theory.
+UNIX_PRACTICAL = re.compile(
+    r'\b(?:commands?\s+with\s+syntax\s+and\s+examples?|'
+    r'(?:shell|perl|awk|sed)\s+scripts?|'
+    r'(?:UNIX|Ubuntu)\s+(?:networking\s+)?commands?|'
+    r'(?:install(?:ation)?|partition(?:ing)?)\b.{0,70}\b(?:Ubuntu|UNIX)|'
+    r'(?:MAC|IP)\s+address)\b', re.I)
+
+
+_HANDWRITTEN_SUBJECT = r"(?!\s+(?:digits?|characters?|letters?|numerals?|text|images?|signatures?|samples?|data(?:set)?s?|recognition)\b)"
 HANDWRITTEN_REGEX = re.compile(
-    r"\b(handwritten|hand[- ]written|by hand|write by hand|draw by hand|draw neatly|sketch|manual drawing)\b",
+    r"\b(handwritten" + _HANDWRITTEN_SUBJECT + r"|hand[- ]written" + _HANDWRITTEN_SUBJECT
+    + r"|by hand|write by hand|draw by hand|draw neatly|sketch|manual drawing)\b",
     re.I
 )
 
@@ -18,6 +30,19 @@ HANDWRITTEN_REGEX = re.compile(
 def is_handwritten_question(text: str) -> bool:
     """Detect if a question or instruction explicitly requests handwritten work."""
     return bool(HANDWRITTEN_REGEX.search(str(text or "")))
+
+
+def practical_text(text: str) -> str:
+    """The part of an experiment a student has to program.
+
+    A lab manual puts Theory, Learning Objectives and Viva-Voce sections around the program. Those headings
+    describe the manual's layout; they must not make the whole experiment look theoretical.
+    """
+    lines = str(text or "").splitlines()
+    if len(lines) < 2:
+        return str(text or "")
+    kept = programming_lines(lines)
+    return "\n".join(kept) if kept else str(text or "")
 
 
 def is_actionable_lab_question(text: str, language: str = "", excluded_section: bool = False) -> bool:
@@ -29,11 +54,14 @@ def is_actionable_lab_question(text: str, language: str = "", excluded_section: 
         return False
     if SECTION.match(question):
         return False
-    # A request to explain concepts does not become actionable just because it mentions code.
-    if THEORETICAL.search(question):
+    if language.lower() == 'ubuntu' and UNIX_PRACTICAL.search(question):
+        return True
+    # A request to explain concepts does not become actionable just because it mentions code. Judge the
+    # practical part only: a manual's "Viva-Voce Questions" section must not reject its programming task.
+    if THEORETICAL.search(practical_text(question)):
         return False
     # A known lab language supplies context that valid UI task prose may omit.
-    known_language = language.lower() in {"html", "react", "node", "python", "java", "c", "cpp", "sql", "colab", "ubuntu"}
+    known_language = language.lower() in {"html", "react", "node", "python", "java", "c", "cpp", "sql", "colab", "ubuntu", "distributed", "r"}
     return bool(ACTION.search(question) and (PROGRAM.search(question) or known_language))
 
 

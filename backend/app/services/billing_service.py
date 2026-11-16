@@ -9,31 +9,36 @@ from datetime import datetime, timedelta, timezone
 
 import httpx
 from fastapi import HTTPException
-from sqlalchemy import select, update
+from sqlalchemy import select, update, func
 from sqlalchemy.exc import IntegrityError
 
 from ..config import settings
 from ..models import (CreditWallet, CreditLedger, PackPurchase, WorkflowCreditHold, User)
 from ..security.operator_access import is_user_credit_exempt
-from ..security.operator_access import is_admin_user
+from .manual_limits import validate_manual
 
 PACKS = (
-    {'id': 'quick-lab', 'name': 'Quick Lab', 'amount': 2900, 'credits': 10,
-     'description': 'For your next set of practicals.', 'featured': False},
-    {'id': 'lab-pack', 'name': 'Lab Pack', 'amount': 7900, 'credits': 35,
-     'description': 'Room for a few lab manuals.', 'featured': True},
-    {'id': 'semester-pack', 'name': 'Semester Pack', 'amount': 14900, 'credits': 80,
-     'description': 'Keep several subjects moving.', 'featured': False},
-    {'id': 'college-pack', 'name': 'College Pack', 'amount': 59900, 'offer_amount': 39900,
-     'offer_ends_at': datetime(2026, 11, 16, 0, 0, tzinfo=timezone(timedelta(hours=5, minutes=30))),
-     'credits': 300, 'description': '300 credits for one student’s full term of practicals.',
-     'featured': False, 'offer_label': 'Diwali offer'},
+    {'id': 'quick-lab', 'name': 'Single Manual', 'amount': 2900, 'credits': 1,
+     'description': 'Finish one practical manual.', 'featured': False},
+    {'id': 'lab-pack', 'name': 'Freshers Pack', 'amount': 9900, 'credits': 5,
+     'description': 'Five manuals to get started.', 'featured': True},
+    {'id': 'semester-pack', 'name': 'Intermediate Pack', 'amount': 24900, 'credits': 15,
+     'description': 'Fifteen manuals across your subjects.', 'featured': False},
+    {'id': 'college-pack', 'name': 'Semester Pack', 'amount': 49900, 'credits': 35,
+     'description': 'Thirty-five manuals for your semester.', 'featured': False},
 )
+# Keep existing checkout URLs and previously purchased quantities intact.
+LEGACY_PACKS = {'quick-lab': (10, 'Quick Lab'), 'lab-pack': (35, 'Lab Pack'),
+                'semester-pack': (80, 'Semester Pack'), 'college-pack': (300, 'College Pack')}
 PACK_BY_ID = {p['id']: p for p in PACKS}
 OWNER_PAYMENT_CHECK = {'id': 'owner-payment-check', 'name': 'Live Payment Check', 'amount': 100,
     'credits': 1, 'description': 'One real ₹1 charge to verify live Razorpay checkout.',
     'featured': False, 'admin_only': True}
 PACK_BY_ID[OWNER_PAYMENT_CHECK['id']] = OWNER_PAYMENT_CHECK
+PAYMENT_CHECK = {'id': 'payment-check', 'name': '₹1 Payment Check', 'amount': 100,
+    'credits': 1, 'description': 'A real ₹1 payment to check checkout. Adds 1 experiment credit; lab access follows beta eligibility.',
+    'featured': False}
+PACK_BY_ID[PAYMENT_CHECK['id']] = PAYMENT_CHECK
 GATEWAY = 'https://api.razorpay.com/v1'
 ID_PATTERN = r'^[A-Za-z0-9_]{5,64}$'
 
@@ -91,7 +96,22 @@ def wallet(db, user_id, mode=None):
     db.execute(insert(CreditLedger).values(user_id=user_id, mode=mode,
         reference=f'trial:{mode}:{user_id}', kind='trial', delta=trial)
         .on_conflict_do_nothing(index_elements=['reference']))
-    row = db.get(CreditWallet, (user_id, mode), populate_existing=True)
+    # Serialize allowance upgrades with concurrent wallet reads and purchases.
+    row = db.scalar(select(CreditWallet).where(CreditWallet.user_id == user_id,
+        CreditWallet.mode == mode).with_for_update().execution_options(populate_existing=True))
+    granted = db.scalar(select(func.coalesce(func.sum(CreditLedger.delta), 0)).where(
+        CreditLedger.user_id == user_id, CreditLedger.mode == mode,
+        CreditLedger.kind.in_(['trial', 'trial_upgrade'])))
+    extra = max(0, trial - granted)
+    if extra:
+        awarded = db.execute(insert(CreditLedger).values(user_id=user_id, mode=mode,
+            reference=f'trial-upgrade:{mode}:{user_id}:{trial}', kind='trial_upgrade', delta=extra)
+            .on_conflict_do_nothing(index_elements=['reference']))
+        if awarded.rowcount == 1:
+            db.execute(update(CreditWallet).where(CreditWallet.user_id == user_id,
+                CreditWallet.mode == mode).values(balance=CreditWallet.balance + extra),
+                execution_options={'synchronize_session': False})
+            db.refresh(row)
     exempt = is_credit_exempt(db, user_id)
     return {'available': row.balance,
             'reserved': row.reserved,
@@ -104,17 +124,47 @@ def ledger(db, user_id, mode, reference, kind, delta):
     db.add(CreditLedger(user_id=user_id, mode=mode, reference=reference, kind=kind, delta=delta))
 
 
+def manual_reference(workflow, user_id, mode):
+    return f'manual:{mode}:{user_id}:{workflow.upload_id}'
+
+
+def manual_paid(db, workflow, user_id, mode):
+    if db.scalar(select(CreditLedger.id).where(
+        CreditLedger.reference == manual_reference(workflow, user_id, mode))) is not None:
+        return True
+    # Runs paid before the unit change have no manual marker. Their immutable
+    # reservation/release ledger still proves that this upload was charged.
+    previous = db.get(WorkflowCreditHold, workflow.id, populate_existing=True)
+    if previous and previous.user_id == user_id and previous.mode == mode and previous.state == 'settled':
+        released = db.scalar(select(CreditLedger.delta).where(
+            CreditLedger.reference == 'release:' + previous.run_token))
+        return released is not None and released < previous.amount
+    return False
+
+
 def settle_workflow_credits(db, workflow):
     hold = db.get(WorkflowCreditHold, workflow.id, populate_existing=True)
     if not hold or hold.state != 'held':
         return
     completed = {r['id'] for r in (workflow.results or []) if r.get('status') == 'completed'}
-    used = min(hold.amount, len(completed - set(hold.baseline_ids)))
+    required = {q['id'] for q in (workflow.questions or [])}
     changed = db.execute(update(WorkflowCreditHold).where(
         WorkflowCreditHold.workflow_id == workflow.id, WorkflowCreditHold.state == 'held')
         .values(state='settled'), execution_options={'synchronize_session': False})
     if changed.rowcount != 1:
         return
+    used = 0
+    # A diagnostic report or partial completion never consumes a manual credit.
+    if hold.amount and workflow.status == 'completed' and required and required <= completed:
+        if db.get_bind().dialect.name == 'postgresql':
+            from sqlalchemy.dialects.postgresql import insert
+        else:
+            from sqlalchemy.dialects.sqlite import insert
+        claimed = db.execute(insert(CreditLedger).values(
+            user_id=hold.user_id, mode=hold.mode,
+            reference=manual_reference(workflow, hold.user_id, hold.mode),
+            kind='manual_completed', delta=0).on_conflict_do_nothing(index_elements=['reference']))
+        used = 1 if claimed.rowcount == 1 else 0
     refund = hold.amount - used
     db.execute(update(CreditWallet).where(CreditWallet.user_id == hold.user_id,
         CreditWallet.mode == hold.mode).values(balance=CreditWallet.balance + refund,
@@ -122,22 +172,39 @@ def settle_workflow_credits(db, workflow):
     ledger(db, hold.user_id, hold.mode, 'release:' + hold.run_token, 'unused_returned', refund)
 
 
-def reserve_workflow_credits(db, workflow, user_id):
+def check_workflow_credits_available(db, workflow, user_id):
+    validate_manual(workflow.questions)
     if not settings.BILLING_ENABLED or is_credit_exempt(db, user_id):
         return
     existing = db.get(WorkflowCreditHold, workflow.id, populate_existing=True)
     if existing and existing.state == 'held':
+        return
+    if manual_paid(db, workflow, user_id, settings.RAZORPAY_MODE):
+        return
+    count = 1
+    if wallet(db, user_id, settings.RAZORPAY_MODE)['available'] < count:
+        raise HTTPException(402, 'This manual needs 1 credit. Top up a pack on the homepage to continue.')
+
+
+def reserve_workflow_credits(db, workflow, user_id):
+    validate_manual(workflow.questions)
+    if not settings.BILLING_ENABLED or is_credit_exempt(db, user_id):
+        return
+    mode = settings.RAZORPAY_MODE
+    wallet(db, user_id, mode)  # Serialize reservations before checking the durable hold.
+    existing = db.get(WorkflowCreditHold, workflow.id, populate_existing=True)
+    if existing and existing.state == 'held':
         return  # The durable worker can resume an already reserved run.
     baseline = [r['id'] for r in (workflow.results or []) if r.get('status') == 'completed']
-    count = sum(q['id'] not in baseline for q in workflow.questions)
-    mode = settings.RAZORPAY_MODE
-    wallet(db, user_id, mode)
+    if manual_paid(db, workflow, user_id, mode):
+        return
+    count = 1
     changed = db.execute(update(CreditWallet).where(CreditWallet.user_id == user_id,
         CreditWallet.mode == mode, CreditWallet.balance >= count)
         .values(balance=CreditWallet.balance - count, reserved=CreditWallet.reserved + count),
         execution_options={'synchronize_session': False})
     if changed.rowcount != 1:
-        raise HTTPException(402, f'This run needs {count} experiment credits. Top up a pack on the homepage to continue.')
+        raise HTTPException(402, 'This manual needs 1 credit. Top up a pack on the homepage to continue.')
     token = str(uuid.uuid4())
     if existing:
         existing.mode, existing.run_token, existing.amount = mode, token, count
@@ -174,7 +241,9 @@ def owned_purchase(db, purchase_id, user_id):
 
 
 def order_view(db, row):
-    return {'id': row.id, 'pack_id': row.pack_id, 'pack_name': PACK_BY_ID[row.pack_id]['name'],
+    legacy = LEGACY_PACKS.get(row.pack_id)
+    name = legacy[1] if legacy and row.credits == legacy[0] else PACK_BY_ID[row.pack_id]['name']
+    return {'id': row.id, 'pack_id': row.pack_id, 'pack_name': name,
         'amount': row.amount, 'currency': row.currency, 'credits': row.credits,
         'status': row.status, 'gateway_order_id': row.gateway_order_id,
         'payment_id': row.gateway_payment_id, 'mode': row.mode,
@@ -183,15 +252,13 @@ def order_view(db, row):
 
 async def create_order(db, user_id, pack_id, request_key):
     require_gateway()
+    # Both ₹1 check packs are retired; they stay in PACK_BY_ID so old orders still render.
+    if pack_id in {PAYMENT_CHECK['id'], OWNER_PAYMENT_CHECK['id']}:
+        raise HTTPException(404, 'Payment pack not found.')
     pack = PACK_BY_ID.get(pack_id)
     if not pack: raise HTTPException(400, 'Choose a valid LabMate pack.')
     if os.getenv('RAILWAY_ENVIRONMENT_ID') and settings.RAZORPAY_MODE != 'live':
         raise HTTPException(503, 'Live Razorpay payments are not configured yet.')
-    if pack.get('admin_only'):
-        if not is_admin_user(db.get(User, user_id)):
-            raise HTTPException(404, 'Payment pack not found.')
-        if settings.RAZORPAY_MODE != 'live':
-            raise HTTPException(503, 'The ₹1 payment check requires live Razorpay keys.')
     row = db.scalar(select(PackPurchase).where(PackPurchase.user_id == user_id,
         PackPurchase.mode == settings.RAZORPAY_MODE, PackPurchase.request_key == request_key))
     if row:
@@ -230,13 +297,17 @@ async def create_order(db, user_id, pack_id, request_key):
 
 def apply_payment(db, purchase_id, payment):
     row = db.scalar(select(PackPurchase).where(PackPurchase.id == purchase_id).with_for_update())
+    if row is None:
+        raise HTTPException(404, 'Payment order not found.')
     if (payment.get('order_id') != row.gateway_order_id or payment.get('amount') != row.amount
         or payment.get('currency') != row.currency or not re.fullmatch(r'pay_[A-Za-z0-9]+', str(payment.get('id', '')))):
         raise HTTPException(400, 'Payment details do not match this order.')
     if payment.get('status') not in {'captured', 'refunded'}:
         return order_view(db, row)
+    if payment.get('captured') is not True:
+        raise HTTPException(400, 'Payment has not been captured. No credits were added.')
     refund = payment.get('amount_refunded', 0)
-    if not isinstance(refund, int) or not 0 <= refund <= row.amount:
+    if type(refund) is not int or not 0 <= refund <= row.amount:
         raise HTTPException(400, 'Invalid payment refund total.')
     wallet(db, row.user_id, row.mode)
     now = datetime.now(timezone.utc)
@@ -272,7 +343,7 @@ async def verify_checkout(db, user_id, purchase_id, returned_order, payment_id, 
     if not hmac.compare_digest(expected, signature):
         raise HTTPException(400, 'Payment signature verification failed. No credits were added.')
     payment = await gateway_request('GET', '/payments/' + payment_id)
-    if (payment.get('order_id') != row.gateway_order_id or payment.get('amount') != row.amount
+    if (payment.get('id') != payment_id or payment.get('order_id') != row.gateway_order_id or payment.get('amount') != row.amount
         or payment.get('currency') != 'INR'):
         raise HTTPException(400, 'Payment details do not match this order.')
     if payment.get('status') == 'authorized':
