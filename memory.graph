@@ -217,14 +217,14 @@
     "session": ".memory/session.json"
   },
   "stats": {
-    "total_files": 518,
+    "total_files": 522,
     "python_files": 336,
     "typescript_files": 165,
     "javascript_files": 17,
     "routes_indexed": 99,
     "decisions_count": 5,
-    "indexed_at": "2026-11-16T12:36:57.399444+00:00",
+    "indexed_at": "2026-11-16T13:29:42.555158+00:00",
     "git_head": "3f7eb68",
-    "last_duration_ms": 26.53
+    "last_duration_ms": 47.05
   }
 }

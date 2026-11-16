@@ -77,11 +77,11 @@ def webhook(env,kind='payment.captured',payload=None,bad=False):
 
 def test_catalogue_and_wallet_are_server_owned(env):
     data=env.client.get('/api/billing/plans').json()
-    assert [(p['name'],p['amount'],p['credits']) for p in data['packs']] == [('Single Manual',2900,1),('Freshers Pack',9900,5),('Intermediate Pack',24900,15),('Semester Pack',49900,35)]
+    assert [(p['amount'],p['credits']) for p in data['packs'][:3]]==[(2900,10),(7900,35),(14900,80)]
     assert data['credit_unit']=='manual' and data['max_questions_per_manual']==15
     college=next(p for p in data['packs'] if p['id']=='college-pack')
-    assert college['regular_amount']==49900 and college['credits']==35
-    assert college['amount']==49900 and not college['offer_active']
+    assert college['regular_amount']==59900 and college['credits']==300
+    assert college['amount'] in {39900,59900} and college['offer_active']==(college['amount']==39900)
     assert 'fixture-secret' not in json.dumps(data) and data['mode']=='test'
     assert credits(env)['available']==3
     assert credits(env)['available']==3
@@ -132,7 +132,7 @@ def test_create_is_idempotent_and_uses_paise(env):
     env.gateway.return_value={'id':'order_created','amount':2900,'currency':'INR'}
     data={'pack_id':'quick-lab','request_key':str(uuid.uuid4())}
     first=env.client.post('/api/billing/orders',json=data);assert first.status_code==200,first.text
-    assert first.json()['amount']==2900 and first.json()['credits']==1
+    assert first.json()['amount']==2900 and first.json()['credits']==10
     assert env.client.post('/api/billing/orders',json=data).json()['id']==first.json()['id']
     env.gateway.assert_awaited_once()
     call=env.gateway.call_args

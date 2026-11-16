@@ -11,10 +11,56 @@ CONTENTS = re.compile(r"^(?:table\s+of\s+contents|contents|index)\s*:?\s*$", re.
 FRONT_MATTER_END = re.compile(r"^(?:general\s+(?:requirements|instructions)|experiments)\s*:?\s*$", re.I)
 REQUIREMENTS = re.compile(r"^(?:aim|problem statement|experiment question|requirements|tasks|expected output)\s*(?::.*)?$", re.I)
 PAGE_REFERENCE = re.compile(r"(?:\.{2,}\s*|\s{2,}|\|\s*|\s+page\s+)\d+\s*$", re.I)
+QUESTION_HEADING = re.compile(r'^\s*(?:question|q)\s*([1-9]\d{0,2})\s*[:.)-]\s*(.*)$', re.I)
+QUESTION_END = re.compile(r'^(?:submission and verification|conclusion|references|bibliography)\s*$', re.I)
 
 
 class ManualStructureError(ValueError):
     """Explicit boundaries are ambiguous; never silently fall back and lose tasks."""
+
+
+def numbered_questions(text):
+    """Preserve separate, explicitly labelled questions outside numbered experiments."""
+    from .lab_question_filter import is_actionable_lab_question
+
+    lines = text.splitlines()
+    headings = [(i, match) for i, line in enumerate(lines)
+                if (match := QUESTION_HEADING.match(line))]
+    if len(headings) < 2:
+        return []
+    numbers = [int(match.group(1)) for _, match in headings]
+    if len(numbers) != len(set(numbers)):
+        raise ManualStructureError('Repeated question numbers were found. Remove duplicate/index headings before processing.')
+    if numbers != list(range(numbers[0], numbers[0] + len(numbers))):
+        raise ManualStructureError('Question numbers are missing or out of order. Review the manual before processing.')
+
+    # Shared input data belongs to every question; a later task may depend on it.
+    preface = lines[:headings[0][0]]
+    shared = []
+    for index, line in enumerate(preface):
+        if re.fullmatch(r'\s*Supplied data and constraints\s*', line, re.I):
+            shared = [part.strip() for part in preface[index + 1:] if part.strip()]
+            break
+    tasks = []
+    for index, (start, heading) in enumerate(headings):
+        end = headings[index + 1][0] if index + 1 < len(headings) else len(lines)
+        block = []
+        for line in lines[start:end]:
+            if QUESTION_END.fullmatch(line.strip()):
+                break
+            if line.strip():
+                block.append(line.strip())
+        body = '\n'.join(block)
+        language = section_language('\n'.join(preface[:8]), body)
+        if not is_actionable_lab_question(body, language):
+            return []  # Leave non-programming question lists to the normal extractor.
+        if shared:
+            body += '\nSupplied data and constraints\n' + '\n'.join(shared)
+        if len(body) > 15000:
+            raise ManualStructureError(f'Question {numbers[index]} exceeds the supported length.')
+        tasks.append({'id': numbers[index], 'text': body, 'language': language,
+                      'extraction_method': 'original_numbered_question'})
+    return tasks
 
 
 def _body_boundaries(lines, boundaries):

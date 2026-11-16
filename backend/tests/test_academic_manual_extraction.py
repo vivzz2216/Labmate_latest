@@ -71,6 +71,24 @@ class AcademicManualTests(unittest.TestCase):
 
 
 class AcademicWorkflowTests(unittest.IsolatedAsyncioTestCase):
+    async def test_numbered_question_manual_keeps_all_exercises_without_model(self):
+        from app.services.manual_sections import numbered_questions
+        source = ('C | MANUAL 01 | 3 EXERCISES\nSupplied data and constraints\n'
+                  'Marks: 78, 92, 65, 88, 77.\nLaboratory exercises\n'
+                  'Question 1: Array statistics\nWrite a C program to compute sum. Expected\n'
+                  'results: sum 400.\nQuestion 2: Structure and grade\n'
+                  'Write a C program using a Student structure.\n'
+                  'Question 3: Boundary validation\nWrite a C program validating marks.\n'
+                  'Submission and verification\nSubmit code and screenshots.')
+        tasks = numbered_questions(source)
+        self.assertEqual([task['id'] for task in tasks], [1, 2, 3])
+        self.assertEqual([task['language'] for task in tasks], ['c'] * 3)
+        self.assertTrue(all('Marks: 78, 92' in task['text'] for task in tasks))
+        self.assertIn('results: sum 400.', tasks[0]['text'])
+        self.assertNotIn('Submission and verification', tasks[2]['text'])
+        with self.assertRaises(ManualStructureError):
+            numbered_questions(source.replace('Question 3:', 'Question 2:'))
+
     async def test_real_extraction_boundary_needs_no_model_or_fallback_for_numbered_manual(self):
         with TemporaryDirectory() as folder:
             engine = create_engine('sqlite:///'+folder.replace('\\','/')+'/test.db',connect_args={'check_same_thread':False})

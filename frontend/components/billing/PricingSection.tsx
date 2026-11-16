@@ -226,7 +226,7 @@ export default function PricingSection() {
                   {checkoutLink(suggested, 'View this pack', styles.textAction)}
                 </>
               ) : (
-                <p>You’ll need more than one pack. Start with the Semester Pack and top up as needed.</p>
+                <p>You’ll need more than one pack. Start with the College Pack and top up as needed.</p>
               )}
             </div>
           </div>

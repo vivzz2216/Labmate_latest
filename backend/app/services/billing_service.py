@@ -18,18 +18,17 @@ from ..security.operator_access import is_user_credit_exempt
 from .manual_limits import validate_manual
 
 PACKS = (
-    {'id': 'quick-lab', 'name': 'Single Manual', 'amount': 2900, 'credits': 1,
-     'description': 'Finish one practical manual.', 'featured': False},
-    {'id': 'lab-pack', 'name': 'Freshers Pack', 'amount': 9900, 'credits': 5,
-     'description': 'Five manuals to get started.', 'featured': True},
-    {'id': 'semester-pack', 'name': 'Intermediate Pack', 'amount': 24900, 'credits': 15,
-     'description': 'Fifteen manuals across your subjects.', 'featured': False},
-    {'id': 'college-pack', 'name': 'Semester Pack', 'amount': 49900, 'credits': 35,
-     'description': 'Thirty-five manuals for your semester.', 'featured': False},
+    {'id': 'quick-lab', 'name': 'Quick Lab', 'amount': 2900, 'credits': 10,
+     'description': 'For your next set of practicals.', 'featured': False},
+    {'id': 'lab-pack', 'name': 'Lab Pack', 'amount': 7900, 'credits': 35,
+     'description': 'Room for a few lab manuals.', 'featured': True},
+    {'id': 'semester-pack', 'name': 'Semester Pack', 'amount': 14900, 'credits': 80,
+     'description': 'Keep several subjects moving.', 'featured': False},
+    {'id': 'college-pack', 'name': 'College Pack', 'amount': 59900, 'offer_amount': 39900,
+     'offer_ends_at': datetime(2026, 11, 16, 0, 0, tzinfo=timezone(timedelta(hours=5, minutes=30))),
+     'credits': 300, 'description': '300 credits for one student’s full term of practicals.',
+     'featured': False, 'offer_label': 'Diwali offer'},
 )
-# Keep existing checkout URLs and previously purchased quantities intact.
-LEGACY_PACKS = {'quick-lab': (10, 'Quick Lab'), 'lab-pack': (35, 'Lab Pack'),
-                'semester-pack': (80, 'Semester Pack'), 'college-pack': (300, 'College Pack')}
 PACK_BY_ID = {p['id']: p for p in PACKS}
 OWNER_PAYMENT_CHECK = {'id': 'owner-payment-check', 'name': 'Live Payment Check', 'amount': 100,
     'credits': 1, 'description': 'One real ₹1 charge to verify live Razorpay checkout.',
@@ -241,9 +240,7 @@ def owned_purchase(db, purchase_id, user_id):
 
 
 def order_view(db, row):
-    legacy = LEGACY_PACKS.get(row.pack_id)
-    name = legacy[1] if legacy and row.credits == legacy[0] else PACK_BY_ID[row.pack_id]['name']
-    return {'id': row.id, 'pack_id': row.pack_id, 'pack_name': name,
+    return {'id': row.id, 'pack_id': row.pack_id, 'pack_name': PACK_BY_ID[row.pack_id]['name'],
         'amount': row.amount, 'currency': row.currency, 'credits': row.credits,
         'status': row.status, 'gateway_order_id': row.gateway_order_id,
         'payment_id': row.gateway_payment_id, 'mode': row.mode,
