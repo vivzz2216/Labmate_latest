@@ -1,5 +1,6 @@
 """Killable stateful notebook workers. No model/application secrets enter cells."""
 import base64
+import hashlib
 import json
 import os
 import queue
@@ -61,6 +62,7 @@ class ColabPythonKernel:
         self._replies = queue.Queue()
 
     def _start(self, deadline):
+        provision_approved_cache(self.work_dir)
         allowed={'PATH','PATHEXT','SYSTEMROOT','WINDIR','COMSPEC','LANG','LC_ALL'}
         environment={k:v for k,v in os.environ.items() if k.upper() in allowed}
         environment.update(LABMATE_NOTEBOOK_THEME=self.theme,TMP=self.work_dir,TEMP=self.work_dir,TMPDIR=self.work_dir,

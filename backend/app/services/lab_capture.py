@@ -18,7 +18,7 @@ from .notebook_magics import neutralize_magics
 from .notebook_runtime import ColabPythonKernel
 from .sql_runtime import SQLSession, verify_sql_exercise
 
-CODE_LINES_PER_PAGE = 22
+CODE_LINES_PER_PAGE = 18
 RESULT_ROWS_PER_PAGE = 12
 RESULT_EDITOR_WINDOW_LINES = 10
 
@@ -196,7 +196,7 @@ async def capture_sql(
         screenshots_map: dict[str, str] = {}
 
         html = resource_file("sql_workbench", "index.html")
-        async with acquire_capture_context(viewport={"width": 1440, "height": 900}, service_workers="block") as context:
+        async with acquire_capture_context(viewport={"width": 1200, "height": 900}, service_workers="block") as context:
             async def guard(route):
                 if allowed_resource(route.request.url, html.parent):
                     await route.continue_()
@@ -284,7 +284,7 @@ async def capture_sql(
                     "actionLogs": page_logs,
                 }
                 await page.evaluate("(cfg) => window.MySQLWorkbench.renderFrame(cfg)", frame_cfg)
-                await page.screenshot(path=str(frame_path))
+                await capture_sql_frame(page, frame_path)
                 key = f"source_page_{page_idx + 1}"
                 screenshots_map[key] = str(frame_path)
                 evidence_frames.append(
@@ -377,7 +377,7 @@ async def capture_sql(
                             "actionLogs": step_logs,
                         }
                         await page.evaluate("(cfg) => window.MySQLWorkbench.renderFrame(cfg)", frame_cfg)
-                        await page.screenshot(path=str(frame_path))
+                        await capture_sql_frame(page, frame_path)
                         last_rendered_path = frame_path
                         q_key = f"database_q{query_counter}_p{r_page + 1}"
                         screenshots_map[q_key] = str(frame_path)
@@ -433,7 +433,7 @@ async def capture_sql(
                         "actionLogs": step_logs,
                     }
                     await page.evaluate("(cfg) => window.MySQLWorkbench.renderFrame(cfg)", frame_cfg)
-                    await page.screenshot(path=str(frame_path))
+                    await capture_sql_frame(page, frame_path)
                     last_rendered_path = frame_path
                     s_key = f"database_step_{st['index']}"
                     screenshots_map[s_key] = str(frame_path)
@@ -708,6 +708,10 @@ async def capture_notebook(code, datasets=None, output_path=None, **metadata):
     notebook_template = str(metadata.pop('notebook_template', 'colab') or 'colab').lower()
     jupyter_theme = str(metadata.pop('jupyter_theme', 'light') or 'light').lower()
     source_filename=metadata.pop('source_filename','notebook.py')
+    notebook_template=metadata.pop('notebook_template', 'colab')
+    jupyter_theme=metadata.pop('jupyter_theme', 'light')
+    if notebook_template not in {'colab', 'jupyter'} or jupyter_theme not in {'light', 'dark'}:
+        return RuntimeResult(False, error='Invalid notebook presentation.', exit_code=2)
     kernel = ColabPythonKernel(
         teacher_datasets=datasets,
         allow_synthetic=bool(metadata.pop("allow_synthetic", False)),
@@ -794,3 +798,64 @@ async def capture_notebook(code, datasets=None, output_path=None, **metadata):
         )
     finally:
         kernel.cleanup()
+
+
+async def capture_jupyter_evidence(cells, target, source_filename, theme):
+    """Render the real notebook receipt in the student's selected presentation."""
+    import textwrap
+    from html.parser import HTMLParser
+    from .screenshot_service import screenshot_service
+
+    class TextExtractor(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.parts = []
+        def handle_data(self, data):
+            self.parts.append(data)
+        def handle_endtag(self, tag):
+            if tag in {'tr', 'p', 'div', 'br'}:
+                self.parts.append('\n')
+
+    frames, offset = [], 0
+    group = 'jupyter_' + uuid.uuid4().hex
+    async def capture(code, output, kind, caption, plot='', **details):
+        if len(frames) >= 40:
+            raise ValueError('Notebook exceeds the 40 evidence section limit; split the assignment.')
+        ok, path, width, height = await screenshot_service.generate_screenshot(
+            code, output, 'jupyter', group, 'Student', source_filename,
+            view_mode='editor' if kind == 'source_preview' else 'output',
+            presentation='ide_evidence', language='python', palette=theme,
+            input_echoed=True, jupyter_plot=plot)
+        if not ok:
+            raise ValueError('Jupyter evidence capture failed.')
+        frames.append({'path': path, 'kind': kind, 'caption': caption,
+                       'width': width, 'height': height, **details})
+
+    for number, cell in enumerate(cells, 1):
+        if cell.get('type') != 'code':
+            await capture('', str(cell.get('content', '')), 'notebook', 'Notebook text')
+            continue
+        lines = cell.get('code', '').splitlines() or ['']
+        for start in range(0, len(lines), 22):
+            end = min(start + 22, len(lines))
+            await capture('\n'.join(lines[start:end]), '', 'source_preview', 'Jupyter notebook code',
+                          source_file=source_filename, source_ranges=[(offset + start + 1, offset + end)])
+        offset += len(lines)
+        context = '\n'.join(lines[-3:])
+        output = '\n'.join(str(cell[k]) for k in ('stdout', 'stderr', 'repr', 'error') if cell.get(k))
+        if cell.get('html') and not cell.get('repr'):
+            parser = TextExtractor()
+            parser.feed(str(cell['html']))
+            output += '\n' + ''.join(parser.parts)
+        visual_lines = [part for line in output.splitlines() for part in
+                        (textwrap.wrap(line, 90, replace_whitespace=False, drop_whitespace=False,
+                                       break_on_hyphens=False) or [''])]
+        for start in range(0, len(visual_lines), 18):
+            await capture(context, '\n'.join(visual_lines[start:start+18]), 'notebook', 'Jupyter notebook output')
+        for plot in cell.get('plots', []):
+            if not isinstance(plot, str) or not re.fullmatch(r'data:image/png;base64,[A-Za-z0-9+/=]+', plot):
+                raise ValueError('Invalid notebook plot evidence.')
+            await capture(context, '', 'notebook', 'Jupyter notebook plot', plot=plot)
+        if not visual_lines and not cell.get('plots'):
+            await capture(context, '', 'notebook', 'Jupyter notebook output')
+    return frames, offset

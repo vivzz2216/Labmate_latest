@@ -335,7 +335,7 @@ def embed_screenshot(document, image_path, caption=None, reserved_height=0.8, ma
         # rather than awkwardly slicing off a tiny fragment at the bottom.
         if max_slice_h < pixels_h <= int(max_slice_h * 1.25):
             scaled_w = int(pixels_w * page_height / pixels_h)
-            if scaled_w >= Inches(4.5):
+            if scaled_w >= min(Inches(4.5), int(display_w * .8)):
                 display_w = scaled_w
                 max_slice_h = pixels_h
 
@@ -363,7 +363,7 @@ def embed_screenshot(document, image_path, caption=None, reserved_height=0.8, ma
                     if brightness_check(sample):
                         bottom = candidate
                         break
-            if pixels_h - bottom < 160:
+            if pixels_h - bottom < 160 and pixels_h - top <= max_slice_h:
                 bottom = pixels_h
             slices.append((top, bottom))
             top = bottom
@@ -406,6 +406,9 @@ def embed_screenshot(document, image_path, caption=None, reserved_height=0.8, ma
                 cap_para = document.add_paragraph()
                 cap_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 cap_para.paragraph_format.keep_together = True
+                cap_para.paragraph_format.space_before = Pt(0)
+                cap_para.paragraph_format.space_after = Pt(3)
+                cap_para.paragraph_format.line_spacing = 1.0
                 run = cap_para.add_run(slice_cap)
                 run.font.size = Pt(9)
                 run.italic = True

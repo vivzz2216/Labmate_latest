@@ -167,7 +167,7 @@ def numbered_experiments(text):
         body = "\n".join(block)
         if is_handwritten_question(body): continue
         objective_lines = [line for line in block[1:] if not SECTION.match(line) or re.match(
-            r'^(?:aim|problem statement)\s*:\s*.*\b(?:write|build|create|implement|design|develop|print|execute|run|train|evaluate|analyze|analyse|query|count|calculate|compute|find|sort|search|use)\b',line,re.I)]
+            r'^(?:aim|problem statement)\s*:\s*.*\b(?:write|build|create|implement|design|develop|print|execute|run|train|fit|import|evaluate|analyze|analyse|query|count|calculate|compute|find|sort|search|use)\b',line,re.I)]
         if not objective_lines:
             raise ManualStructureError(f"Experiment {match.group(1)} has no problem statement or requirements.")
         title=match.group(2).strip() or (block[1] if len(block)>1 else '')

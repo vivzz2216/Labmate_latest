@@ -785,6 +785,15 @@ async def execute_solution(code, language, question, group_id, username, stdin_d
                          if item.get("type") == "browser_verification"), None)
     screenshots = [item["path"] for item in files if item.get("path") and os.path.isfile(item["path"])]
     stages = next((item.get("stages") for item in files if item.get("type") == "execution_stages"), {})
+    if stages.get('preparation') == 'pending':
+        from .worker_health import RuntimePreparingError
+        raise RuntimePreparingError()
+    from .semantic_checks import semantic_failures
+    failures = semantic_failures(question, output, language) if success else []
+    if failures:
+        success=False
+        errors='\n'.join(filter(None,[errors,*failures]))
+        verification=dict(verification or {}, status='failed', semantic_failures=failures)
     if stages.get('isolation') == 'failed':
         from .worker_health import WorkerUnavailableError, worker_health
         worker_health.invalidate()
@@ -1295,6 +1304,9 @@ async def _process_assignment(workflow_id: int):
                             try:
                                 repaired = await repair_generated_code(question["text"], actual_language, code, error or output)
                                 code = repaired
+                                if actual_language == 'colab' or plan_experiment(question['text'], actual_language, code).get('category') == 'notebook':
+                                    from .notebook_magics import neutralize_magics
+                                    code = neutralize_magics(code)
                                 if evidence_plan['category'] == 'notebook':
                                     code = neutralize_magics(code)
                                     from .colab_requirements import missing_required_libraries
@@ -1402,6 +1414,12 @@ async def _process_assignment(workflow_id: int):
                     if category in {'database','notebook'}:
                         candidates = (list((verification or {}).get('evidence_frames') or []) if (verification or {}).get('evidence_frames') else [{'path':p,'kind':category,'caption':f"MySQL Workbench-style rendered interface connected to real {(verification or {}).get('engine', 'MySQL')}" if category=='database' else 'Actual local Python notebook evidence'} for p in browser_captures])
                     project_files=(project_config or {}).get('project_files')
+                    capture_files=project_files
+                    source_policy=planned.get('source_policy','selected')
+                    if actual_language == 'distributed':
+                        from .dc_runtime import split_java_files
+                        capture_files=split_java_files(code)
+                        source_policy='complete'
                     source_language='java_gui' if category in {'java_awt','java_swing'} else 'flask' if (project_config or {}).get('project_type')=='flask' else actual_language
                     source_theme = 'vscode' if question.get('source_ide') == 'vscode' and actual_language in {'python','c','cpp','java'} else theme
                     sources,source_errors=([], []) if actual_language in {'sql','ubuntu','r'} or category=='notebook' else await capture_source_evidence(
@@ -1619,9 +1637,6 @@ def build_word_report(upload, workflow):
             and not any(r.get('is_theory') or r.get('language') in {'theory','ubuntu'} for r in workflow.results)):
         from .compact_report import build_compact_report
         return build_compact_report(upload,workflow)
-    if workflow.results and all(r.get('language') in {'ubuntu','theory'} for r in workflow.results) and any(r.get('language')=='ubuntu' for r in workflow.results):
-        from .ubuntu_report import build_ubuntu_report
-        return build_ubuntu_report(upload,workflow)
     if workflow.results and all(r.get('language') == 'sql' for r in workflow.results):
         from .sql_report import clean_report
         return clean_report(upload, workflow, document_text(upload))

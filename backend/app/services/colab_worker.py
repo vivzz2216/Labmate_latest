@@ -609,6 +609,7 @@ def restrict_runtime(root):
     os.environ['KERAS_HOME'] = str(root / '.keras')
     os.environ['TORCH_HOME'] = str(root / '.torch')
     reads = [Path(sys.prefix).resolve(), Path(sys.base_prefix).resolve(), root,
+             APPROVED_CORPUS_DIR.resolve(),
              Path('/opt/labmate-runtime/site-packages').resolve(),
              Path('/usr/share/fonts'), Path('/usr/local/share/fonts'), Path('/etc/fonts'), Path('/usr/share/zoneinfo'),
              Path('/sys/devices/system/cpu'), Path('/dev')]

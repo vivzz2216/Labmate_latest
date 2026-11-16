@@ -7,10 +7,11 @@ from app.services.sql_runtime import SQLSession, split_sql
 from app.services.sql_instructions import sql_instructions
 
 
-def test_join_repair_instructions_fix_missing_test_data():
+def test_join_repair_instructions_preserve_the_requested_experiment_scope():
     guidance = sql_instructions('Perform joins and views.')
-    assert 'Employees 9 and 10 MUST have no orders' in guidance
-    assert 'FIX THE INSERT DATA' in guidance
+    assert 'retain all right-side rows, including unmatched rows' in guidance
+    assert 'using only the manual tables' in guidance
+    assert 'Use 10 Employees' not in guidance
     assert 'Customers/Employees joins' in sql_instructions('Perform DDL operations.')
     assert 'For joins, include' not in sql_instructions('Perform DDL operations.')
 

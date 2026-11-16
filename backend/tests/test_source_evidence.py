@@ -12,6 +12,42 @@ from app.services.evidence_planner import select_evidence
 
 
 @pytest.mark.asyncio
+async def test_distributed_output_frame_contains_console_receipt_not_source(tmp_path):
+    receipt='Server ready\nClient result: 30\n<untrusted output>'
+    html=await screenshot_service._render_template('',receipt,'vscode',filename='Server.java',
+        source_code='class Server { /* SOURCE_ONLY */ }',presentation='vscode_evidence',view_mode='output',language='java')
+    async with async_playwright() as playwright:
+        browser=await launch_capture_browser(playwright)
+        try:
+            page=await browser.new_page(viewport={'width':1128,'height':650})
+            await page.set_content(html)
+            assert await page.locator('.terminal-output').inner_text()==receipt
+            assert await page.locator('.code').count()==0
+            assert 'SOURCE_ONLY' not in await page.locator('body').inner_text()
+            assert await page.locator('.terminal-tabs .selected').inner_text()=='TERMINAL'
+            await page.screenshot(path=str(tmp_path/'distributed-console.png'),full_page=True)
+        finally:await browser.close()
+
+
+@pytest.mark.asyncio
+async def test_full_document_capture_places_sticky_header_at_top_and_restores_scroll(tmp_path):
+    from app.services.runtime_engine import capture_document_from_top
+    async with async_playwright() as playwright:
+        browser=await launch_capture_browser(playwright)
+        try:
+            page=await browser.new_page(viewport={'width':600,'height':400})
+            await page.set_content('<style>body{margin:0}header{position:sticky;top:0;height:40px;background:rgb(255,0,0)}main{height:1600px;background:white}</style><header>Header</header><main>Content</main>')
+            await page.evaluate('window.scrollTo(0,800)')
+            target=tmp_path/'sticky.png'
+            await capture_document_from_top(page,path=str(target),full_page=True)
+            assert await page.evaluate('window.scrollY')==800
+            with Image.open(target) as image:
+                assert image.convert('RGB').getpixel((300,20))==(255,0,0)
+                assert image.convert('RGB').getpixel((300,820))==(255,255,255)
+        finally:await browser.close()
+
+
+@pytest.mark.asyncio
 async def test_dark_modern_uses_actual_logo_fonts_and_jsx_tokens_without_source_changes():
     from app.services._vendor.pygments_jsx import JsxLexer
     from pygments import lex

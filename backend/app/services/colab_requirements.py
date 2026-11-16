@@ -39,7 +39,7 @@ def missing_required_libraries(question, code):
     for sentence in re.split(r'[\n.!?]+', prose):
         if not re.search(r'\b(?:use|using|import|with|require[sd]?)\b',sentence,re.I):
             continue
-        if re.search(r'\b(?:optional|may use|can use|if available)\b',sentence,re.I):
+        if re.search(r'\b(?:optional|may use|can use|if available)\b', sentence, re.I):
             continue
         names={name for name,pattern in LIBRARIES.items()
                if re.search(r'\b(?:'+pattern+r')\b',sentence,re.I)
@@ -57,7 +57,7 @@ def missing_required_libraries(question, code):
     used={node.id for node in ast.walk(tree) if isinstance(node,ast.Name) and isinstance(node.ctx,ast.Load)}
     present=set()
     for node in ast.walk(tree):
-        if isinstance(node,ast.Import):
+        if isinstance(node, ast.Import):
             for alias in node.names:
                 if (alias.asname or alias.name.split('.')[0]) in used:present.update(alias.name.split('.'))
         elif isinstance(node,ast.ImportFrom) and node.module:

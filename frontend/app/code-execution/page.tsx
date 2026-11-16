@@ -355,6 +355,7 @@ function AssignmentContent() {
   const availableLanguages = getAllowedLanguages(trackParam);
   const workspaceHref = (assignment?: number | null, ide = sourceIde) => workspaceLocation(searchParams.toString(), assignment, ide);
   const inputRef = useRef<HTMLInputElement>(null);
+  const promptSeededRef = useRef("");
   const [upload, setUpload] = useState<UploadResponse | null>(null);
   const [workflow, setWorkflow] = useState<LabWorkflow | null>(null);
   const [questions, setQuestions] = useState<LabQuestion[]>([]);
@@ -408,8 +409,6 @@ function AssignmentContent() {
     batchAlive.current = true;
     return () => { batchAlive.current = false; };
   }, []);
-
-  const promptSeededRef = useRef<string | null>(null);
 
   useEffect(() => {
     const trackLanguage = labLanguage(trackParam, expParam);
@@ -1570,7 +1569,7 @@ function AssignmentContent() {
                 glow={isProcessingActive}
                 glowColor="#d4d4d8"
                 showTimer={isProcessingActive || complete}
-                elapsed={!isProcessingActive && !complete ? 0 : undefined}
+                elapsed={workflow?.elapsed_seconds ?? (!isProcessingActive && !complete ? 0 : undefined)}
               />
 
               {complete && (

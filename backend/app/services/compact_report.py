@@ -96,6 +96,8 @@ def build_compact_report(upload,workflow):
     section=document.sections[-1]
     section.top_margin=section.bottom_margin=Inches(.6)
     languages={r.get('language') for r in workflow.results}
+    if languages == {'sql'}:
+        section.left_margin=section.right_margin=Inches(.55)
     font=LAB_STYLES.get(next(iter(languages)), ('Calibri', '', ''))[0] if len(languages)==1 else 'Calibri'
     if not source_is_docx:
         for name in ('Normal','Title','Heading 1','Heading 2'):

@@ -91,11 +91,14 @@ async def repair_generated_code(question: str, language: str, code: str, error: 
         "input or a bounded prompt flow. In Python, every open() call must use a literal basename string as its "
         "first argument, for example open('sample.txt', 'w'); never a filename variable or input(). "
         "For HTML and React, all images must be inline data URLs or omitted; remote images are blocked by the lab browser. "
-        "For SQL, write MySQL 8.0 syntax (AUTO_INCREMENT, native INNER/LEFT/RIGHT JOIN, LEFT JOIN ... UNION ALL ... RIGHT JOIN ... WHERE ... IS NULL for FULL OUTER JOIN, "
-        "preserve unmatched right-table rows in Orders RIGHT JOIN Employees without filtering out OrderID IS NULL, and query only views actually created). "
+        "For SQL, write MySQL 8 syntax and implement only the operations and tables requested. Preserve exact identifier capitalization. "
+        "Use native RIGHT JOIN when required, retaining unmatched right rows, and query only views actually created. "
         "For Colab/Notebook, the runtime is strictly offline with no network access and no subprocess/pip. "
         "Never download remote datasets or models (e.g. avoid fetch_20newsgroups(), nltk.download()). "
-        "Use local inline sample data, synthetic data, or built-in toy datasets (load_iris, make_classification). "
+        "Keep supplied datasets and approved library assets unchanged. Never replace a missing corpus or lexicon with invented entries. "
+        "Use supplied or approved cached datasets when an exact dataset/model is required; never substitute synthetic/toy data for MNIST or pretrained weights. "
+        "Inline sample or built-in toy data is allowed only when the assignment leaves the dataset unspecified. "
+        "For logic gates, train deterministically until all truth-table predictions match (up to 2000 tiny updates), print Predictions and Targets, and assert equality. "
         "Return only the corrected complete source code in schema JSON, with actual "
         "line breaks rather than literal backslash-n between statements." + time_guidance + sql_guidance,
         json.dumps({"language": language, "question": question[:6000], "code": code[:16000],

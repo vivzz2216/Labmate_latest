@@ -17,6 +17,11 @@ class WorkerUnavailableError(RuntimeError):
         super().__init__('Execution worker unavailable. Completed results are saved; retry processing after the worker recovers.')
 
 
+class RuntimePreparingError(WorkerUnavailableError):
+    def __init__(self):
+        RuntimeError.__init__(self, 'This execution environment is being prepared for its first run. Completed results are saved; retry processing in a few minutes.')
+
+
 class WorkerHealth:
     def __init__(self):
         self._lock = asyncio.Lock()

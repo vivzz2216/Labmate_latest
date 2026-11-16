@@ -12,6 +12,7 @@ Provides managed Playwright browser pooling per event loop / thread:
 """
 
 import asyncio
+import atexit
 import contextlib
 import logging
 import os

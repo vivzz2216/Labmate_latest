@@ -408,8 +408,8 @@ DROP VIEW product_data;
     assert len(result_frames) == 7
     assert all(f['statement'].lstrip().upper().startswith('SELECT') for f in result_frames)
 
-    # Check every generated screenshot exists and is 1440x900
+    # The narrower workspace enlarges query/result type in the printed report.
     for f in frames:
         assert os.path.isfile(f["path"])
         with Image.open(f["path"]) as img:
-            assert img.size == (1440, 900)
+            assert img.width == 1200 and 420 <= img.height <= 1200

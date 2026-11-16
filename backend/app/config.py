@@ -308,6 +308,8 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_railway_settings(self):
+        if self.EXECUTION_BACKEND == 'ssh' and self.HEAVY_EXECUTION_LOCAL_LIMIT > 1:
+            print('The SSH worker accepts one job at a time; use a limit of 1 or railway_sandbox.')
         if self.EXECUTION_BACKEND not in {'ssh', 'railway_sandbox'}:
             raise ValueError('EXECUTION_BACKEND must be ssh or railway_sandbox.')
         if self.EXECUTION_ISOLATION not in {'required', 'development'}:

@@ -360,5 +360,6 @@ def verification_summary(plan, success, output, browser_verification=None, viewp
             for db_fail in (browser_verification or {}).get("failures") or []:
                 if db_fail not in failures:
                     failures.append(db_fail)
+    if semantic: checks['output']='failed'
     return {"checks": checks, "failures": failures,
             "status": "failed" if failures or not success else "verified" if checks["output"] == "passed" or checks["interaction"] == "passed" or checks.get("database") == "passed" else "execution_tested"}

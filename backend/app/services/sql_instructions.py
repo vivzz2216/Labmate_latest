@@ -41,19 +41,18 @@ def sql_instructions(question: str) -> str:
                          'Use matching DELIMITER directives, restore DELIMITER ; after definitions, and show effects before dropping any trigger. ')
     if re.search(r'\bjoins?\b', text, re.I):
         instructions += (
-            'For joins, include INNER/LEFT/RIGHT examples and a FULL OUTER equivalent using UNION ALL '
-            'and an unmatched-right branch. A correct RIGHT JOIN retains ALL right-side rows. '
-            'IMPORTANT SAMPLE DATA: Use 10 Employees, with orders referencing ONLY employees 1 through 8. '
-            'Employees 9 and 10 MUST have no orders. Also retain customers without orders and an order with '
-            'CustomerID NULL. Never remove NULL OrderID rows. If verification reports missing unmatched '
-            'employees, FIX THE INSERT DATA, not just the already-correct RIGHT JOIN SQL. '
+            'Demonstrate the join variants requested using only the manual tables. A generic request for joins does not require adding Orders/Customers or a FULL OUTER example. '
+            'If RIGHT JOIN is requested, retain all right-side rows, including unmatched rows. '
+            'If FULL OUTER JOIN is requested, use a MySQL LEFT JOIN UNION ALL plus an unmatched-right branch. '
+            'Do not add unrelated tables or fabricate rows outside the assignment scope. '
         )
     if re.search(r'\bviews?\b', text, re.I):
         instructions += (
             'Create and query the requested views before dropping them. Correct the manual reference to '
-            'an uncreated Products Above AveragePrice view by querying the view actually created. '
-            'For the product_data example, demonstrate qty*price (3*50=150 and 5*60=300) and WHERE qty=5. '
+            'an uncreated view by querying the view actually created. Do not add unrelated product views. '
         )
+        if 'product_data' in text.lower():
+            instructions += 'For the requested product_data example, demonstrate qty*price and WHERE qty=5. '
     if re.search(r'\b(?:procedure|cursor|function|trigger)s?\b', text, re.I):
         instructions += (
             'Use DELIMITER $$ around multi-statement routines/triggers, then DELIMITER ;. '

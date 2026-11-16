@@ -81,6 +81,7 @@ export interface LabResult {
   };
 }
 export interface LabWorkflow {
+  elapsed_seconds?: number | null;
   id: number;
   upload_id: number;
   status: "queued" | "extracting" | "ready" | "processing" | "completed" | "failed" | "paused" | "awaiting_clarification";
