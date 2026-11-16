@@ -36,7 +36,7 @@ from .parser_service import parser_service
 from .analysis_service import normalize_generated_code, repair_generated_code
 from .profile_service import UserProfileService
 from .evidence_planner import plan_experiment, select_evidence, verification_summary
-from .manual_sections import numbered_experiments, ManualStructureError
+from .manual_sections import numbered_experiments, numbered_questions, ManualStructureError
 from .worker_health import WorkerUnavailableError, worker_health
 
 logger = logging.getLogger(__name__)
@@ -479,7 +479,7 @@ async def _extract_assignment(workflow_id: int):
             # Keep the Railway release independent of the optional Unix/Ubuntu
             # lab package. That parser is not shipped with this release; importing
             # it here made every assignment upload fail before normal extraction.
-            sections = numbered_experiments(original_text) if mode == "code_only" else []
+            sections = (numbered_experiments(original_text) or numbered_questions(original_text)) if mode == "code_only" else []
             if sections:
                 workflow.questions = sections
                 workflow.error = None

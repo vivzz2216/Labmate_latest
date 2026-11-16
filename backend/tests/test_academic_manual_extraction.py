@@ -9,7 +9,7 @@ from app.database import Base
 from app.models import AssignmentWorkflow, Upload, User
 from app.services.assignment_workflow import extract_assignment
 from app.services.lab_question_filter import programming_lines
-from app.services.manual_sections import ManualStructureError, numbered_experiments
+from app.services.manual_sections import ManualStructureError, numbered_experiments, numbered_questions
 
 
 MANUAL = '''Department of Information Technology
@@ -40,6 +40,23 @@ Demonstrate the project in class.
 
 
 class AcademicManualTests(unittest.TestCase):
+    def test_numbered_question_manual_keeps_all_exercises_without_model(self):
+        source = ('C | MANUAL 01 | 3 EXERCISES\nSupplied data and constraints\n'
+                  'Marks: 78, 92, 65, 88, 77.\nLaboratory exercises\n'
+                  'Question 1: Array statistics\nWrite a C program to compute sum. Expected\n'
+                  'results: sum 400.\nQuestion 2: Structure and grade\n'
+                  'Write a C program using a Student structure.\n'
+                  'Question 3: Boundary validation\nWrite a C program validating marks.\n'
+                  'Submission and verification\nSubmit code and screenshots.')
+        tasks = numbered_questions(source)
+        self.assertEqual([task['id'] for task in tasks], [1, 2, 3])
+        self.assertEqual([task['language'] for task in tasks], ['c'] * 3)
+        self.assertTrue(all('Marks: 78, 92' in task['text'] for task in tasks))
+        self.assertIn('results: sum 400.', tasks[0]['text'])
+        self.assertNotIn('Submission and verification', tasks[2]['text'])
+        with self.assertRaises(ManualStructureError):
+            numbered_questions(source.replace('Question 3:', 'Question 2:'))
+
     def test_hyphenated_experiment_preserves_one_react_task_and_topic_choices(self):
         for heading in ['Experiment - 9', 'Experiment-9', 'Experiment – 9', 'Experiment — 9', 'Experiment 9']:
             with self.subTest(heading=heading):
