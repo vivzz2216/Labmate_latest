@@ -53,7 +53,8 @@ export async function runMysqlRemote(statement: string): Promise<RemoteMysqlOutc
       return { ok: false, reason: "signin", message: detail || MYSQL_OFFLINE_NOTICE };
     }
     if (response?.status === 429 || response?.status === 503) {
-      return { ok: false, reason: "busy", message: detail || "Please wait and try again." };
+      const waiting = detail === "high_traffic_waiting_room";
+      return { ok: false, reason: "busy", message: waiting ? "LabMate is very busy and you are waiting in line, so the real MySQL server is paused for you." : detail || "Please wait and try again." };
     }
     return { ok: false, reason: "unavailable", message: "The MySQL server is not reachable right now." };
   }

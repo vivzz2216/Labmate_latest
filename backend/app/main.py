@@ -9,7 +9,7 @@ import asyncio
 import logging
 from .config import settings
 from .database import engine, Base
-from .routers import upload, parse, run, compose, download, analyze, tasks, assignments, basic_auth, ai_review, admin, feedback, workflows, billing, lab_catalog, netlab, ide_java, ide_mysql
+from .routers import upload, parse, run, compose, download, analyze, tasks, assignments, basic_auth, ai_review, admin, feedback, workflows, billing, lab_catalog, netlab, ide_java, ide_mysql, admission
 from .middleware.rate_limit import RateLimitMiddleware
 from .middleware.body_limit import RequestBodyLimitMiddleware
 from .services.background_tasks import start_background_workers, stop_background_workers
@@ -317,6 +317,7 @@ app.include_router(lab_catalog.router, prefix="/api", tags=["lab-catalog"])
 app.include_router(netlab.router, prefix="/api", tags=["netlab"])
 app.include_router(ide_java.router, prefix="/api", tags=["ide-java"])
 app.include_router(ide_mysql.router, prefix="/api", tags=["ide-mysql"])
+app.include_router(admission.router, prefix="/api", tags=["admission"])
 
 # Serve frontend for all non-API routes (must come after API routes to prevent interception)
 

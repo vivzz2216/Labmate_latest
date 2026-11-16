@@ -34,6 +34,10 @@ def check_execution_access(user, *, require_profile=True):
 
 
 async def execution_user(user=Depends(get_current_user)):
+    # While the app is full, a student who is still waiting in line cannot start heavy work (see services/admission.py).
+    from ..services import admission
+    if admission.enabled() and not admission.exempt(user) and not admission.get_gate().is_active(user.id):
+        raise HTTPException(503, "high_traffic_waiting_room")
     try:
         check_execution_access(user)
     except ValueError as error:

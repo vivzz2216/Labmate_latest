@@ -154,6 +154,11 @@ class Settings(BaseSettings):
     GLM_MAX_TOKENS: int = 12000
     DB_POOL_SIZE: int = 5
     DB_POOL_MAX_OVERFLOW: int = 5
+    # Waiting room (services/admission.py): at most ADMISSION_MAX_ACTIVE students use the app at once; the rest sign in and wait their turn.
+    ADMISSION_ENABLED: bool = False
+    ADMISSION_MAX_ACTIVE: int = 150
+    ADMISSION_LEASE_SECONDS: int = 120
+    ADMISSION_CLAIM_SECONDS: int = 90
     WORKFLOW_WORKERS: int = 2
     WORKFLOW_QUEUE_LIMIT: int = 1000
     WORKFLOW_USER_QUEUE_LIMIT: int = 25

@@ -15,6 +15,9 @@ export type RemoteJavaOutcome =
   | { ok: true; result: RemoteJavaResult }
   | { ok: false; reason: "signin" | "busy" | "unavailable"; message: string };
 
+export const WAITING_NOTICE =
+  "LabMate is very busy and you are waiting in line, so running on the real JDK is paused for you. Open your dashboard to see your place.";
+
 export const OFFLINE_NOTICE =
   "Sign in to run on the real JDK. This is the offline practice interpreter: it supports only part of Java, so results may differ.";
 
@@ -38,6 +41,9 @@ export async function runJavaRemote(code: string, stdin: string): Promise<Remote
     const detail = typeof response?.data?.detail === "string" ? response.data.detail : "";
     if (response?.status === 401 || response?.status === 403 || response?.status === 428) {
       return { ok: false, reason: "signin", message: detail || OFFLINE_NOTICE };
+    }
+    if (response?.status === 503 && detail === "high_traffic_waiting_room") {
+      return { ok: false, reason: "busy", message: WAITING_NOTICE };
     }
     if (response?.status === 409 || response?.status === 429) {
       return { ok: false, reason: "busy", message: detail || "Please wait and try again." };

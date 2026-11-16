@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "../styles/globals.css";
 import { AuthProvider } from "@/contexts/BasicAuthContext";
 import ProfileGate from '@/components/auth/ProfileGate';
+import AdmissionGate from '@/components/auth/AdmissionGate';
 
 export const metadata: Metadata = {
   title: {
@@ -36,7 +37,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <AuthProvider><ProfileGate>{children}</ProfileGate></AuthProvider>
+        <AuthProvider><AdmissionGate><ProfileGate>{children}</ProfileGate></AdmissionGate></AuthProvider>
       </body>
     </html>
   );

@@ -149,3 +149,7 @@ Windows private-desktop execution and real Flask/AWT/Swing interaction, report a
 # Optional Razorpay experiment packs
 
 See [PAYMENTS.md](PAYMENTS.md) for the backend-only environment variables, additive PostgreSQL migration, webhook configuration and test-to-live procedure. Billing defaults to disabled. Keep the controlled-beta execution allowlist enabled when introducing packs; payment does not automatically invite an account. Test-mode purchases never grant live credits.
+
+## Waiting room for launch traffic
+
+Set `ADMISSION_ENABLED=true` and `ADMISSION_MAX_ACTIVE=150` (or your number) on the backend service. Everyone can still sign in; students past the limit see a "High traffic" page with their place in line and are let in automatically, in order, when someone leaves (a page that stops checking in frees its slot after `ADMISSION_LEASE_SECONDS`). While a student waits, `execution_user` endpoints answer 503 `high_traffic_waiting_room`. State is kept in the API process: with more than one API replica, divide the limit between replicas or move the state to Redis. The page alerts a waiting student with a browser notification and a sound while it is open; alerting someone who closed the tab needs an email provider, which is not set up.
