@@ -30,10 +30,10 @@ def ensure_owner_account(target_engine=None):
     from sqlalchemy.orm import Session
     from .models import User
     from .routers.basic_auth import hash_password, verify_password
-    from .security.operator_access import admin_email
+    from .security.operator_access import admin_email, owner_password as configured_owner_password
 
     owner_email = admin_email()
-    owner_password = settings.ADMIN_PASSWORD
+    owner_password = configured_owner_password()
     if not owner_email:
         return
 

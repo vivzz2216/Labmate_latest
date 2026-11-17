@@ -16,10 +16,21 @@ def execution_opted_in():
     return not os.getenv('RAILWAY_ENVIRONMENT_ID')
 
 
+def _unquote(value):
+    """Railway stores a variable exactly as typed, so ADMIN_PASSWORD="secret" keeps its quotes; a .env file does not."""
+    value = (value or '').strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
+        value = value[1:-1]
+    return value
+
+
+def owner_password():
+    return _unquote(settings.ADMIN_PASSWORD)
+
+
 def admin_email():
     email = (settings.ADMIN_USERID or '').strip().strip("'\"").casefold()
-    password = (settings.ADMIN_PASSWORD or '').strip().strip("'\"")
-    return email if '@' in email and password else ''
+    return email if '@' in email and owner_password() else ''
 
 
 def is_admin_user(user):

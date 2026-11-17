@@ -110,6 +110,31 @@ def wallet(db, user_id, mode=None):
                 CreditWallet.mode == mode).values(balance=CreditWallet.balance + extra),
                 execution_options={'synchronize_session': False})
             db.refresh(row)
+    return _wallet_view(db, user_id, row, mode)
+
+
+def wallet_snapshot(db, user_id, mode=None):
+    """Balance for GET /wallet, which the homepage polls.
+
+    wallet() locks the row (FOR UPDATE) and tries the trial inserts on every call, and the GET never
+    committed them, so a new account repeated that work on each poll. A provisioned wallet is now read
+    without a lock; only the first view (or a raised trial allowance) provisions it, and that is committed.
+    """
+    mode = mode or settings.RAZORPAY_MODE
+    trial = max(0, min(settings.BILLING_TRIAL_CREDITS, 100))
+    row = db.scalar(select(CreditWallet).where(CreditWallet.user_id == user_id, CreditWallet.mode == mode))
+    if row is not None:
+        granted = db.scalar(select(func.coalesce(func.sum(CreditLedger.delta), 0)).where(
+            CreditLedger.user_id == user_id, CreditLedger.mode == mode,
+            CreditLedger.kind.in_(['trial', 'trial_upgrade'])))
+        if granted >= trial:
+            return _wallet_view(db, user_id, row, mode)
+    view = wallet(db, user_id, mode)
+    db.commit()
+    return view
+
+
+def _wallet_view(db, user_id, row, mode):
     exempt = is_credit_exempt(db, user_id)
     return {'available': row.balance,
             'reserved': row.reserved,

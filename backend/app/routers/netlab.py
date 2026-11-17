@@ -28,6 +28,11 @@ MAX_SESSIONS = 400
 MAX_SESSION_BYTES = 256 * 1024 * 1024
 _sessions: "OrderedDict[str, tuple]" = OrderedDict()   # token -> (expires, session, source, size)
 _sessions_lock = threading.Lock()                      # the sync routes run in worker threads
+# Opening a capture needs no sign-in and parsing is CPU work. Without a bound, anyone could keep every worker thread busy
+# parsing 8 MB files; a class opening captures together waits briefly for a slot instead of being refused.
+PARSE_SLOTS = 2
+PARSE_WAIT_SECONDS = 20
+_parse_slots = asyncio.Semaphore(PARSE_SLOTS)
 
 
 def _remember(session, source, size=0):
@@ -64,10 +69,17 @@ async def open_capture(file: Optional[UploadFile] = File(None), scenario: bool =
             raise HTTPException(status_code=413, detail="The capture is larger than 8 MB. Save a shorter capture or apply a capture filter.")
     # Parsing up to 8 MB is CPU work; on the event loop it froze every other request while it ran (and this route is public).
     try:
-        session, source, _facts = await asyncio.to_thread(wireshark_lab.load, data)
-    except CaptureError as error:
-        raise HTTPException(status_code=400, detail=str(error))
-    steps, missing = await asyncio.to_thread(wireshark_lab.plan, session)
+        await asyncio.wait_for(_parse_slots.acquire(), PARSE_WAIT_SECONDS)
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=429, detail="Many captures are being opened right now. Try again in a few seconds.")
+    try:
+        try:
+            session, source, _facts = await asyncio.to_thread(wireshark_lab.load, data)
+        except CaptureError as error:
+            raise HTTPException(status_code=400, detail=str(error))
+        steps, missing = await asyncio.to_thread(wireshark_lab.plan, session)
+    finally:
+        _parse_slots.release()
     return {"token": _remember(session, source, len(data or b"")), "source": source, "total": len(session.packets), "rows": session.rows(), "steps": steps,
             "missing": missing, "interfaces": wireshark_lab.INTERFACES,
             "file": (file.filename if file is not None and not scenario else "practice-capture.pcap")}

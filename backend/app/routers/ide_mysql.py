@@ -6,6 +6,7 @@ schemas, no administrative statements, query deadline). One session per signed-i
 USE, transactions, views, triggers and session variables behave like a real connection, and is dropped after IDLE_SECONDS.
 """
 import asyncio
+import os
 import re
 import time
 from collections import defaultdict, deque
@@ -22,7 +23,10 @@ router = APIRouter(prefix="/ide/mysql", tags=["ide-mysql"])
 MAX_STATEMENT_CHARS = 20_000
 STATEMENTS_PER_MINUTE = 60
 IDLE_SECONDS = 20 * 60
-MAX_SESSIONS = 40
+# Each session holds a MySQL connection and private schemas; raise with the MySQL server's capacity (max_connections).
+MAX_SESSIONS = int(os.getenv("MYSQL_IDE_MAX_SESSIONS", "40"))
+# When every slot is taken, a session idle this long gives its slot to a new student instead of the newcomer being refused.
+RECLAIM_IDLE_SECONDS = 10 * 60
 
 # SQLSTATE for the errors students meet most; the client prints it as ERROR 1062 (23000).
 SQLSTATE = {
@@ -65,6 +69,17 @@ def _expire():
             _sessions.pop(user_id, None)
             stale.append(session)
     return stale
+
+
+def _reclaim_idle_slot():
+    """Free the slot of the session idle longest, if it has been idle RECLAIM_IDLE_SECONDS; return it for closing."""
+    now = time.monotonic()
+    idle = [(used, user_id) for user_id, (_session, used) in _sessions.items()
+            if now - used > RECLAIM_IDLE_SECONDS and not (_locks.get(user_id) and _locks[user_id].locked())]
+    if not idle:
+        return None
+    _used, user_id = min(idle)
+    return _sessions.pop(user_id)[0]
 
 
 def _close_all(sessions):
@@ -126,7 +141,10 @@ async def execute(body: MysqlStatementInput, user=Depends(execution_user), csrf:
         entry = _sessions.get(user.id)
         if entry is None:
             if len(_sessions) >= MAX_SESSIONS:
-                raise HTTPException(503, "The MySQL practice server is busy. Try again in a few minutes.")
+                reclaimed = _reclaim_idle_slot()
+                if reclaimed is None:
+                    raise HTTPException(503, "The MySQL practice server is busy. Try again in a few minutes.")
+                await asyncio.to_thread(_close_all, [reclaimed])
             try:
                 session = await asyncio.to_thread(SQLSession)
             except Exception:

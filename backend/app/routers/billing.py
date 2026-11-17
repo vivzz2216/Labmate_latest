@@ -57,7 +57,7 @@ def owner_payment_check(user: User = Depends(get_current_user)):
 
 @router.get('/wallet')
 def balance(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    return billing.wallet(db, user.id)
+    return billing.wallet_snapshot(db, user.id)
 
 
 @router.post('/orders')

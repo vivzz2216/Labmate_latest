@@ -131,3 +131,90 @@ async def test_a_failed_report_composition_hides_the_internal_error(monkeypatch)
     with pytest.raises(HTTPException) as failed:
         await compose.compose_report(None, SimpleNamespace(upload_id=1, screenshot_order=[]), None, SimpleNamespace(id=7), True)
     assert failed.value.status_code == 500 and '/data' not in failed.value.detail and 'Errno' not in failed.value.detail
+
+
+def _sqlite(tmp_path, name='audit.db'):
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from app.database import Base
+    engine = create_engine('sqlite:///' + str(tmp_path / name), connect_args={'check_same_thread': False})
+    Base.metadata.create_all(engine)
+    return engine, sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+
+
+@pytest.mark.parametrize('configured', ['"Owner-Pass-1"', "'Owner-Pass-1'", ' Owner-Pass-1 ', 'Owner-Pass-1'])
+def test_a_quoted_admin_password_on_railway_is_the_password_without_quotes(tmp_path, monkeypatch, configured):
+    """D2: Railway keeps quotes typed around a value; the e-mail was unquoted but the password was hashed with them."""
+    from app.main import ensure_owner_account
+    from app.models import User
+    from app.routers.basic_auth import verify_password
+    monkeypatch.setattr(settings, 'ADMIN_USERID', '"owner@example.com"')
+    monkeypatch.setattr(settings, 'ADMIN_PASSWORD', configured)
+    engine, factory = _sqlite(tmp_path)
+    ensure_owner_account(engine)
+    with factory() as db:
+        owner = db.query(User).filter(User.email == 'owner@example.com').one()
+        assert verify_password('Owner-Pass-1', owner.password_hash)
+
+
+def test_polling_the_wallet_provisions_once_then_reads_without_writing(tmp_path, monkeypatch):
+    """D3: GET /wallet locked the row and retried the trial inserts on every poll, and never committed them."""
+    from sqlalchemy import event
+    from app.models import CreditWallet, User
+    from app.services import billing_service as billing
+    monkeypatch.setattr(settings, 'BILLING_TRIAL_CREDITS', 3)
+    monkeypatch.setattr(settings, 'RAZORPAY_MODE', 'test')
+    engine, factory = _sqlite(tmp_path)
+    with factory() as db:
+        db.add(User(id=1, email='s@example.com', name='Student', password_hash='x', is_active=True)); db.commit()
+    with factory() as db:
+        assert billing.wallet_snapshot(db, 1)['available'] == 3
+    with factory() as other:                              # the first view was committed
+        assert other.query(CreditWallet).filter_by(user_id=1, mode='test').one().balance == 3
+    writes = []
+    event.listen(engine, 'before_cursor_execute', lambda *a: writes.append(a[2]) if not a[2].lstrip().upper().startswith('SELECT') else None)
+    with factory() as db:
+        for _ in range(3):
+            assert billing.wallet_snapshot(db, 1)['available'] == 3
+    assert writes == []
+
+
+@pytest.mark.asyncio
+async def test_public_capture_parsing_has_a_bounded_number_of_slots(monkeypatch):
+    """D4: the public capture route could keep every worker thread parsing; extra requests now wait, then get 429."""
+    from app.routers import netlab
+    monkeypatch.setattr(netlab, '_parse_slots', asyncio.Semaphore(1))
+    monkeypatch.setattr(netlab, 'PARSE_WAIT_SECONDS', 0.05)
+    await netlab._parse_slots.acquire()                    # another capture is being parsed
+    with pytest.raises(HTTPException) as busy:
+        await netlab.open_capture(None, False)
+    assert busy.value.status_code == 429
+    netlab._parse_slots.release()
+    monkeypatch.setattr(netlab.wireshark_lab, 'load', lambda data: (type('S', (), {'packets': [], 'rows': lambda self: []})(), 'practice', {}))
+    monkeypatch.setattr(netlab.wireshark_lab, 'plan', lambda session: ([], []))
+    assert (await netlab.open_capture(None, False))['total'] == 0
+    assert not netlab._parse_slots.locked()                # the slot is given back
+
+
+@pytest.mark.asyncio
+async def test_a_full_mysql_ide_gives_a_long_idle_slot_to_a_new_student(monkeypatch):
+    """D5: with 40 sessions open the 41st student was refused for up to 20 minutes, even if others had left."""
+    from app.routers import ide_mysql
+    closed = []
+
+    class Session:
+        schema_map, active_schema = {}, None
+        def close(self): closed.append(self)
+        def execute(self, statement): return {'success': True, 'type': 'ok', 'columns': [], 'rowcount': 0}
+
+    now = time.monotonic()
+    busy = {uid: (Session(), now - 30) for uid in range(1, 3)}
+    monkeypatch.setattr(ide_mysql, 'MAX_SESSIONS', 3)
+    monkeypatch.setattr(ide_mysql, 'SQLSession', Session)
+    monkeypatch.setattr(ide_mysql, '_sessions', {**busy, 3: (Session(), now - ide_mysql.RECLAIM_IDLE_SECONDS - 5)})
+    await ide_mysql.execute(ide_mysql.MysqlStatementInput(statement='SELECT 1'), type('U', (), {'id': 50})(), True)
+    assert set(ide_mysql._sessions) == {1, 2, 50} and len(closed) == 1
+    # Nobody idle long enough: the newcomer is still refused rather than taking an active student's database.
+    with pytest.raises(HTTPException) as full:
+        await ide_mysql.execute(ide_mysql.MysqlStatementInput(statement='SELECT 1'), type('U', (), {'id': 51})(), True)
+    assert full.value.status_code == 503 and set(ide_mysql._sessions) == {1, 2, 50}
