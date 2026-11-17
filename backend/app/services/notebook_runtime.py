@@ -85,7 +85,7 @@ class ColabPythonKernel:
         allowed={'PATH','PATHEXT','SYSTEMROOT','WINDIR','COMSPEC','LANG','LC_ALL'}
         environment={k:v for k,v in os.environ.items() if k.upper() in allowed}
         environment.update(LABMATE_NOTEBOOK_THEME=self.theme,TMP=self.work_dir,TEMP=self.work_dir,TMPDIR=self.work_dir,
-            HOME=self.work_dir,USERPROFILE=self.work_dir,KERAS_HOME=str(Path(self.work_dir)/'.keras'),
+            HOME=self.work_dir,USERPROFILE=self.work_dir,USERNAME='student',LOGNAME='student',KERAS_HOME=str(Path(self.work_dir)/'.keras'),
             TORCH_HOME=str(Path(self.work_dir)/'.torch'),
             NLTK_DATA='/opt/labmate-runtime/nltk_data',
             MPLCONFIGDIR=str(Path(self.work_dir)/'.matplotlib'),PYTHONIOENCODING='utf-8',PYTHONDONTWRITEBYTECODE='1',

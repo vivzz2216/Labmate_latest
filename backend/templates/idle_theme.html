@@ -252,6 +252,12 @@
     /* ========================================================
        IDLE CLASSIC SYNTAX HIGHLIGHTING (EXACT COLOR MATCH)
        ======================================================== */
+    /* IDLE centres the RESTART tag and shortens the '=' bars to fit the window, so a long path never wraps the bars. */
+    .shell-restart.restart-line { display: grid; grid-template-columns: minmax(3ch, 1fr) minmax(0, auto) minmax(3ch, 1fr);
+      white-space: pre; overflow: hidden; }
+    .restart-line .restart-bar { overflow: hidden; white-space: pre; word-break: normal; }
+    .restart-line .restart-left { direction: rtl; }
+    .restart-line .restart-tag { min-width: 0; white-space: pre-wrap; word-break: break-all; }
     .idle-text {
       font-family: 'Consolas', 'Courier New', Courier, monospace;
       font-size: 13.5px;
@@ -448,7 +454,7 @@
     </div>
     <div class="win-body">
       <div class="win-body-inner">
-        <div class="idle-text"><div class="shell-header">Python interactive shell<br>Type "help" for more information.</div><span class="shell-prompt">&gt;&gt;&gt;&#10;</span><span class="shell-restart">========================= RESTART: C:/Users/{{ username or 'Student' }}/Desktop/{{ filename }} =========================&#10;</span>{% for segment in session_segments %}<span class="shell-{{ segment.kind }}">{{ segment.text }}</span>{% endfor %}{% if session_segments and not session_segments[-1].text.endswith('\n') %}<br>{% endif %}<span class="shell-prompt">&gt;&gt;&gt;</span><span class="shell-cursor"></span>
+        <div class="idle-text"><div class="shell-header">Python interactive shell<br>Type "help" for more information.</div><span class="shell-prompt">&gt;&gt;&gt;&#10;</span><span class="shell-restart restart-line"><span class="restart-bar restart-left">========================================================================================================================</span><span class="restart-tag"> RESTART: C:/Users/{{ username or 'Student' }}/Desktop/{{ filename }} </span><span class="restart-bar">========================================================================================================================</span></span>{% for segment in session_segments %}<span class="shell-{{ segment.kind }}">{{ segment.text }}</span>{% endfor %}{% if session_segments and not session_segments[-1].text.endswith('\n') %}<br>{% endif %}<span class="shell-prompt">&gt;&gt;&gt;</span><span class="shell-cursor"></span>
         </div>
       </div>
       <div class="win-scrollbar">

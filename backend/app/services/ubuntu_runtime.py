@@ -8,6 +8,7 @@ import uuid
 from pathlib import Path
 from PIL import Image,ImageStat
 from ..config import settings
+from .isolated_runtime import ssh_executable
 
 
 def ssh_command():
@@ -18,7 +19,7 @@ def ssh_command():
     if not re.fullmatch(r'[a-z_][a-z0-9_-]{0,31}',settings.UBUNTU_SSH_USER):raise ValueError('Invalid Ubuntu SSH user.')
     for filename in [settings.UBUNTU_SSH_KEY,settings.UBUNTU_KNOWN_HOSTS]:
         if not Path(filename).is_file():raise ValueError('Ubuntu SSH identity or pinned host key is missing.')
-    return ['ssh','-T','-o','BatchMode=yes','-o','IdentitiesOnly=yes','-o','StrictHostKeyChecking=yes',
+    return [ssh_executable(),'-T','-o','BatchMode=yes','-o','IdentitiesOnly=yes','-o','StrictHostKeyChecking=yes',
             '-o','UserKnownHostsFile='+settings.UBUNTU_KNOWN_HOSTS,'-o','ConnectTimeout=8',
             '-o','ServerAliveInterval=10','-o','ServerAliveCountMax=2',
             '-i',settings.UBUNTU_SSH_KEY,'-p',str(settings.UBUNTU_SSH_PORT),

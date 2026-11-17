@@ -21,10 +21,10 @@ async def test_distributed_output_frame_contains_console_receipt_not_source(tmp_
         try:
             page=await browser.new_page(viewport={'width':1128,'height':650})
             await page.set_content(html)
-            assert await page.locator('.terminal-output').inner_text()==receipt
+            assert receipt in await page.locator('.term-body').inner_text()
             assert await page.locator('.code').count()==0
             assert 'SOURCE_ONLY' not in await page.locator('body').inner_text()
-            assert await page.locator('.terminal-tabs .selected').inner_text()=='TERMINAL'
+            assert await page.locator('.term-tab.active').inner_text()=='TERMINAL'
             await page.screenshot(path=str(tmp_path/'distributed-console.png'),full_page=True)
         finally:await browser.close()
 
@@ -182,6 +182,6 @@ async def test_vscode_evidence_output_renders_integrated_terminal():
     )
     assert 'alt="Visual Studio Code"' in html
     assert 'TERMINAL' in html and 'PROBLEMS' in html
-    assert 'terminal-output' in html and '[SERVER] Started' in html and '[CLIENT] Connected' in html
+    assert 'term-body' in html and '[SERVER] Started' in html and '[CLIENT] Connected' in html
     assert 'public class Server' not in html
 

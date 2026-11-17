@@ -4,7 +4,7 @@ Google Colab Dedicated Execution, Screenshot, Print-PDF & Word (.docx) Pipeline
 Supports:
   - Option 1: Auto-Dataset Provisioning & Synthesis from Code AST/Column references
   - Option 2: Teacher-Supplied Dataset Paste/Upload (.csv) + Verbatim Code Upload (.py / .ipynb)
-  - CPU deep learning using PyTorch, TensorFlow and Keras with supplied or genuine local datasets
+  - Offline CPU Deep-Learning Support (PyTorch, TensorFlow, Keras) with built-in offline sample datasets
   - Anti-AI Student Personalization: Dynamic Avatar Initial (A, R, P, S...) + Natural Filename (DSLab_Name_Exp6.ipynb)
   - Multi-Student Isolated Worker Queue: Per-student isolated runtime directories + bounded worker concurrency
 """
@@ -119,18 +119,120 @@ def clean_notebook_text(text: str, is_stderr: bool = False) -> str:
     return "\n".join(collapsed).strip()
 
 
-def _configure_dl_libraries_for_code(code: str, builtin_records):
-    """Limit framework threads without replacing user-requested datasets."""
+def _offline_keras_dataset(name: str, num_words: Optional[int] = None):
+    """Deterministic offline built-in mini-datasets matching canonical Keras shapes."""
+    rng = np.random.default_rng(42)
+    n_train, n_test = 120, 30
+    if name in {"mnist", "fashion_mnist"}:
+        y_train = (np.arange(n_train) % 10).astype(np.uint8)
+        y_test = (np.arange(n_test) % 10).astype(np.uint8)
+        x_train = rng.integers(0, 40, size=(n_train, 28, 28), dtype=np.uint8)
+        x_test = rng.integers(0, 40, size=(n_test, 28, 28), dtype=np.uint8)
+        for i, label in enumerate(y_train):
+            r = (int(label) * 2) % 24
+            x_train[i, r : r + 4, :] = 220
+        for i, label in enumerate(y_test):
+            r = (int(label) * 2) % 24
+            x_test[i, r : r + 4, :] = 220
+        return (x_train, y_train), (x_test, y_test)
+    if name in {"cifar10", "cifar100"}:
+        classes = 100 if name == "cifar100" else 10
+        y_train = (np.arange(n_train) % classes).reshape(-1, 1).astype(np.uint8)
+        y_test = (np.arange(n_test) % classes).reshape(-1, 1).astype(np.uint8)
+        x_train = rng.integers(0, 50, size=(n_train, 32, 32, 3), dtype=np.uint8)
+        x_test = rng.integers(0, 50, size=(n_test, 32, 32, 3), dtype=np.uint8)
+        for i, label in enumerate(y_train[:, 0]):
+            c = int(label) % 3
+            r = (int(label) * 3) % 28
+            x_train[i, r : r + 4, :, c] = 230
+        for i, label in enumerate(y_test[:, 0]):
+            c = int(label) % 3
+            r = (int(label) * 3) % 28
+            x_test[i, r : r + 4, :, c] = 230
+        return (x_train, y_train), (x_test, y_test)
+    if name in {"imdb", "reuters"}:
+        vocab = max(50, min(int(num_words or 1000), 5000))
+        classes = 46 if name == "reuters" else 2
+        y_train = (np.arange(n_train) % classes).astype(np.int64)
+        y_test = (np.arange(n_test) % classes).astype(np.int64)
+        x_train = np.empty(n_train, dtype=object)
+        x_test = np.empty(n_test, dtype=object)
+        for i, label in enumerate(y_train):
+            base = 4 + (int(label) * 7) % (vocab - 20)
+            x_train[i] = [1, *[int(base + (j % 5)) for j in range(24)]]
+        for i, label in enumerate(y_test):
+            base = 4 + (int(label) * 7) % (vocab - 20)
+            x_test[i] = [1, *[int(base + (j % 5)) for j in range(24)]]
+        return (x_train, y_train), (x_test, y_test)
+    features = 8 if name == "california_housing" else 13
+    x_train = rng.normal(0.0, 1.0, size=(n_train, features)).astype(np.float32)
+    x_test = rng.normal(0.0, 1.0, size=(n_test, features)).astype(np.float32)
+    weights = np.linspace(1.5, -1.0, features, dtype=np.float32)
+    y_train = (20.0 + x_train @ weights + rng.normal(0, 0.2, size=n_train)).astype(np.float32)
+    y_test = (20.0 + x_test @ weights + rng.normal(0, 0.2, size=n_test)).astype(np.float32)
+    return (x_train, y_train), (x_test, y_test)
+
+
+def _configure_dl_libraries_for_code(code: str, builtin_records: Dict[str, str]):
+    """Configure CPU threads and offline dataset loaders when DL libraries are used."""
+    if not re.search(r"\b(?:torch|tensorflow|keras)\b", code or ""):
+        return
     if re.search(r"\btorch\b", code or ""):
-        import torch
-        torch.set_num_threads(1)
-    if re.search(r"\btensorflow\b", code or ""):
-        import tensorflow as tf
         try:
-            tf.config.threading.set_intra_op_parallelism_threads(1)
-            tf.config.threading.set_inter_op_parallelism_threads(1)
-        except RuntimeError:
+            import torch
+            torch.set_num_threads(1)
+        except Exception:
             pass
+    if re.search(r"\b(?:tensorflow|keras)\b", code or ""):
+        modules_to_patch = []
+        try:
+            import keras
+            if hasattr(keras, "datasets"):
+                modules_to_patch.append(keras.datasets)
+        except Exception:
+            pass
+        try:
+            import tensorflow as tf
+            try:
+                tf.config.threading.set_intra_op_parallelism_threads(1)
+                tf.config.threading.set_inter_op_parallelism_threads(1)
+            except Exception:
+                pass
+            if hasattr(tf, "keras") and hasattr(tf.keras, "datasets"):
+                modules_to_patch.append(tf.keras.datasets)
+        except Exception:
+            pass
+        for ds_root in modules_to_patch:
+            for ds_name in (
+                "mnist",
+                "fashion_mnist",
+                "cifar10",
+                "cifar100",
+                "imdb",
+                "reuters",
+                "boston_housing",
+                "california_housing",
+            ):
+                mod = getattr(ds_root, ds_name, None)
+                if mod is None:
+                    continue
+                def _make_loader(dataset_key):
+                    def _load_data(*args, **kwargs):
+                        num_words = kwargs.get("num_words")
+                        data = _offline_keras_dataset(dataset_key, num_words=num_words)
+                        # The stand-in must be visible in the notebook output and the report;
+                        # accuracy on it says nothing about the real dataset.
+                        print(f"Note: this runtime is offline. keras.datasets.{dataset_key}.load_data() returned a small "
+                              f"built-in sample ({len(data[0][0])} training and {len(data[1][0])} test items), "
+                              f"not the full {dataset_key} dataset.")
+                        digest = hashlib.sha256(dataset_key.encode("utf-8")).hexdigest()
+                        builtin_records[f"keras.datasets.{dataset_key}"] = digest
+                        return data
+                    return _load_data
+                try:
+                    setattr(mod, "load_data", _make_loader(ds_name))
+                except Exception:
+                    pass
 
 
 # ==============================================================================
@@ -525,6 +627,8 @@ def restrict_runtime(root):
                 pass
     if os.environ.get('SYSTEMROOT'):
         reads.append(Path(os.environ['SYSTEMROOT']).resolve())
+    if os.environ.get('NLTK_DATA') and Path(os.environ['NLTK_DATA']).is_dir():
+        reads.append(Path(os.environ['NLTK_DATA']).resolve())
 
     immutable_read_prefixes = tuple(
         os.path.normcase(str(p)).rstrip('\\/') + os.sep

@@ -29,8 +29,9 @@
   --as-purple: #a571e6;
   --as-orange: #c77d55;
 
-  width: 100vw;
-  height: 100vh;
+  /* Pinned to the viewport: 100vw plus the page's default body margin made the window scroll sideways. */
+  position: fixed;
+  inset: 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -40,7 +41,6 @@
   font-size: 13px;
   line-height: 18px;
   user-select: none;
-  position: relative;
 }
 
 .studioRoot *,
@@ -1074,7 +1074,8 @@
   background-size: 16px 16px;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  /* safe: a preview wider than a narrow Split pane scrolls instead of spilling over the code editor. */
+  align-items: safe center;
   gap: 14px;
 }
 

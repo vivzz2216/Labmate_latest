@@ -249,3 +249,23 @@ async def test_full_workflow_turns_an_r_manual_question_into_a_word_report_with_
         assert len(document.inline_shapes) >= len(result['screenshot_paths'])
     assert 'RStudio' in generate.call_args.args[0] or 'R RUNTIME' in generate.call_args.args[0]
     engine.dispose()
+
+
+def test_requested_but_unavailable_r_packages_are_detected():
+    from app.security.r_code import unavailable_requested_packages
+    assert unavailable_requested_packages('Write an R script using library(keras) to train on MNIST') == ['keras']
+    assert unavailable_requested_packages('Classify iris with the caret package and plot with ggplot2') == ['caret']
+    assert unavailable_requested_packages('Train a network with the nnet package; tidyverse is optional') == []
+    assert unavailable_requested_packages('Descriptive statistics on the mtcars data frame') == []
+
+
+def test_script_that_invents_its_input_file_is_detected():
+    from app.security.r_code import fabricated_input_files, forbids_sample_data
+    task = 'Write an R script that reads students_2026.csv with read.csv(). It must not create or simulate the file.'
+    invented = 'd <- data.frame(Marks = 1:3)\nwrite.csv(d, "students_2026.csv")\nx <- read.csv("students_2026.csv")\n'
+    assert fabricated_input_files(task, invented) == ['students_2026.csv'] and forbids_sample_data(task)
+    assert fabricated_input_files(task, 'x <- read.csv("students_2026.csv")') == []
+    # A file the manual asks the program to write and read back is ordinary file handling.
+    assert fabricated_input_files('Write a program that saves marks to marks.txt and reads them back',
+                                  'writeLines("1", "marks.txt")\ny <- readLines("marks.txt")') == []
+    assert not forbids_sample_data('Print the summary of the data')

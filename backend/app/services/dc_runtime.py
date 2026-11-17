@@ -264,6 +264,36 @@ async def _run_single_process(directory: Path, main_class: str, stdin: Optional[
     return result
 
 
+_PORT_USE = re.compile(r'\b(?:createRegistry|getRegistry|ServerSocket|DatagramSocket)\s*\(\s*(?:"[^"]*"\s*,\s*)?(\d{2,5})\s*[,)]'
+                       r'|\b[A-Z_]*PORT[A-Z_]*\s*=\s*(\d{2,5})\b')
+
+
+def _busy_ports(directory: Path) -> List[int]:
+    """Fixed ports the program will listen on that another process already holds (a leftover server from an
+    earlier run). Without this the client silently fails to connect and prints nothing."""
+    import socket
+    ports = set()
+    for source in directory.rglob('*.java'):
+        try:
+            text = source.read_text(encoding='utf-8', errors='replace')
+        except OSError:
+            continue
+        for match in _PORT_USE.finditer(text):
+            port = int(match.group(1) or match.group(2))
+            if 1024 <= port <= 65535:
+                ports.add(port)
+    busy = []
+    for port in sorted(ports):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+            if os.name != 'nt':
+                probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                probe.bind(('127.0.0.1', port))
+            except OSError:
+                busy.append(port)
+    return busy
+
+
 async def _run_server_client(
     directory: Path,
     server_class: str,
@@ -290,6 +320,12 @@ async def _run_server_client(
 
     server_proc = None
     streams = []
+    busy = _busy_ports(directory)
+    if busy:
+        ports = ', '.join(str(p) for p in busy)
+        return RuntimeResult(False, error=(f"Port {ports} is already in use by another process on this machine, so the server "
+                                           "could not start. Stop the earlier server (or use a free port) and run again."),
+                             exit_code=1, stages={"compile": "passed", "execution": "failed"})
     try:
         # 1. Start Server
         server_proc = await start_process(server_cmd, directory, resource_limits={"max_memory_bytes": 0, "max_cpu_seconds": max(1, int(timeout))})

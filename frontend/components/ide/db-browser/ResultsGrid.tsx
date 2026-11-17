@@ -28,6 +28,17 @@ interface ResultsGridProps {
   onHeaderClick?: (colName: string) => void;
   rowNumbers?: number[];
   emptyMessage?: string;
+  /** Per column: declared REAL affinity (Browse Data). */
+  realColumns?: boolean[];
+  /** Per cell: SQLite stored a REAL (query results). */
+  realCells?: boolean[][];
+}
+
+function cellText(val: SqlValue, isReal: boolean): string {
+  if (val === null) return "NULL";
+  // DB Browser for SQLite prints a whole REAL with one decimal place (38000.0), unlike an INTEGER.
+  if (isReal && typeof val === "number" && Number.isInteger(val)) return val.toFixed(1);
+  return String(val);
 }
 
 export function ResultsGrid({
@@ -44,6 +55,8 @@ export function ResultsGrid({
   onHeaderClick,
   rowNumbers,
   emptyMessage = "No rows returned.",
+  realColumns,
+  realCells,
 }: ResultsGridProps) {
   const activeRowIdx = selectedCell ? selectedCell.rowIdx : defaultBoldHeader ? defaultBoldHeader.rowIdx : -1;
   const activeColIdx = selectedCell ? selectedCell.colIdx : defaultBoldHeader ? defaultBoldHeader.colIdx : -1;
@@ -135,9 +148,9 @@ export function ResultsGrid({
                         (isSelected ? " " + styles.dataCellSelected : "")
                       }
                       onClick={() => onSelectCell(rowIdx, colIdx)}
-                      title={val === null ? "NULL" : String(val)}
+                      title={cellText(val, !!(realColumns?.[colIdx] || realCells?.[rowIdx]?.[colIdx]))}
                     >
-                      {val === null ? "NULL" : String(val)}
+                      {cellText(val, !!(realColumns?.[colIdx] || realCells?.[rowIdx]?.[colIdx]))}
                     </td>
                   );
                 })}

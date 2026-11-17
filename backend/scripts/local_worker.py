@@ -126,7 +126,10 @@ def launch(command, label):
 
 
 def ssh_exe():
-    found=shutil.which('ssh')
+    if str(BACKEND) not in sys.path: sys.path.insert(0,str(BACKEND))
+    from app.services.isolated_runtime import ssh_executable
+    found=ssh_executable()
+    if not Path(found).is_file(): found=shutil.which('ssh')
     if not found: raise RuntimeError('OpenSSH client is required.')
     return str(Path(found).resolve())
 

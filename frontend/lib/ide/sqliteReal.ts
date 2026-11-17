@@ -228,6 +228,8 @@ export interface RealStatement {
   rows: SqlValue[][];
   rowsAffected: number;
   error?: string;
+  /** true where SQLite stored a REAL that happens to be whole (DB Browser prints it as 38000.0). */
+  realCells?: boolean[][];
 }
 
 function databaseFor(working: SqlSnapshot): SqlJsDatabase {
@@ -259,8 +261,14 @@ export function runRealBatch(
         const names: string[] = stmt.getColumnNames();
         if (names.length > 0) {
           const rows: SqlValue[][] = [];
-          while (stmt.step()) rows.push((stmt.get() as unknown[]).map(toValue));
-          res = { ok: true, isQuery: true, columns: names, rows, rowsAffected: 0 };
+          const realCells: boolean[][] = [];
+          // With useBigInt, INTEGER storage comes back as bigint and REAL as number, so whole REALs stay recognisable.
+          while (stmt.step()) {
+            const raw = stmt.get(null, { useBigInt: true }) as unknown[];
+            realCells.push(raw.map((v) => typeof v === "number" && Number.isInteger(v)));
+            rows.push(raw.map((v) => toValue(typeof v === "bigint" ? Number(v) : v)));
+          }
+          res = { ok: true, isQuery: true, columns: names, rows, rowsAffected: 0, realCells };
         } else {
           stmt.step();
           res = { ok: true, isQuery: false, columns: [], rows: [], rowsAffected: db.getRowsModified() };

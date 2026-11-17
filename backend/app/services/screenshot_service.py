@@ -18,6 +18,14 @@ from ..config import settings
 from .browser_capture import acquire_capture_context
 
 
+def _language_label(filename, kind):
+    """VS Code's status-bar language name for a file ("C", "C++", ...), never the generic word "File"."""
+    ext = str(filename).rpartition('.')[2].lower()
+    return {'c': 'C', 'h': 'C', 'cpp': 'C++', 'cc': 'C++', 'cxx': 'C++', 'hpp': 'C++', 'java': 'Java', 'py': 'Python',
+            'js': 'JavaScript', 'ts': 'TypeScript', 'sql': 'SQL', 'sh': 'Shell Script', 'r': 'R', 'json': 'JSON',
+            'html': 'HTML', 'css': 'CSS'}.get(ext) or str(kind).title()
+
+
 def _terminal_command(filename):
     """The command a student types in VS Code's terminal to build and run this file (shown after the PowerShell prompt)."""
     name = str(filename).replace('\\', '/').split('/')[-1]
@@ -728,7 +736,7 @@ class ScreenshotService:
                     explorer_rows=explorer_rows(names, filename),
                     path_parts=filename.replace('\\', '/').split('/'),
                     indent_size=indentation(source_code),
-                    language_label={'react': 'JavaScript JSX', 'javascript': 'JavaScript', 'python': 'Python', 'java': 'Java', 'html': 'HTML', 'css': 'CSS'}.get(kind, kind.title()),
+                    language_label={'react': 'JavaScript JSX', 'javascript': 'JavaScript', 'python': 'Python', 'java': 'Java', 'html': 'HTML', 'css': 'CSS'}.get(kind) or _language_label(filename, kind),
                     run_command=_terminal_command(filename),
                     icon_symbols=icon_data.get('symbols', {}),
                     codicon_font=icon_data.get('codicon_font', ''),
@@ -1067,7 +1075,9 @@ class ScreenshotService:
         if not result.screenshots:
             return False, 0, 0
         from PIL import Image
-        with Image.open(next(iter(result.screenshots.values()))) as image:
+        # Frames are fitted individually; report the size of the image actually written to output_path.
+        measured = output_path if output_path and os.path.isfile(output_path) else next(iter(result.screenshots.values()))
+        with Image.open(measured) as image:
             return True, image.width, image.height
 
     async def _capture_colab(self, code, output, output_path, error="", notebook_title=None,

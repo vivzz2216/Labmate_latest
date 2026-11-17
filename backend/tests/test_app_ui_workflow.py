@@ -59,7 +59,9 @@ async def test_real_app_ui_workflow_word_preview_and_owned_download(tmp_path,lan
         assert workflow.report_id and workflow.results[0]['verification']['status']==('failed' if wrong else 'passed')
         report=db.get(Report,workflow.report_id);document=Document(report.file_path)
         text='\n'.join(p.text for p in document.paragraphs)
-        assert ('VS Code-style preview' if language == 'python' else 'Notepad-style preview') in text
+        # The source page is captioned by its file; the editor style is stated inside the image itself
+        # (compact reports drop '(... -style preview)' from captions unless the part failed).
+        assert any(line.endswith(('.py', '.java')) and '— ' in line for line in text.splitlines()), text
         if wrong:assert 'Diagnostic report' in text
         if language=='java':
             assert any(e['kind']=='gui' for e in workflow.results[0]['evidence_plan']['evidence']['selected'])

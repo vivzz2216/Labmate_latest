@@ -91,7 +91,20 @@ def test_distributed_output_ignores_timestamps_and_merged_process_lines():
     actual = "[17:17:35.827036900] Server up\n[17:17:35.9] Node 0 enters\nClient says hi\n[17:17:36.1] Node 0 leaves\nServer done"
     assert distributed_output_matches(actual, ["Node 0 enters", "Node 0 leaves"])
     assert not distributed_output_matches(actual, ["Node 0 leaves", "Node 0 enters"])     # order matters
-    simulation = plan_experiment("EXPERIMENT NO. 4: Token ring\nSimulate 4 nodes.\nExpected output:\nNode 0 enters\nNode 0 leaves", "distributed")
+    # A token-ring objective also triggers the critical-section semantic check; a plain simulation does not.
+    simulation = plan_experiment("EXPERIMENT NO. 4: Process group simulation\nSimulate 4 nodes joining and leaving.\nExpected output:\nNode 0 enters\nNode 0 leaves", "distributed")
     assert verification_summary(simulation, True, actual)["status"] == "verified"         # simulation verified by its output
     networked = plan_experiment("EXPERIMENT NO. 1: Echo\nWrite a server and client using sockets.\nExpected output:\nNode 0 enters", "distributed")
     assert verification_summary(networked, True, actual)["status"] != "verified"          # real networking still needs the independent check
+
+
+def test_hard_coded_sample_output_is_detected_by_changing_the_input():
+    from app.services.assignment_workflow import perturbed_input, output_ignores_input
+    assert perturbed_input('12 4\n3.50\n-2\nabc1') == '13 5\n4.50\n-1\nabc1'
+    hard = 'a = int(input("Enter: "))\nprint(16)'
+    assert output_ignores_input('python', hard, '12\n', 'Enter: \n12\n16', 'Enter: \n13\n16', '13\n')
+    computed = 'a = int(input("Enter: "))\nprint(a + 4)'
+    assert not output_ignores_input('python', computed, '12\n', 'Enter: \n12\n16', 'Enter: \n13\n17', '13\n')
+    # Programs that read no input are not judged by this check.
+    assert not output_ignores_input('c', 'int main(){printf("hi");}', '5', 'hi', 'hi', '6')
+    assert output_ignores_input('c', 'int main(){int a; scanf("%d",&a); printf("25");}', '5', '25', '25', '6')

@@ -12,7 +12,7 @@ COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
 RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
     && ln -s /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
     && apt-get update \
-    && apt-get install -y --no-install-recommends gosu gcc g++ default-jdk xvfb xauth fonts-dejavu-core libmagic1 ca-certificates openssh-client poppler-utils tesseract-ocr \
+    && apt-get install -y --no-install-recommends gosu gcc g++ default-jdk xvfb xauth libtk8.6 fonts-dejavu-core libmagic1 ca-certificates openssh-client poppler-utils tesseract-ocr \
        r-base-core r-recommended r-cran-ggplot2 r-cran-dplyr r-cran-tidyr r-cran-tibble r-cran-scales r-cran-reshape2 r-cran-e1071 r-cran-randomforest \
     && rm -rf /var/lib/apt/lists/*
 

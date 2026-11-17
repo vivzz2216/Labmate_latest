@@ -333,6 +333,8 @@ def _normalize_mysql_statement(stmt: str) -> str:
     return out
 
 
+_WATCHDOG_LOCK = threading.RLock()
+
 class SQLSession:
     """
     Isolated MySQL execution session.
@@ -474,7 +476,15 @@ class SQLSession:
             self._connect_session_user()
 
     def _kill_query_on_timeout(self, thread_id: int | None, timed_out_flag: list[bool]) -> None:
-        timed_out_flag[0] = True
+        # The flag gets a second element once the statement has returned. Checking it under the lock stops a
+        # late watchdog (slow admin login under load) from killing the NEXT statement on the same connection.
+        with _WATCHDOG_LOCK:
+            if len(timed_out_flag) > 1:
+                return
+            timed_out_flag[0] = True
+            self._kill_thread(thread_id)
+
+    def _kill_thread(self, thread_id: int | None) -> None:
         if not thread_id:
             return
         try:
@@ -864,6 +874,8 @@ class SQLSession:
                         cur.execute(definition)
                 finally:
                     watchdog.cancel()
+                    with _WATCHDOG_LOCK:
+                        flag.append(True)
                     admin.close()
                 return self._ok(kind='CREATE', table=name, columns=[], rows=[], rowcount=0,
                                 message='Created in private schema with restricted execution definer.', started=started, stmt=cleaned)
@@ -962,6 +974,8 @@ class SQLSession:
                     return result
             finally:
                 timer.cancel()
+                with _WATCHDOG_LOCK:
+                    timed_out.append(True)   # statement finished; a watchdog still waiting must not fire
         except Exception as exc:
             if timed_out[0] if "timed_out" in locals() else False:
                 self._connect_session_user()
@@ -1136,6 +1150,11 @@ class SQLSession:
                 stdout_lines.append(f"({len(receipt['rows'])} row(s) returned)")
             elif is_ok:
                 stdout_lines.append(f"-- [{idx}] {stmt_text} -> {receipt['message']}")
+            elif expects_error(meta.get("leading_comment", "")):
+                # A deliberate violation (e.g. inserting a duplicate key to show a constraint) is part of the lab:
+                # keep its real MySQL error in the evidence and continue with the rest of the script.
+                receipt["expected_error"] = True
+                stdout_lines.append(f"-- [{idx}] EXPECTED ERROR in `{stmt_text}`: {res.get('error') or res.get('message')}")
             else:
                 overall_success = False
                 error_msg = res.get("error") or res.get("message") or "SQL execution error"
@@ -1160,6 +1179,15 @@ class SQLSession:
             "error": error_msg or None,
             "execution_time": total_time,
         }
+
+
+_EXPECTED_ERROR = re.compile(r"\bexpect(?:ed|s)?\s+(?:an?\s+)?(?:error|failure|violation)|\b(?:error|failure)\s+expected\b|"
+                             r"\b(?:should|will|must)\s+(?:fail|be\s+rejected|raise\s+an?\s+error)\b", re.I)
+
+
+def expects_error(leading_comment: str) -> bool:
+    """A statement whose comment says it fails on purpose (constraint demonstrations)."""
+    return bool(_EXPECTED_ERROR.search(leading_comment or ""))
 
 
 def execute_sql(sql: str, timeout: float | None = None) -> dict[str, Any]:
@@ -1213,10 +1241,12 @@ def verify_sql_exercise(objective: str, code: str, execution_result: dict[str, A
     )
 
     exec_ok = bool(execution_result.get("success"))
+    expected_errors = sum(1 for st in execution_result.get("statements") or [] if st.get("expected_error"))
     add_check(
         "SQL script execution",
         exec_ok,
-        "All SQL statements executed without errors." if exec_ok else (execution_result.get("error") or execution_result.get("stderr") or "SQL execution failed."),
+        ("All SQL statements executed as intended; %d deliberate error(s) were rejected by MySQL as expected." % expected_errors
+         if expected_errors else "All SQL statements executed without errors.") if exec_ok else (execution_result.get("error") or execution_result.get("stderr") or "SQL execution failed."),
     )
 
     statements: list[dict[str, Any]] = execution_result.get("statements") or []

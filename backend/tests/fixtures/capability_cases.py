@@ -64,7 +64,8 @@ def gui_cases():
       swing='import javax.swing.*;public class Main{public static void main(String[]a){JFrame f=new JFrame("Audit");f.add(new JButton("Run"));f.setSize(300,200);f.setVisible(true);}}'
       tk='import tkinter as tk\nroot=tk.Tk()\ntk.Button(root,text="Run").pack()\nroot.mainloop()'
       cases.append(fixture('swing_'+variant,'java',swing,failure='missing_gui_plan',objective='Create a Swing '+variant))
-      cases.append(fixture('tkinter_'+variant,'python',tk,blocked='tkinter',objective='Create a Tkinter '+variant))
+      # Tkinter runs for real (private Windows desktop, or Xvfb on Linux) and its window is captured.
+      cases.append(fixture('tkinter_'+variant,'python',tk,gui=True,objective='Create a Tkinter '+variant))
     cases.append(fixture('awt_button','java','import java.awt.*;public class Main{public static void main(String[]a){Frame f=new Frame("Audit");f.add(new Button("Run"));f.setSize(300,200);f.setVisible(true);}}',failure='missing_gui_plan'))
     cases.append(fixture('javafx_window','java','import javafx.application.Application;import javafx.stage.Stage;public class Main extends Application{public void start(Stage stage){stage.show();}public static void main(String[]args){launch(args);}}',blocked='javafx'))
     for name in ('homepage','template','form','server_validation','routes'):

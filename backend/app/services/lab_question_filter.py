@@ -9,6 +9,16 @@ PROGRAM = re.compile(r"\b(?:program(?:ming)?|code|script|function|application|ap
 EXPLICIT_PROGRAM = re.compile(r"\b(?:write|create|develop|implement|build)\s+(?:a\s+|an\s+)?(?:(?:python|java|c\+\+|c|html|react|node)\s+)?(?:program|code|script|application|web\s+page)\b", re.I)
 
 
+# Only Unix-labelled practical prompts override explanation filtering. Generic
+# theory questions mentioning a shell or Linux remain theory.
+UNIX_PRACTICAL = re.compile(
+    r'\b(?:commands?\s+with\s+syntax\s+and\s+examples?|'
+    r'(?:shell|perl|awk|sed)\s+scripts?|'
+    r'(?:UNIX|Ubuntu)\s+(?:networking\s+)?commands?|'
+    r'(?:install(?:ation)?|partition(?:ing)?)\b.{0,70}\b(?:Ubuntu|UNIX)|'
+    r'(?:MAC|IP)\s+address)\b', re.I)
+
+
 _HANDWRITTEN_SUBJECT = r"(?!\s+(?:digits?|characters?|letters?|numerals?|text|images?|signatures?|samples?|data(?:set)?s?|recognition)\b)"
 HANDWRITTEN_REGEX = re.compile(
     r"\b(?:by hand|draw neatly|sketch|manual drawing|"
@@ -46,6 +56,8 @@ def is_actionable_lab_question(text: str, language: str = "", excluded_section: 
         return False
     if SECTION.match(question):
         return False
+    if language.lower() == 'ubuntu' and UNIX_PRACTICAL.search(question):
+        return True
     # A request to explain concepts does not become actionable just because it mentions code. Judge the
     # practical part only: a manual's "Viva-Voce Questions" section must not reject its programming task.
     if THEORETICAL.search(practical_text(question)):

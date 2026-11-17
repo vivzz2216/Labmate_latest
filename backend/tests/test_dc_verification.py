@@ -40,3 +40,28 @@ def test_server_and_client_run_is_independently_verified():
     plan = plan_experiment("EXPERIMENT NO. 1: Ping\nWrite a server and a client using sockets.\nExpected output (client):\nReply: PONG hello", "distributed")
     summary = verification_summary(plan, True, result.output, result.verification)
     assert summary["status"] == "verified" and summary["checks"]["output"] == "passed"
+
+
+def test_port_already_held_by_an_earlier_server_is_reported(tmp_path):
+    import socket
+    from app.services.dc_runtime import _busy_ports
+    (tmp_path / 'Server.java').write_text(
+        'class Server { static final int PORT = 5057; void m() throws Exception {'
+        ' java.rmi.registry.LocateRegistry.createRegistry(1098); new java.net.ServerSocket(PORT); } }')
+    assert _busy_ports(tmp_path) == []
+    holder = socket.socket()
+    holder.bind(('127.0.0.1', 5057))
+    holder.listen()
+    try:
+        assert _busy_ports(tmp_path) == [5057]
+    finally:
+        holder.close()
+
+
+def test_output_gap_names_missing_and_reordered_lines():
+    from app.services.assignment_workflow import expected_output_gap
+    gap = expected_output_gap(['P1 sends', 'P2 receives the message from P1 and sets clock to 5'],
+                              'P2 receives the message and sets clock to 5\nP1 sends', 'distributed')
+    assert 'P2 receives the message from P1 and sets clock to 5' in gap and 'deterministic order' in gap
+    assert expected_output_gap(['a b', 'c'], 'a  b\nc') == ''
+    assert 'different order' in expected_output_gap(['first', 'second'], 'second\nfirst')

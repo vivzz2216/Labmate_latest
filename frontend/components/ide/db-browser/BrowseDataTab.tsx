@@ -185,6 +185,7 @@ export function BrowseDataTab({
         <ResultsGrid
           columns={processed.columns}
           rows={processed.rows}
+          realColumns={table ? table.columns.map((c) => /REAL|FLOA|DOUB/i.test(c.type || "")) : undefined}
           selectedCell={
             selectedCell && selectedCell.tableName === tableName ? selectedCell : null
           }

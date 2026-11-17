@@ -333,10 +333,9 @@ def verification_summary(plan, success, output, browser_verification=None, viewp
     # A single-program simulation (token ring, election, clocks, ...) is verified by its exact expected output. Programs that must really talk
     # over sockets, RMI or between processes also need the independent behaviour check, since printed text alone does not prove the exchange.
     networked = bool(re.search(r"\b(?:sockets?|rmi|server|client|ports?|registry|datagram|tcp|udp)\b", str(plan.get("objective", "")), re.I))
-    if plan.get("language") == "distributed" and (browser_verification or {}).get("status") != "passed" and (networked or checks["output"] != "passed"):
-        if checks["output"] not in {"passed", "failed"}:
-            checks["output"] = "unverified"          # a real output mismatch stays "failed" so it can be corrected
-        failures.append("Distributed execution completed, but its required behavior has not been independently verified.")
+    if plan.get("language") == "distributed" and networked and (browser_verification or {}).get("status") != "passed":
+        # Printed text alone does not prove a real exchange: such a run is at most "execution tested", never "verified".
+        checks["behavior"] = "unverified"
     if failed_check:
         checks["output"] = "failed"
         failures.append("Program output reported a failed internal or verification check.")
@@ -367,4 +366,4 @@ def verification_summary(plan, success, output, browser_verification=None, viewp
                     failures.append(db_fail)
     if semantic: checks['output']='failed'
     return {"checks": checks, "failures": failures,
-            "status": "failed" if failures or not success else "verified" if checks["output"] == "passed" or checks["interaction"] == "passed" or checks.get("database") == "passed" else "execution_tested"}
+            "status": "failed" if failures or not success else "verified" if (checks["output"] == "passed" and checks.get("behavior") != "unverified") or checks["interaction"] == "passed" or checks.get("database") == "passed" else "execution_tested"}

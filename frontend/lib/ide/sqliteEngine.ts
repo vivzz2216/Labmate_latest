@@ -1,4 +1,4 @@
-import { hasRealSqlite, runRealBatch } from "./sqliteReal";
+import { hasRealSqlite, runRealBatch } from "./sqliteReal.ts";
 
 export type SqlValue = string | number | boolean | null;
 
@@ -97,6 +97,7 @@ export interface StatementResult {
   error?: string;
   editableTable?: string;
   sourceRowIndices?: number[];
+  realCells?: boolean[][];
 }
 
 export interface BatchExecutionResult {
@@ -2821,6 +2822,7 @@ function executeSqlBatchReal(
       error: r.ok ? undefined : r.error,
       editableTable: editable || undefined,
       sourceRowIndices: editable ? r.rows.map((_, idx) => idx) : undefined,
+      realCells: r.realCells,
     };
     results.push(res);
     newLogs.push({ id: nextLogId++, timestamp: nowTimestamp(), source, sql: stmts[i].sql, status: r.ok ? "ok" : "error", message });

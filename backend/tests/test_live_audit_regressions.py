@@ -113,8 +113,8 @@ def test_catalog_counts_are_the_actual_frontend_experiments():
     assert all(word in cpp['starterPrompt'].lower() for word in ('linked list','stack','binary search tree'))
     root=Path(__file__).resolve().parents[2]
     for dockerfile in (root/'Dockerfile',root/'backend/Dockerfile'):
-        assert 'COPY frontend/lib/lab-catalog.json ./app/data/lab_catalog.json' in dockerfile.read_text()
-        assert 'COPY rstudio/assets' in dockerfile.read_text()
+        assert 'COPY frontend/lib/lab-catalog.json ./app/data/lab_catalog.json' in dockerfile.read_text(encoding='utf-8')
+        assert 'COPY rstudio/assets' in dockerfile.read_text(encoding='utf-8')
 
 
 def test_completed_workflow_restores_server_elapsed_time():
@@ -138,8 +138,8 @@ def test_resume_ignores_new_default_fields_but_honors_real_template_changes():
 
 def test_generation_and_repair_share_distributed_observation_contract():
     source=Path(__file__).resolve().parents[1]/'app/services'
-    assert 'distributed_instructions()' in (source/'assignment_workflow.py').read_text()
-    assert 'distributed_instructions()' in (source/'analysis_service.py').read_text()
+    assert 'distributed_instructions()' in (source/'assignment_workflow.py').read_text(encoding='utf-8')
+    assert 'distributed_instructions()' in (source/'analysis_service.py').read_text(encoding='utf-8')
     assert 'message_id' in distributed_instructions()
 
 

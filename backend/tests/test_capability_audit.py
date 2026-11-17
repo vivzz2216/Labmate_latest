@@ -24,6 +24,8 @@ async def test_capability_fixture(case,tmp_path,monkeypatch):
         if case['failure']=='timeout':assert result.exit_code==124
     else:
         assert result.success,result.error
+        if case.get('gui'):
+            assert result.screenshots and (result.verification or {}).get('kind')=='gui'
         if case.get('expected'):
             if experiment_category(case['language'], case.get('objective',''), case['code']) == 'console':
                 assert result.output.strip().splitlines()[-1] == case['expected']

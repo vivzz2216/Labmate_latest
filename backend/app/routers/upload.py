@@ -23,11 +23,17 @@ from zipfile import BadZipFile
 # Set up logging for debugging
 logger = logging.getLogger(__name__)
 
-try:
-    import magic  # python-magic for file type validation
-except ImportError:
+if os.name == "nt" and os.getenv("LABMATE_USE_LIBMAGIC") != "1":
+    # On Windows python-magic loads whatever libmagic DLL it finds on PATH; Git's MSYS msys-magic-1.dll crashes the
+    # whole process (an access violation cannot be caught). Production runs on Linux; Windows uses the fallback.
     magic = None
-    logger.warning("python-magic is not installed; falling back to header/signature file validation.")
+    logger.info("python-magic is disabled on Windows; using header/signature file validation.")
+else:
+    try:
+        import magic  # python-magic for file type validation
+    except ImportError:
+        magic = None
+        logger.warning("python-magic is not installed; falling back to header/signature file validation.")
 
 router = APIRouter()
 

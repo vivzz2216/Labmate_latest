@@ -55,7 +55,30 @@ def find_rscript():
     return None
 
 
-def r_instructions():
+def r_instructions(objective=''):
+    return _r_instructions_base() + _substitution_instructions(objective)
+
+
+def _substitution_instructions(objective):
+    from ..security.r_code import unavailable_requested_packages, forbids_sample_data, _DATA_FILE
+    extra = ''
+    missing = unavailable_requested_packages(objective)
+    if missing:
+        extra += ('- The manual asks for ' + ', '.join(missing) + ', which is NOT installed here. Do not imitate it or name '
+                  'variables/files after it. Write the closest program with the allowed packages and make the first printed '
+                  'line: cat("NOTE: ' + ', '.join(missing) + ' is not available in this R runtime; '
+                  '<what you used instead>.\\n")\n')
+    files = sorted(set(_DATA_FILE.findall(objective or '')))
+    if files:
+        extra += ('- No data files are uploaded to this runtime (' + ', '.join(files) + ' are not present). ')
+        extra += ('The manual forbids invented data, so read the file as asked and let the script stop with a clear error '
+                  'if it is missing.\n' if forbids_sample_data(objective) else
+                  'If the script needs one as input, build a small clearly labelled sample in the script and print '
+                  '"NOTE: sample data used because <file> was not supplied" before using it.\n')
+    return extra
+
+
+def _r_instructions_base():
     return '''
 R RUNTIME (real Rscript, shown in an RStudio workspace): Return one complete R script (.R) that runs top to
 bottom without user input. The runner evaluates it expression by expression exactly like the RStudio console,
@@ -258,6 +281,22 @@ async def capture_r(code, filename=None, stdin='', objective='', theme='light'):
         root = Path(settings.SCREENSHOT_DIR).resolve()
         rendered = await asyncio.to_thread(render_frames, frames, root, f'rstudio_{uuid.uuid4().hex}')
         error = receipt.get('error') or ''
+        from ..security.r_code import unavailable_requested_packages, fabricated_input_files, forbids_sample_data
+        notes = []
+        missing = unavailable_requested_packages(objective)
+        if missing:
+            notes.append('the manual asks for the R package ' + ', '.join(missing) + ', which is not installed in the LabMate '
+                         'R runtime, so the program uses a substitute and does not use ' + ', '.join(missing) + '.')
+        invented = fabricated_input_files(objective, code)
+        if invented:
+            if forbids_sample_data(objective) and not error:
+                error = ('The manual forbids creating or simulating ' + ', '.join(invented) + ', but the program wrote that '
+                         'file itself instead of reading supplied data.')
+            notes.append(', '.join(invented) + ' was not supplied, so the program created it with sample data; the '
+                         'results describe that sample, not the real file.')
+        verification['runtime_notes'] = notes
+        if missing:
+            verification['requirements_status'] = 'substituted'
         passed = not error and bool(rendered)
         verification.update(status='passed' if passed else 'failed', engine=receipt.get('rVersion', 'R'),
                             evidence_frames=rendered, source_lines=len(_lines(code)), plots=len(receipt.get('plot_uris', [])),

@@ -1,5 +1,5 @@
 import api from "@/lib/api";
-import { formatAsciiTable, formatVerticalRows, type MysqlOutputBlock, type MysqlValue } from "./mysqlEngine";
+import { formatAsciiTable, formatVerticalRows, type MysqlOutputBlock, type MysqlValue } from "./mysqlEngine.ts";
 
 /** One statement run by a real MySQL server (see backend/app/routers/ide_mysql.py). */
 export interface RemoteMysqlResult {

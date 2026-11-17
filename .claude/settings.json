@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python .claude/tools/memory_graph.py sync-summary"
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/tools/memory_graph.py\" sync-summary"
           }
         ]
       }
@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python .claude/tools/memory_graph.py hook-post-edit"
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/tools/memory_graph.py\" hook-post-edit"
           }
         ]
       }

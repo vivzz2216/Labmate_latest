@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
 import styles from "./androidStudio.module.css";
 import {
   STUDIO_PRESETS,
@@ -146,6 +146,10 @@ export const AndroidStudioWorkspace: React.FC = () => {
     createInitialLogcatEntries(STUDIO_PRESETS[0].packageName)
   );
   const [logcatQuery, setLogcatQuery] = useState<string>("package:mine ");
+  // The server render uses fixed sample times; replace them with the real launch time once mounted.
+  useEffect(() => {
+    setLogcatEntries(createInitialLogcatEntries(STUDIO_PRESETS[0].packageName, Date.now()));
+  }, []);
   const [buildSteps, setBuildSteps] = useState<GradleBuildStep[]>([
     { id: "s1", label: ":app:preBuild", status: "up-to-date", durationMs: 12 },
     { id: "s2", label: ":app:compileDebugKotlin", status: "success", durationMs: 410 },
@@ -219,7 +223,7 @@ export const AndroidStudioWorkspace: React.FC = () => {
       setOpenTabIds(target.files.slice(0, 3).map((f) => f.id));
       setActiveFileId(firstFile.id);
     }
-    setLogcatEntries(createInitialLogcatEntries(target.packageName));
+    setLogcatEntries(createInitialLogcatEntries(target.packageName, Date.now()));
     setStatusMessage(`Switched project to ${target.name}`);
   }, []);
 
@@ -581,7 +585,7 @@ export const AndroidStudioWorkspace: React.FC = () => {
               onChangeLogcatQuery={setLogcatQuery}
               onClearLogcat={() => setLogcatEntries([])}
               onRestartLogcat={() =>
-                setLogcatEntries(createInitialLogcatEntries(activePreset.packageName))
+                setLogcatEntries(createInitialLogcatEntries(activePreset.packageName, Date.now()))
               }
               onEmitSampleCrash={() => {
                 const now = new Date();

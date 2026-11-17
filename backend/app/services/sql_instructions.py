@@ -31,6 +31,7 @@ def sql_instructions(question: str) -> str:
             'When demonstrating constraints (NOT NULL, UNIQUE, PRIMARY KEY, FOREIGN KEY, CHECK, DEFAULT), '
             'ensure referenced parent tables retain a PRIMARY KEY on their referenced ID column before child tables add FOREIGN KEY. '
             'In MySQL 8, expressions and date functions in column DEFAULT clauses MUST be enclosed in parentheses, e.g. `DEFAULT (CURRENT_DATE)` or use literal constants. '
+            'To demonstrate that a constraint rejects bad data, put the comment -- EXPECTED ERROR: <reason> on the line directly above that statement; it is recorded with its real MySQL error and the script continues. Never add helper tables (such as error_log) to capture errors. '
         )
     if re.search(r'\bHAVING\b|\bGROUP\s+BY\b', text, re.I):
         instructions += ('Choose sample rows so each demonstrated HAVING predicate has at least one matching group. '

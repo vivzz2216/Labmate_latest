@@ -135,7 +135,8 @@ class BrainTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_unknown_adapter_and_excessive_questions_never_execute(self):
         with self.assertRaises(GenerationError):
-            await make_plan([{'id':1,'language':'python','text':'Build a tkinter GUI.'}])
+            # Tkinter has a real runtime now; JavaFX still has no capture adapter.
+            await make_plan([{'id':1,'language':'java','text':'Build a JavaFX GUI.'}])
         questions=[{'id':i,'language':'react','text':'Use Vue only.'} for i in range(1,5)]
         with self.assertRaises(GenerationError):await make_plan(questions)
 

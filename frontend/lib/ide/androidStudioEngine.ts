@@ -1087,11 +1087,20 @@ export function getLogcatTagColor(tag: string): string {
   return LOGCAT_TAG_PALETTE[idx];
 }
 
-export function createInitialLogcatEntries(packageName: string): LogcatEntry[] {
+/** Logcat-style local time: 2026-11-17 14:03:22.517 */
+export function logcatTime(ms: number): string {
+  const d = new Date(ms);
+  const p = (n: number, w = 2) => String(n).padStart(w, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${p(d.getMilliseconds(), 3)}`;
+}
+
+export function createInitialLogcatEntries(packageName: string, baseMs?: number): LogcatEntry[] {
+  // Without baseMs (server render) the fixed sample times are kept so hydration matches; the client passes Date.now().
+  const at = (fixed: string, offsetMs: number) => (baseMs === undefined ? fixed : logcatTime(baseMs - 1200 + offsetMs));
   return [
     {
       id: "log-1",
-      timestamp: "2026-11-15 22:42:10.114",
+      timestamp: at("2026-11-15 22:42:10.114", 0),
       pid: 4820,
       tid: 4820,
       tag: "ActivityTaskManager",
@@ -1101,7 +1110,7 @@ export function createInitialLogcatEntries(packageName: string): LogcatEntry[] {
     },
     {
       id: "log-2",
-      timestamp: "2026-11-15 22:42:10.302",
+      timestamp: at("2026-11-15 22:42:10.302", 188),
       pid: 6142,
       tid: 6142,
       tag: "CompatibilityChange",
@@ -1111,7 +1120,7 @@ export function createInitialLogcatEntries(packageName: string): LogcatEntry[] {
     },
     {
       id: "log-3",
-      timestamp: "2026-11-15 22:42:10.489",
+      timestamp: at("2026-11-15 22:42:10.489", 375),
       pid: 6142,
       tid: 6142,
       tag: "MainActivity",
@@ -1121,7 +1130,7 @@ export function createInitialLogcatEntries(packageName: string): LogcatEntry[] {
     },
     {
       id: "log-4",
-      timestamp: "2026-11-15 22:42:10.618",
+      timestamp: at("2026-11-15 22:42:10.618", 504),
       pid: 6142,
       tid: 6171,
       tag: "HWUI",
@@ -1131,7 +1140,7 @@ export function createInitialLogcatEntries(packageName: string): LogcatEntry[] {
     },
     {
       id: "log-5",
-      timestamp: "2026-11-15 22:42:10.745",
+      timestamp: at("2026-11-15 22:42:10.745", 631),
       pid: 6142,
       tid: 6142,
       tag: "Choreographer",
@@ -1141,7 +1150,7 @@ export function createInitialLogcatEntries(packageName: string): LogcatEntry[] {
     },
     {
       id: "log-6",
-      timestamp: "2026-11-15 22:42:11.012",
+      timestamp: at("2026-11-15 22:42:11.012", 898),
       pid: 6142,
       tid: 6155,
       tag: "ProfileInstaller",
@@ -1278,9 +1287,22 @@ export function analyzeStudioProblems(files: StudioFile[]): StudioProblem[] {
     if (file.kind === "kotlin" || file.kind === "gradle-kts") {
       let braceBalance = 0;
       let firstOpenLine = 1;
+      let inBlockComment = false;
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
-        const stripped = line.replace(/\/\/.*$/, "");
+        // Braces inside /* ... */ (possibly spanning lines) are not code.
+        let code = "";
+        let rest = line;
+        while (rest.length > 0) {
+          if (inBlockComment) {
+            const end = rest.indexOf("*/");
+            if (end < 0) { rest = ""; } else { inBlockComment = false; rest = rest.slice(end + 2); }
+          } else {
+            const start = rest.indexOf("/*");
+            if (start < 0) { code += rest; rest = ""; } else { code += rest.slice(0, start); inBlockComment = true; rest = rest.slice(start + 2); }
+          }
+        }
+        const stripped = code.replace(/\/\/.*$/, "");
         if (stripped.indexOf("{") >= 0 && braceBalance === 0) {
           firstOpenLine = i + 1;
         }
@@ -1379,6 +1401,119 @@ export function analyzeStudioProblems(files: StudioFile[]): StudioProblem[] {
     }
   });
 
+  unresolvedReferenceProblems(files).forEach((p) => problems.push(p));
+  return problems;
+}
+
+// Names Kotlin resolves without an import (kotlin.*, kotlin.collections.*, java.lang.*) that are commonly called
+// with a capital letter, e.g. Exception("x") or StringBuilder().
+const KOTLIN_IMPLICIT_CALLS = new Set([
+  "Pair", "Triple", "Any", "Unit", "String", "Int", "Long", "Double", "Float", "Boolean", "Char", "Byte", "Short",
+  "Array", "IntArray", "LongArray", "DoubleArray", "FloatArray", "BooleanArray", "CharArray", "ByteArray",
+  "ArrayList", "HashMap", "HashSet", "LinkedHashMap", "LinkedHashSet", "StringBuilder", "Regex", "Lazy",
+  "Exception", "RuntimeException", "Error", "Throwable", "IllegalArgumentException", "IllegalStateException",
+  "IndexOutOfBoundsException", "NullPointerException", "NumberFormatException", "UnsupportedOperationException",
+  "ArithmeticException", "ClassCastException", "NoSuchElementException", "ConcurrentModificationException",
+  "Thread", "Runnable", "Math", "System", "Integer", "Object", "Comparable", "Comparator", "Iterable", "Sequence",
+  "Suppress", "JvmStatic", "JvmField", "JvmOverloads", "Deprecated", "Volatile", "Synchronized", "Throws",
+]);
+
+/** Kotlin source without comments and string contents (template expressions are kept). */
+function kotlinCode(src: string): string {
+  let out = "";
+  let i = 0;
+  const n = src.length;
+  while (i < n) {
+    const two = src.substr(i, 2);
+    if (two === "//") {
+      while (i < n && src.charAt(i) !== "\n") i++;
+    } else if (two === "/*") {
+      const end = src.indexOf("*/", i + 2);
+      const stop = end < 0 ? n : end + 2;
+      out += src.slice(i, stop).replace(/[^\n]/g, " ");
+      i = stop;
+    } else if (src.charAt(i) === '"') {
+      const raw = src.substr(i, 3) === '"""';
+      const quote = raw ? '"""' : '"';
+      out += quote;
+      i += quote.length;
+      while (i < n && src.substr(i, quote.length) !== quote) {
+        if (!raw && src.charAt(i) === "\\") { out += "  "; i += 2; continue; }
+        if (src.substr(i, 2) === "${") {
+          let depth = 0;
+          while (i < n) {
+            const c = src.charAt(i);
+            out += c;
+            i++;
+            if (c === "{") depth++;
+            else if (c === "}" && --depth === 0) break;
+          }
+          continue;
+        }
+        out += src.charAt(i) === "\n" ? "\n" : " ";
+        i++;
+      }
+      out += quote;
+      i += quote.length;
+    } else if (src.charAt(i) === "'") {
+      const end = src.indexOf("'", i + (src.charAt(i + 1) === "\\" ? 3 : 2));
+      const stop = end < 0 ? i + 1 : end + 1;
+      out += " ".repeat(stop - i);
+      i = stop;
+    } else {
+      out += src.charAt(i);
+      i++;
+    }
+  }
+  return out;
+}
+
+/**
+ * A capitalised call (a Composable or constructor) must be declared in the project, imported, or implicit in Kotlin;
+ * otherwise kotlinc reports "Unresolved reference". Files with wildcard imports are skipped, since the names they
+ * bring in are unknown here.
+ */
+function unresolvedReferenceProblems(files: StudioFile[]): StudioProblem[] {
+  const problems: StudioProblem[] = [];
+  const kotlinFiles = files.filter((f) => f.kind === "kotlin");
+  const declared = new Set<string>();
+  kotlinFiles.forEach((f) => {
+    const code = kotlinCode(f.content);
+    const decl = /\b(?:fun|class|object|interface|typealias|val|var)\s+(?:<[^>]*>\s*)?(?:[A-Za-z_][\w.]*\.)?([A-Z]\w*)/g;
+    let m: RegExpExecArray | null;
+    while ((m = decl.exec(code))) declared.add(m[1]);
+  });
+  kotlinFiles.forEach((f) => {
+    const code = kotlinCode(f.content);
+    if (/^\s*import\s+[\w.]+\.\*\s*$/m.test(code)) return;
+    const imported = new Set<string>();
+    code.replace(/^\s*import\s+[\w.]+?\.([A-Za-z_]\w*)(?:\s+as\s+([A-Za-z_]\w*))?\s*$/gm, (_all, name: string, alias?: string) => {
+      imported.add(alias || name);
+      return "";
+    });
+    const lines = code.split(/\r?\n/);
+    const seen = new Set<string>();
+    lines.forEach((line, idx) => {
+      if (/^\s*(?:package|import)\b/.test(line)) return;
+      const call = /(^|[^\w.@:$])([A-Z]\w*)\s*(?:<[^>()]*>)?\s*[({]/g;
+      let m: RegExpExecArray | null;
+      while ((m = call.exec(line))) {
+        const name = m[2];
+        if (declared.has(name) || imported.has(name) || KOTLIN_IMPLICIT_CALLS.has(name) || seen.has(name)) continue;
+        // `class Foo(` / `fun Foo(` declarations and `: Base(` supertypes of declared classes are handled above.
+        seen.add(name);
+        problems.push({
+          id: `${f.id}-unresolved-${name}`,
+          fileId: f.id,
+          fileName: f.tabTitle,
+          line: idx + 1,
+          column: m.index + m[1].length + 1,
+          severity: "error",
+          message: `Unresolved reference: ${name}`,
+        });
+      }
+    });
+  });
   return problems;
 }
 
@@ -1611,7 +1746,7 @@ export function runAndroidApp(
       logcatEmitted: [
         {
           id: "err-log-" + Date.now(),
-          timestamp: "2026-11-15 22:45:12.104",
+          timestamp: logcatTime(start + 0),
           pid: 6204,
           tid: 6204,
           tag: "GradleBuild",
@@ -1648,7 +1783,7 @@ export function runAndroidApp(
         stdout.push(rendered);
         emittedLogs.push({
           id: `run-stdout-${idx}-${Date.now()}`,
-          timestamp: "2026-11-15 22:45:14.220",
+          timestamp: logcatTime(start + 0),
           pid: 6410,
           tid: 6410,
           tag: "System.out",
@@ -1665,7 +1800,7 @@ export function runAndroidApp(
         const msg = evalKotlinSimpleExpr(logMatch[3], env);
         emittedLogs.push({
           id: `run-log-${idx}-${Date.now()}`,
-          timestamp: "2026-11-15 22:45:14.310",
+          timestamp: logcatTime(start + 90),
           pid: 6410,
           tid: 6410,
           tag: logMatch[2],
@@ -1679,7 +1814,7 @@ export function runAndroidApp(
 
   emittedLogs.push({
     id: "run-launch-" + Date.now(),
-    timestamp: "2026-11-15 22:45:14.540",
+    timestamp: logcatTime(start + 320),
     pid: 6410,
     tid: 6410,
     tag: "ActivityTaskManager",

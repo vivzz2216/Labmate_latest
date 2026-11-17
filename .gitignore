@@ -139,3 +139,7 @@ backend/scratch/
 # --- Generated docs ---
 docs/_build/
 /site
+
+# Local test/capture scratch folders
+backend/pytest-of-*/
+backend/labmate-browser-tmp/

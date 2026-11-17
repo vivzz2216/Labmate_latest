@@ -63,6 +63,7 @@ interface SqlQueryTab {
   rows: SqlValue[][];
   editableTable?: string;
   sourceRowIndices?: number[];
+  realCells?: boolean[][];
 }
 
 const INITIAL_SQL = "select * from shipper;";
@@ -79,6 +80,7 @@ function buildInitialSqlTab(state: DatabaseState): SqlQueryTab {
     statusIsError: false,
     columns: q ? q.columns : [],
     rows: q ? q.rows : [],
+    realCells: q?.realCells,
     editableTable: q?.editableTable,
     sourceRowIndices: q?.sourceRowIndices,
   };
@@ -197,6 +199,7 @@ export function DbBrowserWorkspace() {
             statusIsError: !batch.ok,
             columns: q ? q.columns : batch.ok ? t.columns : [],
             rows: q ? q.rows : batch.ok ? t.rows : [],
+            realCells: q ? q.realCells : batch.ok ? t.realCells : undefined,
             editableTable: q?.editableTable,
             sourceRowIndices: q?.sourceRowIndices,
           };
@@ -346,6 +349,7 @@ export function DbBrowserWorkspace() {
           ...t,
           columns: q.columns,
           rows: q.rows,
+          realCells: q.realCells,
           editableTable: q.editableTable,
           sourceRowIndices: q.sourceRowIndices,
         }));
@@ -377,6 +381,7 @@ export function DbBrowserWorkspace() {
             statusIsError: false,
             columns: r ? r.columns : [],
             rows: r ? r.rows : [],
+            realCells: r?.realCells,
             editableTable: r?.editableTable,
             sourceRowIndices: r?.sourceRowIndices,
           },
@@ -1431,6 +1436,7 @@ export function DbBrowserWorkspace() {
                   <ResultsGrid
                     columns={activeSqlTab.columns}
                     rows={activeSqlTab.rows}
+                    realCells={activeSqlTab.realCells}
                     selectedCell={
                       selectedCell && selectedCell.origin === "sql"
                         ? selectedCell

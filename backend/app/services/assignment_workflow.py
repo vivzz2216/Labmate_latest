@@ -17,7 +17,7 @@ import pdfplumber
 from docx import Document
 from fastapi import HTTPException
 from sqlalchemy import select, update, case
-from docx.shared import Inches, Pt
+from docx.shared import Inches
 
 from ..config import settings
 from ..database import SessionLocal
@@ -177,9 +177,9 @@ def local_upload_path(file_path) -> str:
 
 
 def document_text(upload: Upload) -> str:
-    upload = SimpleNamespace(**{**vars(upload), 'file_path': local_upload_path(upload.file_path)})
+    file_path = local_upload_path(upload.file_path)
     if upload.file_type == "docx":
-        doc = Document(upload.file_path)
+        doc = Document(file_path)
         chunks = []
         # Include tables in document order rather than losing questions inside cells.
         from docx.table import Table
@@ -200,15 +200,8 @@ def document_text(upload: Upload) -> str:
                             seen_cells.add(cell._tc)
         text = "\n".join(chunks)
     else:
-        with pdfplumber.open(upload.file_path) as pdf:
-            if len(pdf.pages) > 100:
-                raise ValueError("Please upload an assignment of 100 pages or fewer.")
-            page_text = [page.extract_text() or "" for page in pdf.pages]
-        scanned = [i+1 for i,value in enumerate(page_text) if len(value.strip()) < 20]
-        if scanned:
-            from .pdf_ocr import ocr_pdf_pages
-            recognized = ocr_pdf_pages(upload.file_path, scanned)
-            page_text = [recognized.get(i+1,value) for i,value in enumerate(page_text)]
+        from .pdf_ocr import pdf_text_pages
+        page_text = pdf_text_pages(file_path)
         text = "\n".join(page_text)
     if not text.strip():
         raise ValueError("No readable text was found. Upload a text-based PDF or Word document.")
@@ -426,11 +419,14 @@ def merge_language_alternatives(questions):
 
 
 def attach_evidence(results, questions, rows):
-    """Results as the report shows them: each evidence part gets the student's current screenshots.
+    """Results as the report shows them: each evidence part gets its screenshots.
 
-    rows are (question_id, slot, stored_path). The files are read when the report is built, so the report always
-    holds what the student has attached by then. Blocking (may fetch from object storage): call from a worker thread.
+    rows are (question_id, slot, stored_path). The student's own screenshot for a slot is used when there is one; otherwise
+    the dashboard LabMate built from their dataset fills the dashboard slot, and its extra views follow. The dataset file
+    itself is never placed in the report. Files are read when the report is built, so it always holds what the student has
+    attached by then. Blocking (may fetch from object storage): call from a worker thread.
     """
+    from .evidence_files import DATASET_SLOT
     from .storage_service import storage_service
     stored = {(question_id, slot): path for question_id, slot, path in rows}
     attached = []
@@ -439,8 +435,12 @@ def attach_evidence(results, questions, rows):
             attached.append(result)
             continue
         question = next((q for q in questions or [] if q.get('id') == result.get('id')), {})
-        paths, captions, missing = [], [], []
+        auto = [shot for shot in result.get('auto_evidence') or [] if shot.get('path') and os.path.isfile(shot['path'])]
+        auto_for_slot = {shot['slot']: shot for shot in auto if shot.get('slot')}
+        paths, captions, explanations, missing = [], [], [], []
         for slot in question.get('evidence_slots') or []:
+            if slot['id'] in (DATASET_SLOT, 'wireshark_pcap'):
+                continue
             local = None
             if stored.get((result['id'], slot['id'])):
                 try:
@@ -450,9 +450,21 @@ def attach_evidence(results, questions, rows):
             if local and os.path.isfile(local):
                 paths.append(local)
                 captions.append('Student-supplied: ' + slot['label'])
+            elif slot['id'] in auto_for_slot:
+                paths.append(auto_for_slot[slot['id']]['path'])
+                captions.append(auto_for_slot[slot['id']]['caption'])
             else:
                 missing.append(slot['label'])
-        attached.append({**result, 'screenshot_paths': paths, 'screenshot_captions': captions, 'evidence_missing': missing})
+        extras = [shot for shot in auto if not shot.get('slot')]
+        for shot in extras:
+            paths.append(shot['path'])
+            captions.append(shot['caption'])
+        # explanations line up with paths: student/slot images have none, studio extras follow them
+        explanations = [''] * (len(paths) - len(extras)) + [shot.get('explain', '') for shot in extras]
+        if result.get('studio_error'):
+            missing.append(result['studio_error'])
+        attached.append({**result, 'screenshot_paths': paths, 'screenshot_captions': captions, 'screenshot_explanations': explanations,
+                         'evidence_missing': missing})
     return attached
 
 
@@ -463,6 +475,25 @@ def store_workflow_result(workflow,index,result):
     elif index==len(rows): rows.append(result)
     else: raise ValueError('Workflow result order is incomplete.')
     workflow.results=rows
+
+
+def _record_failed_question(workflow, db, index, question, language, reason, progress, stage="generate", code="", answer=None):
+    """Store a single-question failure checkpoint without aborting the workflow."""
+    plan = plan_experiment(question["text"], language, code)
+    store_workflow_result(workflow, index, {
+        "id": question["id"],
+        "question": question["text"],
+        "language": language,
+        "answer": answer if answer is not None else reason,
+        "code": code,
+        "output": "",
+        "error": reason,
+        "status": "failed",
+        "screenshot_paths": [],
+        "evidence_plan": plan,
+        "verification_summary": verification_summary(plan, False, reason),
+    })
+    record(workflow, db, stage, progress, reason)
 
 
 async def extract_assignment(workflow_id: int, claim_token: str | None = None):
@@ -499,9 +530,10 @@ async def _extract_assignment(workflow_id: int):
                 unix_sections = unix_manual_tasks(original_text, mode=mode)
             sections = unix_sections or ((numbered_experiments(original_text) or numbered_questions(original_text)) if mode == 'code_only' else [])
             if sections:
+                validate_manual(sections)
                 workflow.questions = sections
                 workflow.error = None
-                upload.language = sections[0]["language"]
+                upload.language = next((item['language'] for item in sections if item['language'] != 'theory'), 'theory')
                 workflow.status = "queued" if workflow.batch_id else "ready"
                 record(workflow, db, "generate" if workflow.batch_id else "review", 20,
                        f"Preserved all {len(sections)} numbered experiments and their original requirements without model rewriting.")
@@ -570,7 +602,8 @@ async def _extract_assignment(workflow_id: int):
             else:
                 workflow.status = "ready"
                 record(workflow, db, "review", 20, f"Extracted {len(clean)} questions. Ready for review and processing.")
-        except ManualStructureError as error:
+        except (ManualStructureError, ManualLimitError) as error:
+            workflow.questions = []
             workflow.status, workflow.error = 'failed', str(error)
             record(workflow, db, 'extract', workflow.progress, str(error))
         except (GenerationUnavailableError, GenerationError, ValueError) as error:
@@ -578,7 +611,8 @@ async def _extract_assignment(workflow_id: int):
             try:
                 if workflow.mode == "theory_and_code":
                     raise ValueError("Local parser cannot reliably extract theory questions.")
-                local_tasks = await parser_service.parse_file(upload.file_path, upload.file_type)
+                local_tasks = await parser_service.parse_file(
+                    await asyncio.to_thread(local_upload_path, upload.file_path), upload.file_type)
                 local_tasks = filter_lab_tasks(local_tasks or [], mode="code_only")
                 if local_tasks:
                     clean = []
@@ -588,6 +622,7 @@ async def _extract_assignment(workflow_id: int):
                         if language not in LANGUAGES:
                             language = "python"
                         clean.append({"id": index + 1, "text": question_text, "language": language})
+                    validate_manual(clean)
                     workflow.questions = clean
                     workflow.error = None
                     upload.language = clean[0]["language"]
@@ -599,6 +634,9 @@ async def _extract_assignment(workflow_id: int):
                         record(workflow, db, "review", 20, f"Extracted {len(clean)} questions using local parser. Ready for review and processing.")
                     return
             except Exception as fallback_err:
+                if isinstance(fallback_err, ManualLimitError):
+                    workflow.questions = []
+                    error = fallback_err
                 logger.error(f"Local parser fallback failed: {fallback_err}")
             if isinstance(error, GenerationUnavailableError):
                 workflow.status, workflow.error = ("failed" if workflow.batch_id else "paused"), str(error)
@@ -643,7 +681,7 @@ def student_friendly_filename(question_text: str, language: str, index: int) -> 
         parts = [p.capitalize() for p in slug.split("_")]
         pascal_name = "".join(parts) or "Program"
         return f"{pascal_name}{ext}"
-    exp_match = re.search(r'exp(?:eriment)?[\s_–-]*(\d+)', question_text, re.I)
+    exp_match = re.search(r'exp(?:eriment)?[\s_â€“-]*(\d+)', question_text, re.I)
     exp_num = int(exp_match.group(1)) if exp_match else (index + 1)
     if language in {"colab", "python"} and exp_match:
         return f"Experiment_{exp_num:02d}_{slug}{ext}"
@@ -793,9 +831,78 @@ async def execute_web_assignment(question, language, group, username, on_retry, 
     return previous or {}, config or {}, execution
 
 
+def saved_ubuntu_draft(previous, question):
+    """Retry the same failed solution and input, rather than inventing a new assignment."""
+    if not previous or previous.get('status')!='failed' or previous.get('language')!='ubuntu' or previous.get('id')!=question['id']:
+        return None
+    code=previous.get('code')
+    if not isinstance(code,str) or not code.strip() or len(code)>50000:return None
+    stdin=previous.get('stdin')
+    if not isinstance(stdin,str):
+        stdin=next((item.get('text','') for item in (previous.get('verification') or {}).get('files',[])
+                    if item.get('name')=='stdin.txt'),'')
+    return {'code':code,'answer':previous.get('answer') or 'Program for the experiment.',
+            'stdin':stdin[:8000],'error':previous.get('error') or 'Required evidence was incomplete.'}
+
+
 async def process_assignment(workflow_id: int, claim_token: str | None = None):
     with claim_scope(workflow_id, claim_token):
         return await _process_assignment(workflow_id)
+
+
+
+def expected_output_gap(expected, output, language=''):
+    """Name the exact expected lines that are missing or out of order, so a correction targets them."""
+    def norm(text):
+        return re.sub(r'\s+', ' ', str(text)).strip().lower()
+    actual = [norm(line) for line in str(output).splitlines() if line.strip()]
+    wanted = [line for block in expected for line in str(block).splitlines() if line.strip()]
+    positions = [next((i for i, a in enumerate(actual) if norm(line) == a or norm(line) in a), -1) for line in wanted]
+    missing = [line for line, pos in zip(wanted, positions) if pos < 0]
+    present = [pos for pos in positions if pos >= 0]
+    lines = []
+    if missing:
+        lines.append('These expected lines are missing or worded differently (print them exactly, word for word):')
+        lines += ['  ' + line.strip() for line in missing[:12]]
+    if present != sorted(present):
+        lines.append('The expected lines are printed in a different order; print them in the order shown in the manual.')
+    if language == 'distributed' and lines:
+        lines.append('For threads/processes, collect results and print them in a deterministic order after joining, '
+                     'and never let two components write the same line concurrently.')
+    return ('\n' + '\n'.join(lines)) if lines else ''
+
+
+
+_READS_INPUT = {
+    'python': re.compile(r'\binput\s*\(|sys\.stdin'),
+    'java': re.compile(r'\bScanner\s*\(\s*System\.in|BufferedReader\s*\(\s*new\s+InputStreamReader\s*\(\s*System\.in|System\.in\.read'),
+    'c': re.compile(r'\b(?:scanf|fgets|getchar|gets|getline)\s*\('),
+    'cpp': re.compile(r'\b(?:cin\s*>>|scanf\s*\(|getline\s*\(|fgets\s*\()'),
+}
+
+
+def perturbed_input(stdin):
+    """The same input with every number changed by one (the sample's shape is kept, its values are not)."""
+    def bump(match):
+        text = match.group(0)
+        if '.' in text:
+            return format(float(text) + 1, '.%df' % len(text.split('.')[1]))
+        return str(int(text) + 1)
+    return re.sub(r'(?<![\w.])-?\d+(?:\.\d+)?(?![\w.])', bump, stdin or '')
+
+
+def output_ignores_input(language, code, stdin, output, other_output, other_stdin):
+    """True when a console program that reads numeric input printed exactly the same text for different numbers,
+    i.e. it most likely prints a hard-coded copy of the manual's sample instead of computing it."""
+    from .evidence_planner import strip_echoed_input
+    pattern = _READS_INPUT.get(language)
+    if not pattern or not pattern.search(code or '') or not re.search(r'\d', stdin or '') or stdin == other_stdin:
+        return False
+    def clean(text, given):
+        text = strip_echoed_input(text, given) if language == 'python' else str(text)
+        return re.sub(r'\s+', ' ', text).strip()
+    first, second = clean(output, stdin), clean(other_output, other_stdin)
+    return bool(first) and first == second
 
 
 async def _process_assignment(workflow_id: int):
@@ -805,6 +912,7 @@ async def _process_assignment(workflow_id: int):
         try:
             from ..security.execution_access import check_execution_access
             check_execution_access(upload.user)
+            validate_manual(workflow.questions)
             needs_worker = any(not q.get('is_theory') and
                 (workflow.language if workflow.language != 'auto' else q.get('language')) not in {'sql', 'theory'}
                 for q in workflow.questions)
@@ -869,6 +977,12 @@ async def _process_assignment(workflow_id: int):
                 language = planned.get('language') or (question["language"] if workflow.language == "auto" else workflow.language)
                 progress = 20 + int(65 * index / len(questions))
                 record(workflow, db, "generate", progress, f"Generating answer {index + 1} of {len(questions)}.")
+                if question.get("studio"):
+                    from .network_labs import run_studio_part
+                    record(workflow, db, "execute", progress, f"Building part {index + 1} of {len(questions)} in the practice environment.")
+                    store_workflow_result(workflow, index, await run_studio_part(workflow, db, question))
+                    record(workflow, db, "generate", 20 + int(65 * (index + 1) / len(questions)), f"Part {index + 1} finished.")
+                    continue
                 if question.get("is_theory") or question.get("language") == "theory":
                     theory_instruction = (
                         "You are writing a laboratory manual theory/viva answer as an authentic undergraduate engineering student.\n"
@@ -935,12 +1049,34 @@ async def _process_assignment(workflow_id: int):
                 web_execution = None
                 if language == 'ubuntu' and re.search(r'\b(?:install(?:ation)?|partitions?)\b.{0,60}\b(?:Ubuntu|operating system)\b|\binstall Ubuntu\b',question['text'],re.I):
                     reason='Ubuntu installation and partitioning require installer evidence. An existing Ubuntu desktop is not proof of installation; manual review is required.'
+                    # Record what can actually be inspected without pretending
+                    # the installer ran or touching a real disk.
+                    inspection_code='#!/bin/bash\n# Inspect the existing Ubuntu environment; this does not install it.\nuname -a\ncat /etc/os-release\ndf -hT\n'
+                    inspected=await execute_solution(inspection_code,'ubuntu','Inspect the current Ubuntu environment.',
+                        f'workflow_{workflow.id}_{uuid.uuid4().hex[:8]}',username,filename='existing_ubuntu.sh')
+                    inspection_verification=dict(inspected.verification or {})
+                    inspection_verification.update(status='failed',requirements_status='unverified',
+                        limitations=[reason],installation='not_performed')
                     store_workflow_result(workflow,index,{'id':question['id'],'question':question['text'],'language':'ubuntu',
-                        'answer':reason,'code':'','output':'','error':reason,'status':'failed','screenshot_paths':[],
-                        'verification':{'kind':'ubuntu','required':True,'status':'failed','limitations':[reason]},
+                        'answer':reason,'code':inspection_code,'output':inspected.output,
+                        'error':reason+ ('\n'+inspected.error if inspected.error else ''),'status':'failed','screenshot_paths':inspected.screenshots,
+                        'verification':inspection_verification,
                         'verification_summary':{'status':'failed','checks':{'installation':'unverified'},'failures':[reason]}})
                     record(workflow,db,'execute',progress,reason)
                     continue
+                if language=='ubuntu':
+                    from .unix_command_lab import command_lab_plan,run_command_lab
+                    command_question={**question,'text':question.get('manual_text') or question['text']}
+                    command_plan=command_lab_plan(command_question['text'],student_name=student_name,
+                        experiment_number=question.get('experiment_label'),roll_no=roll_no,
+                        department=department,institution=institution)
+                    if command_plan:
+                        record(workflow,db,'execute',progress,'Running Ubuntu commands individually in the native terminal.')
+                        result=await run_command_lab(command_question,command_plan)
+                        store_workflow_result(workflow,index,result)
+                        record(workflow,db,'capture',20+int(65*(index+1)/len(questions)),
+                               'Native command evidence captured.' if result['status']=='completed' else 'Command evidence needs review.')
+                        continue
                 from .evidence_planner import experiment_category
                 java_gui=language=='java' and experiment_category(language,question['text']) in {'java_awt','java_swing'}
                 is_web_project = java_gui or language in {'html', 'react'} or (language == 'python' and bool(re.search(r'\bflask\b',question['text'],re.I))) or (language == 'node' and bool(re.search(r'\b(?:react|express|api|server|http)\b', question['text'], re.I)))
@@ -988,7 +1124,7 @@ async def _process_assignment(workflow_id: int):
                             code_instruction += (
                                 "\n8. Return browser_tests as declarative browser steps, never JavaScript or Python test code. "
                                 "For a static page with no user interaction, return an empty array. For a task that asks the user "
-                                "to interact with the page, return 1–3 scenarios, each with 1–8 actions and expected_text values. "
+                                "to interact with the page, return 1â€“3 scenarios, each with 1â€“8 actions and expected_text values. "
                                 "Actions may only be fill or click. Locate controls by accessible role and name, label, or placeholder. "
                                 "Use locator_type=role with role such as button/textbox/spinbutton and locator as its accessible name; "
                                 "use role=\"\" for label/placeholder locators. Every click must have value=\"\". "
@@ -1026,14 +1162,23 @@ async def _process_assignment(workflow_id: int):
                             code_instruction += ubuntu_instructions()
                         elif language == 'r':
                             from .r_runtime import r_instructions
-                            code_instruction += r_instructions()
-                        solution = await generation_service.generate_json(
-                            code_instruction,
-                            f"Language: {language}\n{personalization_prompt}\nAdditional requirements: {workflow.instructions}\nProject brief: {planned.get('brief','')}\n"
-                            + (question_dataset_brief(question)+'\n' if (question.get('datasets') or question.get('builtin_datasets')) else '')
-                            + f"Question:\n{question['text']}",
-                            ANSWER_SCHEMA, on_retry=retry_status,
-                        )
+                            code_instruction += r_instructions(question['text'])
+                        previous = (workflow.results or [])[index] if index < len(workflow.results or []) else None
+                        draft = saved_ubuntu_draft(previous, question) if language == 'ubuntu' else None
+                        if draft:
+                            repaired_code=draft['code']
+                            needs_repair=bool((previous.get('verification') or {}).get('repairable_errors')) or previous.get('execution_stages',{}).get('execution')!='passed'
+                            if needs_repair and '/etc/profile.d/' not in draft['error']:
+                                repaired_code=await repair_generated_code(question['text'],'ubuntu',repaired_code,draft['error'])
+                            solution={'language':'ubuntu','answer':draft['answer'],'code':repaired_code,'stdin':draft['stdin'],'browser_tests':[]}
+                        else:
+                            solution = await generation_service.generate_json(
+                                code_instruction,
+                                f"Language: {language}\n{personalization_prompt}\nAdditional requirements: {workflow.instructions}\nProject brief: {planned.get('brief','')}\n"
+                                + (question_dataset_brief(question)+'\n' if (question.get('datasets') or question.get('builtin_datasets')) else '')
+                                + f"Question:\n{question['text']}",
+                                ANSWER_SCHEMA, on_retry=retry_status,
+                            )
                         answer = str(solution.get("answer", "")).strip()
                         code = normalize_generated_code(solution.get("code", "")).strip()
                         if code and not answer:
@@ -1056,40 +1201,12 @@ async def _process_assignment(workflow_id: int):
                     except GenerationError as ai_err:
                         logger.warning(f"AI generation failed for question {index + 1} ({ai_err}). No unverified substitute will be executed.")
                         reason = f"AI code generation failed for question {index + 1}: {ai_err}"
-                        summary = verification_summary(plan_experiment(question["text"], language, ""), False, reason)
-                        store_workflow_result(workflow, index, {
-                            "id": question["id"],
-                            "question": question["text"],
-                            "language": language,
-                            "answer": reason,
-                            "code": "",
-                            "output": "",
-                            "error": reason,
-                            "status": "failed",
-                            "screenshot_paths": [],
-                            "evidence_plan": plan_experiment(question["text"], language, ""),
-                            "verification_summary": summary,
-                        })
-                        record(workflow, db, "generate", progress, reason)
+                        _record_failed_question(workflow, db, index, question, language, reason, progress)
                         continue
                 
                     if actual_language not in LANGUAGES or not answer or not code:
                         reason = f"AI generation returned an incomplete solution for question {index + 1} (language={actual_language}); no unverified substitute was executed."
-                        summary = verification_summary(plan_experiment(question["text"], language, ""), False, reason)
-                        store_workflow_result(workflow, index, {
-                            "id": question["id"],
-                            "question": question["text"],
-                            "language": language,
-                            "answer": reason,
-                            "code": "",
-                            "output": "",
-                            "error": reason,
-                            "status": "failed",
-                            "screenshot_paths": [],
-                            "evidence_plan": plan_experiment(question["text"], language, ""),
-                            "verification_summary": summary,
-                        })
-                        record(workflow, db, "generate", progress, reason)
+                        _record_failed_question(workflow, db, index, question, language, reason, progress)
                         continue
                 if actual_language == "python" and re.search(r"\binput\s*\(", code) and not stdin_data:
                     # One interactive program must not abort the whole manual: record this question as
@@ -1142,7 +1259,7 @@ async def _process_assignment(workflow_id: int):
 
                 notebook_config = None
                 if evidence_plan['category'] == 'notebook':
-                    exp_m = re.search(r'exp(?:eriment)?[\s_–-]*(\d+)', question['text'] + ' ' + (upload.original_filename or ''), re.I)
+                    exp_m = re.search(r'exp(?:eriment)?[\s_â€“-]*(\d+)', question['text'] + ' ' + (upload.original_filename or ''), re.I)
                     exp_no = f"{int(exp_m.group(1)):02d}" if exp_m else f"{index+1:02d}"
                     if question.get('experiment_no'):
                         # A multi-part experiment numbers its notebooks by the experiment, not by the part's position.
@@ -1164,6 +1281,7 @@ async def _process_assignment(workflow_id: int):
                         if language_mismatch:
                             raise ValueError(f"Generated language {actual_language} does not match requested language {language}; execution was not attempted.")
                         if evidence_plan['category'] == 'notebook':
+                            code = neutralize_magics(code)
                             from .colab_requirements import missing_required_libraries
                             missing = missing_required_libraries(question['text'], code)
                             if missing: raise ValueError('Required notebook libraries missing from solution: '+', '.join(missing))
@@ -1188,7 +1306,7 @@ async def _process_assignment(workflow_id: int):
                         if requires_interaction:
                             verification = {"required": True, "status": "failed", "tests": [],
                                             "error": "The required browser interaction could not be verified."}
-                    if not is_web_project and not success and not language_mismatch and evidence_plan["supported"] and execution_stages.get('capture') != 'unavailable' and (execution_stages.get('execution') != 'not_run' or execution_stages.get('compile') == 'failed') and not (actual_language=='ubuntu' and execution_stages.get('execution')=='passed') and (
+                    if not is_web_project and not success and not language_mismatch and evidence_plan["supported"] and execution_stages.get('capture') != 'unavailable' and (execution_stages.get('execution') != 'not_run' or execution_stages.get('compile') == 'failed') and not (actual_language=='ubuntu' and execution_stages.get('execution')=='passed' and not (verification or {}).get('repairable_errors')) and (
                             bool(error or output) or bool(verification and (verification.get("error") or verification.get("failures")))):
                         for repair_attempt in range(1 if actual_language=='ubuntu' else 2):
                             record(workflow, db, "execute", progress,
@@ -1200,6 +1318,7 @@ async def _process_assignment(workflow_id: int):
                                     from .notebook_magics import neutralize_magics
                                     code = neutralize_magics(code)
                                 if evidence_plan['category'] == 'notebook':
+                                    code = neutralize_magics(code)
                                     from .colab_requirements import missing_required_libraries
                                     missing = missing_required_libraries(question['text'], code)
                                     if missing: raise ValueError('Required notebook libraries missing from solution: '+', '.join(missing))
@@ -1240,6 +1359,7 @@ async def _process_assignment(workflow_id: int):
                                    f"Correcting question {index + 1}: its output differs from the manual's expected output (attempt {repair_attempt + 1}).")
                             problem = ("The program compiled and ran, but its output does not match the expected output stated in the manual.\n"
                                        "Expected output:\n" + "\n".join(evidence_plan["expected_output"]) + "\nActual output:\n" + str(output))
+                            problem += expected_output_gap(evidence_plan["expected_output"], str(output), actual_language)
                             try:
                                 code = await repair_generated_code(question["text"], actual_language, code, problem)
                                 execution = await execute_solution(
@@ -1256,6 +1376,25 @@ async def _process_assignment(workflow_id: int):
                                 raise
                             except Exception:
                                 break
+                    # The manual's sample alone cannot tell a computed result from a printed copy of it: run once more with
+                    # different numbers and flag output that does not change.
+                    if (success and code and stdin_data and not is_web_project and not language_mismatch
+                            and actual_language in {'python', 'java', 'c', 'cpp'} and evidence_plan['category'] == 'console'):
+                        other_stdin = perturbed_input(stdin_data)
+                        try:
+                            probe_ok, probe_output, _, _ = await execute_solution(
+                                code, actual_language, question["text"], group, username, other_stdin, filename=src_filename,
+                                browser_tests=browser_tests, interaction_is_required=requires_interaction, project_config=notebook_config)
+                        except (GenerationUnavailableError, WorkerUnavailableError):
+                            raise
+                        except Exception:
+                            probe_ok, probe_output = False, ''
+                        if probe_ok and output_ignores_input(actual_language, code, stdin_data, output, probe_output, other_stdin):
+                            verification = dict(verification or {})
+                            verification['runtime_notes'] = list(verification.get('runtime_notes') or []) + [
+                                'the program printed exactly the same output when every number in its input was changed, so it '
+                                'may print a fixed copy of the sample instead of computing the result.']
+                            verification['input_dependence'] = 'failed'
                     # Capture exactly what the runtime returned, including failures.
                     if actual_language in {'java', 'distributed'}:
                         from .runtime_engine import java_class_name
@@ -1292,7 +1431,9 @@ async def _process_assignment(workflow_id: int):
                     capture_views = ("output",) if category in {"console", "api"} or actual_http else ()
                     browser_captures = list(screenshots)
                     candidates = ([{'path':p,'kind':'gui','caption':'Actual Java UI component capture (private display)'} for p in browser_captures]
-                                  if category in {'java_awt','java_swing'} else report_browser_captures(browser_captures,verification))
+                                  if category in {'java_awt','java_swing'} else
+                                  [{'path':p,'kind':'gui','caption':'Actual Tkinter window capture (private display)'} for p in browser_captures]
+                                  if category == 'tkinter' else report_browser_captures(browser_captures,verification))
                     browser_frame_errors = []
                     if category in {'browser', 'react', 'flask'}:
                         candidates, browser_frame_errors = await frame_browser_captures(
@@ -1395,6 +1536,7 @@ async def _process_assignment(workflow_id: int):
                     success = False
                 result = {"id": question["id"], "question": question["text"], "language": actual_language,
                           "answer": answer, "code": code, "output": output, "error": error,
+                          **({'stdin':stdin_data or ''} if actual_language=='ubuntu' else {}),
                           "status": "completed" if success else "failed", "screenshot_paths": screenshots,
                           "evidence_plan": evidence_plan, "verification_summary": summary,
                           "agent_decision": planned,
@@ -1522,6 +1664,9 @@ def build_word_report(upload, workflow):
             and not any(r.get('is_theory') or r.get('language') in {'theory','ubuntu'} for r in workflow.results)):
         from .compact_report import build_compact_report
         return build_compact_report(upload,workflow)
+    if workflow.results and all(r.get('language') in {'ubuntu','theory'} for r in workflow.results) and any(r.get('language')=='ubuntu' for r in workflow.results):
+        from .ubuntu_report import build_ubuntu_report
+        return build_ubuntu_report(upload,workflow)
     if workflow.results and all(r.get('language') == 'sql' for r in workflow.results):
         from .sql_report import clean_report
         return clean_report(upload, workflow, document_text(upload))
@@ -1552,7 +1697,7 @@ def build_word_report(upload, workflow):
         decision = result.get('agent_decision') or {}
         if decision.get('report_policy') == 'images_only':
             if idx>0: document.add_page_break()
-            document.add_heading(f"Program {result['id']}"+((' — '+decision['topic']) if decision.get('topic') else ''),2)
+            document.add_heading(f"Program {result['id']}"+((' â€” '+decision['topic']) if decision.get('topic') else ''),2)
             if (decision.get('include_description') or result.get('language') == 'sql') and result.get('answer'):
                 document.add_paragraph(result['answer'])
             if result.get('status')=='failed':
@@ -1569,7 +1714,9 @@ def build_word_report(upload, workflow):
             embed_evidence_block(document, result.get("part_title") or result["question"], result.get("answer", ""),
                                  result.get("id", 1), result.get("screenshot_paths") or [],
                                  result.get("screenshot_captions") or [], result.get("evidence_missing") or [],
-                                 table=result.get("table"))
+                                 table=result.get("table"), tables_before=result.get("tables_before") or (),
+                                 explanations=result.get("screenshot_explanations") or (), observations=result.get("observations") or (),
+                                 notes=result.get("notes") or (), tables_after=result.get("tables_after") or ())
         elif is_theory:
             embed_theory_block(document, result.get("part_title") or result["question"], result.get("answer", ""),
                                result.get("id", 1), table=result.get("table"))
@@ -1606,6 +1753,8 @@ def build_word_report(upload, workflow):
                     document.add_paragraph("Browser evidence unavailable: no execution images could be captured.")
                     document.add_paragraph("Source code:\n" + result.get("code", "")[:20000])
             verification = result.get("verification")
+            for note in (verification or {}).get("runtime_notes") or []:
+                document.add_paragraph("Note: " + note)
             if verification and verification.get("status") == "failed":
                 status = str(verification.get("status", "unknown")).replace("_", " ").upper()
                 label = f"MySQL execution & semantic verification ({verification.get('engine') or 'MySQL'})" if verification.get('kind')=='database' else "R / RStudio execution verification" if verification.get('kind')=='rstudio' else "Python notebook execution verification" if verification.get('kind')=='notebook' else "Java UI interaction verification" if verification.get('kind')=='gui' else "HTTP request verification" if verification.get("kind") == "http" else "Render verification" if verification.get('kind')=='render' else "Browser interaction verification"
@@ -1645,14 +1794,15 @@ def build_word_report(upload, workflow):
                         document.add_paragraph(test.get('observed_text','')[:2000])
                         if test.get('error'): document.add_paragraph('Failure details: '+test['error'])
                 if verification.get("status") == "failed":
-                    document.add_paragraph("Diagnostic report — this SQL solution has not passed MySQL execution or result verification." if verification.get("kind") == "database" else "Diagnostic report — this solution has not passed browser verification.")
+                    document.add_paragraph("Diagnostic report — this SQL solution has not passed MySQL execution or result verification." if verification.get("kind") == "database" else "Diagnostic report — this solution has not passed " + {"rstudio": "R execution and RStudio evidence", "notebook": "notebook execution", "gui": "Java UI interaction", "http": "HTTP request", "ubuntu": "Ubuntu execution"}.get(verification.get("kind"), "browser") + " verification.")
                     if result.get("error"):
                         document.add_paragraph("Execution details: " + str(result["error"])[:2000])
                     if result.get('language') != 'sql':
                         document.add_paragraph("Source code:")
                         document.add_paragraph(result.get("code", "")[:20000])
                     if result.get('language') != 'sql' and (not result.get("screenshot_paths") or (
-                            result.get("screenshot_captions") is not None
+                            result.get('language') != 'r'  # RStudio captions never say "browser"; the evidence exists
+                            and result.get("screenshot_captions") is not None
                             and not any("browser" in caption.lower() for caption in result["screenshot_captions"]))):
                         document.add_paragraph("Browser evidence unavailable: the browser could not capture this run.")
                     elif result.get('language') == 'sql' and not any(os.path.isfile(p) for p in result.get('screenshot_paths', [])):
@@ -1662,15 +1812,15 @@ def build_word_report(upload, workflow):
                 # Build a descriptive caption for each screenshot
                 captions = result.get("screenshot_captions") or []
                 if ss_idx < len(captions):
-                    cap = f"Program {result['id']} — {captions[ss_idx]}"
+                    cap = f"Program {result['id']} â€” {captions[ss_idx]}"
                 elif len(screenshot_paths) == 1:
-                    cap = (f"Program {result['id']} — Browser Evidence"
+                    cap = (f"Program {result['id']} â€” Browser Evidence"
                            if result.get("language") == "html" else f"Program {result['id']}")
                 elif ss_idx == 0:
-                    cap = f"Program {result['id']} — Code"
+                    cap = f"Program {result['id']} â€” Code"
                 else:
-                    cap = (f"Program {result['id']} — Browser Evidence"
-                           if result.get("language") == "html" else f"Program {result['id']} — Output")
+                    cap = (f"Program {result['id']} â€” Browser Evidence"
+                           if result.get("language") == "html" else f"Program {result['id']} â€” Output")
                 if os.path.isfile(screenshot):
                     embed_screenshot(document, screenshot, caption=cap)
                 elif verification and verification.get("status") == "failed":

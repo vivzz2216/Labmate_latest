@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -301,17 +301,21 @@ export default function DashboardShell({
 
   const displayName = user?.name?.trim() || "Student";
 
-  const navItems = user?.is_admin
-    ? [
-        ...dashboardNavItems,
-        {
-          label: "Owner Admin",
-          icon: ShieldCheck,
-          href: "/admin/dashboard",
-          matchPrefix: "/admin",
-        },
-      ]
-    : dashboardNavItems;
+  const navItems = useMemo(
+    () =>
+      user?.is_admin
+        ? [
+            ...dashboardNavItems,
+            {
+              label: "Owner Admin",
+              icon: ShieldCheck,
+              href: "/admin/dashboard",
+              matchPrefix: "/admin",
+            },
+          ]
+        : dashboardNavItems,
+    [user?.is_admin],
+  );
 
   useEffect(() => {
     navItems.forEach((item) => {
@@ -321,7 +325,7 @@ export default function DashboardShell({
         // ignore prefetch errors
       }
     });
-  }, [router, user?.is_admin]);
+  }, [router, navItems]);
 
   const go = (href: string) => {
     setMobileNavOpen(false);
@@ -353,8 +357,8 @@ export default function DashboardShell({
               data-tooltip="LabMate"
             >
               <LabMateLogo
-                size="sm"
-                theme="dark"
+                size="md"
+                theme={theme === "light" ? "light" : "dark"}
                 showWordmark={false}
               />
             </Link>
@@ -367,8 +371,8 @@ export default function DashboardShell({
                 title="LabMate Dashboard"
               >
                 <LabMateLogo
-                  size="sm"
-                  theme="dark"
+                  size="md"
+                  theme={theme === "light" ? "light" : "dark"}
                   showWordmark={true}
                 />
               </Link>

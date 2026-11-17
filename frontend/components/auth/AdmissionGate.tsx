@@ -106,10 +106,10 @@ export default function AdmissionGate({children}: {children: ReactNode}) {
     <main role="status" aria-live="polite" style={{minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#050506', color: '#e4e4e7', padding: '24px'}}>
       <section style={{maxWidth: 520, width: '100%', textAlign: 'center', border: '1px solid #27272a', borderRadius: 16, padding: '36px 28px', background: '#0b0b0d'}}>
         <p style={{margin: 0, fontSize: 13, letterSpacing: '.08em', textTransform: 'uppercase', color: '#a78bfa'}}>High traffic</p>
-        <h1 style={{margin: '10px 0 8px', fontSize: 26, color: '#fafafa'}}>You're signed in. Please wait your turn.</h1>
+        <h1 style={{margin: '10px 0 8px', fontSize: 26, color: '#fafafa'}}>You&apos;re signed in. Please wait your turn.</h1>
         <p style={{margin: '0 0 22px', color: '#a1a1aa', lineHeight: 1.5}}>
-          A lot of students are using LabMate at the same moment. We admit them in order so everyone's work runs properly.
-          Keep this page open: you'll be let in automatically and we'll alert you.
+          A lot of students are using LabMate at the same moment. We admit them in order so everyone&apos;s work runs properly.
+          Keep this page open: you&apos;ll be let in automatically and we&apos;ll alert you.
         </p>
         <div style={{fontSize: 56, fontWeight: 700, color: '#fafafa', lineHeight: 1}}>#{view.position}</div>
         <p style={{margin: '8px 0 4px', color: '#d4d4d8'}}>

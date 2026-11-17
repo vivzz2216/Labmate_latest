@@ -91,8 +91,9 @@ def test_a_real_syntax_error_is_not_reported_as_every_library_missing():
 def test_notebook_validation_and_cells_accept_pip_magic():
     code = '%pip -q install tensorflow\nimport numpy as np\nprint(np.zeros(1))\n'
     validate_generated_code(code, 'python', capability='notebook')
-    with pytest.raises(SyntaxError):
-        validate_generated_code(code, 'python')  # outside a notebook a magic is still invalid
+    # Outside a notebook the magic is left as written: Python itself reports the SyntaxError when the file runs,
+    # with its real line, instead of the validator turning it into a policy violation.
+    validate_generated_code(code, 'python')
     cells = notebook_cells(code)
     assert len(cells) == 1 and cells[0]['code'].startswith('# %pip -q install tensorflow')
     import json

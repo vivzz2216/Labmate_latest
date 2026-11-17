@@ -24,6 +24,18 @@ def require_worker():
         raise RuntimeError('Host code execution is disabled. Configure the isolated runtime worker.')
 
 
+def ssh_executable():
+    """The OpenSSH client to launch. On Windows, Git's MSYS ssh.exe often comes first on PATH and aborts with
+    0xC0000022 when started from a service or non-MSYS Python process, so the built-in Windows client wins."""
+    import os
+    import shutil
+    if os.name == 'nt':
+        native = Path(os.environ.get('SystemRoot', r'C:\Windows')) / 'System32' / 'OpenSSH' / 'ssh.exe'
+        if native.is_file():
+            return str(native)
+    return shutil.which('ssh') or 'ssh'
+
+
 def worker_command():
     host, user = settings.SANDBOX_SSH_HOST, settings.SANDBOX_SSH_USER
     if not host or not re.fullmatch(r'[A-Za-z0-9_.:-]+', host) or host.startswith('-'):
@@ -34,7 +46,7 @@ def worker_command():
         if not file or not Path(file).is_file():
             raise ValueError('Sandbox identity and pinned SSH host key are required.')
     # The SSH key should have a forced command for this broker on a dedicated worker VM.
-    return ['ssh', '-T', '-o', 'BatchMode=yes', '-o', 'IdentitiesOnly=yes', '-o', 'StrictHostKeyChecking=yes',
+    return [ssh_executable(), '-T', '-o', 'BatchMode=yes', '-o', 'IdentitiesOnly=yes', '-o', 'StrictHostKeyChecking=yes',
             '-o', 'UserKnownHostsFile=' + settings.SANDBOX_KNOWN_HOSTS, '-o', 'ConnectTimeout=8',
             '-o', 'ServerAliveInterval=10', '-o', 'ServerAliveCountMax=2', '-i', settings.SANDBOX_SSH_KEY,
             '-p', str(settings.SANDBOX_SSH_PORT), user + '@' + host,
