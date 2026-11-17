@@ -34,6 +34,7 @@ def numbered_questions(text):
     if numbers != list(range(numbers[0], numbers[0] + len(numbers))):
         raise ManualStructureError('Question numbers are missing or out of order. Review the manual before processing.')
 
+    # Shared input data belongs to every question; a later task may depend on it.
     preface = lines[:headings[0][0]]
     shared = []
     for index, line in enumerate(preface):
@@ -52,7 +53,7 @@ def numbered_questions(text):
         body = '\n'.join(block)
         language = section_language('\n'.join(preface[:8]), body)
         if not is_actionable_lab_question(body, language):
-            return []
+            return []  # Leave non-programming question lists to the normal extractor.
         if shared:
             body += '\nSupplied data and constraints\n' + '\n'.join(shared)
         if len(body) > 15000:

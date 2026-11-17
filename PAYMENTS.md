@@ -4,10 +4,10 @@ The homepage offers one-time purchases through Razorpay Standard Checkout.
 
 | Pack | Total | Manual credits |
 | --- | ---: | ---: |
-| Single Manual | ₹29 | 1 |
-| Freshers Pack | ₹99 | 5 |
-| Intermediate Pack | ₹249 | 15 |
-| Semester Pack | ₹499 | 35 |
+| Quick Lab | ₹29 | 10 |
+| Lab Pack | ₹79 | 35 |
+| Semester Pack | ₹149 | 80 |
+| College Pack | ₹599 (existing offer applies before its cutoff) | 300 |
 
 One credit covers one uploaded manual containing at most **15 questions or exercises**. Oversized manuals are rejected, never silently truncated; split them before uploading. Explicitly numbered independent exercises inside a grouped task also count towards the limit. Individual SQL statements, command steps and implementation instructions are not separate questions.
 

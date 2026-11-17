@@ -1125,6 +1125,7 @@
       "backend/app/security/operator_access.py",
       "backend/app/security/signed_assets.py",
       "backend/app/services/admin_analytics.py",
+      "backend/app/services/admission.py",
       "backend/app/services/analysis_service.py",
       "backend/app/services/assignment_workflow.py",
       "backend/app/services/billing_service.py",
@@ -1170,6 +1171,7 @@
       "backend/tests/conftest.py",
       "backend/tests/test_academic_sql_colab_extraction.py",
       "backend/tests/test_admin_analytics.py",
+      "backend/tests/test_admission.py",
       "backend/tests/test_app_ui_workflow.py",
       "backend/tests/test_audit_regressions_2026.py",
       "backend/tests/test_audit_security_regressions.py",
@@ -1362,6 +1364,7 @@
     "imported_by": [
       "backend/app/middleware/csrf.py",
       "backend/app/routers/admin.py",
+      "backend/app/routers/admission.py",
       "backend/app/routers/ai_review.py",
       "backend/app/routers/analyze.py",
       "backend/app/routers/assignments.py",
@@ -1376,6 +1379,7 @@
       "backend/app/routers/upload.py",
       "backend/app/routers/workflows.py",
       "backend/app/security/execution_access.py",
+      "backend/tests/test_admission.py",
       "backend/tests/test_app_ui_workflow.py",
       "backend/tests/test_billing.py",
       "backend/tests/test_execution_access.py",
@@ -1676,6 +1680,7 @@
       "backend/app/main.py",
       "backend/tests/test_academic_sql_colab_extraction.py",
       "backend/tests/test_admin_analytics.py",
+      "backend/tests/test_admission.py",
       "backend/tests/test_app_ui_workflow.py",
       "backend/tests/test_billing.py",
       "backend/tests/test_execution_access.py",
@@ -1712,6 +1717,16 @@
       "fastapi",
       "sqlalchemy",
       "typing"
+    ]
+  },
+  "backend/app/routers/admission.py": {
+    "imports_from": [
+      "backend/app/middleware/auth.py",
+      "backend/app/services/__init__.py"
+    ],
+    "imported_by": [],
+    "external": [
+      "fastapi"
     ]
   },
   "backend/app/routers/ai_review.py": {
@@ -2137,6 +2152,7 @@
       "backend/app/routers/workflows.py",
       "backend/app/services/assignment_workflow.py",
       "backend/app/services/task_service.py",
+      "backend/tests/test_admission.py",
       "backend/tests/test_agent_clarification_api.py",
       "backend/tests/test_execution_access.py",
       "backend/tests/test_ide_java.py",
@@ -2238,6 +2254,7 @@
       "backend/app/routers/basic_auth.py",
       "backend/app/security/execution_access.py",
       "backend/app/services/admin_analytics.py",
+      "backend/app/services/admission.py",
       "backend/app/services/billing_service.py",
       "backend/app/services/profile_service.py",
       "backend/app/services/r_runtime.py",
@@ -2314,11 +2331,13 @@
     "imports_from": [],
     "imported_by": [
       "backend/app/routers/admin.py",
+      "backend/app/routers/admission.py",
       "backend/app/routers/billing.py",
       "backend/scripts/run_unix_manuals_e2e.py",
       "backend/scripts/verify_labs.py",
       "backend/scripts/verify_unix_manuals.py",
       "backend/tests/test_academic_sql_colab_extraction.py",
+      "backend/tests/test_admission.py",
       "backend/tests/test_audit_regressions_2026.py",
       "backend/tests/test_billing.py",
       "backend/tests/test_colab_requirements.py",
@@ -2376,6 +2395,21 @@
     "external": [
       "datetime",
       "sqlalchemy"
+    ]
+  },
+  "backend/app/services/admission.py": {
+    "imports_from": [
+      "backend/app/config.py",
+      "backend/app/security/operator_access.py"
+    ],
+    "imported_by": [
+      "backend/tests/test_admission.py"
+    ],
+    "external": [
+      "collections",
+      "math",
+      "threading",
+      "time"
     ]
   },
   "backend/app/services/analysis_service.py": {
@@ -4676,6 +4710,22 @@
       "types"
     ]
   },
+  "backend/tests/test_admission.py": {
+    "imports_from": [
+      "backend/app/config.py",
+      "backend/app/middleware/auth.py",
+      "backend/app/routers/__init__.py",
+      "backend/app/security/execution_access.py",
+      "backend/app/services/__init__.py",
+      "backend/app/services/admission.py"
+    ],
+    "imported_by": [],
+    "external": [
+      "fastapi",
+      "pytest",
+      "types"
+    ]
+  },
   "backend/tests/test_agent_clarification_api.py": {
     "imports_from": [
       "backend/app/database.py",
@@ -6818,6 +6868,17 @@
       "react"
     ]
   },
+  "frontend/components/auth/AdmissionGate.tsx": {
+    "imports_from": [
+      "frontend/contexts/BasicAuthContext.tsx",
+      "frontend/lib/api.ts"
+    ],
+    "imported_by": [],
+    "external": [
+      "next",
+      "react"
+    ]
+  },
   "frontend/components/auth/LoginModal.tsx": {
     "imports_from": [
       "frontend/contexts/BasicAuthContext.tsx",
@@ -8097,6 +8158,7 @@
       "frontend/app/page.tsx",
       "frontend/app/user-dashboard/page.tsx",
       "frontend/app/workspace/page.tsx",
+      "frontend/components/auth/AdmissionGate.tsx",
       "frontend/components/auth/LoginModal.tsx",
       "frontend/components/auth/ProfileGate.tsx",
       "frontend/components/auth/UserOnboarding.tsx",
@@ -8127,6 +8189,7 @@
       "frontend/app/dashboard/page.tsx",
       "frontend/app/user-dashboard/page.tsx",
       "frontend/app/workspace/page.tsx",
+      "frontend/components/auth/AdmissionGate.tsx",
       "frontend/components/auth/UserOnboarding.tsx",
       "frontend/components/dashboard/StudentProfileModal.tsx",
       "frontend/components/netlab/PacketTracerStudio.tsx",

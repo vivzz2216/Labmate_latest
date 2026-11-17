@@ -73,7 +73,7 @@
     "top_files": [
       {
         "path": "backend/app/config.py",
-        "imported_by": 112,
+        "imported_by": 114,
         "loc": 352,
         "summary": ""
       },
@@ -140,7 +140,7 @@
     "top_files": [
       {
         "path": "backend/app/middleware/auth.py",
-        "imported_by": 30,
+        "imported_by": 32,
         "loc": 237,
         "summary": "Authentication and authorization middleware"
       },
@@ -158,13 +158,13 @@
       },
       {
         "path": "backend/app/security/execution_access.py",
-        "imported_by": 15,
+        "imported_by": 16,
         "loc": 47,
         "summary": "Admission control for the existing controlled beta process runner."
       },
       {
         "path": "backend/app/security/operator_access.py",
-        "imported_by": 13,
+        "imported_by": 14,
         "loc": 35,
         "summary": "Operator identity is configured on the server, never by a browser flag."
       },
@@ -201,13 +201,13 @@
     ]
   },
   "api_routers": {
-    "file_count": 19,
-    "total_loc": 3684,
-    "routes_count": 66,
+    "file_count": 20,
+    "total_loc": 3715,
+    "routes_count": 69,
     "top_files": [
       {
         "path": "backend/app/routers/__init__.py",
-        "imported_by": 20,
+        "imported_by": 21,
         "loc": 1,
         "summary": ""
       },
@@ -268,13 +268,13 @@
     ]
   },
   "workflow_services": {
-    "file_count": 48,
-    "total_loc": 11260,
+    "file_count": 49,
+    "total_loc": 11391,
     "routes_count": 0,
     "top_files": [
       {
         "path": "backend/app/services/__init__.py",
-        "imported_by": 34,
+        "imported_by": 36,
         "loc": 1,
         "summary": ""
       },
@@ -549,8 +549,8 @@
     ]
   },
   "backend_tests": {
-    "file_count": 116,
-    "total_loc": 16292,
+    "file_count": 117,
+    "total_loc": 16436,
     "routes_count": 0,
     "top_files": [
       {
@@ -732,8 +732,8 @@
     ]
   },
   "frontend_components": {
-    "file_count": 100,
-    "total_loc": 39236,
+    "file_count": 101,
+    "total_loc": 39364,
     "routes_count": 0,
     "top_files": [
       {
@@ -804,20 +804,20 @@
     "routes_count": 0,
     "top_files": [
       {
+        "path": "frontend/contexts/BasicAuthContext.tsx",
+        "imported_by": 17,
+        "loc": 384,
+        "summary": ""
+      },
+      {
         "path": "frontend/lib/powerbi/types.ts",
         "imported_by": 17,
         "loc": 133,
         "summary": ""
       },
       {
-        "path": "frontend/contexts/BasicAuthContext.tsx",
-        "imported_by": 16,
-        "loc": 384,
-        "summary": ""
-      },
-      {
         "path": "frontend/lib/api.ts",
-        "imported_by": 14,
+        "imported_by": 15,
         "loc": 762,
         "summary": ""
       },

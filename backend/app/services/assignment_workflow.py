@@ -37,6 +37,7 @@ from .analysis_service import normalize_generated_code, repair_generated_code
 from .profile_service import UserProfileService
 from .evidence_planner import plan_experiment, select_evidence, verification_summary
 from .manual_sections import numbered_experiments, numbered_questions, ManualStructureError
+from .manual_limits import validate_manual, ManualLimitError
 from .worker_health import WorkerUnavailableError, worker_health
 from .student_identity import align_student_stdin, student_identity_error
 
@@ -477,10 +478,26 @@ async def _extract_assignment(workflow_id: int):
             mode = workflow.mode or "code_only"
             workflow.agent_plan = {}
             original_text = await asyncio.to_thread(document_text, document_snapshot(upload))
-            # Keep the Railway release independent of the optional Unix/Ubuntu
-            # lab package. That parser is not shipped with this release; importing
-            # it here made every assignment upload fail before normal extraction.
-            sections = (numbered_experiments(original_text) or numbered_questions(original_text)) if mode == "code_only" else []
+            # A Computer Networks manual (Wireshark, Packet Tracer) is not a programming assignment: its parts are built in
+            # LabMate's own studios from the packet/network engines, so no language model is involved in recognising them.
+            from .network_labs import detect_network_lab
+            network_parts = detect_network_lab(original_text)
+            if network_parts:
+                validate_manual(network_parts)
+                workflow.questions = network_parts
+                workflow.error = None
+                upload.language = "theory"
+                workflow.status = "queued" if workflow.batch_id else "ready"
+                record(workflow, db, "generate" if workflow.batch_id else "review", 20,
+                       f"Recognised a Computer Networks experiment: {len(network_parts)} part(s) will be built in LabMate's practice environment.")
+                return
+            # Unix extraction is optional in releases that deliberately exclude Ubuntu.
+            import importlib.util
+            unix_sections = []
+            if importlib.util.find_spec(__package__ + '.unix_manual') is not None:
+                from .unix_manual import unix_manual_tasks
+                unix_sections = unix_manual_tasks(original_text, mode=mode)
+            sections = unix_sections or ((numbered_experiments(original_text) or numbered_questions(original_text)) if mode == 'code_only' else [])
             if sections:
                 workflow.questions = sections
                 workflow.error = None
@@ -1231,6 +1248,10 @@ async def _process_assignment(workflow_id: int):
                                 success, output, error, screenshots = execution
                                 verification = getattr(execution, "verification", None)
                                 execution_stages = getattr(execution, "stages", None) or {}
+                                if success and actual_language in {'python', 'c', 'cpp', 'java'}:
+                                    identity_error = student_identity_error(question['text'], code, output, student_name)
+                                    if identity_error:
+                                        success, error = False, identity_error
                             except (GenerationUnavailableError, WorkerUnavailableError):
                                 raise
                             except Exception:

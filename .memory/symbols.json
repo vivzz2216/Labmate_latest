@@ -83509,5 +83509,594 @@
     "routes": [],
     "exports": [],
     "parse_error": null
+  },
+  "backend/app/services/admission.py": {
+    "lang": "python",
+    "domain": "workflow_services",
+    "loc": 131,
+    "doc": "Waiting room: at most ADMISSION_MAX_ACTIVE signed-in students use the app at once.",
+    "imports": [
+      {
+        "module": "math",
+        "names": [],
+        "level": 0,
+        "line": 12
+      },
+      {
+        "module": "threading",
+        "names": [],
+        "level": 0,
+        "line": 13
+      },
+      {
+        "module": "time",
+        "names": [],
+        "level": 0,
+        "line": 14
+      },
+      {
+        "module": "collections",
+        "names": [
+          "OrderedDict",
+          "deque"
+        ],
+        "level": 0,
+        "line": 15
+      },
+      {
+        "module": "config",
+        "names": [
+          "settings"
+        ],
+        "level": 2,
+        "line": 116
+      },
+      {
+        "module": "config",
+        "names": [
+          "settings"
+        ],
+        "level": 2,
+        "line": 125
+      },
+      {
+        "module": "security.operator_access",
+        "names": [
+          "is_user_credit_exempt"
+        ],
+        "level": 2,
+        "line": 130
+      }
+    ],
+    "classes": [
+      {
+        "name": "AdmissionGate",
+        "line": 18,
+        "bases": [],
+        "doc": "",
+        "methods": [
+          {
+            "name": "__init__",
+            "line": 19,
+            "async": false,
+            "args": [
+              "self",
+              "limit",
+              "lease",
+              "claim",
+              "wait_lease",
+              "clock"
+            ]
+          },
+          {
+            "name": "_expire",
+            "line": 29,
+            "async": false,
+            "args": [
+              "self",
+              "now"
+            ]
+          },
+          {
+            "name": "_promote",
+            "line": 42,
+            "async": false,
+            "args": [
+              "self",
+              "now"
+            ]
+          },
+          {
+            "name": "_estimate",
+            "line": 47,
+            "async": false,
+            "args": [
+              "self",
+              "position",
+              "now"
+            ]
+          },
+          {
+            "name": "_view",
+            "line": 53,
+            "async": false,
+            "args": [
+              "self",
+              "status",
+              "position",
+              "now"
+            ]
+          },
+          {
+            "name": "enter",
+            "line": 58,
+            "async": false,
+            "args": [
+              "self",
+              "uid"
+            ]
+          },
+          {
+            "name": "leave",
+            "line": 87,
+            "async": false,
+            "args": [
+              "self",
+              "uid"
+            ]
+          },
+          {
+            "name": "is_active",
+            "line": 96,
+            "async": false,
+            "args": [
+              "self",
+              "uid"
+            ]
+          },
+          {
+            "name": "snapshot",
+            "line": 102,
+            "async": false,
+            "args": [
+              "self"
+            ]
+          }
+        ]
+      }
+    ],
+    "functions": [
+      {
+        "name": "get_gate",
+        "line": 113,
+        "async": false,
+        "args": [],
+        "doc": "The process-wide gate, rebuilt if the configured limits change (tests, restarts with new settings).",
+        "decorators": []
+      },
+      {
+        "name": "enabled",
+        "line": 124,
+        "async": false,
+        "args": [],
+        "doc": "",
+        "decorators": []
+      },
+      {
+        "name": "exempt",
+        "line": 129,
+        "async": false,
+        "args": [
+          "user"
+        ],
+        "doc": "",
+        "decorators": []
+      }
+    ],
+    "routes": [],
+    "exports": [
+      "AdmissionGate",
+      "get_gate",
+      "enabled",
+      "exempt"
+    ],
+    "parse_error": null
+  },
+  "backend/app/routers/admission.py": {
+    "lang": "python",
+    "domain": "api_routers",
+    "loc": 31,
+    "doc": "Waiting room endpoints: the page checks in here when it opens and every 30 seconds while it stays open.",
+    "imports": [
+      {
+        "module": "fastapi",
+        "names": [
+          "APIRouter",
+          "Depends"
+        ],
+        "level": 0,
+        "line": 2
+      },
+      {
+        "module": "middleware.auth",
+        "names": [
+          "get_current_user"
+        ],
+        "level": 2,
+        "line": 4
+      },
+      {
+        "module": "services",
+        "names": [
+          "admission"
+        ],
+        "level": 2,
+        "line": 5
+      }
+    ],
+    "classes": [],
+    "functions": [
+      {
+        "name": "enter",
+        "line": 11,
+        "async": true,
+        "args": [
+          "user"
+        ],
+        "doc": "Check in. `status` is \"active\" (use the app) or \"waiting\" (with `position` and an `estimated_wait_seconds`).",
+        "decorators": [
+          "router.post"
+        ]
+      },
+      {
+        "name": "leave",
+        "line": 19,
+        "async": true,
+        "args": [
+          "user"
+        ],
+        "doc": "Free the slot (or leave the line) when the student signs out or closes the app on purpose.",
+        "decorators": [
+          "router.post"
+        ]
+      },
+      {
+        "name": "status",
+        "line": 27,
+        "async": true,
+        "args": [
+          "user"
+        ],
+        "doc": "Capacity snapshot (no check-in).",
+        "decorators": [
+          "router.get"
+        ]
+      }
+    ],
+    "routes": [
+      {
+        "method": "POST",
+        "path": "/api/admission/enter",
+        "handler": "enter",
+        "line": 11
+      },
+      {
+        "method": "POST",
+        "path": "/api/admission/leave",
+        "handler": "leave",
+        "line": 19
+      },
+      {
+        "method": "GET",
+        "path": "/api/admission/status",
+        "handler": "status",
+        "line": 27
+      }
+    ],
+    "exports": [
+      "enter",
+      "leave",
+      "status"
+    ],
+    "parse_error": null
+  },
+  "backend/tests/test_admission.py": {
+    "lang": "python",
+    "domain": "backend_tests",
+    "loc": 144,
+    "doc": "Waiting room: a full app lets everyone sign in but only a limited number work at once; the rest wait in order.",
+    "imports": [
+      {
+        "module": "types",
+        "names": [
+          "SimpleNamespace"
+        ],
+        "level": 0,
+        "line": 2
+      },
+      {
+        "module": "pytest",
+        "names": [],
+        "level": 0,
+        "line": 4
+      },
+      {
+        "module": "fastapi",
+        "names": [
+          "FastAPI"
+        ],
+        "level": 0,
+        "line": 5
+      },
+      {
+        "module": "fastapi.testclient",
+        "names": [
+          "TestClient"
+        ],
+        "level": 0,
+        "line": 6
+      },
+      {
+        "module": "app.config",
+        "names": [
+          "settings"
+        ],
+        "level": 0,
+        "line": 8
+      },
+      {
+        "module": "app.middleware.auth",
+        "names": [
+          "get_current_user"
+        ],
+        "level": 0,
+        "line": 9
+      },
+      {
+        "module": "app.routers",
+        "names": [
+          "admission"
+        ],
+        "level": 0,
+        "line": 10
+      },
+      {
+        "module": "app.security.execution_access",
+        "names": [
+          "execution_user"
+        ],
+        "level": 0,
+        "line": 11
+      },
+      {
+        "module": "app.services",
+        "names": [
+          "admission"
+        ],
+        "level": 0,
+        "line": 12
+      },
+      {
+        "module": "app.services.admission",
+        "names": [
+          "AdmissionGate"
+        ],
+        "level": 0,
+        "line": 13
+      }
+    ],
+    "classes": [
+      {
+        "name": "Clock",
+        "line": 16,
+        "bases": [],
+        "doc": "",
+        "methods": [
+          {
+            "name": "__init__",
+            "line": 17,
+            "async": false,
+            "args": [
+              "self"
+            ]
+          },
+          {
+            "name": "__call__",
+            "line": 18,
+            "async": false,
+            "args": [
+              "self"
+            ]
+          },
+          {
+            "name": "tick",
+            "line": 19,
+            "async": false,
+            "args": [
+              "self",
+              "seconds"
+            ]
+          }
+        ]
+      }
+    ],
+    "functions": [
+      {
+        "name": "make",
+        "line": 22,
+        "async": false,
+        "args": [
+          "limit"
+        ],
+        "doc": "",
+        "decorators": []
+      },
+      {
+        "name": "test_up_to_the_limit_are_admitted_and_the_rest_queue_in_order",
+        "line": 27,
+        "async": false,
+        "args": [],
+        "doc": "",
+        "decorators": []
+      },
+      {
+        "name": "test_a_freed_slot_goes_to_the_first_waiter_and_nobody_can_jump_the_line",
+        "line": 37,
+        "async": false,
+        "args": [],
+        "doc": "",
+        "decorators": []
+      },
+      {
+        "name": "test_an_unclaimed_slot_passes_to_the_next_waiter_after_the_claim_window",
+        "line": 48,
+        "async": false,
+        "args": [],
+        "doc": "",
+        "decorators": []
+      },
+      {
+        "name": "test_closing_the_tab_frees_the_slot_after_the_lease",
+        "line": 57,
+        "async": false,
+        "args": [],
+        "doc": "",
+        "decorators": []
+      },
+      {
+        "name": "test_a_waiter_who_left_loses_the_place",
+        "line": 68,
+        "async": false,
+        "args": [],
+        "doc": "",
+        "decorators": []
+      },
+      {
+        "name": "test_estimate_grows_with_position",
+        "line": 76,
+        "async": false,
+        "args": [],
+        "doc": "",
+        "decorators": []
+      },
+      {
+        "name": "test_estimate_uses_recent_release_speed",
+        "line": 83,
+        "async": false,
+        "args": [],
+        "doc": "",
+        "decorators": []
+      },
+      {
+        "name": "api",
+        "line": 95,
+        "async": false,
+        "args": [
+          "monkeypatch"
+        ],
+        "doc": "",
+        "decorators": [
+          "pytest.fixture"
+        ]
+      },
+      {
+        "name": "as_user",
+        "line": 115,
+        "async": false,
+        "args": [
+          "client",
+          "uid",
+          "email"
+        ],
+        "doc": "",
+        "decorators": []
+      },
+      {
+        "name": "test_endpoints_and_the_heavy_work_gate",
+        "line": 119,
+        "async": false,
+        "args": [
+          "api",
+          "monkeypatch"
+        ],
+        "doc": "",
+        "decorators": []
+      },
+      {
+        "name": "test_disabled_gate_lets_everyone_through",
+        "line": 137,
+        "async": false,
+        "args": [
+          "monkeypatch"
+        ],
+        "doc": "",
+        "decorators": []
+      }
+    ],
+    "routes": [],
+    "exports": [
+      "Clock",
+      "make",
+      "test_up_to_the_limit_are_admitted_and_the_rest_queue_in_order",
+      "test_a_freed_slot_goes_to_the_first_waiter_and_nobody_can_jump_the_line",
+      "test_an_unclaimed_slot_passes_to_the_next_waiter_after_the_claim_window",
+      "test_closing_the_tab_frees_the_slot_after_the_lease",
+      "test_a_waiter_who_left_loses_the_place",
+      "test_estimate_grows_with_position",
+      "test_estimate_uses_recent_release_speed",
+      "api",
+      "as_user",
+      "test_endpoints_and_the_heavy_work_gate",
+      "test_disabled_gate_lets_everyone_through"
+    ],
+    "parse_error": null
+  },
+  "frontend/components/auth/AdmissionGate.tsx": {
+    "lang": "typescript",
+    "domain": "frontend_components",
+    "loc": 128,
+    "doc": "",
+    "imports": [
+      {
+        "module": "react",
+        "names": [],
+        "level": 0,
+        "line": 3
+      },
+      {
+        "module": "next/navigation",
+        "names": [],
+        "level": 0,
+        "line": 4
+      },
+      {
+        "module": "@/contexts/BasicAuthContext",
+        "names": [],
+        "level": 0,
+        "line": 5
+      },
+      {
+        "module": "@/lib/api",
+        "names": [],
+        "level": 0,
+        "line": 6
+      }
+    ],
+    "classes": [],
+    "functions": [
+      {
+        "name": "AdmissionGate",
+        "line": 1,
+        "async": false,
+        "args": [],
+        "doc": "",
+        "decorators": []
+      }
+    ],
+    "routes": [],
+    "exports": [
+      "AdmissionGate"
+    ],
+    "parse_error": null
   }
 }

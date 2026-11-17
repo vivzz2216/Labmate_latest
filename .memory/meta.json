@@ -1,8 +1,8 @@
 {
   "schema_version": "1.0.0",
-  "indexed_at": "2026-11-16T12:36:57.399444+00:00",
-  "git_head": "3f7eb68",
-  "last_duration_ms": 26.53,
+  "indexed_at": "2026-11-16T13:29:42.555158+00:00",
+  "git_head": "bf03d78",
+  "last_duration_ms": 47.05,
   "last_diff": {
     "added": 9,
     "modified": 38,
@@ -2599,6 +2599,26 @@
       "sha256": "5004085c2a126c59af49aa566de5c9310706999eccd11933a9c44e2171911c5c",
       "size": 36622,
       "mtime_ns": 1794405300308565000
+    },
+    "backend/app/services/admission.py": {
+      "sha256": "d8dcec171355a23289d7de4d3b6cb7c82ac11d21ebf8cbb2ac13636d93b21d99",
+      "size": 5798,
+      "mtime_ns": 1794835684894504300
+    },
+    "backend/app/routers/admission.py": {
+      "sha256": "72c58b055429782bc60058b15cd269f777175e51eafe63f24059d81bc84d2958",
+      "size": 1245,
+      "mtime_ns": 1794835696316337000
+    },
+    "backend/tests/test_admission.py": {
+      "sha256": "2c46c648055a4f566f7a464ab9b88ee56bbf14373a4a8521d6c51772f09ffe90",
+      "size": 6262,
+      "mtime_ns": 1794835712993049600
+    },
+    "frontend/components/auth/AdmissionGate.tsx": {
+      "sha256": "c21466edff96e7856b61adc45fc8c3f56681bd9b6c79c9384292c1f8bcb8ec37",
+      "size": 6108,
+      "mtime_ns": 1794835782174721300
     }
   }
 }
