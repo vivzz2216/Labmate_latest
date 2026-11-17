@@ -22,12 +22,12 @@ SELECT * FROM Students WHERE marks >= 90;"""
 
     assert success is True, "Screenshot generation should succeed"
     assert os.path.isfile(path), f"Screenshot file should exist at {path}"
-    assert width == 1440, f"Expected width 1440, got {width}"
-    assert height == 900, f"Expected height 900, got {height}"
+    assert width == 1200, f"Expected print-readable workspace width 1200, got {width}"
+    assert 420 <= height <= 1200
 
     with Image.open(path) as img:
-        assert img.width == 1440
-        assert img.height == 900
+        assert img.width == 1200
+        assert img.height == height
 
     # Clean up
     if os.path.exists(path):
@@ -176,6 +176,5 @@ FROM `OrderDetails`;"""
             continue
         index=df['statement_index']
         selects=[s for s in capture.verification['statements'] if s['index']<=index and s.get('type')=='SELECT' and s.get('success') and s.get('columns')]
-        assert df.get('active_result_rows',[]) == ((selects[-1].get('shown_rows') or selects[-1]['rows'])[:12] if selects else [])
+        assert df.get('active_result_rows',[]) == (selects[-1]['rows'][:12] if selects else [])
         assert df.get('active_result_columns',[]) == (selects[-1]['columns'] if selects else [])
-

@@ -1,4 +1,4 @@
-"""Tasks done in an outside tool (Power BI, Canva, ParseHub, Similarweb, Google Trends) rather than in code.
+"""Tasks done in an outside tool (Canva, ParseHub, Similarweb, Google Trends) rather than in code.
 
 LabMate cannot run these tools, so such a task is not a program to generate. It becomes an evidence part: LabMate
 writes the procedure and the student attaches their own screenshots (see assignment_workflow and docx_layout).
@@ -9,17 +9,13 @@ import re
 
 # tool -> (pattern, [(slot id, slot label)])
 TOOLS = {
-    # The dataset comes first: LabMate loads it into its Power BI studio and builds the dashboard from it. The dashboard
-    # slot is filled by that capture, or by the student's own screenshot when they made it in a real Power BI.
-    "powerbi": (r"power\s*-?\s*bi\b", [("powerbi_dataset", "Dataset for the dashboard (CSV)"),
-                                       ("powerbi_dashboard", "Power BI dashboard screenshot")]),
     "canva": (r"\bcanva\b", [("canva_poster", "Final poster or design"), ("canva_editor", "Canva editor while designing")]),
     "parsehub": (r"\bparse\s*hub\b", [("parsehub_project", "ParseHub project with the selected elements"),
                                       ("parsehub_result", "ParseHub run result or exported CSV")]),
     "similarweb": (r"\bsimilar\s*web\b", [("similarweb_snapshot", "Similarweb snapshot")]),
     "google_trends": (r"\bgoogle\s+trends\b", [("google_trends", "Google Trends comparison")]),
 }
-CERTIFICATE_SLOT = ("powerbi_certificate", "Course completion certificate")   # same id the SMA catalogue uses
+CERTIFICATE_SLOT = ("course_certificate", "Course completion certificate")
 
 # Words that mean the student must write or run a program, so the task is not purely an outside-tool task.
 PROGRAMMING = re.compile(
@@ -62,7 +58,7 @@ def dedupe_certificate_slots(questions):
 SCREENSHOT_DELIVERABLE = re.compile(r"\battach\b[^.]{0,40}\b(?:screenshot|snapshot|screen\s*shot)s?\b", re.I)
 
 # A task starts with an action verb ("Create a dashboard...", "Analyse competitors..."); a theory question about the same
-# tool ("Explain the working of Similarweb", "What is Power BI?") does not, and stays a written answer.
+# tool ("Explain the working of Similarweb", "What is Canva?") does not, and stays a written answer.
 TASK_START = re.compile(
     r"^\s*(?:(?:\d+|[a-z]|[ivxlcdm]+)[.):\-]\s*)?(?:then\s+|also\s+)?"
     r"(?:create|design|build|make|prepare|develop|analy[sz]e|compare|complete|use|using|perform|generate|export|collect|select|choose|join|enrol+|"
@@ -79,7 +75,7 @@ def tool_task_slots(question_text, manual_text=""):
     if PROGRAMMING.search(text) or not TASK_START.match(text):
         return []
     if CERTIFICATE_TASK.search(text) and not re.search(r"\bdashboard|report\b", text, re.I):
-        # "Join the Power BI course and attach the certificate": the certificate is the whole deliverable.
+        # "Join the Canva course and attach the certificate": the certificate is the whole deliverable.
         return [{"id": CERTIFICATE_SLOT[0], "label": CERTIFICATE_SLOT[1]}]
     found = []
     for pattern, tool_slots in TOOLS.values():
@@ -88,7 +84,7 @@ def tool_task_slots(question_text, manual_text=""):
             found.append((match.start(), tool_slots))
     if not found and SCREENSHOT_DELIVERABLE.search(text):
         # "Create dashboard of any social media platform and attach the screenshot of it." names no tool; the manual
-        # around it does (Power BI). Use it only when the manual names exactly one tool, so the choice is not a guess.
+        # around it does (Canva). Use it only when the manual names exactly one tool, so the choice is not a guess.
         in_manual = [tool_slots for pattern, tool_slots in TOOLS.values() if re.search(pattern, str(manual_text or ""), re.I)]
         if len(in_manual) == 1:
             found.append((0, in_manual[0]))
@@ -96,8 +92,7 @@ def tool_task_slots(question_text, manual_text=""):
         return []
     # Slots follow the order in which the task mentions its tools.
     slots = [{"id": slot, "label": label} for _, tool_slots in sorted(found, key=lambda item: item[0]) for slot, label in tool_slots]
-    uses_powerbi = any(slot["id"] == "powerbi_dashboard" for slot in slots)
-    mentioned = re.search(r"\bcertificate\b", text, re.I) or (uses_powerbi and re.search(r"\bcertificate\b", str(manual_text or ""), re.I))
+    mentioned = re.search(r"\bcertificate\b", text, re.I)
     if mentioned:
         slots.append({"id": CERTIFICATE_SLOT[0], "label": CERTIFICATE_SLOT[1]})
     return slots[:6]
@@ -106,7 +101,7 @@ def tool_task_slots(question_text, manual_text=""):
 def recover_tool_tasks(manual_text, questions):
     """Outside-tool tasks written in the manual that extraction did not return as evidence parts.
 
-    The extraction model keeps programming and theory questions, so it may drop "Create a dashboard in Power BI" or file
+    The extraction model keeps programming and theory questions, so it may drop "Create a dashboard in Canva" or file
     it as theory. The manual's own lines are read here instead, so such a task is never silently lost. A line already
     covered by an evidence part with the same tool slots is skipped. Returns new question dicts (ids continue the list).
     """

@@ -70,14 +70,14 @@ def test_dataset_download_route_serves_only_registered_files():
     app = FastAPI()
     app.include_router(lab_catalog.router, prefix="/api")
     client = TestClient(app)
-    ok = client.get("/api/labs/datasets/social_kpi_powerbi.csv")
+    ok = client.get("/api/labs/datasets/social_posts_raw.csv")
     assert ok.status_code == 200 and ok.headers["content-disposition"].startswith("attachment")
     assert ok.headers["x-content-type-options"] == "nosniff"
-    assert ok.text.startswith("date,platform,impressions")
+    assert ok.text.startswith("post_id,username,platform,post_text")
     for bad in ("nope.csv", "..%2Fconfig.py", "%2e%2e%2fconfig.py"):
         assert client.get("/api/labs/datasets/" + bad).status_code in {404, 422}
     sma = client.get("/api/labs/social-media-analytics").json()
-    assert sma["track"] == "sma" and sma["experiment_count"] == 10
+    assert sma["track"] == "sma" and sma["experiment_count"] == 9
 
 
 # ----------------------------------------------------------------------------- notebook allowlists
@@ -231,7 +231,7 @@ def test_pdf_certificate_first_page_becomes_a_png():
     (b"", "empty"), (b"GIF89a....", "PNG, JPG or PDF"), (b"<svg onload=alert(1)/>", "PNG, JPG or PDF"),
     (b"\x89PNG\r\n\x1a\n" + b"garbage", "could not be read"), (b"%PDF-1.4 not really", "could not be read"),
     (b"x" * (evidence_files.MAX_BYTES + 1), "5 MB"),
-])
+], ids=['empty','gif','svg','broken-png','broken-pdf','oversized'])
 def test_bad_evidence_is_refused_with_a_reason(data, reason):
     with pytest.raises(ValueError, match=reason):
         evidence_files.normalize_evidence(data)
@@ -368,7 +368,7 @@ def test_per_assignment_screenshot_limit(env, monkeypatch):
 
 def test_from_prompt_keeps_the_multi_part_fields(env):
     payload = {"title": "Exp 7", "questions": [
-        {"id": 1, "text": "Explain Power BI", "language": "theory", "track": "sma", "kind": "theory", "part_title": "Power BI"},
+        {"id": 1, "text": "Explain Canva", "language": "theory", "track": "sma", "kind": "theory", "part_title": "Canva"},
         {"id": 2, "text": "Scrape", "language": "colab", "track": "sma", "kind": "code", "builtin_datasets": ["social_feed.html"]},
         {"id": 3, "text": "Dashboard", "language": "theory", "track": "sma", "kind": "evidence", "evidence_slots": SLOTS}]}
     response = env.client.post("/api/workflows/from-prompt", json=payload)
@@ -384,9 +384,7 @@ def test_from_prompt_keeps_the_multi_part_fields(env):
 def test_outside_tool_tasks_become_evidence_parts_with_the_right_slots():
     from app.services.lab_tools import tool_task_slots
     ids = lambda text, manual="": [s["id"] for s in tool_task_slots(text, manual)]
-    assert ids("Create a dashboard for any social media platform using Microsoft Power BI.") == ["powerbi_dataset", "powerbi_dashboard"]
     # The certificate line lives elsewhere in the manual, not inside the dashboard task.
-    assert ids("Create a dashboard using Power BI.", "Attach the course certificate with the write-up.") == ["powerbi_dataset", "powerbi_dashboard", "powerbi_certificate"]
     assert ids("Create a promotional poster for a business using Canva.") == ["canva_poster", "canva_editor"]
     assert ids("Analyse competitors using Google Trends and Similarweb.") == ["google_trends", "similarweb_snapshot"]
     assert ids("Scrape the posts with ParseHub and export the CSV.") == []              # scraping is also a program task
@@ -399,28 +397,12 @@ def test_outside_tool_tasks_become_evidence_parts_with_the_right_slots():
     "Perform sentiment analysis on the scraped data and create a bar graph.",
     "Implement a classifier in Python.",
     "Write a SQL query to list customers.",
-    "Explain how the Power BI service works with Python scripts.",      # names a language: stays a code/theory task
+    "Explain how the Canva service works with Python scripts.",      # names a language: stays a code/theory task
     "Create a dashboard.",                                              # no tool named
 ])
 def test_ordinary_tasks_are_not_mistaken_for_outside_tool_tasks(text):
     from app.services.lab_tools import tool_task_slots
-    assert tool_task_slots(text, "Power BI certificate") == []
-
-
-EXP7_MANUAL = ("What is power BI? Advantages. Limitations\nAll are supposed to join the following course and attach the certificate "
-               "along with write-up.\nhttps://www.simplilearn.com/learn-power-bi-basics-free-course-skillup?tag=Power%20BI\n"
-               "Create dashboard of any social media platform and attach the screenshot of it.")
-
-
-def test_task_naming_no_tool_takes_the_one_tool_its_manual_names():
-    from app.services.lab_tools import recover_tool_tasks, tool_task_slots
-    task = "Create dashboard of any social media platform and attach the screenshot of it."
-    assert [s["id"] for s in tool_task_slots(task, EXP7_MANUAL)] == ["powerbi_dataset", "powerbi_dashboard", "powerbi_certificate"]
-    assert tool_task_slots(task, "Use Canva and Power BI.") == []          # two tools: not a guess
-    assert tool_task_slots(task, "No tool named here.") == []
-    assert tool_task_slots("Create a dashboard of any platform.", EXP7_MANUAL) == []   # no screenshot deliverable
-    recovered = recover_tool_tasks(EXP7_MANUAL, [])
-    assert len(recovered) == 1 and recovered[0]["text"] == task and recovered[0]["kind"] == "evidence"
+    assert tool_task_slots(text, "Canva certificate") == []
 
 
 @pytest.mark.parametrize("text,expected", [
@@ -551,32 +533,6 @@ def test_a_shortened_theory_question_is_not_restored_a_second_time():
         "Explain 7-8 functions (Python/R) with syntax for data preprocessing."]
 
 
-def test_exp7_as_the_model_returned_it_becomes_theory_then_certificate_then_dashboard():
-    from app.services.assignment_workflow import merge_language_alternatives, recover_theory_questions
-    from app.services.lab_tools import dedupe_certificate_slots, recover_tool_tasks, strip_section_label, tool_task_slots
-    manual = ("Experiment No. 7\nAim: To develop a dashboard and reporting tool based on real-time social media data.\nTheory:\n"
-              "What is power BI? Advantages. Limitations\nWhat is a social media reporting tool?\n"
-              "Steps in creating dashboard and KPIs you have tracked.\nImplementation:\n" + EXP7_MANUAL.split("\n", 1)[1]
-              + "\nScreenshots of Execution:\nConclusion:")
-    model = ["Implementation: Join the Simplilearn 'Learn Power BI Basics' free course, complete it, and attach the certificate.",
-             "Implementation: Create a dashboard of any social media platform using Power BI and attach the screenshot of it."]
-    clean = []
-    for number, raw in enumerate(model, 1):
-        text = strip_section_label(raw)
-        assert not text.startswith("Implementation")
-        item = {"id": number, "text": text, "language": "theory", "is_theory": True}
-        slots = tool_task_slots(text, manual)
-        if slots:
-            item.update(kind="evidence", evidence_slots=slots)
-        clean.append(item)
-    clean = merge_language_alternatives(clean)
-    clean = recover_theory_questions(manual, clean)
-    clean.extend(recover_tool_tasks(manual, clean))
-    clean = dedupe_certificate_slots(clean)
-    shape = [(q.get("kind") or q["language"], [s["id"] for s in q.get("evidence_slots", [])]) for q in clean]
-    assert shape == [("theory", []), ("theory", []), ("theory", []),
-                     ("evidence", ["powerbi_certificate"]), ("evidence", ["powerbi_dataset", "powerbi_dashboard"])]
-    assert [q["id"] for q in clean] == [1, 2, 3, 4, 5]
 
 
 @pytest.mark.parametrize("raw,clean", [
@@ -653,7 +609,7 @@ def test_only_bare_conclusion_requests_are_dropped(text, is_conclusion):
     ("Procedure:\n1. Opened Canva.", "1. Opened Canva."),
     ("Procedure: Web Scraping using ParseHub\n\n1. Opened ParseHub.", "Web Scraping using ParseHub"),
     ("**Procedure:**\n1. Step", "1. Step"),
-    ("1. Opened Power BI.\n2. Procedures were followed.", "1. Opened Power BI."),
+    ("1. Opened Canva.\n2. Procedures were followed.", "1. Opened Canva."),
 ])
 def test_evidence_procedure_label_is_printed_once(answer, first_line):
     from app.services.docx_layout import strip_procedure_heading
@@ -674,17 +630,18 @@ def test_conclusion_block_is_rendered_after_the_parts():
 
 def test_registry_ids_match_the_catalogue_slots():
     from app.services.lab_tools import SLOT_IDS
-    catalogue = (Path(__file__).resolve().parents[2] / "frontend" / "lib" / "smaCatalog.ts").read_text(encoding="utf-8")
-    import re
-    used = set(re.findall(r'id: "([a-z_]+)", label', catalogue))
+    import json
+    catalogue = json.loads((Path(__file__).resolve().parents[2] / "frontend" / "lib" / "lab-catalog.json").read_text(encoding="utf-8"))
+    category = next(c for c in catalogue if c['track']=='sma')
+    used = {slot['id'] for e in category['experiments'] for part in e.get('parts',[]) for slot in part.get('evidenceSlots',[])}
     assert used and used <= SLOT_IDS, used - SLOT_IDS
 
 
 def test_upload_flow_accepts_extracted_evidence_parts_on_any_track():
     Q = workflows.QuestionInput
     data = SimpleNamespace(track=None)
-    slots = [{"id": "powerbi_dashboard", "label": "Power BI dashboard screenshot"}]
-    fields = workflows.multi_part_fields(Q(id=1, text="Create a dashboard in Power BI", language="theory", kind="evidence", evidence_slots=slots), data)
+    slots = [{"id": "canva_poster", "label": "Canva dashboard screenshot"}]
+    fields = workflows.multi_part_fields(Q(id=1, text="Create a dashboard in Canva", language="theory", kind="evidence", evidence_slots=slots), data)
     assert fields["kind"] == "evidence" and fields["evidence_slots"] == slots
     # Only slots LabMate itself defines, and never datasets or code parts, are allowed off the SMA track.
     for bad in (Q(id=1, text="x", kind="evidence", evidence_slots=[{"id": "my_slot", "label": "x"}]),
@@ -723,10 +680,10 @@ def test_evidence_block_shows_procedure_images_and_placeholders(tmp_path):
     shot = tmp_path / "s.png"
     shot.write_bytes(png_bytes((300, 200)))
     document = Document()
-    embed_evidence_block(document, "Power BI dashboard", "1. Imported the file.\n2. Built KPI cards.", 7, [str(shot)],
+    embed_evidence_block(document, "Canva dashboard", "1. Imported the file.\n2. Built KPI cards.", 7, [str(shot)],
                          ["Student-supplied: Dashboard screenshot"], ["Course certificate"])
     text = doc_text(document)
-    assert "Part 7: Power BI dashboard" in text and "Built KPI cards." in text
+    assert "Part 7: Canva dashboard" in text and "Built KPI cards." in text
     assert "Student-supplied: Dashboard screenshot" in text
     assert "[Not attached: Course certificate." in text
     assert len(document.inline_shapes) == 1

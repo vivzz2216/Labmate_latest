@@ -6,55 +6,48 @@ import json
 
 def practical_table_checks(statements):
     """Require a full input-table result after population, before topic queries."""
-    encode = lambda rows: Counter(json.dumps(r, sort_keys=True, default=str) for r in rows)
     inserts = {}
-    history = {}
     for step in statements:
-        if not step.get('success'):
-            continue
-        schema = step.get('active_schema', 'lab')
-        stmt_type = step.get('type')
-        if stmt_type == 'INSERT':
-            table = step.get('tableName', '').lower()
-            if not table:
-                continue
-            snapshot = (step.get('schemas_snapshot') or {}).get(schema, {}).get('tables', {})
-            saved = next((v.get('rows', []) for k, v in snapshot.items() if k.lower() == table), [])
-            inserts[(schema, table)] = (step['index'], saved)
-            history.setdefault((schema, table), []).append((step['index'], encode(saved), saved))
-        elif stmt_type == 'ROLLBACK' or 'ROLLBACK' in step.get('statement', '').upper():
-            all_schemas = step.get('schemas_snapshot') or {}
-            for (s, t) in list(inserts.keys()):
-                if s not in all_schemas and s != schema:
-                    continue
-                t_snap = all_schemas.get(s, {}).get('tables', {})
-                saved = next((v.get('rows', []) for k, v in t_snap.items() if k.lower() == t), [])
-                target_sig = encode(saved)
-                restored = next(((idx, rows) for idx, sig, rows in history.get((s, t), []) if sig == target_sig), None)
-                inserts[(s, t)] = restored if restored is not None else (inserts[(s, t)][0], saved)
+        if step.get('success') and step.get('type') == 'INSERT':
+            inserts[(step.get('active_schema', 'lab'), step.get('tableName', '').lower())] = step
+        elif step.get('success') and step.get('type') == 'ROLLBACK':
+            # A rolled-back insert must not replace evidence for the restored data.
+            def snapshot_rows(item, schema, table):
+                tables = (item.get('schemas_snapshot') or {}).get(schema, {}).get('tables', {})
+                return next((value.get('rows', []) for name, value in tables.items() if name.lower() == table), [])
+            for (schema, table) in list(inserts):
+                restored = snapshot_rows(step, schema, table)
+                candidates = [prior for prior in statements if prior.get('index', 0) < step.get('index', 0)
+                              and prior.get('success') and prior.get('type') == 'INSERT'
+                              and prior.get('active_schema', 'lab') == schema
+                              and prior.get('tableName', '').lower() == table
+                              and snapshot_rows(prior, schema, table) == restored]
+                if candidates:
+                    inserts[(schema, table)] = candidates[-1]
     checks = []
-    for (schema, table), (insert_index, saved) in inserts.items():
+    for (schema, table), inserted in inserts.items():
+        if not table:
+            continue
         displayed = False
         for step in statements:
-            if step['index'] <= insert_index or not step.get('success'):
+            if step['index'] <= inserted['index'] or not step.get('success'):
                 continue
-            match = re.fullmatch(
-                r'SELECT\s+\*\s+FROM\s+(?:(`?\w+`?)\.)?`?(\w+)`?\s*(?:ORDER\s+BY\s+[\w`, .]+)?\s*;?',
-                step.get('statement', '').strip(),
-                re.I,
-            )
+            match = re.fullmatch(r'SELECT\s+\*\s+FROM\s+(?:(`?\w+`?)\.)?`?(\w+)`?\s*(?:ORDER\s+BY\s+[\w`, .]+)?\s*;?', step.get('statement', '').strip(), re.I)
             if step.get('type') == 'SELECT' and not match:
                 break
             if not match or match.group(2).lower() != table or (match.group(1) or step.get('active_schema', 'lab')).strip('`') != schema:
                 continue
+            snapshot = (inserted.get('schemas_snapshot') or {}).get(schema, {}).get('tables', {})
+            saved = next((v.get('rows', []) for k,v in snapshot.items() if k.lower() == table), [])
+            encode = lambda rows: Counter(json.dumps(r, sort_keys=True, default=str) for r in rows)
             displayed = bool(saved) and not step.get('truncated') and encode(saved) == encode(step.get('rows', []))
             if displayed:
                 break
-        checks.append({
-            'name': f'Input table {table} displayed completely',
-            'passed': displayed,
-            'detail': 'All inserted records are visible.' if displayed else f'After inserting records, run SELECT * FROM `{table}`; without WHERE or LIMIT, before experiment queries.',
-        })
+        # Case-fold only for receipt matching. Linux MySQL executes identifiers
+        # case-sensitively; repair advice must preserve the authored name.
+        actual_table = inserted.get('tableName') or table
+        checks.append({'name': f'Input table {actual_table} displayed completely', 'passed': displayed,
+                       'detail': 'All inserted records are visible.' if displayed else f'After inserting records, run SELECT * FROM `{actual_table}`; without WHERE or LIMIT, before experiment queries.'})
     return checks
 
 

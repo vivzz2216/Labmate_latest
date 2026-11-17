@@ -3,10 +3,7 @@
 import React from "react";
 import Image from "next/image";
 import { ArrowRight, CheckCircle2, XCircle } from "lucide-react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useAuth } from "@/contexts/BasicAuthContext";
-import { LAB_IDE_ASSOCIATIONS, labIdeHref } from "@/lib/mumbaiUniversity/labIdeAssociations";
+import { LAB_IDE_ASSOCIATIONS } from "@/lib/mumbaiUniversity/labIdeAssociations";
 import type {
   UniversityLabEntry,
   DepartmentCode,
@@ -37,8 +34,6 @@ export default function LabCard({
   activeDepartment,
   onOpenDetails,
 }: LabCardProps) {
-  const router = useRouter();
-  const {user} = useAuth();
   const displayCode = getDisplayCourseCode(lab, activeDepartment);
   const displayName = getDisplayLabName(lab, activeDepartment);
   const visual = getLabVisualMeta(lab);
@@ -97,13 +92,7 @@ export default function LabCard({
       </div>
 
       {/* Footer Action */}
-      <div className={styles.cardFooter} style={{flexWrap:"wrap"}}>
-        {LAB_IDE_ASSOCIATIONS[lab.id] && <Link className={styles.viewDetailsBtn} style={{textDecoration:"none"}} href={labIdeHref(lab.id)!} aria-label={`Open workspace for ${displayName}`} onClick={event=>{
-          try {
-            const choice=localStorage.getItem("labmate:lab-ide:"+(user?.id || "guest")+":"+lab.id);
-            if(choice){event.preventDefault();router.push(labIdeHref(lab.id,choice)!);}
-          } catch {}
-        }}>Open Workspace</Link>}
+      <div className={styles.cardFooter}>
         <span className={styles.footerMetaText}>
           {hasDetailedOutlines
             ? `${lab.detailedOutlines?.length} Modules · ${lab.scheme}`

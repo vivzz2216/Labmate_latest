@@ -47,8 +47,10 @@ export default function StudentProfileModal({
         const meta = profile.metadata || profile.profile_metadata || {};
         setUsn(meta.roll_number || meta.usn || meta.roll_no || "");
       })
-      .catch((err) => {
-        console.error("Could not fetch profile:", err);
+      .catch((err: any) => {
+        if (err?.response?.status !== 401 && err?.response?.status !== 403) {
+          console.error("Could not fetch profile:", err);
+        }
       })
       .finally(() => {
         if (active) setLoading(false);

@@ -232,6 +232,7 @@
       if (!sqlTextarea || !sqlHighlightLayer || !codeGutter) return;
       const text = sqlTextarea.value;
       const lines = text.split('\n');
+      const printMode = document.body.classList.contains('print-evidence');
 
       sqlHighlightLayer.innerHTML = lines.map((line, idx) => {
         const lineNum = editorStartLine + idx;
@@ -239,8 +240,9 @@
           lineNum >= editorHighlightRange[0] &&
           lineNum <= editorHighlightRange[1];
         const html = highlightSqlLine(line);
+        if (printMode) return `<span class="sql-source-line ${isHighlighted ? 'sql-active-stmt-line' : ''}">${html || ' '}</span>`;
         return isHighlighted ? `<span class="sql-active-stmt-line">${html || ' '}</span>` : html;
-      }).join('\n') + (text.endsWith('\n') ? ' ' : '');
+      }).join(printMode ? '' : '\n') + (!printMode && text.endsWith('\n') ? ' ' : '');
 
       let gutterHtml = '';
       lines.forEach((line, idx) => {
@@ -256,6 +258,12 @@
 
       sqlTextarea.style.height = 'auto';
       sqlTextarea.style.height = Math.max(180, lines.length * 17 + 16) + 'px';
+      if (printMode) {
+        const sourceLines = sqlHighlightLayer.querySelectorAll('.sql-source-line');
+        codeGutter.querySelectorAll('.gutter-item').forEach((item, index) => {
+          item.style.height = `${sourceLines[index].getBoundingClientRect().height}px`;
+        });
+      }
     }
 
     if (sqlTextarea) {
@@ -796,24 +804,25 @@
         const codeSectionEl = document.getElementById('wb-code-section');
         const resultPaneEl = document.getElementById('result-pane');
         const outputPanelEl = document.getElementById('output-panel');
+        document.body.classList.add('print-evidence');
         if (codeSectionEl && resultPaneEl && outputPanelEl) {
-          if (frameConfig.layoutMode === 'code') {
-            codeSectionEl.style.height = '365px';
-            codeSectionEl.style.flex = '0 0 365px';
-            codeSectionEl.style.minHeight = '365px';
-            resultPaneEl.style.height = '286px';
-            resultPaneEl.style.flex = '0 0 286px';
-            outputPanelEl.style.height = '96px';
-            outputPanelEl.style.flex = '0 0 96px';
-          } else if (frameConfig.layoutMode === 'result') {
-            codeSectionEl.style.height = '200px';
-            codeSectionEl.style.flex = '0 0 200px';
-            codeSectionEl.style.minHeight = '200px';
-            resultPaneEl.style.height = '392px';
-            resultPaneEl.style.flex = '0 0 392px';
-            outputPanelEl.style.height = '155px';
-            outputPanelEl.style.flex = '0 0 155px';
-          }
+          const lines = String(frameConfig.editorSql || '').split('\n').length;
+          const active = (frameConfig.resultSets || [])[frameConfig.activeResultIndex];
+          const editorHeight = Math.max(64, Math.min(18, lines) * 22 + 10);
+          const resultHeight = active?.columns?.length
+            ? Math.max(112, (Math.min(12, active.rows?.length || 0) + 2) * 24 + 46) : 0;
+          codeSectionEl.style.height = `${editorHeight}px`;
+          codeSectionEl.style.flex = `0 0 ${editorHeight}px`;
+          codeSectionEl.style.minHeight = `${editorHeight}px`;
+          resultPaneEl.style.display = resultHeight ? 'flex' : 'none';
+          resultPaneEl.style.height = `${resultHeight}px`;
+          resultPaneEl.style.flex = `0 0 ${resultHeight}px`;
+          outputPanelEl.style.height = '92px';
+          outputPanelEl.style.flex = '0 0 92px';
+          document.body.dataset.captureHeight = String(Math.max(420, editorHeight + resultHeight + 92 + 154));
+          document.getElementById('toggle-additions')?.classList.remove('active');
+          const wrapControl = document.querySelector('.rg-wrap-label input');
+          if (wrapControl) wrapControl.checked = true;
         }
 
         editorStartLine = Number(frameConfig.startLine) || 1;
@@ -821,6 +830,12 @@
         if (sqlTextarea && frameConfig.editorSql !== undefined) {
           sqlTextarea.value = frameConfig.editorSql;
           syncEditorHighlightAndGutter();
+          const previous = parseFloat(codeSectionEl.style.height);
+          const fitted = Math.max(64, Math.ceil(sqlHighlightLayer.scrollHeight) + 10);
+          codeSectionEl.style.height = `${fitted}px`;
+          codeSectionEl.style.flex = `0 0 ${fitted}px`;
+          codeSectionEl.style.minHeight = `${fitted}px`;
+          document.body.dataset.captureHeight = String(Number(document.body.dataset.captureHeight) - previous + fitted);
         }
         if (codeSectionEl) {
           codeSectionEl.scrollTop = 0;

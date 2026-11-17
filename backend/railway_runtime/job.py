@@ -31,6 +31,7 @@ def run(request):
         if set(job) != {'operation', 'nonce'} or not isinstance(job['nonce'], str) or not re.fullmatch('[a-f0-9]{32}', job['nonce']):
             raise ValueError('Invalid health probe.')
         source = "import os,socket,subprocess; assert os.getuid()==65534 and os.getpid()==1, 'identity'; assert not os.getenv('RAILWAY_API_TOKEN'), 'secret environment'; assert not os.path.exists('/root/.ssh'), 'filesystem'; node=subprocess.run([os.environ['NODE_COMMAND'],'--version'],capture_output=True); assert node.returncode==0, ('Node probe',node.returncode,node.stderr.decode()); open('/work/probe','w').write('ok'); s=socket.socket(); s.bind(('127.0.0.1',0)); s.close(); print('PROBE_OK')"
+        source = source.replace("print('PROBE_OK')", "r=subprocess.run(['Rscript','--vanilla','-e','stopifnot(2+3==5); library(ggplot2); library(dplyr)'],capture_output=True,timeout=10); assert r.returncode==0, ('R probe',r.returncode,r.stderr.decode()); print('PROBE_OK')")
         cmd[-2:] = ['/opt/labmate-runtime/venv/bin/python', '-c', source]
         result = subprocess.run(cmd, capture_output=True, timeout=15)
         if result.returncode or result.stdout.strip() != b'PROBE_OK':

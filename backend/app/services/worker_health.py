@@ -17,6 +17,11 @@ class WorkerUnavailableError(RuntimeError):
         super().__init__('Execution worker unavailable. Completed results are saved; retry processing after the worker recovers.')
 
 
+class RuntimePreparingError(WorkerUnavailableError):
+    def __init__(self):
+        RuntimeError.__init__(self, 'This execution environment is being prepared for its first run. Completed results are saved; retry processing in a few minutes.')
+
+
 class WorkerHealth:
     def __init__(self):
         self._lock = asyncio.Lock()
@@ -36,7 +41,7 @@ class WorkerHealth:
                 return dict(self._result)
             if wait_timeout is not None and (force or time.monotonic() >= self._expires):
                 if not self._lock.locked():
-                    self._probe = asyncio.create_task(self._railway_check(force))
+                    asyncio.create_task(self._railway_check(force))
                 return dict(self._result)
             return await self._railway_check(force)
         identity = (settings.SANDBOX_SSH_HOST, settings.SANDBOX_SSH_PORT,

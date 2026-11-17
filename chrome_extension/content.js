@@ -264,26 +264,34 @@
     toast.id = "labmate-toast";
     toast.className = `labmate-toast labmate-toast-${type}`;
 
-    const msgEl = document.createElement("div");
-    msgEl.className = "labmate-toast-msg";
-    msgEl.textContent = String(message ?? "");
-    toast.appendChild(msgEl);
+    // Build the toast from DOM nodes: the message can contain a Drive filename or a server
+    // error, so it must never be parsed as HTML on drive.google.com.
+    const msg = document.createElement("div");
+    msg.className = "labmate-toast-msg";
+    msg.textContent = String(message);
+    toast.appendChild(msg);
 
-    const safeActionUrl = sanitizeHttpUrl(actionUrl);
-    if (safeActionUrl) {
-      const actionLink = document.createElement("a");
-      actionLink.href = safeActionUrl;
-      actionLink.target = "_blank";
-      actionLink.rel = "noopener noreferrer";
-      actionLink.className = "labmate-toast-action";
-      actionLink.textContent = "Open Workspace →";
-      toast.appendChild(actionLink);
+    if (actionUrl) {
+      const link = document.createElement("a");
+      link.className = "labmate-toast-action";
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      // Only http(s) links are allowed; anything else (javascript:, data:) is dropped.
+      try {
+        const parsed = new URL(actionUrl, window.location.href);
+        if (parsed.protocol === "https:" || parsed.protocol === "http:") link.href = parsed.href;
+      } catch (_) { /* leave href unset */ }
+      link.textContent = "Open Workspace →";
+      toast.appendChild(link);
     }
 
     const closeBtn = document.createElement("button");
     closeBtn.className = "labmate-toast-close";
     closeBtn.textContent = "×";
-    closeBtn.addEventListener("click", () => {
+    toast.appendChild(closeBtn);
+    document.body.appendChild(toast);
+
+    toast.querySelector(".labmate-toast-close").addEventListener("click", () => {
       toast.remove();
     });
     toast.appendChild(closeBtn);

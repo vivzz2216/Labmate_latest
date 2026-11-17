@@ -21,6 +21,7 @@ RUN pip install --no-cache-dir -r requirements.txt \
     && python -m playwright install --with-deps chromium \
     && rm -rf /var/lib/apt/lists/*
 COPY backend/app ./app
+COPY frontend/lib/lab-catalog.json ./app/data/lab_catalog.json
 COPY backend/templates ./templates
 COPY backend/scripts/sandbox_job.py backend/scripts/sandbox_broker.py ./runtime_scripts/
 COPY backend/railway_runtime ./railway_runtime

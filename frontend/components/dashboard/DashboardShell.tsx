@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -51,11 +51,7 @@ export const languageMeta: Record<
 > = {
   python: { label: "Python", icon: SiPython, className: styles.python },
   colab: { label: "Python Notebook", icon: SiPython, className: styles.python },
-  deep_learning: { label: "Deep Learning", icon: SiPython, className: styles.python },
-  "deep-learning": { label: "Deep Learning", icon: SiPython, className: styles.python },
   java: { label: "Java", icon: FaJava, className: styles.java },
-  distributed: { label: "Distributed Computing", icon: FaJava, className: styles.java },
-  "distributed-computing": { label: "Distributed Computing", icon: FaJava, className: styles.java },
   c: { label: "C", icon: SiC, className: styles.c },
   cpp: { label: "C++", icon: SiCplusplus, className: styles.cpp },
   webdev: { label: "Web Development", icon: SiHtml5, className: styles.html },
@@ -66,6 +62,10 @@ export const languageMeta: Record<
   sql: { label: "SQL", icon: Terminal, className: styles.c },
   ubuntu: { label: "Ubuntu / Linux", icon: Terminal, className: styles.fileIcon },
   r: { label: "R / RStudio", icon: Terminal, className: styles.fileIcon },
+  deep_learning: { label: "Deep Learning", icon: SiPython, className: styles.python },
+  "deep-learning": { label: "Deep Learning", icon: SiPython, className: styles.python },
+  distributed: { label: "Distributed Computing", icon: FaJava, className: styles.java },
+  "distributed-computing": { label: "Distributed Computing", icon: FaJava, className: styles.java },
 };
 
 export function formatDate(value?: string) {
@@ -301,21 +301,17 @@ export default function DashboardShell({
 
   const displayName = user?.name?.trim() || "Student";
 
-  const navItems = useMemo(
-    () =>
-      user?.is_admin
-        ? [
-            ...dashboardNavItems,
-            {
-              label: "Owner Admin",
-              icon: ShieldCheck,
-              href: "/admin/dashboard",
-              matchPrefix: "/admin",
-            },
-          ]
-        : dashboardNavItems,
-    [user?.is_admin],
-  );
+  const navItems = user?.is_admin
+    ? [
+        ...dashboardNavItems,
+        {
+          label: "Owner Admin",
+          icon: ShieldCheck,
+          href: "/admin/dashboard",
+          matchPrefix: "/admin",
+        },
+      ]
+    : dashboardNavItems;
 
   useEffect(() => {
     navItems.forEach((item) => {
@@ -325,7 +321,7 @@ export default function DashboardShell({
         // ignore prefetch errors
       }
     });
-  }, [router, navItems]);
+  }, [router, user?.is_admin]);
 
   const go = (href: string) => {
     setMobileNavOpen(false);
@@ -357,8 +353,8 @@ export default function DashboardShell({
               data-tooltip="LabMate"
             >
               <LabMateLogo
-                size="md"
-                theme={theme === "light" ? "light" : "dark"}
+                size="sm"
+                theme="dark"
                 showWordmark={false}
               />
             </Link>
@@ -371,8 +367,8 @@ export default function DashboardShell({
                 title="LabMate Dashboard"
               >
                 <LabMateLogo
-                  size="md"
-                  theme={theme === "light" ? "light" : "dark"}
+                  size="sm"
+                  theme="dark"
                   showWordmark={true}
                 />
               </Link>

@@ -25,6 +25,6 @@ body.dark{background:#111;color:#eee}body.dark .window-title{background:#353535;
 {% if view_mode == 'editor' and start_line > 1 %}<div class="range">Source lines {{ start_line }}–{{ end_line }}</div>{% endif %}
 <div class="cell"><div class="prompt">[{{ ' ' if view_mode == 'editor' else '1' }}]:</div>
 <div class="input">{% if collapse_input %}<div class="collapsed" title="Input collapsed; complete source is included in the source captures">···</div>{% else %}<pre class="code">{{ code_content }}</pre>{% endif %}</div>
-{% if view_mode != 'editor' %}<div class="output">{% for segment in session_segments %}<pre class="stream {{ 'stderr' if segment.kind == 'stderr' else '' }}">{{ segment.text }}</pre>{% endfor %}{% if jupyter_plot %}<img src="{{ jupyter_plot }}" alt="Notebook plot output" style="display:block;max-width:100%;height:auto;margin-top:8px;background:#fff;border-radius:4px;" />{% endif %}</div>{% endif %}
+{% if view_mode != 'editor' %}<div class="output">{% for segment in session_segments %}<pre class="stream {{ 'stderr' if segment.kind == 'stderr' else '' }}">{{ segment.text }}</pre>{% endfor %}{% if jupyter_plot %}<img src="{{ jupyter_plot }}" alt="Notebook plot" style="max-width:100%;height:auto">{% endif %}</div>{% endif %}
 </div></main><div class="footer"><span>Python 3 (ipykernel) | Idle</span><span>Mode: Command</span><span>{{ filename }}</span></div>
 </body></html>

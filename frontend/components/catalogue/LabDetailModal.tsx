@@ -95,7 +95,9 @@ export default function LabDetailModal({
               {displayName}
             </h2>
             <p className={styles.courseSubtitle}>{lab.courseName}</p>
-            <p style={{color:LAB_IDE_ASSOCIATIONS[lab.id] ? "#4ade80" : "#f87171"}}>{LAB_IDE_ASSOCIATIONS[lab.id] ? "✓ Lab connected" : "✕ Lab not connected yet"}</p>
+            <p style={{color:LAB_IDE_ASSOCIATIONS[lab.id] ? "#4ade80" : "#f87171"}}>
+              {LAB_IDE_ASSOCIATIONS[lab.id] ? "✓ Lab connected" : "✕ Lab not connected yet"}
+            </p>
             <LabIdeSelector key={lab.id} labId={lab.id} />
           </div>
           <button

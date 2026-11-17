@@ -21,10 +21,10 @@ export default function FestiveOffer({packName, credits, amount, regularAmount, 
       <div className={styles.offerBody}>
         <p className={styles.offerTitle}>{saving > 0 ? `Diwali Offer · Save ${rupees(saving)} on ${packName}` : packName}</p>
         <p className={styles.offerMeta}>
-          {rupees(amount)}{saving > 0 && <> <s>{rupees(regularAmount)}</s></>} for {credits} manual credits{endsLabel ? ` · Ends ${endsLabel}` : ''}
+          {rupees(amount)}{saving > 0 && <> <s>{rupees(regularAmount)}</s></>} for {credits} experiment credits{endsLabel ? ` · Ends ${endsLabel}` : ''}
         </p>
         <p className={styles.offerNote}>
-          Full-term practical coverage at {new Intl.NumberFormat('en-IN', {style: 'currency', currency: 'INR', maximumFractionDigits: 2}).format(amount / 100 / credits)} per manual.
+          Full-term practical coverage at {new Intl.NumberFormat('en-IN', {style: 'currency', currency: 'INR', maximumFractionDigits: 2}).format(amount / 100 / credits)} per experiment.
         </p>
         {href && (
           <Link href={href} className={styles.offerLink}>

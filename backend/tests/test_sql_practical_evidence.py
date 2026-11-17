@@ -32,6 +32,11 @@ async def test_practical_has_every_operation_in_order_and_exact_results():
     assert any(f['caption'].startswith('GROUP BY example') for f in pages)
     assert any(f['caption'].startswith('HAVING example') for f in pages)
     assert any(f['caption'].startswith('Nested query example') for f in pages)
+    # Short queries no longer reserve a full 900px desktop of empty editor.
+    from PIL import Image
+    heights=[Image.open(path).height for path in result.screenshots.values()]
+    assert min(heights)<600
+    assert max(heights)<=1200
 
 
 @pytest.mark.parametrize('script', [SCRIPT.replace('SELECT * FROM marks;', ''), SCRIPT.replace('grouped_queries_lab','mini_project_demo')])

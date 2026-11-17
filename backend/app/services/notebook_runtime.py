@@ -1,5 +1,6 @@
 """Killable stateful notebook workers. No model/application secrets enter cells."""
 import base64
+import hashlib
 import json
 import os
 import queue
@@ -13,6 +14,30 @@ import time
 from pathlib import Path
 
 
+def provision_approved_cache(work_dir, cache_root=Path('/opt/labmate-runtime/dl-cache')):
+    """Copy only trusted, manifest-listed immutable artifacts into this job."""
+    manifest_path = cache_root / 'manifest.json'
+    if not manifest_path.is_file():
+        return
+    manifest = json.loads(manifest_path.read_text())
+    if not isinstance(manifest, dict) or len(manifest) > 32:
+        raise ValueError('Invalid runtime artifact manifest.')
+    for name, digest in manifest.items():
+        relative = Path(name)
+        if relative.is_absolute() or '..' in relative.parts or '\\' in name:
+            raise ValueError('Unsafe runtime artifact path.')
+        source = cache_root / 'keras' / relative
+        if source.is_symlink() or not source.is_file() or source.stat().st_size > 128 * 1024**2:
+            raise ValueError('Invalid runtime artifact.')
+        with source.open('rb') as artifact:
+            actual_digest = hashlib.file_digest(artifact, 'sha256').hexdigest()
+        if actual_digest != digest:
+            raise ValueError('Runtime artifact checksum mismatch.')
+        destination = Path(work_dir) / '.keras' / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, destination)
+
+
 def _notebook_python_executable():
     override = os.environ.get('LABMATE_NOTEBOOK_PYTHON')
     if override and Path(override).is_file():
@@ -24,24 +49,19 @@ def _notebook_python_executable():
     return sys.executable
 
 
-# The whole program gets CELL_TIMEOUT_SEC. Interpreter start-up is not part of the student's program, so it has
-# its own allowance: on a slow machine it takes 25 seconds, and charging it to the cell left too little for
-# importing TensorFlow (about 40 seconds there) and then training.
 CELL_TIMEOUT_SEC = 90
 STARTUP_TIMEOUT_SEC = 60
 
 
 def compute_budget_instruction():
-    """Tell the model how much work fits, so a solution is sized to the limit instead of discovering it."""
-    return (f'COMPUTE BUDGET: the notebook runs on one CPU thread and the whole program has {CELL_TIMEOUT_SEC} seconds. '
-            'Importing TensorFlow or PyTorch can take 40 of them, so keep the training work under about 30 seconds: '
-            'at most 2,000 training samples, images no larger than 28x28, text sequences of at most 50 tokens with a '
-            'vocabulary of at most 2,000 words, layers of at most 64 units (32 for LSTM or GRU), and at most 5 epochs '
-            '(3 for recurrent models). ')
+    return (f'COMPUTE BUDGET: one CPU thread, {CELL_TIMEOUT_SEC} seconds per program. '
+            'When the assignment permits a small demonstration, use at most 2,000 training samples '
+            'and small recurrent layers. Preserve explicit dataset, accuracy and workload requirements; '
+            'report unsupported workloads rather than silently changing them. ')
 
 
 class ColabPythonKernel:
-    def __init__(self, work_dir=None, teacher_datasets=None, timeout_sec=CELL_TIMEOUT_SEC, allow_synthetic=False, theme='dark'):
+    def __init__(self, work_dir=None, teacher_datasets=None, timeout_sec=90, allow_synthetic=False, theme='dark'):
         from .isolated_runtime import require_worker
         require_worker()
         if theme not in {'light','dark'}:raise ValueError('Invalid Colab theme.')
@@ -61,20 +81,17 @@ class ColabPythonKernel:
         self._replies = queue.Queue()
 
     def _start(self, deadline):
+        provision_approved_cache(self.work_dir)
         allowed={'PATH','PATHEXT','SYSTEMROOT','WINDIR','COMSPEC','LANG','LC_ALL'}
         environment={k:v for k,v in os.environ.items() if k.upper() in allowed}
         environment.update(LABMATE_NOTEBOOK_THEME=self.theme,TMP=self.work_dir,TEMP=self.work_dir,TMPDIR=self.work_dir,
-            # getpass.getuser() (called while importing torch) needs a user name; Windows has no pwd module.
-            HOME=self.work_dir,USERPROFILE=self.work_dir,USERNAME='student',LOGNAME='student',KERAS_HOME=str(Path(self.work_dir)/'.keras'),
+            HOME=self.work_dir,USERPROFILE=self.work_dir,KERAS_HOME=str(Path(self.work_dir)/'.keras'),
             TORCH_HOME=str(Path(self.work_dir)/'.torch'),
+            NLTK_DATA='/opt/labmate-runtime/nltk_data',
             MPLCONFIGDIR=str(Path(self.work_dir)/'.matplotlib'),PYTHONIOENCODING='utf-8',PYTHONDONTWRITEBYTECODE='1',
             OPENBLAS_NUM_THREADS='1',OMP_NUM_THREADS='1',MKL_NUM_THREADS='1',NUMEXPR_NUM_THREADS='1',
             CUDA_VISIBLE_DEVICES='',TF_CPP_MIN_LOG_LEVEL='2',TF_ENABLE_ONEDNN_OPTS='0',
             TF_NUM_INTRAOP_THREADS='1',TF_NUM_INTEROP_THREADS='1',TORCH_CPP_LOG_LEVEL='ERROR')
-        # NLTK corpora (VADER lexicon, stop words) are installed by the operator; a run can never download them.
-        nltk_data = os.environ.get('LABMATE_NLTK_DATA') or '/opt/labmate-runtime/nltk_data'
-        if Path(nltk_data).is_dir():
-            environment['NLTK_DATA'] = nltk_data
         flags={'creationflags':subprocess.CREATE_NO_WINDOW} if os.name=='nt' else {'start_new_session':True}
         if os.name!='nt' and os.geteuid()==0:
             # Drop root privileges in the image; local non-root callers retain their UID.

@@ -17,7 +17,6 @@ import { useAuth } from "@/contexts/BasicAuthContext";
 import styles from "./home.module.css";
 import PricingSection from '@/components/billing/PricingSection';
 import LabShowcase from '@/components/home/LabShowcase';
-import SampleReportsShowcase from '@/components/home/SampleReportsShowcase';
 import StudentReviews from '@/components/home/StudentReviews';
 
 const LoginModal = dynamic(() => import("@/components/auth/LoginModal"), {
@@ -64,7 +63,6 @@ export default function HomePage() {
             <div className={styles.navLinks}>
               <a href="#how-it-works" className={styles.navLink}>How It Works</a>
               <a href="#features" className={styles.navLink}>Features</a>
-              <Link href="/samples" className={styles.navLink}>Sample Reports</Link>
               <Link href="/labs" className={styles.navLink}>Lab Sections</Link>
               <a href="#labs" className={styles.navLink}>Labs &amp; templates</a>
               <a href="#reviews" className={styles.navLink}>Reviews</a>
@@ -337,7 +335,6 @@ export default function HomePage() {
         </div>
       </section>
 
-      <SampleReportsShowcase />
       <LabShowcase />
       <StudentReviews />
 
@@ -383,7 +380,6 @@ export default function HomePage() {
           <div>
             <div className={styles.footerColTitle}>Product</div>
             <ul className={styles.footerNavList}>
-              <li><Link href="/samples" className={styles.footerLink}>Sample Reports (.docx)</Link></li>
               <li><Link href="/labs" className={styles.footerLink}>All Lab Sections</Link></li>
               <li><Link href="/workspace" className={styles.footerLink}>Student Workspace</Link></li>
               <li><Link href="/dashboard" className={styles.footerLink}>Lab Studio IDE</Link></li>

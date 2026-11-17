@@ -197,7 +197,7 @@ async def test_full_workflow_turns_an_r_manual_question_into_a_word_report_with_
     from app.database import Base
     from app.models import AssignmentWorkflow, Report, Upload, User
     from app.services.assignment_workflow import process_assignment
-    from conftest import student_profile
+    from app.models import UserProfile
     from scripts.r_manual_cases import CASES
 
     case = CASES[4]  # Experiment 5: regression, with console tables and a plot
@@ -211,7 +211,9 @@ async def test_full_workflow_turns_an_r_manual_question_into_a_word_report_with_
     Base.metadata.create_all(engine)
     factory = sessionmaker(bind=engine)
     with factory() as db:
-        user = User(email='r@example.com', name='R Student', profile=student_profile())
+        user = User(email='r@example.com', name='R Student', profile=UserProfile(
+            institution='Test College', course='Computer Science',
+            profile_metadata={'roll_number': '21CS001', 'year': '3', 'graduation_year': '2027'}))
         db.add(user)
         db.flush()
         upload = Upload(user_id=user.id, filename='manual.docx', original_filename='EXP 5 Regression in R.docx',

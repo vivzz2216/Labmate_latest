@@ -160,11 +160,15 @@ async def test_dc_runtime_sanitizes_env_and_requires_worker(tmp_path, monkeypatc
 
     monkeypatch.setattr(settings, "EXECUTION_ISOLATION", "required")
     monkeypatch.delenv("LABMATE_SANDBOX_WORKER", raising=False)
-    with pytest.raises(RuntimeError):
-        await dc_runtime._run_server_client(tmp_path, "LabServer", "LabClient", None, 20.0)
+    before = len(recorded_kwargs)
+    result = await dc_runtime._run_server_client(tmp_path, "LabServer", "LabClient", None, 20.0)
+    assert not result.success
+    assert len(recorded_kwargs) == before
 
 
 def test_ubuntu_desktop_binds_novnc_to_localhost():
+    if not (BACKEND_ROOT / "scripts" / "ubuntu_desktop.sh").is_file():
+        pytest.skip("Ubuntu is excluded from this release.")
     content = (BACKEND_ROOT / "scripts" / "ubuntu_desktop.sh").read_text(encoding="utf-8")
     assert "0.0.0.0:6080" not in content
     assert "127.0.0.1:6080" in content

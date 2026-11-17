@@ -26,8 +26,7 @@ class Settings(BaseSettings):
     # Security
     BETA_KEY: str = os.getenv("BETA_KEY", "")
     EXECUTION_ALLOWED_EMAILS: str = ''
-    # Local installs only: admit every signed-in student even when an allowlist is set.
-    # With no allowlist a local install is already open. Never overrides Railway admission.
+    # Explicit opt-in for a local installation; never overrides Railway admission.
     LOCAL_OPEN_EXECUTION: bool = False
     # Explicit test accounts may use the requested test password and beta execution.
     # Keep empty by default; never place ordinary users here.
@@ -308,6 +307,8 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_railway_settings(self):
+        if self.EXECUTION_BACKEND == 'ssh' and self.HEAVY_EXECUTION_LOCAL_LIMIT > 1:
+            print('The SSH worker accepts one job at a time; use a limit of 1 or railway_sandbox.')
         if self.EXECUTION_BACKEND not in {'ssh', 'railway_sandbox'}:
             raise ValueError('EXECUTION_BACKEND must be ssh or railway_sandbox.')
         if self.EXECUTION_ISOLATION not in {'required', 'development'}:

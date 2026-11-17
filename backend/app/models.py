@@ -150,7 +150,7 @@ class WorkflowBatchItem(Base):
 
 
 class WorkflowEvidence(Base):
-    """A screenshot the student made in an outside tool (Power BI, Canva, ParseHub, ...) for one evidence part."""
+    """A screenshot the student made in an outside tool (Canva, ParseHub, ...) for one evidence part."""
     __tablename__ = "workflow_evidence"
     __table_args__ = (UniqueConstraint("workflow_id", "question_id", "slot", name="uq_workflow_evidence_slot"),)
 

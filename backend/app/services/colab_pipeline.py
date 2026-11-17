@@ -70,7 +70,7 @@ def render_and_capture_colab(cells,screenshot_path,notebook_title=None,student_n
                 .cell-code-highlight,.cell-code-textarea,.cell-output-content {
                     font-size:18px;line-height:27px}
                 .cell-output-content table.colab-df-table {font-size:16px}
-                .colab-plot-img {max-width:760px}
+                .colab-plot-img {max-width:760px;max-height:680px;object-fit:contain}
             ''')
             page.evaluate('document.querySelectorAll(".cell-code-textarea").forEach(el=>{el.style.height="auto";el.style.height=el.scrollHeight+"px"})')
         page.evaluate('()=>Promise.all(Array.from(document.images).map(img=>img.decode().catch(()=>{})))')
@@ -94,10 +94,26 @@ def capture_colab_evidence(cells,screenshot_path,source_filename='notebook.py',*
     frames=[]
     offset=0
     def capture(cell,kind,caption,**details):
-        if len(frames)>=80:raise ValueError('Notebook exceeds the 80 evidence section limit.')
+        if len(frames)>=40:raise ValueError('Notebook exceeds the 40 evidence section limit; split the assignment.')
         path=target.with_name(f'{target.stem}_{len(frames)+1:02d}.png')
-        ok,width,height=render_and_capture_colab([cell],str(path),expand_full=True,
-            viewport_width=1100,viewport_height=260,print_readable=True,**metadata)
+        try:
+            ok,width,height=render_and_capture_colab([cell],str(path),expand_full=True,
+                viewport_width=1100,viewport_height=260,print_readable=True,**metadata)
+        except ValueError as error:
+            if 'too tall' not in str(error) and 'exceeds one screenshot' not in str(error):raise
+            # Re-render smaller source/output sections; do not crop or discard lines.
+            key = 'code' if kind == 'source_preview' else next((k for k in ('error','stdout','stderr','repr','content') if cell.get(k)), None)
+            lines = str(cell.get(key, '')).splitlines() if key else []
+            if len(lines)<2:raise
+            mid=len(lines)//2
+            for start,end in ((0,mid),(mid,len(lines))):
+                child=dict(cell,**{key:'\n'.join(lines[start:end])})
+                info=dict(details)
+                if kind=='source_preview' and details.get('source_ranges'):
+                    first=details['source_ranges'][0][0]
+                    info['source_ranges']=[(first+start,first+end-1)]
+                capture(child,kind,caption,**info)
+            return
         if not ok:raise RuntimeError('Colab evidence capture failed.')
         frames.append(dict(path=str(path),kind=kind,caption=caption,width=width,height=height,**details))
     for number,cell in enumerate(cells,1):
@@ -116,19 +132,9 @@ def capture_colab_evidence(cells,screenshot_path,source_filename='notebook.py',*
         for key in ('stdout','stderr','repr','error'):
             text=cell.get(key)
             if text:
-                wrapped_lines=[]
-                for raw_line in str(text).splitlines():
-                    wrapped_lines.extend(
-                        textwrap.wrap(
-                            raw_line,
-                            width=90,
-                            replace_whitespace=False,
-                            drop_whitespace=False,
-                            break_on_hyphens=False,
-                        )
-                        or [""]
-                    )
-                parts.extend({key:'\n'.join(wrapped_lines[i:i+18])} for i in range(0,len(wrapped_lines),18))
+                output_lines=[part for line in str(text).splitlines() for part in
+                    (textwrap.wrap(line,width=82,replace_whitespace=False,drop_whitespace=False,break_on_hyphens=False) or [''])]
+                parts.extend({key:'\n'.join(output_lines[i:i+18])} for i in range(0,len(output_lines),18))
         if cell.get('html'):parts.append({'html':cell['html']})
         parts.extend({'plots':[plot]} for plot in cell.get('plots',[]))
         for part,output in enumerate(parts or [{}],1):

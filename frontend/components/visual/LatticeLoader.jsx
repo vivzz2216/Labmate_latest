@@ -101,7 +101,7 @@ export default function LatticeLoader({
     if (status === 'working') setAnnounce(`${label}, in progress`);
     else setAnnounce(`${status === 'done' ? doneLabel : errorLabel}${showTimer ? ` ${spoken(dsRef.current)}` : ''}`);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, label, doneLabel, errorLabel, showTimer]);
+  }, [status, elapsed, label, doneLabel, errorLabel, showTimer]);
 
   return (
     <span
