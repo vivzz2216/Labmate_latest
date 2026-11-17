@@ -31,6 +31,12 @@ else:
     db_url = settings.DATABASE_URL
     if db_url.startswith("postgres://"):
         db_url = db_url.replace("postgres://", "postgresql://", 1)
+    # SQLAlchemy 2.1 picks psycopg (v3) for a bare postgresql:// URL, and Railway may supply a
+    # postgresql+psycopg:// URL; the image installs psycopg2, so name that driver explicitly.
+    for prefix in ("postgresql://", "postgresql+psycopg://"):
+        if db_url.startswith(prefix):
+            db_url = "postgresql+psycopg2://" + db_url[len(prefix):]
+            break
 
     if db_url.startswith("sqlite:"):
         # Local recovery runs can use a file database without PostgreSQL.

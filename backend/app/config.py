@@ -319,7 +319,7 @@ class Settings(BaseSettings):
             if self.EXECUTION_ISOLATION != 'required':
                 raise ValueError('Railway requires isolated code execution.')
             self.REDIS_REQUIRED = True
-            if not self.DATABASE_URL.startswith(("postgres://", "postgresql://", "postgresql+psycopg2://")):
+            if not self.DATABASE_URL.startswith(("postgres://", "postgresql://", "postgresql+psycopg://", "postgresql+psycopg2://")):
                 raise ValueError("Railway requires DATABASE_URL referencing the PostgreSQL service.")
             if self.SECRET_KEY == self._default_secret or len(self.SECRET_KEY) < 32:
                 raise ValueError("Set a stable SECRET_KEY of at least 32 characters on Railway.")

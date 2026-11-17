@@ -192,3 +192,9 @@ Every item listed above in this file now has one of four outcomes: **FIXED** (ch
 | E2 | GLM cooldowns and deadlines | provider limits |
 | E3 | `npm install sql.js` pruned unused packages | none are in `package.json` |
 | J3, L4, M3, M5 | Untested scope (Code::Blocks/Workbench themes for Java, GPU, Jupyter DL theme, Android Design view, `.pcap` upload) | not run in this pass |
+
+## Railway deploy fix 2026-11-17
+| # | Problem | Fix |
+|---|---|---|
+| H1 | Railway backend for merge 2fb5d13 failed its health check: `ModuleNotFoundError: No module named 'psycopg'`. The merge had raised SQLAlchemy to 2.1.3, which uses psycopg v3 for a bare `postgresql://` URL, but the image installs psycopg2. It also pulled in untested upgrades (redis 8, bcrypt 5, anthropic 1.x, uvicorn 0.54) and dropped packages main still lists | `backend/requirements.txt` is back to the set the full backend suite ran with (main's pins plus openai 3.24, which the code's `OpenAI` client needs, and fakeredis). `database.py` names the `postgresql+psycopg2` driver for `postgresql://` and `postgresql+psycopg://` URLs. Retested: startup/auth/hardening tests 58 passed |
+| H2 | Railway frontend build of 2fb5d13 failed | Lint errors in the waiting-room page (fixed in bafeedc). `next build` passes locally; confirmed by the Railway deploy of this commit |
