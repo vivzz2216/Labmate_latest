@@ -36,8 +36,9 @@ from .parser_service import parser_service
 from .analysis_service import normalize_generated_code, repair_generated_code
 from .profile_service import UserProfileService
 from .evidence_planner import plan_experiment, select_evidence, verification_summary
-from .manual_sections import numbered_experiments, ManualStructureError
+from .manual_sections import numbered_experiments, numbered_questions, ManualStructureError
 from .worker_health import WorkerUnavailableError, worker_health
+from .student_identity import align_student_stdin, student_identity_error
 
 logger = logging.getLogger(__name__)
 
@@ -479,7 +480,7 @@ async def _extract_assignment(workflow_id: int):
             # Keep the Railway release independent of the optional Unix/Ubuntu
             # lab package. That parser is not shipped with this release; importing
             # it here made every assignment upload fail before normal extraction.
-            sections = numbered_experiments(original_text) if mode == "code_only" else []
+            sections = (numbered_experiments(original_text) or numbered_questions(original_text)) if mode == "code_only" else []
             if sections:
                 workflow.questions = sections
                 workflow.error = None
@@ -960,7 +961,7 @@ async def _process_assignment(workflow_id: int):
                             "3. REALISTIC STUDENT LOGIC: Write direct, correct, undergraduate-level code without over-engineering, unnecessary abstract wrapper classes, or excessive typing annotations unless requested.\n"
                             "4. SAMPLE DATA: Preserve any examples supplied in the question. Otherwise use varied, natural, concise example records appropriate to the exercise. Do not insert student details into data or output unless the question asks for them.\n"
                             "5. Code must be self-contained and completely executable without network or external uninstalled packages.\n"
-                            "6. For interactive programs with input()/scanf()/cin, provide realistic finite newline-separated stdin values in the 'stdin' field that thoroughly test the program and choose the menu exit option; use an empty string for non-interactive programs.\n"
+                            "6. For interactive programs with input()/scanf()/cin, provide realistic finite newline-separated stdin values in the 'stdin' field that thoroughly test the program and choose the menu exit option; use an empty string for non-interactive programs. If the exercise asks for the current student's name, use the exact Student Name from the profile as sample input and in the output; read the entire line so names with spaces work. For multiple student records, include the profile student once and use distinct natural names for the others. Preserve names explicitly supplied by the manual.\n"
                             "7. Keep answer to one short sentence of at most 20 words; no introductions, walkthroughs or conclusions. Return complete executable source code in code. Return only schema JSON. "
                             "Preserve the exercise's exact sample inputs, expected outputs, and visible labels over personalization. "
                             "Implement only the current exercise. Do not add passing-test messages, verification badges, accreditation claims, "
@@ -1028,6 +1029,8 @@ async def _process_assignment(workflow_id: int):
                             from .notebook_magics import neutralize_magics
                             code = neutralize_magics(code)
                         stdin_data = str(solution.get("stdin", ""))[:10000] or None
+                        if actual_language in {'python', 'c', 'cpp', 'java'}:
+                            stdin_data = align_student_stdin(question['text'], code, stdin_data, student_name)
                         browser_tests = solution.get("browser_tests", []) if actual_language in {"html", "react"} else []
                     except GenerationUnavailableError:
                         # Preserve checkpoints and wait for the real model to return.
@@ -1157,6 +1160,10 @@ async def _process_assignment(workflow_id: int):
                         success, output, error, screenshots = execution
                         verification = getattr(execution, "verification", None)
                         execution_stages = getattr(execution, "stages", None) or {}
+                        if success and actual_language in {'python', 'c', 'cpp', 'java'}:
+                            identity_error = student_identity_error(question['text'], code, output, student_name)
+                            if identity_error:
+                                success, error = False, identity_error
                     except WorkerUnavailableError:
                         raise
                     except Exception as execution_error:
@@ -1191,6 +1198,10 @@ async def _process_assignment(workflow_id: int):
                                 success, output, error, screenshots = execution
                                 verification = getattr(execution, "verification", None)
                                 execution_stages = getattr(execution, "stages", None) or {}
+                                if success and actual_language in {'python', 'c', 'cpp', 'java'}:
+                                    identity_error = student_identity_error(question['text'], code, output, student_name)
+                                    if identity_error:
+                                        success, error = False, identity_error
                                 if success:
                                     break
                             except (GenerationUnavailableError, WorkerUnavailableError):
