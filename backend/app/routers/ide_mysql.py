@@ -57,14 +57,22 @@ def _admit(user_id):
 
 
 def _expire():
+    """Forget idle sessions and return them; closing one drops schemas over the network, so callers do it off the loop."""
     now = time.monotonic()
+    stale = []
     for user_id, (session, used) in list(_sessions.items()):
         if now - used > IDLE_SECONDS:
             _sessions.pop(user_id, None)
-            try:
-                session.close()
-            except Exception:
-                pass
+            stale.append(session)
+    return stale
+
+
+def _close_all(sessions):
+    for session in sessions:
+        try:
+            session.close()
+        except Exception:
+            pass
 
 
 def _logical(text, session):
@@ -110,7 +118,9 @@ def _shape(result, session):
 async def execute(body: MysqlStatementInput, user=Depends(execution_user), csrf: bool = Depends(require_csrf_token)):
     """Execute one statement on this account's MySQL session and return the rows or the error the server produced."""
     _admit(user.id)
-    _expire()
+    stale = _expire()
+    if stale:
+        await asyncio.to_thread(_close_all, stale)
     lock = _locks.setdefault(user.id, asyncio.Lock())
     async with lock:
         entry = _sessions.get(user.id)

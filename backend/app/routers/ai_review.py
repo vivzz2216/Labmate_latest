@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+# These call the paid language model directly; they need the same execution access and credits as the other legacy
+# runners, or any free account could spend the model budget without limit.
+from ..security.execution_access import legacy_execution_user
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -24,7 +28,7 @@ class VariantRequest(BaseModel):
 async def review_python_file(
     file: UploadFile = File(...),
     problem_statement: str | None = Form(default=None, max_length=600),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(legacy_execution_user),
     csrf_valid: bool = Depends(require_csrf_token),
     db: Session = Depends(get_db),
 ):
@@ -49,7 +53,7 @@ async def review_python_file(
 @router.post("/variant")
 async def generate_alternative_solution(
     request: VariantRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(legacy_execution_user),
     csrf_valid: bool = Depends(require_csrf_token),
     db: Session = Depends(get_db),
 ):

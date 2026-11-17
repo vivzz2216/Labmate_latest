@@ -12,6 +12,9 @@ from .database import engine, Base
 from .routers import upload, parse, run, compose, download, analyze, tasks, assignments, basic_auth, ai_review, admin, feedback, workflows, billing, lab_catalog, netlab, ide_java, ide_mysql, admission
 from .middleware.rate_limit import RateLimitMiddleware
 from .middleware.body_limit import RequestBodyLimitMiddleware
+from .middleware.path_ids import PathIdRangeMiddleware
+from sqlalchemy.exc import DataError
+from fastapi.responses import JSONResponse
 from .services.background_tasks import start_background_workers, stop_background_workers
 from .services.workflow_queue import start_workflow_workers, stop_workflow_workers
 from .security.signed_assets import verified_screenshot
@@ -115,6 +118,15 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 if settings.RATE_LIMIT_ENABLED:
     app.add_middleware(RateLimitMiddleware)
 app.add_middleware(RequestBodyLimitMiddleware)
+app.add_middleware(PathIdRangeMiddleware)
+
+@app.exception_handler(DataError)
+async def database_value_out_of_range(request, exc):
+    # A body or query value the column cannot hold (e.g. an ID beyond PostgreSQL INTEGER) is the caller's mistake,
+    # not a server fault: answer 422 instead of 500.
+    logging.getLogger(__name__).warning("Rejected out-of-range database value on %s: %s", request.url.path, exc.orig)
+    return JSONResponse(status_code=422, content={"detail": "A value in the request is out of range."})
+
 
 # Configure CORS with security best practices
 # In production, set ALLOWED_ORIGINS environment variable to your frontend domain

@@ -4,7 +4,9 @@ The studios in the browser call these endpoints; the engines live in app/netlab 
 parsed in memory and never written to disk. A parsed capture is kept for half an hour under a random token so the page can ask
 for packet details and filters without uploading the file again; when the token has expired the page uploads it once more.
 """
+import asyncio
 import secrets
+import threading
 import time
 from collections import OrderedDict
 from typing import Any, Dict, List, Optional
@@ -20,26 +22,35 @@ router = APIRouter(prefix="/netlab", tags=["netlab"])
 
 MAX_CAPTURE_BYTES = 8 * 1024 * 1024
 SESSION_TTL_SECONDS = 1800
-MAX_SESSIONS = 24
-_sessions: "OrderedDict[str, tuple]" = OrderedDict()
+# A whole class opens captures during one lab. Twenty-four sessions in total meant the 25th student evicted the first
+# one's capture mid-lab ("no longer open"); bound memory by the capture bytes held instead, and evict the least recently used.
+MAX_SESSIONS = 400
+MAX_SESSION_BYTES = 256 * 1024 * 1024
+_sessions: "OrderedDict[str, tuple]" = OrderedDict()   # token -> (expires, session, source, size)
+_sessions_lock = threading.Lock()                      # the sync routes run in worker threads
 
 
-def _remember(session, source):
+def _remember(session, source, size=0):
     now = time.time()
-    for token in [t for t, (expires, *_rest) in _sessions.items() if expires < now]:
-        _sessions.pop(token, None)
-    while len(_sessions) >= MAX_SESSIONS:
-        _sessions.popitem(last=False)
-    token = secrets.token_urlsafe(12)
-    _sessions[token] = (now + SESSION_TTL_SECONDS, session, source)
+    size = max(int(size), 64 * 1024)
+    with _sessions_lock:
+        for token in [t for t, (expires, *_rest) in _sessions.items() if expires < now]:
+            _sessions.pop(token, None)
+        while _sessions and (len(_sessions) >= MAX_SESSIONS
+                             or sum(entry[3] for entry in _sessions.values()) + size > MAX_SESSION_BYTES):
+            _sessions.popitem(last=False)
+        token = secrets.token_urlsafe(12)
+        _sessions[token] = (now + SESSION_TTL_SECONDS, session, source, size)
     return token
 
 
 def _recall(token):
-    entry = _sessions.get(token)
-    if entry is None or entry[0] < time.time():
-        _sessions.pop(token, None)
-        raise HTTPException(status_code=410, detail="This capture is no longer open. Open the file again.")
+    with _sessions_lock:
+        entry = _sessions.get(token)
+        if entry is None or entry[0] < time.time():
+            _sessions.pop(token, None)
+            raise HTTPException(status_code=410, detail="This capture is no longer open. Open the file again.")
+        _sessions.move_to_end(token)
     return entry[1], entry[2]
 
 
@@ -51,12 +62,13 @@ async def open_capture(file: Optional[UploadFile] = File(None), scenario: bool =
         data = await file.read(MAX_CAPTURE_BYTES + 1)
         if len(data) > MAX_CAPTURE_BYTES:
             raise HTTPException(status_code=413, detail="The capture is larger than 8 MB. Save a shorter capture or apply a capture filter.")
+    # Parsing up to 8 MB is CPU work; on the event loop it froze every other request while it ran (and this route is public).
     try:
-        session, source, _facts = wireshark_lab.load(data)
+        session, source, _facts = await asyncio.to_thread(wireshark_lab.load, data)
     except CaptureError as error:
         raise HTTPException(status_code=400, detail=str(error))
-    steps, missing = wireshark_lab.plan(session)
-    return {"token": _remember(session, source), "source": source, "total": len(session.packets), "rows": session.rows(), "steps": steps,
+    steps, missing = await asyncio.to_thread(wireshark_lab.plan, session)
+    return {"token": _remember(session, source, len(data or b"")), "source": source, "total": len(session.packets), "rows": session.rows(), "steps": steps,
             "missing": missing, "interfaces": wireshark_lab.INTERFACES,
             "file": (file.filename if file is not None and not scenario else "practice-capture.pcap")}
 

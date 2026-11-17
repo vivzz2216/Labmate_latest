@@ -1,3 +1,6 @@
+# These call the paid language model directly; they need the same execution access and credits as the other legacy
+# runners, or any free account could spend the model budget without limit.
+from ..security.execution_access import legacy_execution_user
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from ..database import get_db
@@ -15,7 +18,7 @@ async def analyze_document(
     http_request: Request,
     request: AnalyzeRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(legacy_execution_user),
     csrf_valid: bool = Depends(require_csrf_token)
 ):
     """

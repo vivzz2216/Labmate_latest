@@ -480,7 +480,9 @@ async def get_workflow(upload_id: int, user: User = Depends(get_current_user), d
 @router.post("/{upload_id}/process")
 async def process(upload_id: int, data: ProcessInput, request: Request, background: BackgroundTasks, user: User = Depends(execution_user), db: Session = Depends(get_db), csrf: bool = Depends(require_csrf_token)):
     owned_upload(upload_id, user, db)
-    workflow = db.query(AssignmentWorkflow).filter_by(upload_id=upload_id).first()
+    # Lock the row: a double-clicked Process otherwise ran twice, and the second reserve of the run's credits failed
+    # on the hold's primary key with HTTP 500. Now the second request waits and sees the queued run.
+    workflow = db.query(AssignmentWorkflow).filter_by(upload_id=upload_id).with_for_update().first()
     if not workflow or workflow.status == "extracting" or (workflow.status == "queued" and workflow.stage == "extract"):
         raise HTTPException(409, "Extract and review the questions first.")
     if workflow.status == "queued" and workflow.stage != "extract":
@@ -682,10 +684,12 @@ async def add_evidence(upload_id: int, question_id: int = Form(...), slot: str =
         if reset:
             workflow.status, workflow.stage = "ready", "review"
         db.commit()
-    except Exception:
+    except Exception as error:
         db.rollback()
         if os.path.exists(stored):
             os.unlink(stored)
+        if isinstance(error, IntegrityError):   # two uploads raced for the same empty slot
+            raise HTTPException(409, "This screenshot slot was just filled. Refresh and try again.") from None
         raise
     if old_path and old_path != stored:
         try:

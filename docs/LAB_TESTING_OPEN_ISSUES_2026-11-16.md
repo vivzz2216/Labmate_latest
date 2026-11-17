@@ -230,3 +230,38 @@ Regression tests: `backend/tests/test_load_resilience.py` (4), plus an upload qu
 
 ## Railway variable to set (not done: Railway refuses changes until the plan is active)
 Set the same random value as `TRUSTED_PROXY_KEY` on both the frontend and backend services. Without it all students share one set of per-IP limits (180 a minute unauthenticated, 60 sign-ups a minute, 3,000 a minute for all signed-in traffic together).
+
+---
+
+# Backend audit 2026-11-17
+
+Scope: all 71 API routes (auth dependency inventory), authentication and tokens, CSRF, owner/admin access, object ownership on every ID route, billing (orders, verification, webhook, credit holds), uploads/downloads/evidence files, the unauthenticated studio endpoints, and error handling. Method: code reading plus a fuzzer that sent malformed bodies, wrong types, negative/huge/non-numeric IDs and path tricks to every route, with and without a signed-in student, against the real API (scratch data).
+
+## Checked and sound (no change)
+- Every route that takes an upload, job, report, workflow, batch or evidence ID checks that the signed-in student owns it (or is the owner account); composing a report only uses screenshots of the same upload.
+- JWTs: HS256 only, type checked (access vs refresh), revocation list in Redis, refresh tokens are single-use (a replayed refresh is refused), logout revokes both tokens.
+- CSRF tokens are per user and stored server-side; every state-changing route requires one (the webhook authenticates its body signature instead).
+- The owner account is identified by the server-side `ADMIN_USERID`; sign-up refuses that address in any letter case, so nobody can register as the owner.
+- Billing: Razorpay signatures checked with constant-time comparison; the payment is re-fetched from Razorpay and its order, amount and currency must match the stored order; credits are added once (conditional update on `fulfilled_at`), refunds reverse proportionally, webhooks are de-duplicated; the retired `test-pay` shortcut returns 410.
+- Uploaded file names are sanitised; generated document names are normalised; evidence images are never served for CSV/PCAP slots.
+
+## Fixed (each with a regression test in `backend/tests/test_backend_audit_2026_11_17.py` unless noted)
+| # | Severity | Problem | Fix |
+|---|---|---|---|
+| A1 | High (crash, 14 routes) | A numeric ID larger than the database column (e.g. `/api/workflows/3000000000`) raised "integer out of range" in PostgreSQL ("int too large" in SQLite) and returned HTTP 500 | `PathIdRangeMiddleware` answers 404 for path IDs above 2,147,483,647; a `DataError` anywhere else (e.g. a huge ID in a request body) becomes 422 instead of 500. Fuzzer after the fix: 0 server errors |
+| A2 | High (cost) | `/api/analyze` and `/api/ai-review/review` and `/variant` call the paid language model but only required sign-in: any free account could spend the model budget without limit, bypassing credits and the execution allow-list. The current frontend no longer calls them | They now require `legacy_execution_user`, like the other legacy runners (`/api/run`, `/api/tasks/submit`) |
+| A3 | High (availability, public route) | `POST /api/netlab/wireshark/open` (no sign-in) parsed up to 8 MB of capture on the event loop, freezing every other request while it ran | Parsing and planning run in a worker thread |
+| A4 | Medium (lab breaks under a class) | Only 24 open captures were kept for everyone, evicted oldest-first even while in use: the 25th student in a networking lab made the first one's capture "no longer open"; the store was also shared by worker threads without a lock | Up to 400 sessions within a 256 MB capture budget, least-recently-used eviction, a lock around the store |
+| A5 | Medium (availability) | The MySQL practice IDE closed idle sessions (dropping schemas over the network) on the event loop | Closed in a worker thread |
+| A6 | Low (500 on double click) | Two simultaneous "Process" requests for one workflow both reserved credits; the second failed on the credit-hold key with HTTP 500 | The workflow row is locked (`SELECT … FOR UPDATE`, PostgreSQL) while the request runs (no new test: SQLite ignores row locks) |
+| A7 | Low (500 on a race) | Two uploads to the same empty evidence slot: the loser hit the unique constraint and got HTTP 500 | Returns 409 "slot was just filled" (no new test) |
+
+## Documented, not changed (higher risk or needs a decision)
+| # | Severity | Issue | Recommendation |
+|---|---|---|---|
+| D1 | Medium | Several routes return raw exception text to the browser (`/api/analyze` "Analysis failed: …", `/api/download` "Download failed: …", `/api/compose`, upload preview), which can expose server paths and library messages | Log the exception and return a fixed message |
+| D2 | Medium | `ensure_owner_account` hashes `ADMIN_PASSWORD` exactly as given, while `admin_email()` strips surrounding quotes. If the Railway value is quoted, the owner's password includes the quotes | Decide whether quotes are part of the password before changing it: a change re-hashes the owner password on the next start |
+| D3 | Low | `GET /api/billing/wallet` takes a row lock (`FOR UPDATE`) and, for a new account, re-inserts the trial rows on every poll without committing | Make the read path lock-free; provision the wallet once at sign-up |
+| D4 | Low | Netlab, Packet Tracer and dataset routes are public by design; they are bounded by the per-IP rate limit only, which is shared by everyone while `TRUSTED_PROXY_KEY` is unset (see the load analysis above) | Set `TRUSTED_PROXY_KEY`; consider requiring sign-in for `wireshark/open` |
+| D5 | Low | The MySQL practice IDE allows 40 live sessions in total; the 41st student gets "server is busy" and idle sessions hold a slot for 20 minutes | Raise with MySQL capacity, or shorten the idle time during labs |
+| D6 | Info | 40 `async` handlers still run database calls on the event loop after authentication (list in the load analysis) | Convert gradually |
