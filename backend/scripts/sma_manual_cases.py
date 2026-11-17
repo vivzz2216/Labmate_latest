@@ -3,7 +3,7 @@
 Each case lists the parts of one experiment exactly as frontend/lib/smaCatalog.ts launches them. Code parts carry a
 hand-written reference solution that is run for real in the notebook runtime on the bundled practice data; theory and
 evidence parts carry a short sample answer. The evidence screenshots in the test reports are labelled stand-ins: LabMate
-never draws a Power BI, Canva, ParseHub, Google Trends or Similarweb screen, and neither do these cases.
+never draws a Canva, ParseHub, Google Trends or Similarweb screen, and neither do these cases.
 """
 
 FEED = '''import pandas as pd
@@ -367,10 +367,6 @@ CASES = [
         code("Random social networks with NetworkX", NETWORKS, [], [r"=== Watts-Strogatz", r"Average clustering coefficient"], plots=6),
         code("Community detection and influence analysis", COMMUNITIES, ["social_network_edges.csv"],
              [r"Communities detected: [3-9]", r"Top 10 users by PageRank", r"INTERPRETATION"], plots=1)]},
-    {"number": 7, "title": "Dashboard and Reporting Tool (Power BI)", "parts": [
-        theory("Power BI and social media reporting"),
-        evidence("Power BI dashboard and course certificate", [("powerbi_dashboard", "Power BI dashboard screenshot"),
-                                                               ("powerbi_certificate", "Power BI Basics course certificate")])]},
     {"number": 8, "title": "Creative Content Design Using Canva", "parts": [
         theory("Working of Canva"),
         evidence("Promotional poster in Canva", [("canva_poster", "Final promotional poster"), ("canva_editor", "Canva editor while designing")])]},

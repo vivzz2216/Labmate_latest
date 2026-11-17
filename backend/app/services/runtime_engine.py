@@ -3,7 +3,6 @@
 import asyncio
 import ast
 import json
-import logging
 import os
 import re
 import shutil
@@ -21,6 +20,7 @@ from urllib.parse import urlparse
 import httpx
 from functools import partial
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
+from playwright.async_api import async_playwright
 
 try:
     import resource
@@ -28,10 +28,8 @@ except ImportError:
     resource = None
 
 from ..config import settings
-from .browser_capture import acquire_capture_context
+from .browser_capture import acquire_capture_context, launch_capture_browser
 from .resource_budget import heavy_execution_budget
-
-logger = logging.getLogger(__name__)
 
 
 async def capture_document_from_top(page, **options):
@@ -65,8 +63,6 @@ def runtime_environment(directory: Path, extras=None):
     environment["PATH"] = os.pathsep.join(tool_directories + [environment.get("PATH", "")])
     environment.update({"TMP": str(directory), "TEMP": str(directory), "TMPDIR": str(directory), "PYTHONIOENCODING": "utf-8"})
     environment['HOME'] = str(directory)
-    # A neutral user name: getpass.getuser() fails on Windows without one (torch calls it at import).
-    environment.update({"USERNAME": "student", "LOGNAME": "student"})
     environment.update(extras or {})
     return environment
 
@@ -101,7 +97,7 @@ def make_resource_limiter(resource_limits=None):
         if hasattr(os, "setsid"):
             try:
                 os.setsid()
-            except OSError:
+            except Exception:
                 pass
 
         if resource is None:
@@ -118,7 +114,7 @@ def make_resource_limiter(resource_limits=None):
                 resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
             if max_procs and hasattr(resource, "RLIMIT_NPROC"):
                 resource.setrlimit(resource.RLIMIT_NPROC, (max_procs, max_procs))
-        except (OSError, ValueError):
+        except Exception:
             pass
 
     return preexec
@@ -420,12 +416,11 @@ class RuntimeEngine:
             return await capture_sql(code, filename=filename, objective=objective)
         if capability['category']=='notebook':
             # Native process restrictions are defense in depth, not an OS sandbox.
-            from ..security.operator_access import execution_opted_in
-            if not execution_opted_in():
+            if not settings.EXECUTION_ALLOWED_EMAILS.strip():
                 return RuntimeResult(False,error='Notebook execution requires an explicit beta execution allowlist.',exit_code=126)
             from .lab_capture import capture_notebook
             cfg = project_config or {}
-            return await capture_notebook(code, datasets=cfg.get('datasets'), exp_no=cfg.get('exp_no', '01'), student_name=cfg.get('student_name', 'Student'), subject=cfg.get('subject', 'DSLab'), notebook_title=cfg.get('notebook_title'), theme=cfg.get('colab_theme', 'dark'), notebook_template=cfg.get('notebook_template', 'colab'), jupyter_theme=cfg.get('jupyter_theme', 'light'), source_filename=filename or 'notebook.py')
+            return await capture_notebook(code, datasets=cfg.get('datasets'), exp_no=cfg.get('exp_no', '01'), student_name=cfg.get('student_name', 'Student'), subject=cfg.get('subject', 'DSLab'), notebook_title=cfg.get('notebook_title'),theme=cfg.get('colab_theme','dark'),source_filename=filename or 'notebook.py', notebook_template=cfg.get('notebook_template','colab'), jupyter_theme=cfg.get('jupyter_theme','light'))
         if not capability["supported"]:
             return RuntimeResult(False, error=f"Unsupported capability: {capability['category']} requires an isolated display/server adapter and genuine capture support; it was not executed.",
                                  exit_code=69, stages={"execution": "not_run", "capability": capability["category"]})
@@ -495,7 +490,6 @@ class RuntimeEngine:
                 else:
                     # Restricted local fallback has no credential environment, an isolated cwd, and kernel resource bounds.
                     limits = {"max_memory_bytes": 512 * 1024 * 1024, "max_cpu_seconds": 15}
-                    # -I ignores PYTHONIOENCODING, so UTF-8 is requested explicitly (printing a check mark or a rupee sign must not crash).
                     result = await run_process([sys.executable, "-I", "-X", "utf8", "-u", "-c", PYTHON_INPUT_ECHO_RUNNER, source], directory, inputs, resource_limits=limits)
                 if collect_files:
                     result.files = collect_files(directory, context, name)
@@ -752,7 +746,7 @@ class RuntimeEngine:
                                         try:
                                             await page.wait_for_function('Array.from(document.images).every(image=>image.complete)',timeout=2500)
                                         except Exception:
-                                            logger.debug("Timed out waiting for image load completion", exc_info=True)
+                                            pass
                                     broken_images = await page.evaluate(
                                         "Array.from(document.images).filter(image => !image.complete || image.naturalWidth === 0).length")
                                     if broken_images:
@@ -780,7 +774,7 @@ class RuntimeEngine:
                                 if v2 and result is not None:
                                     result['http_observations'] = observations[-80:]
                             except Exception:
-                                logger.debug("Diagnostic collection skipped on closed or hung page", exc_info=True)
+                                pass
                             try:
                                 async def screenshot():
                                     height = max(viewport["height"], await page.evaluate("document.documentElement.scrollHeight"))

@@ -41,7 +41,7 @@ class WorkerHealth:
                 return dict(self._result)
             if wait_timeout is not None and (force or time.monotonic() >= self._expires):
                 if not self._lock.locked():
-                    self._probe = asyncio.create_task(self._railway_check(force))
+                    asyncio.create_task(self._railway_check(force))
                 return dict(self._result)
             return await self._railway_check(force)
         identity = (settings.SANDBOX_SSH_HOST, settings.SANDBOX_SSH_PORT,

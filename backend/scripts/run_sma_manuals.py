@@ -7,7 +7,7 @@ assignment_workflow.execute_solution, the call the live workflow makes), attache
 evidence parts, builds the Word report with assignment_workflow.build_word_report, and checks the output.
 
 Writes, under Labmate_documents/Labmate_documents/sma/completed/, one report per experiment, and copies every
-screenshot to <out>/screenshots. The evidence stand-ins say so on their face: they are not Power BI, Canva, ParseHub,
+screenshot to <out>/screenshots. The evidence stand-ins say so on their face: they are not Canva, ParseHub,
 Google Trends or Similarweb screens. Exits non-zero if any experiment fails its checks.
 """
 import argparse
@@ -29,7 +29,7 @@ from scripts.sma_manual_cases import CASES
 
 REPO = Path(__file__).resolve().parents[2]
 REPORT_DIR = REPO / 'Labmate_documents' / 'Labmate_documents' / 'sma' / 'completed'
-LEFT_UNATTACHED = {'powerbi_certificate'}   # Experiment 7 keeps one slot empty to show the "Not attached" placeholder.
+LEFT_UNATTACHED = set()
 
 
 def stand_in(path, label):
@@ -38,7 +38,7 @@ def stand_in(path, label):
     draw.rectangle((8, 8, 1271, 711), outline=(120, 130, 150), width=4)
     draw.text((40, 40), 'STAND-IN FOR THE STUDENT\'S OWN SCREENSHOT', fill=(180, 35, 24))
     draw.text((40, 80), label, fill=(30, 41, 59))
-    draw.text((40, 120), 'LabMate never creates Power BI, Canva, ParseHub, Google Trends or Similarweb images.', fill=(71, 85, 105))
+    draw.text((40, 120), 'LabMate never creates Canva, ParseHub, Google Trends or Similarweb images.', fill=(71, 85, 105))
     image.save(path)
 
 
@@ -110,8 +110,6 @@ async def run_case(case, theme, work, out):
             problems.append(f"report is missing the heading {part['title']!r}")
     if any(part['kind'] == 'evidence' for part in case['parts']) and 'Student-supplied' not in text:
         problems.append('report is missing the student-supplied captions')
-    if number == 7 and '[Not attached: Power BI Basics course certificate' not in text:
-        problems.append('Experiment 7 should show the Not attached placeholder')
     if any(part.get('table') for part in case['parts']) and not document.tables:
         problems.append('report is missing the comparison table')
     for result in results:

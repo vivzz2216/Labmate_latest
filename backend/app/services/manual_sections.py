@@ -4,7 +4,7 @@ import re
 from .lab_question_filter import is_handwritten_question, programming_lines
 
 
-HEADING = re.compile(r"^\s*(?:#+\s*)?experiment(?:\s*[-–—]\s*|\s+)(?:(?:no|number)\.?\s*:?\s*)?(\d{1,3}[a-z]?)\s*(?:[:.)–—-]\s*|\s+|$)(.*)$", re.I)
+HEADING = re.compile(r"^\s*(?:#+\s*)?experiment(?:\s*[-–—]\s*|\s+)(?:(?:no|number)\.?\s*:?\s*)?(\d{1,3})\s*(?:[:.)–—-]\s*|\s+|$)(.*)$", re.I)
 END = re.compile(r"^(?:research basis|references|bibliography|appendix)\b", re.I)
 SECTION = re.compile(r"^(?:aim|problem statement|tasks|evidence to submit|verification checklist|result|difficulty)(?:\s*:.*)?$", re.I)
 CONTENTS = re.compile(r"^(?:table\s+of\s+contents|contents|index)\s*:?\s*$", re.I)
@@ -97,8 +97,7 @@ def _body_boundaries(lines, boundaries):
 def section_language(title, content, default="python"):
     # Mixed React/Express is a full-stack Node assignment, never raw JSX in Node.
     text = title + "\n" + content
-    if re.search(r'\b(?:Subject\s*:\s*UNIX\s+LAB|ITL\s*402)\b|^\s*#!\s*/(?:usr/)?bin/(?:ba)?sh\b',text,re.I|re.M):return 'ubuntu'
-    if re.search(r'\b(?:UNIX|Ubuntu|Bash|shell script(?:s|ing)?|(?:sed|awk|grep|egrep|perl)\s+(?:script|program)(?:s|ming)?|system administrati(?:on|ve tasks))\b',title,re.I):return 'ubuntu'
+    if re.search(r'\b(?:UNIX|Ubuntu|Bash|shell scripting)\b',title,re.I):return 'ubuntu'
     if re.search(r'\bR\s?Studio\b|\bRscript\b|\bR\s+(?:programming|language|lab|script)\b|\b(?:in|using|with|via)\s+(?-i:R)(?![\w.+#-])',title,re.I):return 'r'
     if re.search(r'\b(?:SQL|MySQL|SQLite)\b',title,re.I) and not re.search(r'\b(?:react|node|html|css|javascript|python|java|web|webpage|website|portfolio)\b',title,re.I):return 'sql'
     if re.search(r'\b(?:Colab|Jupyter|PySpark|SparkSession|SparkContext|PyTorch|TensorFlow|Keras|Data Science|Deep Learning|Neural Network|Machine Learning|Perceptron|Autoencoder|Backpropagation|MLP|ANN|LSTM|CNN|RNN|AdaBoost|Random Forest|Bayesian Network|Fuzzy Controller|Fuzzy Sets?|Classification Algorithms?)\b|\.ipynb\b', text, re.I): return 'colab'
@@ -135,7 +134,7 @@ def numbered_experiments(text):
     boundaries = _body_boundaries(lines, raw_boundaries)
     if not boundaries:
         raise ManualStructureError("Only contents/index entries were found. Upload the experiment pages as well.")
-    numbers = [match.group(1).upper() for _, match in boundaries]
+    numbers = [int(match.group(1)) for _, match in boundaries]
     declared = re.search(r'\b(\d{1,3})\s+experiments\b', '\n'.join(lines[:boundaries[0][0]]), re.I)
     if declared and int(declared.group(1)) != len(boundaries):
         raise ManualStructureError(f"The manual declares {declared.group(1)} experiments, but {len(boundaries)} explicit experiment sections were found.")
@@ -175,8 +174,8 @@ def numbered_experiments(text):
         relevant_global=[line for line in global_lines if language=='node' or not re.search(r'For the Node\.js experiment',line,re.I)]
         if relevant_global:body += "\nGeneral requirements\n" + "\n".join(relevant_global)
         if len(body) > 15000: raise ManualStructureError(f"Experiment {match.group(1)} exceeds the supported question length.")
-        results.append({"id": index + 1 if any(re.search(r"[A-Z]$", number) for number in numbers) else int(match.group(1)), "text": body,
+        results.append({"id": int(match.group(1)), "text": body,
                         "language": language,
-                        "experiment_number": int(re.match(r"\d+", match.group(1)).group()), "experiment_label": match.group(1).upper(), "title": title or block[0],
+                        "experiment_number": int(match.group(1)), "title": title or block[0],
                         "extraction_method": "original_numbered_section"})
     return results

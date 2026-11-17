@@ -132,19 +132,9 @@ def capture_colab_evidence(cells,screenshot_path,source_filename='notebook.py',*
         for key in ('stdout','stderr','repr','error'):
             text=cell.get(key)
             if text:
-                wrapped_lines=[]
-                for raw_line in str(text).splitlines():
-                    wrapped_lines.extend(
-                        textwrap.wrap(
-                            raw_line,
-                            width=90,
-                            replace_whitespace=False,
-                            drop_whitespace=False,
-                            break_on_hyphens=False,
-                        )
-                        or [""]
-                    )
-                parts.extend({key:'\n'.join(wrapped_lines[i:i+18])} for i in range(0,len(wrapped_lines),18))
+                output_lines=[part for line in str(text).splitlines() for part in
+                    (textwrap.wrap(line,width=82,replace_whitespace=False,drop_whitespace=False,break_on_hyphens=False) or [''])]
+                parts.extend({key:'\n'.join(output_lines[i:i+18])} for i in range(0,len(output_lines),18))
         if cell.get('html'):parts.append({'html':cell['html']})
         parts.extend({'plots':[plot]} for plot in cell.get('plots',[]))
         for part,output in enumerate(parts or [{}],1):

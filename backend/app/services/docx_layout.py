@@ -45,14 +45,6 @@ def _add_table(document, table):
     from docx.oxml import OxmlElement
     from docx.oxml.ns import qn
     headers, rows = table["headers"], table["rows"]
-    if table.get("title"):
-        caption = document.add_paragraph()
-        caption.paragraph_format.keep_with_next = True
-        caption.paragraph_format.space_before = Pt(8)
-        caption.paragraph_format.space_after = Pt(3)
-        label = caption.add_run(str(table["title"]))
-        label.bold = True
-        label.font.size = Pt(10)
     grid = document.add_table(rows=1 + len(rows), cols=len(headers))
     properties = grid._tbl.tblPr
     borders = OxmlElement("w:tblBorders")
@@ -174,24 +166,8 @@ def strip_procedure_heading(text):
     return "\n".join(lines).strip()
 
 
-def _note_paragraph(document, heading, text):
-    paragraph = document.add_paragraph()
-    paragraph.paragraph_format.left_indent = Inches(0.2)
-    paragraph.paragraph_format.space_after = Pt(4)
-    paragraph.paragraph_format.line_spacing = 1.15
-    if heading:
-        label = paragraph.add_run(heading + " ")
-        label.bold = True
-        label.font.size = Pt(10)
-    body = paragraph.add_run(text)
-    body.font.size = Pt(10)
-    body.font.color.rgb = RGBColor(0x33, 0x41, 0x55)
-    return paragraph
-
-
 def embed_evidence_block(document, title: str, procedure_text: str, number: int = 1,
-                         image_paths=(), captions=(), missing=(), table=None,
-                         tables_before=(), explanations=(), observations=(), notes=(), tables_after=()):
+                         image_paths=(), captions=(), missing=(), table=None):
     """A part done in an outside tool: the written procedure, then the student's own screenshots.
 
     LabMate never draws these images. A screenshot the student has not attached yet is shown as a plain
@@ -232,19 +208,9 @@ def embed_evidence_block(document, title: str, procedure_text: str, number: int 
 
     if table:
         _add_table(document, table)
-    for before in tables_before:
-        _add_table(document, before)
-    captions, explanations = list(captions), list(explanations)
+    captions = list(captions)
     for index, path in enumerate(image_paths):
         embed_screenshot(document, path, caption=captions[index] if index < len(captions) else "Student-supplied screenshot")
-        if index < len(explanations) and explanations[index]:
-            _note_paragraph(document, "Explanation:", explanations[index])
-    for text in observations:
-        _note_paragraph(document, "Observation:", text)
-    for after in tables_after:
-        _add_table(document, after)
-    for text in notes:
-        _note_paragraph(document, "Note:", text)
     for slot_label in missing:
         paragraph = document.add_paragraph()
         paragraph.paragraph_format.left_indent = Inches(0.2)
@@ -378,10 +344,11 @@ def embed_screenshot(document, image_path, caption=None, reserved_height=0.8, ma
             paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
             paragraph.paragraph_format.keep_together = True
             paragraph.paragraph_format.keep_with_next = bool(caption)
-            if max_width is not None:
-                paragraph.paragraph_format.space_before = Pt(0)
-                paragraph.paragraph_format.space_after = Pt(2)
-                paragraph.paragraph_format.line_spacing = 1.0
+            # Uploaded documents can have an exact/large Normal line height.
+            # Never inherit that spacing for an inline screenshot.
+            paragraph.paragraph_format.space_before = Pt(0)
+            paragraph.paragraph_format.space_after = Pt(2)
+            paragraph.paragraph_format.line_spacing = 1.0
 
             if s_top == 0 and s_bottom == pixels_h:
                 source = str(image_path)

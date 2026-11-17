@@ -810,7 +810,7 @@ class ScreenshotService:
             source_code=source_code or "",
             jupyter_title=os.path.splitext(safe_filename)[0] + ".ipynb",
             jupyter_theme="dark" if kwargs.get("palette") == "dark" else "light",
-            jupyter_plot=jupyter_plot,
+            jupyter_plot=kwargs.get('jupyter_plot', ''),
             collapse_input=view_mode in {"shell", "output"} and len((source_code or "").splitlines()) > 40,
         )
         

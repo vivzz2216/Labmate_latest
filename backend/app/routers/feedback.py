@@ -1,4 +1,4 @@
-from typing import Dict, Any
+from typing import Optional, Dict, Any, List
 import re
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response

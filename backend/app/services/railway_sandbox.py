@@ -96,6 +96,9 @@ async def execute(job):
     except Exception as error:
         detail = str(error).replace(os.environ.get('RAILWAY_API_TOKEN') or '<unset>', '<redacted>')
         logging.getLogger(__name__).warning('Sandbox execution failed (%s): %s', type(error).__name__, detail[-1600:])
+        if 'waiting for template' in detail and 'last status: BUILDING' in detail:
+            return RuntimeResult(False, error='Execution environment preparation is still in progress.', exit_code=75,
+                                 stages={'execution':'not_run', 'preparation':'pending', 'isolation':'not_started'})
         # No host fallback, provider error details or automatic code-repair loop.
         return RuntimeResult(False,error='Railway sandbox execution unavailable; completed results are saved.',exit_code=126,
                              stages={'execution':'not_run','isolation':'failed'})

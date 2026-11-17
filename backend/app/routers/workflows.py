@@ -56,8 +56,8 @@ class QuestionInput(BaseModel):
     colab_theme: Literal["light", "dark"] = "dark"
     rstudio_theme: Literal["light", "dark"] = "light"
     browser_theme: Literal["edge", "chrome"] = "edge"
-    source_ide: Optional[Literal["codeblocks", "vscode", "notepad", "workbench"]] = None
     python_template: Literal["idle", "jupyter"] = "idle"
+    source_ide: Optional[Literal["codeblocks", "vscode", "notepad", "workbench"]] = None
     jupyter_theme: Literal["light", "dark"] = "light"
 
 
@@ -258,7 +258,7 @@ def batch_status(batch_id, user, db):
 
 
 class PromptStartInput(BaseModel):
-    questions: list[QuestionInput] = Field(min_length=1, max_length=MAX_MANUAL_EXERCISES)
+    questions: list[QuestionInput] = Field(min_length=1, max_length=20)
     title: str = Field(default="Lab experiment", min_length=1, max_length=120)
 
 
@@ -286,10 +286,6 @@ async def start_from_prompt(data: PromptStartInput, user: User = Depends(get_cur
                   **({"track": q.track} if q.track else {}), **multi_part_fields(q, data)} for q in data.questions]
     if any(not question["text"] for question in questions):
         raise HTTPException(400, "Every question needs some text.")
-    try:
-        validate_manual(questions)
-    except ManualLimitError as error:
-        raise HTTPException(422, str(error)) from None
     title = re.sub(r"\s+", " ", data.title).strip() or "Lab experiment"
     name = normalize_output_name(title, default="lab_experiment", max_length=60)
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
@@ -298,7 +294,7 @@ async def start_from_prompt(data: PromptStartInput, user: User = Depends(get_cur
         await asyncio.to_thread(_write_prompt_manual, stored, title, questions)
         os.chmod(stored, 0o600)
         from ..services.storage_service import storage_service
-        storage_service.sync_file(stored)
+        await asyncio.to_thread(storage_service.sync_file, stored)
         upload = Upload(user_id=user.id, filename=os.path.basename(stored), original_filename=name + ".docx",
                         file_path=stored, file_type="docx", file_size=os.path.getsize(stored),
                         language=next((q["language"] for q in questions if q["language"] != "theory"), "theory"))
@@ -499,16 +495,12 @@ async def process(upload_id: int, data: ProcessInput, request: Request, backgrou
                   **multi_part_fields(q, data),
                   **({'datasets':q.datasets} if q.datasets else {}),
                   **({'source_ide':q.source_ide} if q.source_ide else {}),
-                  **({'python_template':q.python_template, 'jupyter_theme':q.jupyter_theme} if q.python_template == 'jupyter' and (q.language in {'python','auto'} or data.language in {'python','auto'}) else {}),
+                  **({'python_template':q.python_template, 'jupyter_theme':q.jupyter_theme} if q.language in {'python','auto'} or data.language in {'python','auto'} else {}),
                   **({'colab_theme':q.colab_theme} if q.language=='colab' or data.language=='colab' else {}),
                   **({'rstudio_theme':q.rstudio_theme} if q.language=='r' or data.language=='r' else {}),
                   **({'browser_theme':q.browser_theme} if q.browser_theme == 'chrome' or q.language in {'html','react','node'} or data.language in {'html','react','node'} else {})} for q in data.questions]
     if sum(sum(len(name)+len(content) for name,content in q.datasets.items()) for q in data.questions)>8*1024*1024:
         raise HTTPException(400,'Dataset upload exceeds 8 MiB.')
-    try:
-        validate_manual(questions)
-    except ManualLimitError as error:
-        raise HTTPException(422, str(error)) from None
     # Parts the lab itself declared (kind) keep that decision; only undeclared questions go through the heuristics.
     undeclared = [question for question in questions if not question.get("kind")]
     filtered = filter_lab_tasks(undeclared, mode=data.mode)
@@ -538,11 +530,6 @@ async def process(upload_id: int, data: ProcessInput, request: Request, backgrou
                 names = suggest_datasets(question["text"])
                 if names:
                     question["builtin_datasets"] = names
-    absent = missing_required_datasets(questions, [
-        (row.question_id, row.slot) for row in db.query(WorkflowEvidence).filter_by(workflow_id=workflow.id).all()])
-    if absent:
-        raise HTTPException(400, "Upload your dataset (CSV) for \"%s\" before generating: LabMate builds the Power BI dashboard "
-                                 "from it." % absent[0])
     previous_instructions = re.sub(r"^\[screenshot_style:[^\]]+\]\s*", "", workflow.instructions or "")
     resume = (workflow.status in {"paused", "failed"} and same_questions(workflow.questions, questions)
               and workflow.language == data.language and previous_instructions == data.instructions
@@ -623,25 +610,6 @@ def _evidence_slot(workflow, question_id, slot):
         if question.get("id") == question_id and question.get("kind") == "evidence":
             return next((item for item in question.get("evidence_slots") or [] if item.get("id") == slot), None)
     return None
-
-
-def missing_required_datasets(questions, rows):
-    """Titles of Power BI parts that have neither the student's dataset nor their own dashboard screenshot.
-
-    LabMate builds the dashboard from the dataset, so the dataset is mandatory; a student who already made the dashboard
-    in a real Power BI and attached that screenshot does not need one. rows are (question_id, slot) pairs.
-    """
-    from ..services.evidence_files import DATASET_SLOT
-    have = set(rows)
-    missing = []
-    for question in questions or []:
-        slots = {slot.get("id") for slot in question.get("evidence_slots") or []}
-        if question.get("kind") != "evidence" or DATASET_SLOT not in slots:
-            continue
-        if (question["id"], DATASET_SLOT) in have or (question["id"], "powerbi_dashboard") in have:
-            continue
-        missing.append(question.get("part_title") or str(question.get("text", ""))[:80])
-    return missing
 
 
 def _evidence_json(row):

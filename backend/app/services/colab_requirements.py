@@ -32,46 +32,99 @@ def alternative_groups(sentence,names):
 
 
 def missing_required_libraries(question, code):
-    required=[]
-    # Requirements come from the prose. A manual that prints its own program lists its imports as code
-    # (import numpy as np), and those lines must not turn every imported library into a requirement.
-    prose='\n'.join(line for line in question.splitlines() if not CODE_IMPORT.match(line))
+    groups = []
+    prose = '\n'.join(line for line in question.splitlines() if not CODE_IMPORT.match(line))
     for sentence in re.split(r'[\n.!?]+', prose):
-        if not re.search(r'\b(?:use|using|import|with|require[sd]?)\b',sentence,re.I):
+        if not re.search(r'\b(?:use|using|import|with|require[sd]?|train|build|implement|fit|develop)\b', sentence, re.I):
             continue
         if re.search(r'\b(?:optional|may use|can use|if available)\b', sentence, re.I):
             continue
-        names={name for name,pattern in LIBRARIES.items()
-               if re.search(r'\b(?:'+pattern+r')\b',sentence,re.I)
-               and not re.search(r'\b(?:not|without|instead of|rather than)\s+(?:an?\s+)?(?:'+pattern+r')\b',sentence,re.I)}
-        for group in alternative_groups(sentence,names):
-            if group not in required:required.append(group)
-    if not required:return []
-    label=lambda group:' or '.join(sorted(group))
-    # IPython magics (%pip, !pip) are not Python; they are skipped at run time, so they must not break parsing here.
-    try:tree=ast.parse(neutralize_magics(code))
-    except SyntaxError:
-        # A real syntax error is reported by the run itself, with its traceback. Claiming that every
-        # requested library is missing would hide the actual cause.
+
+        found = []
+        for name, pattern in LIBRARIES.items():
+            for m in re.finditer(r'\b(?:' + pattern + r')\b', sentence, re.I):
+                prefix = sentence[max(0, m.start() - 30):m.start()]
+                if not re.search(r'\b(?:not|without|instead of|rather than)\s+(?:an?\s+)?$', prefix, re.I):
+                    found.append((m.start(), m.end(), name))
+
+        if not found:
+            continue
+
+        found.sort()
+        deduped = []
+        for f in found:
+            if not deduped or f[0] >= deduped[-1][1]:
+                deduped.append(f)
+            elif f[2] != deduped[-1][2]:
+                deduped.append(f)
+
+        i = 0
+        while i < len(deduped):
+            group = {deduped[i][2]}
+            while i + 1 < len(deduped):
+                between = sentence[deduped[i][1]:deduped[i + 1][0]]
+                if re.search(r'^\s*(?:or|/|,?\s*or)\s*$', between, re.I):
+                    group.add(deduped[i + 1][2])
+                    i += 1
+                else:
+                    break
+            groups.append(group)
+            i += 1
+
+    if not groups:
         return []
-    used={node.id for node in ast.walk(tree) if isinstance(node,ast.Name) and isinstance(node.ctx,ast.Load)}
-    present=set()
+
+    try:
+        tree = ast.parse(neutralize_magics(code))
+    except SyntaxError:
+        return []
+
+    used = {node.id for node in ast.walk(tree) if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)}
+    present = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
-                if (alias.asname or alias.name.split('.')[0]) in used:present.update(alias.name.split('.'))
-        elif isinstance(node,ast.ImportFrom) and node.module:
-            imported=[alias.name for alias in node.names if (alias.asname or alias.name) in used]
-            if imported:present.update(node.module.split('.'));present.update(imported)
-    # pandas is also used without ever naming the module: load_iris(as_frame=True) returns a DataFrame and its methods do the work.
-    imports_pandas=any(isinstance(node,ast.Import) and any(alias.name.split('.')[0]=='pandas' for alias in node.names)
-                       or isinstance(node,ast.ImportFrom) and (node.module or '').split('.')[0]=='pandas' for node in ast.walk(tree))
-    if imports_pandas and 'pandas' not in present:
-        frame_idioms={'frame','groupby','describe','value_counts','iloc','loc','head','agg','pivot_table','merge'}
-        if any(isinstance(node,ast.keyword) and node.arg=='as_frame' for node in ast.walk(tree)) or \
-           any(isinstance(node,ast.Attribute) and node.attr in frame_idioms for node in ast.walk(tree)):
-            present.add('pandas')
-    # tf.keras is Keras: importing TensorFlow and using its keras attribute satisfies a Keras requirement.
-    if 'tensorflow' in present and any(isinstance(node,ast.Attribute) and node.attr=='keras' for node in ast.walk(tree)):
+                if (alias.asname or alias.name.split('.')[0]) in used:
+                    present.add(alias.name.split('.')[0])
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            if any((alias.asname or alias.name) in used for alias in node.names):
+                present.add(node.module.split('.')[0])
+                if node.module.startswith('tensorflow.keras') or (
+                    node.module == 'tensorflow' and any(a.name == 'keras' and (a.asname or a.name) in used for a in node.names)
+                ):
+                    present.add('keras')
+
+    tensorflow_aliases = {
+        a.asname or a.name
+        for n in ast.walk(tree)
+        if isinstance(n, ast.Import)
+        for a in n.names
+        if a.name == 'tensorflow'
+    }
+    if any(
+        isinstance(n, ast.Attribute)
+        and n.attr == 'keras'
+        and isinstance(n.value, ast.Name)
+        and n.value.id in tensorflow_aliases
+        for n in ast.walk(tree)
+    ):
         present.add('keras')
-    return sorted(label(group) for group in required if not group&present)
+
+    # pandas is also used without ever naming the module: load_iris(as_frame=True) returns a DataFrame and its methods do the work.
+    imports_pandas = any(
+        isinstance(n, ast.Import) and any(a.name.split('.')[0] == 'pandas' for a in n.names)
+        or isinstance(n, ast.ImportFrom) and (n.module or '').split('.')[0] == 'pandas'
+        for n in ast.walk(tree)
+    )
+    if imports_pandas and 'pandas' not in present:
+        frame_idioms = {'frame', 'groupby', 'describe', 'value_counts', 'iloc', 'loc', 'head', 'agg', 'pivot_table', 'merge'}
+        if any(isinstance(n, ast.keyword) and n.arg == 'as_frame' for n in ast.walk(tree)) or \
+           any(isinstance(n, ast.Attribute) and n.attr in frame_idioms for n in ast.walk(tree)):
+            present.add('pandas')
+
+    missing = []
+    for g in groups:
+        if not (g & present):
+            missing.append(" or ".join(sorted(g)))
+
+    return sorted(set(missing))

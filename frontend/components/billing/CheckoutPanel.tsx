@@ -28,12 +28,7 @@ export default function CheckoutPanel({packId}: {packId: string}) {
   const requestKey = useRef('');
   const storageKey = user ? `labmate_checkout_${user.id}` : '';
   const requestStorageKey = storageKey + '_' + packId + '_request';
-  const currentPack = catalogue?.packs.find(p => p.id === packId);
-  // A saved order keeps its quoted amount and quantity even after repricing.
-  const pack: Pack|undefined = currentPack && order?.pack_id === packId
-    ? {...currentPack, name: order.pack_name, credits: order.credits, amount: order.amount,
-        regular_amount: order.amount, offer_active: false}
-    : currentPack;
+  const pack: Pack|undefined = catalogue?.packs.find(p => p.id === packId);
 
   useEffect(() => {
     active.current = true;
@@ -96,7 +91,7 @@ export default function CheckoutPanel({packId}: {packId: string}) {
     setOrder(saved);
     setBalance(saved.wallet);
     if (saved.status === 'paid') {
-      setMessage(`Payment verified. ${saved.credits} manual credits added to your account.`);
+      setMessage(`Payment verified. ${saved.credits} experiment credits added to your account.`);
     } else if (saved.status.includes('refunded')) {
       setMessage('This payment has a refund adjustment. Your balance has been updated.');
     } else {
@@ -153,7 +148,7 @@ export default function CheckoutPanel({packId}: {packId: string}) {
         amount: saved.amount,
         currency: saved.currency,
         name: 'LabMate',
-        description: `${saved.pack_name} · ${saved.credits} manual credits`,
+        description: `${saved.pack_name} · ${saved.credits} experiment credits`,
         order_id: saved.gateway_order_id,
         prefill: {name: user.name, email: user.email},
         image: new URL('/images/labmate-logo-transparent.png', window.location.origin).toString(),
@@ -197,7 +192,7 @@ export default function CheckoutPanel({packId}: {packId: string}) {
 
   const paid = order?.status === 'paid';
   const refunded = order?.status.includes('refunded');
-  const isFestive = Boolean(pack?.offer_active);
+  const isFestive = pack?.offer_active || packId === 'college-pack';
   const regularAmount = pack ? (pack.regular_amount ?? pack.amount) : 0;
   const savings = pack && regularAmount > pack.amount ? regularAmount - pack.amount : 0;
 
@@ -225,8 +220,8 @@ export default function CheckoutPanel({packId}: {packId: string}) {
           <h1>{paid ? 'Payment confirmed' : `${pack?.name ?? 'Pack'} checkout`}</h1>
           <p className={styles.checkoutLead}>
             {paid
-              ? `Your ${order?.credits ?? pack?.credits ?? 0} manual credits are active. Upload your lab manual to generate code and Word reports.`
-              : `Add ${pack?.credits ?? 'your'} manual credits to your LabMate account. Credits activate after payment verification and never expire.`}
+              ? `Your ${order?.credits ?? pack?.credits ?? 0} experiment credits are active. Upload your lab manual to generate code and Word reports.`
+              : `Add ${pack?.credits ?? 'your'} experiment credits to your LabMate account. Credits activate after payment verification and never expire.`}
           </p>
 
           {isFestive && pack && !paid && (
@@ -242,14 +237,14 @@ export default function CheckoutPanel({packId}: {packId: string}) {
 
           <h2 className={styles.includedTitle}>What is included</h2>
           <ul className={styles.included}>
-            <li><Check size={16} aria-hidden="true" />{pack?.credits ?? 'Manual'} manual credits</li>
+            <li><Check size={16} aria-hidden="true" />{pack?.credits ?? 'Experiment'} experiment credits</li>
             <li><Check size={16} aria-hidden="true" />Code generated and executed in sandbox</li>
             <li><Check size={16} aria-hidden="true" />Terminal execution output screenshots</li>
             <li><Check size={16} aria-hidden="true" />Formatted Word (.docx) lab record</li>
             <li><Check size={16} aria-hidden="true" />Unused credits never expire</li>
           </ul>
           <p className={styles.fine}>
-            One credit covers one completed manual with up to 15 questions or exercises. Larger manuals must be split. Failed or unfinished manuals return their reserved credit; retries and downloads do not charge again.
+            A credit is used only when an experiment completes. Failed and unfinished experiments return their reserved credits.
           </p>
         </section>
 
@@ -285,7 +280,7 @@ export default function CheckoutPanel({packId}: {packId: string}) {
               <div className={styles.lineItem}>
                 <div>
                   <p className={styles.lineName}>{pack.name}</p>
-                  <p className={styles.lineSub}>{pack.credits} manual credits</p>
+                  <p className={styles.lineSub}>{pack.credits} experiment credits</p>
                 </div>
                 <span className={styles.lineAmount}>{rupees(regularAmount)}</span>
               </div>

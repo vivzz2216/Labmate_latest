@@ -176,6 +176,5 @@ FROM `OrderDetails`;"""
             continue
         index=df['statement_index']
         selects=[s for s in capture.verification['statements'] if s['index']<=index and s.get('type')=='SELECT' and s.get('success') and s.get('columns')]
-        assert df.get('active_result_rows',[]) == ((selects[-1].get('shown_rows') or selects[-1]['rows'])[:12] if selects else [])
+        assert df.get('active_result_rows',[]) == (selects[-1]['rows'][:12] if selects else [])
         assert df.get('active_result_columns',[]) == (selects[-1]['columns'] if selects else [])
-

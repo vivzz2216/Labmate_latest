@@ -155,7 +155,7 @@ def test_detect_topology_single_file_server_and_client():
 
 
 @pytest.mark.asyncio
-async def test_run_server_client_allows_self_contained_server_exit_zero(tmp_path, monkeypatch):
+async def test_run_server_client_rejects_server_exit_before_client(tmp_path, monkeypatch):
     from unittest.mock import AsyncMock
     from app.services import dc_runtime
 
@@ -180,12 +180,14 @@ async def test_run_server_client_allows_self_contained_server_exit_zero(tmp_path
         async def wait(self):
             return 0
 
-    monkeypatch.setattr(dc_runtime.asyncio, "create_subprocess_exec", AsyncMock(return_value=FakeProc()))
+    process = FakeProc()
+    process.stdin = type("Input", (), {"close": lambda self: None})()
+    monkeypatch.setattr(dc_runtime, "start_process", AsyncMock(return_value=process))
     monkeypatch.setattr(dc_runtime.asyncio, "sleep", AsyncMock())
     res = await dc_runtime._run_server_client(tmp_path, "LabServer", "LabClient", None, 20.0)
-    assert res.success is True
+    assert res.success is False
     assert res.exit_code == 0
-    assert "Demonstration complete" in res.output
+    assert "Demonstration complete" in res.error
 
 
 

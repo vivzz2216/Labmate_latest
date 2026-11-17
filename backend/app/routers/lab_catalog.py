@@ -1,240 +1,40 @@
-"""
-Lab Catalog Router - provides public metadata and curriculum for all LabMate lab sections.
-"""
+"""Public metadata derived from the same catalog used by the frontend."""
+import json
+from pathlib import Path
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import Response
 
-from typing import Any, Dict, List
-from fastapi import APIRouter, HTTPException, Response
+router=APIRouter(prefix='/labs', tags=['lab-catalog'])
 
-router = APIRouter(prefix="/labs", tags=["lab-catalog"])
+def load_catalog():
+    packaged=Path(__file__).resolve().parents[1]/'data'/'lab_catalog.json'
+    development=Path(__file__).resolve().parents[3]/'frontend'/'lib'/'lab-catalog.json'
+    data=json.loads((packaged if packaged.is_file() else development).read_text(encoding='utf-8-sig'))
+    keys={'slug':'slug','track':'track','title':'title','short_title':'shortTitle','tagline':'tagline',
+          'description':'description','default_language':'defaultLanguage','badge':'badge',
+          'accent_color':'accentColor','features':'features'}
+    return [{**{dest:c[src] for dest,src in keys.items() if src in c},'experiment_count':len(c['experiments'])} for c in data]
 
-LAB_CATALOG_DATA: List[Dict[str, Any]] = [
-    {
-        "slug": "deep-learning",
-        "track": "deep_learning",
-        "title": "Deep Learning Labs",
-        "short_title": "Deep Learning",
-        "tagline": "Neural network architectures, model training & high-resolution notebook reports",
-        "description": "Dedicated execution and reporting environment for Deep Learning coursework with PyTorch 2.x, TensorFlow 2.x, and Keras 3.x.",
-        "default_language": "colab",
-        "badge": "Expanded Section",
-        "accent_color": "#8b5cf6",
-        "features": [
-            "Full support for PyTorch 2.x, TensorFlow 2.15+ and Keras 3.x",
-            "Automated convergence and metric plotting (Loss, Accuracy, Confusion Matrix)",
-            "Strict framework validation — guarantees requested models are trained without silent fallback",
-            "Dark & Light Colab high-resolution notebook captures",
-        ],
-        "experiment_count": 8,
-    },
-    {
-        "slug": "distributed-computing",
-        "track": "distributed",
-        "title": "Distributed Computing Labs",
-        "short_title": "Distributed Computing",
-        "tagline": "Multi-process architectures, socket networks, Java RMI & consensus algorithms",
-        "description": "Specialized execution and reporting engine for Distributed Systems practicals with Java multi-process coordination and concurrent terminal captures.",
-        "default_language": "distributed",
-        "badge": "New Dedicated Section",
-        "accent_color": "#0ea5e9",
-        "features": [
-            "Multi-file Java source compilation with topological dependency resolution",
-            "Concurrent execution of Server, Client, and Registry processes in isolated microVM sandbox",
-            "Loopback network orchestration with automated dynamic port injection",
-            "Support for Java Socket API (TCP/UDP), Java RMI, Multithreading, and Distributed Consensus",
-        ],
-        "experiment_count": 8,
-    },
-    {
-        "slug": "python",
-        "track": "python",
-        "title": "Basic Python Programming Labs",
-        "short_title": "Python",
-        "tagline": "Core syntax, data structures, algorithms, and OOP exercises",
-        "description": "Python programming practicals with IDLE or Jupyter style captures.",
-        "default_language": "python",
-        "accent_color": "#3b82f6",
-        "features": [
-            "IDLE editor and IDLE shell captures",
-            "Automated unit testing & stdin simulation",
-            "Standard university practical syllabus coverage",
-        ],
-        "experiment_count": 1,
-    },
-    {
-        "slug": "java",
-        "track": "java",
-        "title": "Java Programming Labs",
-        "short_title": "Java",
-        "tagline": "Object-oriented programming, inheritance, interfaces & multithreading",
-        "description": "Classic Java coursework formatted with Windows Notepad source code and Windows Command Prompt execution captures.",
-        "default_language": "java",
-        "accent_color": "#f97316",
-        "features": [
-            "JDK 17/21 compilation and execution",
-            "Windows Notepad + Command Prompt captures",
-        ],
-        "experiment_count": 1,
-    },
-    {
-        "slug": "c-cpp",
-        "track": "cpp",
-        "title": "C & C++ Programming Labs",
-        "short_title": "C / C++",
-        "tagline": "Pointers, memory management, data structures & STL",
-        "description": "Procedural C and object-oriented C++ coursework rendered with Code::Blocks IDE styling and Command Prompt terminal output.",
-        "default_language": "cpp",
-        "accent_color": "#6366f1",
-        "features": [
-            "GCC/G++ 13+ native compilation",
-            "Code::Blocks IDE source capture style",
-        ],
-        "experiment_count": 1,
-    },
-    {
-        "slug": "web-development",
-        "track": "web",
-        "title": "Web Development Labs",
-        "short_title": "Web Dev",
-        "tagline": "HTML5, CSS3, modern JavaScript, React components & Node.js backends",
-        "description": "Full-stack and frontend web coursework with VS Code source views and real headless browser renders.",
-        "default_language": "html",
-        "accent_color": "#10b981",
-        "features": [
-            "Full browser rendering via Playwright Chromium/Edge engine",
-            "VS Code Dark Modern editor presentation",
-        ],
-        "experiment_count": 1,
-    },
-    {
-        "slug": "sql",
-        "track": "sql",
-        "title": "SQL & Database Labs",
-        "short_title": "SQL",
-        "tagline": "DDL, DML, relational schemas, complex joins & aggregate queries",
-        "description": "Database management practicals executed against real MySQL instances with Workbench result captures.",
-        "default_language": "sql",
-        "accent_color": "#ec4899",
-        "features": [
-            "Real MySQL 8.x database container execution",
-            "MySQL Workbench capture style with query and tabular results",
-        ],
-        "experiment_count": 1,
-    },
-    {
-        "slug": "colab",
-        "track": "colab",
-        "title": "Google Colab & Notebook Labs",
-        "short_title": "Notebooks",
-        "tagline": "Data science, exploratory analysis, visualization & machine learning notebooks",
-        "description": "Jupyter and Google Colab notebook workflows with multi-cell execution and matplotlib/seaborn plots.",
-        "default_language": "colab",
-        "accent_color": "#f59e0b",
-        "features": [
-            "Jupyter / Colab multi-cell execution runtime",
-            "Matplotlib, Seaborn, Pandas, and NumPy integration",
-        ],
-        "experiment_count": 1,
-    },
-    {
-        "slug": "ubuntu",
-        "track": "ubuntu",
-        "title": "Ubuntu & Linux Shell Labs",
-        "short_title": "Ubuntu / Linux",
-        "tagline": "Real Bash execution on Ubuntu with native Text Editor and terminal captures",
-        "description": "Linux command and shell scripting practicals executed inside a disposable private namespace of a dedicated Ubuntu VM. The script is shown in the real GNOME Text Editor and its transcript in the Ptyxis terminal.",
-        "default_language": "ubuntu",
-        "badge": "Dedicated Section",
-        "accent_color": "#e95420",
-        "features": [
-            "Real Bash execution in a private Linux namespace on a dedicated Ubuntu VM",
-            "Source in the native GNOME Text Editor and output in the Ptyxis terminal",
-            "Disposable /etc, /home and /tmp for every run, with a root identity confined to the namespace",
-            "Loopback-only networking; reboot, partitioning and installation exercises are flagged for manual review",
-        ],
-        "experiment_count": 9,
-    },
-    {
-        "slug": "r",
-        "track": "r",
-        "title": "R & RStudio Labs",
-        "short_title": "R / RStudio",
-        "tagline": "Statistics, data frames, plots and models run in real R and captured in an RStudio workspace",
-        "description": "R practicals executed by a real Rscript. The script appears in the RStudio source editor, its transcript in the console, variables in the Environment pane and figures in the Plots pane.",
-        "default_language": "r",
-        "badge": "New",
-        "accent_color": "#2a6fbb",
-        "features": [
-            "Real Rscript execution with expression-by-expression console echo",
-            "RStudio source, console, Environment and Plots panes in light or dark theme",
-            "Base R plus ggplot2, dplyr, tidyr, MASS, e1071, randomForest and rpart",
-            "Built-in datasets only; no network access during a run",
-        ],
-        "experiment_count": 8,
-    },
-    {
-        "slug": "social-media-analytics",
-        "track": "sma",
-        "title": "Social Media Analytics Labs",
-        "short_title": "Social Media Analytics",
-        "tagline": "Platform research, scraping, data cleaning, EDA, sentiment, network analysis and review mining",
-        "description": "Ten Social Media Analytics practicals in one section. Coding parts run as real Python notebooks on LabMate practice data; research parts are written up; work done in outside tools (ParseHub, Power BI, Canva, Google Trends, Similarweb) is documented with your own screenshots.",
-        "default_language": "colab",
-        "badge": "New",
-        "accent_color": "#0d9488",
-        "features": [
-            "Python notebooks with pandas, seaborn, NLTK (VADER), NetworkX and BeautifulSoup",
-            "Bundled practice data and practice web pages; no network access during a run",
-            "Theory answers, comparison tables and written analysis next to the code parts",
-            "Upload your own Power BI, Canva, ParseHub and Similarweb screenshots into the report",
-        ],
-        "experiment_count": 10,
-    },
-    {
-        "slug": "computer-networks",
-        "track": "networks",
-        "title": "Computer Networks Labs",
-        "short_title": "Computer Networks",
-        "tagline": "Packet analysis with a Wireshark-style analyser; hubs, switches and routing with a Packet Tracer-style simulator",
-        "description": "Computer Networks practicals built in LabMate's own practice studios. The packets, tables, ARP and ICMP event lists and routing tables are computed by LabMate's engines, so every explanation in the report agrees with its screenshots. The studios are simplified models, labelled as such in every screenshot; they are not Wireshark or Cisco Packet Tracer.",
-        "default_language": "theory",
-        "badge": "New",
-        "accent_color": "#2563eb",
-        "features": [
-            "Packet analyser: decodes real capture bytes, display filters, packet details, hex view and Follow TCP Stream",
-            "Upload the .pcap or .pcapng you saved from Wireshark, or use a built-in practice capture",
-            "Network simulator: hub flooding, switch learning, ARP, ICMP, routers, RIP routing and link failure",
-            "Screenshots, explanations and answer tables generated together and placed in your Word report",
-        ],
-        "experiment_count": 3,
-    },
-]
+LAB_CATALOG_DATA=load_catalog()
 
 
-@router.get("/datasets/{name}")
-async def download_practice_dataset(name: str) -> Response:
-    """Download one of the invented Social Media Analytics practice files (for Power BI, or to open the practice pages)."""
+@router.get('/datasets/{name}')
+async def download_practice_dataset(name: str):
     from ..services.sma_datasets import DATASETS, dataset_path
     if name not in DATASETS:
-        raise HTTPException(status_code=404, detail="Practice dataset not found.")
-    path = dataset_path(name)
-    return Response(
-        content=path.read_bytes(), media_type=DATASETS[name],
-        headers={"Content-Disposition": f'attachment; filename="{name}"', "X-Content-Type-Options": "nosniff",
-                 "Content-Security-Policy": "default-src 'none'; sandbox", "Cache-Control": "public, max-age=3600"})
+        raise HTTPException(404, detail='Practice dataset not found.')
+    return Response(content=dataset_path(name).read_bytes(), media_type=DATASETS[name], headers={
+        'Content-Disposition': f'attachment; filename="{name}"',
+        'X-Content-Type-Options':'nosniff', 'Content-Security-Policy':"default-src 'none'; sandbox",
+        'Cache-Control':'public, max-age=3600'})
 
-
-@router.get("")
-async def list_labs() -> List[Dict[str, Any]]:
-    """List all available lab sections with metadata."""
+@router.get('')
+async def list_labs():
     return LAB_CATALOG_DATA
 
-
-@router.get("/{slug}")
-async def get_lab_detail(slug: str) -> Dict[str, Any]:
-    """Retrieve detailed lab section metadata by slug."""
-    normalized = slug.lower().replace("_", "-")
+@router.get('/{slug}')
+async def get_lab_detail(slug:str):
+    normalized=slug.lower().replace('_','-')
     for category in LAB_CATALOG_DATA:
-        if category["slug"] == normalized or category["track"].replace("_", "-") == normalized:
-            return category
-    raise HTTPException(status_code=404, detail=f"Lab category '{slug}' not found.")
-
+        if category['slug']==normalized or category['track'].replace('_','-')==normalized:return category
+    raise HTTPException(404,detail=f"Lab category '{slug}' not found.")

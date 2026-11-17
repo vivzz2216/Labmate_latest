@@ -18,7 +18,6 @@ from ..middleware.csrf import require_csrf_token
 from ..models import PackPurchase, PaymentWebhookEvent, User
 from ..security.execution_access import check_execution_access
 from ..services import billing_service as billing
-from ..services.manual_limits import MAX_MANUAL_EXERCISES
 
 router = APIRouter(prefix='/billing', tags=['billing'])
 
@@ -46,7 +45,6 @@ class VerifyInput(BaseModel):
 def plans():
     return {'packs': [{**p, 'currency': 'INR'} for p in billing.public_packs()],
         'trial_credits': max(0, min(settings.BILLING_TRIAL_CREDITS, 100)),
-        'credit_unit': 'manual', 'max_questions_per_manual': MAX_MANUAL_EXERCISES,
         'mode': settings.RAZORPAY_MODE,
         'checkout_available': billing.configuration_ready() and settings.RAZORPAY_MODE == 'live',
         'billing_enabled': settings.BILLING_ENABLED}
@@ -65,10 +63,12 @@ def balance(user: User = Depends(get_current_user), db: Session = Depends(get_db
 @router.post('/orders')
 async def order(data: OrderInput, user: User = Depends(get_current_user),
                 db: Session = Depends(get_db), csrf: bool = Depends(require_csrf_token)):
-    try:
-        check_execution_access(user, require_profile=False)
-    except ValueError:
-        raise HTTPException(403, 'Packs are currently available to invited beta accounts only.') from None
+    # A payment check does not grant admission to code execution.
+    if data.pack_id != billing.PAYMENT_CHECK['id']:
+        try:
+            check_execution_access(user, require_profile=False)
+        except ValueError:
+            raise HTTPException(403, 'Packs are currently available to invited beta accounts only.') from None
     return await billing_task(billing.create_order, db, user.id, data.pack_id, str(data.request_key))
 
 

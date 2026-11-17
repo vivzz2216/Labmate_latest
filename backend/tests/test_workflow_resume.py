@@ -9,8 +9,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
-from app.models import AssignmentWorkflow, Report, Upload, User
-from conftest import student_profile
+from app.models import AssignmentWorkflow, Report, Upload, User, UserProfile
 from app.routers.workflows import ProcessInput, process
 from app.services.assignment_workflow import process_assignment
 from app.services.generation_service import GenerationUnavailableError
@@ -32,7 +31,9 @@ class WorkflowResumeTests(unittest.IsolatedAsyncioTestCase):
             {"id": 2, "text": "Write a Python program to reverse a string.", "language": "python"},
         ]
         with self.factory() as db:
-            user = User(email="resume@example.com", name="Resume Test", profile=student_profile())
+            user = User(email="resume@example.com", name="Resume Test")
+            user.profile=UserProfile(institution='Test College', course='Computer Science',
+                profile_metadata={'year':'4','graduation_year':'2026','roll_number':'QA002'})
             db.add(user); db.flush()
             upload = Upload(user_id=user.id, filename="manual.docx", original_filename="manual.docx", file_path="unused", file_type="docx", file_size=1)
             db.add(upload); db.flush()

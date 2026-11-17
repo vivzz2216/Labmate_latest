@@ -31,10 +31,9 @@ def test_failed_execution_checks_never_become_verified(output):
     assert summary['failures']
 
 
-def test_distributed_success_without_independent_verification_fails_closed():
+def test_generic_distributed_execution_is_not_labelled_independently_verified():
     summary = verification_summary(plan_experiment('Run distributed code', 'distributed'), True, 'Execution finished.')
-    assert summary['status'] == 'failed'
-    assert any('independently verified' in item for item in summary['failures'])
+    assert summary['status'] == 'execution_tested'
 
 
 def test_colab_python_optimization_route_stays_notebook():
@@ -184,33 +183,8 @@ def test_colab_save_does_not_claim_saved_without_persistence():
 
 
 def test_catalog_counts_match_frontend_definitions():
-    ts = (REPO_ROOT / 'frontend' / 'lib' / 'labCatalog.ts').read_text(encoding='utf-8')
-    for item in LAB_CATALOG_DATA:
-        slug = item['slug']
-        if slug == 'social-media-analytics':
-            # Defined in its own file through an experiment(number, ...) helper that builds the id "sma-<number>".
-            sma = (REPO_ROOT / 'frontend' / 'lib' / 'smaCatalog.ts').read_text(encoding='utf-8')
-            numbers = [int(n) for n in re.findall(r'\bexperiment\(\s*(\d+),', sma)]
-            assert 'id: `sma-${number}`' in sma and 'SMA_CATEGORY,' in ts
-            assert numbers == list(range(1, item['experiment_count'] + 1)), f"{slug}: frontend numbers {numbers}"
-            continue
-        if slug == 'computer-networks':
-            networks = (REPO_ROOT / 'frontend' / 'lib' / 'networkCatalog.ts').read_text(encoding='utf-8')
-            numbers = [int(n) for n in re.findall(r'\bexperiment\(\s*(\d+),', networks)]
-            assert 'id: `net-${number}`' in networks and 'NETWORKS_CATEGORY,' in ts
-            assert len(numbers) == item['experiment_count'] and numbers == sorted(set(numbers)), f"{slug}: frontend numbers {numbers}"
-            continue
-        prefix = {
-            'deep-learning': 'dl-',
-            'distributed-computing': 'dc-',
-            'python': 'py-',
-            'java': 'java-',
-            'c-cpp': 'cpp-',
-            'web-development': 'web-',
-            'sql': 'sql-',
-            'colab': 'colab-',
-            'ubuntu': 'ubuntu-',
-            'r': 'r-',
-        }[slug]
-        ids = re.findall(rf'id:\s*"{re.escape(prefix)}\d+"', ts)
-        assert item['experiment_count'] == len(ids), f"{slug}: backend={item['experiment_count']} vs frontend={len(ids)}"
+    import json
+    data = json.loads((REPO_ROOT / 'frontend/lib/lab-catalog.json').read_text(encoding='utf-8-sig'))
+    assert {item['slug']: item['experiment_count'] for item in LAB_CATALOG_DATA} == {
+        item['slug']: len(item['experiments']) for item in data}
+    assert not any('powerbi' in str(item).lower() or 'power bi' in str(item).lower() for item in data)

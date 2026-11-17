@@ -26,8 +26,7 @@ class Settings(BaseSettings):
     # Security
     BETA_KEY: str = os.getenv("BETA_KEY", "")
     EXECUTION_ALLOWED_EMAILS: str = ''
-    # Local installs only: admit every signed-in student even when an allowlist is set.
-    # With no allowlist a local install is already open. Never overrides Railway admission.
+    # Explicit opt-in for a local installation; never overrides Railway admission.
     LOCAL_OPEN_EXECUTION: bool = False
     # Explicit test accounts may use the requested test password and beta execution.
     # Keep empty by default; never place ordinary users here.

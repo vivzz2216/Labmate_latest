@@ -164,7 +164,7 @@ export const workflowApi = {
   ): Promise<LabWorkflow> {
     return (await api.post(`/api/workflows/${uploadId}/process`, data)).data;
   },
-  // Screenshots the student made in an outside tool (Power BI, Canva, ParseHub...) for an evidence part.
+  // Screenshots the student made in an outside tool (Canva, ParseHub...) for an evidence part.
   async listEvidence(uploadId: number): Promise<EvidenceItem[]> {
     return (await api.get(`/api/workflows/${uploadId}/evidence`)).data;
   },

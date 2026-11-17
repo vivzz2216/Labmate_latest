@@ -23,6 +23,8 @@ def sql_instructions(question: str) -> str:
         'Do not include invented student/class/institution details in comments. '
         'Do not add unrelated Customers/Employees joins or product views to other exercises. '
         'Use beginner-friendly SQL: short descriptive names, simple CREATE/INSERT/SELECT statements, and brief labels for each requested example. Avoid decorative comments, unnecessary quoting or extra project logic. '
+        'Preserve the exact capitalization of every created table in every subsequent query; Linux MySQL identifiers are case-sensitive. Prefer lowercase names only when the manual does not specify a name. '
+        'Keep SQL and comment lines within 80 characters, splitting long INSERT lists and SELECT clauses across lines so the complete code is readable in print. '
     )
     if re.search(r'\b(?:constraints?|DDL)\b', text, re.I):
         instructions += (

@@ -67,11 +67,11 @@ def short_text(text,limit=180):
 
 
 def diagnostic_text(result):
-    raw_err = str(result.get('error') or 'Required execution evidence is missing.').strip()
-    err_lines = [ln.strip() for ln in raw_err.splitlines() if ln.strip()]
-    if len(err_lines) > 1 and err_lines[0].startswith('Traceback'):
-        raw_err = f"{err_lines[-1]} ({err_lines[0]})"
-    lines=['Diagnostic report — this experiment has not passed verification. '+short_text(raw_err,300)]
+    raw_error = str(result.get('error') or 'Required execution evidence is missing.').strip()
+    error_lines = [line.strip() for line in raw_error.splitlines() if line.strip()]
+    if len(error_lines) > 1 and error_lines[0].startswith('Traceback'):
+        raw_error = error_lines[-1]
+    lines=['Diagnostic report — this experiment has not passed verification. '+short_text(raw_error,300)]
     verification=result.get('verification') or {}
     kind=verification.get('kind') or ('browser' if result.get('language') in {'html','react'} else 'console')
     if verification.get('status')=='failed':
@@ -91,8 +91,7 @@ def diagnostic_text(result):
 
 
 def build_compact_report(upload,workflow):
-    landscape=all(r.get('language')=='sql' for r in workflow.results)
-    document,source_is_docx=create_report_document(upload,landscape=landscape)
+    document,source_is_docx=create_report_document(upload)
     section=document.sections[-1]
     section.top_margin=section.bottom_margin=Inches(.6)
     languages={r.get('language') for r in workflow.results}
@@ -145,12 +144,18 @@ def build_compact_report(upload,workflow):
         for image_index,path in enumerate(paths):
             if not Path(path).is_file():raise ValueError('A required screenshot is missing: '+str(path))
             caption=evidence_caption(result.get('language'),captions[image_index] if image_index<len(captions) else '')
+            if not re.search(r'\b(?:simulated|unverified|failed|diagnostic)\b', caption, re.I):
+                # Interface details already appear in the image itself.
+                caption = re.sub(r'\s*\([^)]*(?:style|preview)[^)]*\)', '', caption, flags=re.I)
+                caption = re.sub(r'\s*\[[^\]]*(?:style|preview)[^\]]*\]', '', caption, flags=re.I)
             if result.get('language') == 'colab' and not re.search(r'\b(?:simulated|unverified|failed|diagnostic)\b', caption, re.I):
                 # The notebook screenshots already contain their content; avoid
                 # redundant per-slice labels and fit two readable frames per page.
                 caption = None
             # Leave room on the first page for the heading, aim and caption.
             reserve = min(3.0, 1.7 + max(0, len(aim) - 140) / 300) if image_index == 0 else .8
+            if result.get('language') == 'sql':
+                reserve = .7
             embed_screenshot(document,path,caption=caption,reserved_height=reserve,
                              max_width=6.25 if result.get('language') == 'colab' else None)
     name=normalize_output_name(workflow.output_name or 'lab_report',max_length=80)+'.docx'

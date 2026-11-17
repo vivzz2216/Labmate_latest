@@ -243,29 +243,6 @@ def network_edges():
     write_csv("social_network_edges.csv", ["source", "target"], [[name(a), name(b)] for a, b in sorted(edges)])
 
 
-# ---------------------------------------------------------------- social_kpi_powerbi.csv (Exp 7)
-def kpi_data():
-    rng = random.Random(SEED + 7)
-    rows = []
-    start = date(2026, 1, 1)
-    base = {"Instagram": 9000, "Facebook": 7000, "Twitter": 5000, "LinkedIn": 3000}
-    followers = {platform: value * 3 for platform, value in base.items()}
-    for offset in range(90):
-        day = start + timedelta(days=offset)
-        for platform, level in base.items():
-            impressions = int(level * rng.uniform(0.7, 1.4) * (1 + offset / 300))
-            reach = int(impressions * rng.uniform(0.55, 0.85))
-            likes = int(reach * rng.uniform(0.03, 0.09))
-            comments = int(likes * rng.uniform(0.05, 0.2))
-            shares = int(likes * rng.uniform(0.04, 0.25))
-            clicks = int(reach * rng.uniform(0.01, 0.04))
-            followers[platform] += rng.randint(-5, 60)
-            engagement = round((likes + comments + shares) / reach * 100, 2)
-            rows.append([day.isoformat(), platform, impressions, reach, likes, comments, shares, clicks, followers[platform],
-                         engagement])
-    write_csv("social_kpi_powerbi.csv",
-              ["date", "platform", "impressions", "reach", "likes", "comments", "shares", "clicks", "followers",
-               "engagement_rate"], rows)
 
 
 # ---------------------------------------------------------------- post images (Exp 5 image analysis)
@@ -287,7 +264,7 @@ def post_images():
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
     for build in (social_posts_raw, tweets_sentiment, social_feed, profile_page, competitor_mentions, product_reviews,
-                  network_edges, kpi_data, post_images):
+                  network_edges, post_images):
         build()
     print("wrote", ", ".join(sorted(path.name for path in OUT.iterdir())))
 

@@ -282,6 +282,11 @@ def verification_summary(plan, success, output, browser_verification=None, viewp
     checks = {"execution": "passed" if success else "failed", "output": "not_specified",
               "render": "not_applicable", "interaction": "not_required"}
     failures = []
+    from .semantic_checks import semantic_failures
+    semantic = semantic_failures(plan.get('objective',''), output, plan.get('language',''))
+    if semantic:
+        failures.extend(semantic)
+        checks['output']='failed'
     if plan['category']=='rstudio' and (browser_verification or {}).get('status')!='passed':
         failures.append('Real R execution and RStudio workspace evidence did not pass.')
     if plan['category']=='ubuntu':

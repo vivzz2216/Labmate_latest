@@ -182,6 +182,6 @@ async def test_vscode_evidence_output_renders_integrated_terminal():
     )
     assert 'alt="Visual Studio Code"' in html
     assert 'TERMINAL' in html and 'PROBLEMS' in html
-    assert 'terminal-panel' in html and '[SERVER] Started' in html and '[CLIENT] Connected' in html
+    assert 'terminal-output' in html and '[SERVER] Started' in html and '[CLIENT] Connected' in html
     assert 'public class Server' not in html
 

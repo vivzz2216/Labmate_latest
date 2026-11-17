@@ -806,23 +806,23 @@
         const outputPanelEl = document.getElementById('output-panel');
         document.body.classList.add('print-evidence');
         if (codeSectionEl && resultPaneEl && outputPanelEl) {
-          if (frameConfig.layoutMode === 'code') {
-            codeSectionEl.style.height = '365px';
-            codeSectionEl.style.flex = '0 0 365px';
-            codeSectionEl.style.minHeight = '365px';
-            resultPaneEl.style.height = '286px';
-            resultPaneEl.style.flex = '0 0 286px';
-            outputPanelEl.style.height = '96px';
-            outputPanelEl.style.flex = '0 0 96px';
-          } else if (frameConfig.layoutMode === 'result') {
-            codeSectionEl.style.height = '200px';
-            codeSectionEl.style.flex = '0 0 200px';
-            codeSectionEl.style.minHeight = '200px';
-            resultPaneEl.style.height = '392px';
-            resultPaneEl.style.flex = '0 0 392px';
-            outputPanelEl.style.height = '155px';
-            outputPanelEl.style.flex = '0 0 155px';
-          }
+          const lines = String(frameConfig.editorSql || '').split('\n').length;
+          const active = (frameConfig.resultSets || [])[frameConfig.activeResultIndex];
+          const editorHeight = Math.max(64, Math.min(18, lines) * 22 + 10);
+          const resultHeight = active?.columns?.length
+            ? Math.max(112, (Math.min(12, active.rows?.length || 0) + 2) * 24 + 46) : 0;
+          codeSectionEl.style.height = `${editorHeight}px`;
+          codeSectionEl.style.flex = `0 0 ${editorHeight}px`;
+          codeSectionEl.style.minHeight = `${editorHeight}px`;
+          resultPaneEl.style.display = resultHeight ? 'flex' : 'none';
+          resultPaneEl.style.height = `${resultHeight}px`;
+          resultPaneEl.style.flex = `0 0 ${resultHeight}px`;
+          outputPanelEl.style.height = '92px';
+          outputPanelEl.style.flex = '0 0 92px';
+          document.body.dataset.captureHeight = String(Math.max(420, editorHeight + resultHeight + 92 + 154));
+          document.getElementById('toggle-additions')?.classList.remove('active');
+          const wrapControl = document.querySelector('.rg-wrap-label input');
+          if (wrapControl) wrapControl.checked = true;
         }
 
         editorStartLine = Number(frameConfig.startLine) || 1;
