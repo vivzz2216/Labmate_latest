@@ -198,3 +198,35 @@ Every item listed above in this file now has one of four outcomes: **FIXED** (ch
 |---|---|---|
 | H1 | Railway backend for merge 2fb5d13 failed its health check: `ModuleNotFoundError: No module named 'psycopg'`. The merge had raised SQLAlchemy to 2.1.3, which uses psycopg v3 for a bare `postgresql://` URL, but the image installs psycopg2. It also pulled in untested upgrades (redis 8, bcrypt 5, anthropic 1.x, uvicorn 0.54) and dropped packages main still lists | `backend/requirements.txt` is back to the set the full backend suite ran with (main's pins plus openai 3.24, which the code's `OpenAI` client needs, and fakeredis). `database.py` names the `postgresql+psycopg2` driver for `postgresql://` and `postgresql+psycopg://` URLs. Retested: startup/auth/hardening tests 58 passed |
 | H2 | Railway frontend build of 2fb5d13 failed | Lint errors in the waiting-room page (fixed in bafeedc). `next build` passes locally; confirmed by the Railway deploy of this commit |
+
+---
+
+# Load and failure analysis 2026-11-17
+
+Method: the real API (one uvicorn process, scratch SQLite data, local Windows machine) driven by an asyncio client simulating students. Numbers are for that machine; production (Linux, PostgreSQL, Redis) is faster per request but has the same limits and the same code paths. Anything not measured is marked as such.
+
+## Failures found and fixed (each retested)
+| # | Where it fails | Measured before | Root cause | Fix | Measured after |
+|---|---|---|---|---|---|
+| L1 | Any signed-in request once about 15 are in flight at once | `/api/billing/wallet` 6 req/s with 60 s timeouts at 40 clients; `/api/assignments` 5 req/s, all timed out; the server stopped answering (240 half-closed connections) and the log showed `QueuePool limit ... reached, connection timed out` | `get_current_user` (every signed-in route) ran its first database query directly on the event loop. When every pooled connection was held by a request that needs the loop to finish, the loop waited for a connection only the loop could release, until the 30 s pool timeout | The lookup runs in a worker thread (`middleware/auth.py`) | wallet 94 req/s, assignments 150 req/s, p50 under 270 ms, no errors. 150 students polling for 40 s: 2,848 requests, all 200, 71 req/s (before: 40 % failed or timed out) |
+| L2 | Students behind one address (campus or the frontend proxy) | 60 students signing up and signing in at once: 60 of 120 calls refused with 429 (limit was 20 a minute per IP) | Login, refresh and sign-up shared one 20-per-minute per-IP bucket | Login/refresh 300 a minute, sign-up its own bucket of 60 a minute (`AUTH_RATE_LIMIT_PER_MINUTE`, `SIGNUP_RATE_LIMIT_PER_MINUTE`). Password guessing is still bounded per account by the lockout | 60 students: 120 of 120 succeed |
+| L3 | A class uploading manuals together | 40 simultaneous uploads: 23 refused at once with "Upload capacity is busy" (only 4 parsers, no waiting, the frontend does not retry) | Immediate refusal when the 4 slots were taken | Uploads wait up to 20 s in a queue of at most 64 (`UPLOAD_QUEUE_WAIT_SECONDS`, `UPLOAD_QUEUE_LIMIT`); beyond that the 429 remains | 40 of 40 accepted |
+| L4 | Storage volume (5 GB on Railway) | Nothing stops uploads when it is full; writes fail half way | No free-space check and no retention | Uploads are refused with 507 below `MIN_FREE_DISK_MB` (200); `/health/ready` reports `disk_free_mb` | Unit-tested |
+| L5 | Railway rate limits | Warning only | `TRUSTED_PROXY_KEY` is not set on either Railway service, so the backend sees every student as the frontend proxy's address | Startup warning added. **Needs a Railway variable change** (below) | not applicable |
+
+Regression tests: `backend/tests/test_load_resilience.py` (4), plus an upload queueing test and the two existing upload-limit tests in `test_release_hardening.py`.
+
+## Limits that remain (capacity, not defects; measured where stated)
+| Limit | Where it bites | What to do |
+|---|---|---|
+| Logins are CPU-bound: 4 password hashes at a time | 150 students logging in the same 10 seconds: all succeed, but over about 16 s (p95 8.4 s locally). Measured | Acceptable; stagger lab start or raise `PASSWORD_WORKERS` if the host has spare CPUs |
+| One uvicorn process, `--limit-concurrency 128` | More than 128 requests in flight at once get 503. Not reached in the 150-student test (71 req/s). Not measured above that | Add replicas (the budget counters are per process) |
+| Code execution and browser captures: 1 at a time per process (`HEAVY_EXECUTION_LOCAL_LIMIT`, `BROWSER_CAPTURE_LOCAL_LIMIT`), the Ubuntu SSH worker one job at a time; a waiter gives up after 600 s | Many students generating reports at once queue up; throughput is a few captures a minute. **Not load-tested here** (needs the real worker and model keys) | Scale the Railway sandbox worker and workers; raise the limits only with matching CPU and RAM |
+| `WORKFLOW_WORKERS=2` | At most two manuals are processed at a time per API process; the rest wait in the durable queue (they are not lost) | Run `LABMATE_ROLE=worker` services |
+| 40 async handlers (list: `run_tasks`, `extract`, `batch_upload`, `start_from_prompt`, `signup`, `create_order` and others) still call the database directly on the event loop after the auth step | The connection is already held by the request, so the stall seen in L1 cannot start there, but a second checkout (after a commit) can briefly block the loop under saturation | Move these to `to_thread`/`run_in_threadpool` one at a time with tests |
+| No retention for reports, screenshots and uploads | The 5 GB volume fills (L4 only makes it fail cleanly) | Add a retention job once the download window is decided, or use object storage |
+| Redis down | Rate limiting fails closed: every API request returns 503, including login | Intentional; keep Redis healthy or decide on fail-open |
+| Frontend proxy has no upstream timeout | A hung backend leaves proxy requests waiting until the browser gives up | Not changed (long report downloads need long timeouts) |
+
+## Railway variable to set (not done: Railway refuses changes until the plan is active)
+Set the same random value as `TRUSTED_PROXY_KEY` on both the frontend and backend services. Without it all students share one set of per-IP limits (180 a minute unauthenticated, 60 sign-ups a minute, 3,000 a minute for all signed-in traffic together).

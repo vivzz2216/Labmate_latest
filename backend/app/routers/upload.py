@@ -13,6 +13,7 @@ from ..models import User
 import logging
 import asyncio
 import os
+import shutil
 import uuid
 from pydantic import BaseModel, Field, field_validator
 import mammoth
@@ -77,6 +78,16 @@ async def upload_file(
             logger.warning("File upload failed: No file provided")
             raise HTTPException(status_code=400, detail="No file provided")
         
+        # Reports, screenshots and uploads are kept on the volume without expiry. When it is nearly full, writes
+        # fail half way through; refuse the upload cleanly instead.
+        try:
+            free_mb = shutil.disk_usage(settings.UPLOAD_DIR if os.path.isdir(settings.UPLOAD_DIR) else settings.DATA_DIR).free // 1024**2
+        except OSError:
+            free_mb = None
+        if free_mb is not None and free_mb < settings.MIN_FREE_DISK_MB:
+            logger.error("Upload refused: only %s MB free on the storage volume", free_mb)
+            raise HTTPException(status_code=507, detail="Storage is full right now. Please try again later.")
+
         # Sanitize filename to prevent path traversal
         safe_filename = sanitize_filename(file.filename)
         logger.debug(f"Sanitized filename: {safe_filename}")

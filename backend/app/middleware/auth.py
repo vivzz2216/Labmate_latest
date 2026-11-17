@@ -43,9 +43,11 @@ async def get_current_user(
         # Verify token and get user ID
         user_id = await asyncio.to_thread(get_user_id_from_token, token)
         
-        # Get user from database
-        user = db.query(User).filter(User.id == user_id).first()
-        
+        # Get user from database. This must not run on the event loop: the first query checks a connection out
+        # of the pool, and when every connection is held by a request that needs the loop to finish, a checkout
+        # on the loop waits for a connection only the loop can release (a stall until pool_timeout).
+        user = await asyncio.to_thread(lambda: db.query(User).filter(User.id == user_id).first())
+
         if not user:
             logger.warning(f"User {user_id} from token not found in database")
             raise HTTPException(

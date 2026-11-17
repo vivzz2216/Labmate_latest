@@ -208,6 +208,7 @@ async def test_body_limit_rejects_declared_and_chunked_overflow(monkeypatch):
 @pytest.mark.asyncio
 async def test_upload_parser_admission_is_bounded(monkeypatch):
     monkeypatch.setattr(settings, 'UPLOAD_CONCURRENCY_LIMIT', 4)
+    monkeypatch.setattr(settings, 'UPLOAD_QUEUE_WAIT_SECONDS', 0)
     from app.middleware.body_limit import RequestBodyLimitMiddleware
     entered = asyncio.Event()
     release = asyncio.Event()
@@ -232,9 +233,38 @@ async def test_upload_parser_admission_is_bounded(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_a_busy_upload_waits_for_a_slot_instead_of_being_refused(monkeypatch):
+    from app.middleware.body_limit import RequestBodyLimitMiddleware
+    monkeypatch.setattr(settings, 'UPLOAD_CONCURRENCY_LIMIT', 2)
+    monkeypatch.setattr(settings, 'UPLOAD_QUEUE_WAIT_SECONDS', 5)
+    monkeypatch.setattr(settings, 'UPLOAD_QUEUE_LIMIT', 3)
+    release = asyncio.Event()
+    running = 0
+    app = FastAPI()
+    app.add_middleware(RequestBodyLimitMiddleware)
+    @app.post('/upload')
+    async def upload():
+        nonlocal running
+        running += 1
+        await release.wait()
+        return {}
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://test') as client:
+        tasks = [asyncio.create_task(client.post('/upload')) for _ in range(5)]   # 2 running + 3 allowed to wait
+        await asyncio.sleep(0.3)
+        assert running == 2
+        overflow = await asyncio.wait_for(client.post('/upload'), 2)               # queue full: refused at once
+        assert overflow.status_code == 429
+        release.set()
+        assert [r.status_code for r in await asyncio.gather(*tasks)] == [200] * 5
+    assert running == 5
+
+
+
+@pytest.mark.asyncio
 async def test_upload_parser_admission_honors_configured_concurrency(monkeypatch):
     from app.middleware.body_limit import RequestBodyLimitMiddleware
     monkeypatch.setattr(settings, 'UPLOAD_CONCURRENCY_LIMIT', 6)
+    monkeypatch.setattr(settings, 'UPLOAD_QUEUE_WAIT_SECONDS', 0)
     entered = asyncio.Event()
     release = asyncio.Event()
     count = 0

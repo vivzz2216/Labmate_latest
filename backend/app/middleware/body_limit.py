@@ -9,6 +9,7 @@ class RequestBodyLimitMiddleware:
     def __init__(self, app):
         self.app = app
         self.uploads = asyncio.Semaphore(max(1, int(getattr(settings, 'UPLOAD_CONCURRENCY_LIMIT', 4))))
+        self.waiting = 0
 
     async def __call__(self, scope, receive, send):
         if scope['type'] != 'http':
@@ -37,8 +38,23 @@ class RequestBodyLimitMiddleware:
             scope.get('method') == 'POST' and headers.get(b'content-type', b'').lower().startswith(b'multipart/form-data'))
         if not upload:
             return await self.app(scope, bounded_receive, send)
+        busy = JSONResponse({'detail': 'Upload capacity is busy. Please retry.'}, 429, headers={'Retry-After': '5'})
         if self.uploads.locked():
-            return await JSONResponse({'detail': 'Upload capacity is busy. Please retry.'}, 429,
-                                      headers={'Retry-After': '5'})(scope, receive, send)
+            # A class uploads its manuals together. Rather than turning most of them away, let a bounded number
+            # wait briefly for a parser slot; only an overflowing queue or a long wait is refused.
+            wait = float(getattr(settings, 'UPLOAD_QUEUE_WAIT_SECONDS', 20))
+            if wait <= 0 or self.waiting >= int(getattr(settings, 'UPLOAD_QUEUE_LIMIT', 64)):
+                return await busy(scope, receive, send)
+            self.waiting += 1
+            try:
+                await asyncio.wait_for(self.uploads.acquire(), wait)
+            except asyncio.TimeoutError:
+                return await busy(scope, receive, send)
+            finally:
+                self.waiting -= 1
+            try:
+                return await self.app(scope, bounded_receive, send)
+            finally:
+                self.uploads.release()
         async with self.uploads:
             return await self.app(scope, bounded_receive, send)

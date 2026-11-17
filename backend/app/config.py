@@ -100,6 +100,9 @@ class Settings(BaseSettings):
     # File limits
     MAX_FILE_SIZE: int = 50 * 1024 * 1024
     UPLOAD_CONCURRENCY_LIMIT: int = 4
+    UPLOAD_QUEUE_WAIT_SECONDS: int = 20   # how long an upload waits for a parser slot before "busy" (0 = refuse at once)
+    UPLOAD_QUEUE_LIMIT: int = 64          # uploads allowed to wait at once
+    MIN_FREE_DISK_MB: int = 200           # refuse new uploads below this much free space on the storage volume
     MAX_CODE_LENGTH: int = 5000
     
     # OpenAI settings
@@ -151,8 +154,8 @@ class Settings(BaseSettings):
     GLM_ENDPOINT: str = 'https://api.z.ai/api/paas/v4/chat/completions'
     GLM_REQUEST_TIMEOUT: float = 90
     GLM_MAX_TOKENS: int = 12000
-    DB_POOL_SIZE: int = 5
-    DB_POOL_MAX_OVERFLOW: int = 5
+    DB_POOL_SIZE: int = 15
+    DB_POOL_MAX_OVERFLOW: int = 15
     # Waiting room (services/admission.py): at most ADMISSION_MAX_ACTIVE students use the app at once; the rest sign in and wait their turn.
     ADMISSION_ENABLED: bool = False
     ADMISSION_MAX_ACTIVE: int = 150
@@ -240,7 +243,11 @@ class Settings(BaseSettings):
     # Rate limiting
     RATE_LIMIT_ENABLED: bool = True
     RATE_LIMIT_PER_MINUTE: int = 180
-    AUTH_RATE_LIMIT_PER_MINUTE: int = 20
+    # Login/refresh and sign-up are per IP, and a whole campus can sit behind one address (or behind the frontend
+    # proxy when TRUSTED_PROXY_KEY is not set), so 20 a minute locked out most of a class that signed in together.
+    # Guessing passwords is bounded per account by the lockout in basic_auth; the bcrypt queue bounds CPU.
+    AUTH_RATE_LIMIT_PER_MINUTE: int = 300
+    SIGNUP_RATE_LIMIT_PER_MINUTE: int = 60
     # Signed-in requests are counted per user, not per IP, so a campus behind one public address
     # does not share one bucket. The IP ceiling still bounds many accounts behind one address
     # (0 disables it). Login, signup and refresh stay per-IP.
@@ -325,6 +332,11 @@ class Settings(BaseSettings):
                 raise ValueError("Set a stable SECRET_KEY of at least 32 characters on Railway.")
             if not self.REDIS_URL.startswith(("redis://", "rediss://")):
                 raise ValueError("Railway requires REDIS_URL for CSRF token storage.")
+            if not self.TRUSTED_PROXY_KEY:
+                # Without it every student reaches the API from the frontend proxy's address, so all of them
+                # share one per-IP rate-limit bucket and one student's burst can throttle the whole class.
+                print("[WARNING] TRUSTED_PROXY_KEY is not set on this Railway service. Set the same random value on "
+                      "the frontend and backend so rate limits count each student's real address.")
         return self
 
     # Admin dashboard (Basic Auth)

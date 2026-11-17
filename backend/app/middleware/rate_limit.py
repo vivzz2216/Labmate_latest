@@ -55,7 +55,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         auth=request.url.path in {'/api/basic-auth/login','/api/basic-auth/signup','/api/basic-auth/refresh'}
         subject = None if auth else rate_limit_subject(self._bearer_token(request))
         buckets = []  # (redis key, limit, label for logs)
-        if auth:
+        if auth and request.url.path.endswith('/signup'):
+            buckets.append((f"rate_limit:signup:{client_ip}", settings.SIGNUP_RATE_LIMIT_PER_MINUTE, f"IP {client_ip} (signup)"))
+        elif auth:
             buckets.append((f"rate_limit:auth:{client_ip}", settings.AUTH_RATE_LIMIT_PER_MINUTE, f"IP {client_ip}"))
         elif subject is not None:
             buckets.append((f"rate_limit:user:{subject}", self.user_requests_per_minute, f"user {subject}"))

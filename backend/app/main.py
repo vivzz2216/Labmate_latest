@@ -271,6 +271,11 @@ def _health_check_sync(response: Response):
         }
     }
     
+    try:
+        import shutil
+        result["metrics"]["disk_free_mb"] = shutil.disk_usage(settings.DATA_DIR).free // 1024**2
+    except OSError:
+        pass
     logger.debug(f"Health check response: {result}")
     return result
 
