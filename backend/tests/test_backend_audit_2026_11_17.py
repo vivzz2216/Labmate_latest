@@ -102,3 +102,32 @@ def test_legacy_model_endpoints_require_paid_execution_access():
         for route in router.routes:
             calls = {dependency.call for dependency in route.dependant.dependencies}
             assert legacy_execution_user in calls, route.path
+
+
+def test_server_errors_do_not_echo_exception_text_to_the_client():
+    """D1: messages like "Download failed: [Errno 2] /data/reports/..." exposed paths and library errors."""
+    import pathlib
+    import re
+    leak = re.compile(r'detail\s*=\s*f["\'][^"\']*\{\s*(str\()?(e|exc|error|err)\b')
+    routers = pathlib.Path(__file__).resolve().parents[1] / 'app' / 'routers'
+    offenders = [f'{path.name}:{number}' for path in routers.glob('*.py')
+                 for number, line in enumerate(path.read_text(encoding='utf-8').splitlines(), 1) if leak.search(line)]
+    assert offenders == []
+
+
+@pytest.mark.asyncio
+async def test_a_failed_report_composition_hides_the_internal_error(monkeypatch):
+    from types import SimpleNamespace
+    from app.routers import compose
+
+    async def owned(*_):
+        return SimpleNamespace(id=1)
+
+    async def boom(*_):
+        raise OSError("[Errno 28] No space left on device: '/data/reports/secret.docx'")
+
+    monkeypatch.setattr(compose, 'verify_upload_ownership', owned)
+    monkeypatch.setattr(compose.composer_service, 'compose_report', boom)
+    with pytest.raises(HTTPException) as failed:
+        await compose.compose_report(None, SimpleNamespace(upload_id=1, screenshot_order=[]), None, SimpleNamespace(id=7), True)
+    assert failed.value.status_code == 500 and '/data' not in failed.value.detail and 'Errno' not in failed.value.detail

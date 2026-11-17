@@ -53,5 +53,9 @@ async def compose_report(
             download_url=f"/api/download/{report.id}"
         )
         
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Report composition failed: {str(e)}")
+    except HTTPException:
+        raise
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception("Report composition failed for upload_id=%s", request.upload_id)
+        raise HTTPException(status_code=500, detail="Report composition failed. Please try again.")

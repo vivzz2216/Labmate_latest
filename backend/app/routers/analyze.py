@@ -64,9 +64,9 @@ async def analyze_document(
         
         return AnalyzeResponse(candidates=candidates)
         
-    except Exception as e:
-        import traceback
-        error_details = traceback.format_exc()
-        print(f"ERROR in analyze endpoint:")
-        print(error_details)
-        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+    except HTTPException:
+        raise
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception("Analyze failed")
+        raise HTTPException(status_code=500, detail="Analysis failed. Please try again.")

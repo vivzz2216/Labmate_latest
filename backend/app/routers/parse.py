@@ -108,7 +108,7 @@ async def parse_file(
         raise
     except FileNotFoundError as e:
         logger.error(f"Parse failed: File not found on disk - {upload.file_path}: {e}")
-        raise HTTPException(status_code=404, detail=f"File not found on disk: {str(e)}")
+        raise HTTPException(status_code=404, detail="The uploaded file is no longer available. Please upload it again.")
     except Exception as e:
         logger.error(f"Parse failed for file_id={file_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Parsing failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Parsing failed. Please try again.")

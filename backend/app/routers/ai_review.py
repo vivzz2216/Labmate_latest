@@ -36,7 +36,7 @@ async def review_python_file(
     try:
         code_bytes = await file.read()
     except Exception as exc:  # pragma: no cover - upload errors
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Failed to read file: {exc}") from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to read the uploaded file.") from exc
 
     try:
         return await service.review_code(

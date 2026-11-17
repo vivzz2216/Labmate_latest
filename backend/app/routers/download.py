@@ -36,5 +36,7 @@ async def download_report(
             media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         )
         
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Download failed: {str(e)}")
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception("Download failed for report_id=%s", doc_id)
+        raise HTTPException(status_code=500, detail="Download failed. Please try again.")

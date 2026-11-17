@@ -344,5 +344,9 @@ async def run_tasks(
         
         return RunResponse(jobs=job_statuses)
         
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Execution failed: {str(e)}")
+    except HTTPException:
+        raise
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception("Legacy run failed")
+        raise HTTPException(status_code=500, detail="Execution failed. Please try again.")

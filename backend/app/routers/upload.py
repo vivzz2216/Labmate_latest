@@ -277,7 +277,7 @@ async def set_custom_filename(
         raise
     except Exception as e:
         logger.error(f"Set filename failed for upload_id={request.upload_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to set filename: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to set filename. Please try again.")
 
 
 def _render_pdf_preview(file_path: str) -> str:
@@ -427,4 +427,4 @@ async def preview_docx(
         raise
     except Exception as e:
         logger.error(f"Preview failed for upload_id={upload_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Preview failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Preview failed. Please try again.")
