@@ -33,10 +33,17 @@ import DashboardShell, {
   useDashboardTheme,
 } from "@/components/dashboard/DashboardShell";
 import CreditStatus from "@/components/billing/CreditStatus";
+import SelectWithOther from "@/components/profile/SelectWithOther";
 import dashStyles from "@/app/dashboard/dashboard.module.css";
 import { useAuth } from "@/contexts/BasicAuthContext";
 import { apiService } from "@/lib/api";
 import { saveReport } from "@/lib/workflow";
+import {
+  ACADEMIC_YEARS,
+  ENGINEERING_DEPARTMENTS,
+  GRADUATION_YEARS,
+  TOP_MUMBAI_COLLEGES,
+} from "@/lib/studentOptions";
 import styles from "./settings.module.css";
 
 interface Assignment {
@@ -366,7 +373,7 @@ export default function UserDashboard() {
         await saveReport(
           assignment.report_id,
           assignment.report_filename ||
-            `${assignment.original_filename || assignment.filename || "lab_report"}_completed.docx`,
+          `${assignment.original_filename || assignment.filename || "lab_report"}_completed.docx`,
         );
         return;
       } catch (err) {
@@ -447,7 +454,7 @@ export default function UserDashboard() {
         title="Settings"
         subtitle="Manage your student profile, preferences, and account"
       >
-        <div className={`${dashStyles.panel} ${styles.sectionCard}`}>
+        <div className={dashStyles.panel}>
           <LoadingState message="Loading your account settings..." />
         </div>
       </DashboardShell>
@@ -472,8 +479,8 @@ export default function UserDashboard() {
         {/* Top Grid: Profile Settings (Left) + Account & Preferences (Right) */}
         <div className={styles.settingsGrid}>
           {/* Student Profile & Code Personalization Form */}
-          <section className={`${dashStyles.panel} ${styles.sectionCard}`}>
-            <div className={`${dashStyles.panelHeader} ${styles.sectionHeader}`}>
+          <section className={dashStyles.panel}>
+            <div className={dashStyles.panelHeader}>
               <div>
                 <h2>Student Profile</h2>
                 <p>
@@ -520,14 +527,16 @@ export default function UserDashboard() {
                   <label className={styles.fieldLabel} htmlFor="settings-dept">
                     <BookOpen size={13} /> Branch / Department
                   </label>
-                  <input
+                  <SelectWithOther
                     id="settings-dept"
-                    type="text"
-                    className={styles.fieldInput}
                     value={department}
-                    onChange={(e) => setDepartment(e.target.value)}
-                    placeholder="e.g. Computer Science & Engineering"
+                    onChange={setDepartment}
+                    options={ENGINEERING_DEPARTMENTS}
+                    placeholder="Select branch / department"
+                    customPlaceholder="e.g. Computer Science & Engineering"
                     disabled={profileLoading}
+                    selectClassName={styles.fieldSelect}
+                    inputClassName={styles.fieldInput}
                   />
                 </div>
 
@@ -535,14 +544,16 @@ export default function UserDashboard() {
                   <label className={styles.fieldLabel} htmlFor="settings-inst">
                     <Building2 size={13} /> College / University
                   </label>
-                  <input
+                  <SelectWithOther
                     id="settings-inst"
-                    type="text"
-                    className={styles.fieldInput}
                     value={institution}
-                    onChange={(e) => setInstitution(e.target.value)}
-                    placeholder="e.g. Engineering College"
+                    onChange={setInstitution}
+                    options={TOP_MUMBAI_COLLEGES}
+                    placeholder="Select college / university"
+                    customPlaceholder="Enter your college name"
                     disabled={profileLoading}
+                    selectClassName={styles.fieldSelect}
+                    inputClassName={styles.fieldInput}
                   />
                 </div>
 
@@ -558,11 +569,15 @@ export default function UserDashboard() {
                     disabled={profileLoading}
                   >
                     <option value="">Select academic year</option>
-                    <option value="1st Year">1st Year</option>
-                    <option value="2nd Year">2nd Year</option>
-                    <option value="3rd Year">3rd Year</option>
-                    <option value="4th Year">4th Year</option>
-                    <option value="Graduate">Graduate</option>
+                    {ACADEMIC_YEARS.map((y) => (
+                      <option key={y} value={y}>
+                        {y}
+                      </option>
+                    ))}
+                    {academicYear &&
+                      !(ACADEMIC_YEARS as readonly string[]).includes(
+                        academicYear
+                      ) && <option value={academicYear}>{academicYear}</option>}
                   </select>
                 </div>
 
@@ -570,14 +585,18 @@ export default function UserDashboard() {
                   <label className={styles.fieldLabel} htmlFor="settings-grad">
                     <Calendar size={13} /> Graduation Year
                   </label>
-                  <input
+                  <SelectWithOther
                     id="settings-grad"
-                    type="text"
-                    className={styles.fieldInput}
                     value={graduationYear}
-                    onChange={(e) => setGraduationYear(e.target.value)}
-                    placeholder="e.g. 2026"
+                    onChange={setGraduationYear}
+                    options={GRADUATION_YEARS}
+                    placeholder="Select graduation year"
+                    customPlaceholder="e.g. 2027"
+                    inputMode="numeric"
+                    maxLength={4}
                     disabled={profileLoading}
+                    selectClassName={styles.fieldSelect}
+                    inputClassName={styles.fieldInput}
                   />
                 </div>
               </div>
@@ -585,11 +604,10 @@ export default function UserDashboard() {
               {profileMessage && (
                 <div
                   role="status"
-                  className={`${styles.feedbackBanner} ${
-                    profileMessage.type === "success"
-                      ? styles.feedbackSuccess
-                      : styles.feedbackError
-                  }`}
+                  className={`${styles.feedbackBanner} ${profileMessage.type === "success"
+                    ? styles.feedbackSuccess
+                    : styles.feedbackError
+                    }`}
                 >
                   {profileMessage.text}
                 </div>
@@ -613,8 +631,8 @@ export default function UserDashboard() {
 
           {/* Right Column: Account Overview & Theme Preferences */}
           <aside className={styles.rightColumn}>
-            <section className={`${dashStyles.panel} ${styles.sectionCard}`}>
-              <div className={`${dashStyles.panelHeader} ${styles.sectionHeader}`}>
+            <section className={dashStyles.panel}>
+              <div className={dashStyles.panelHeader}>
                 <div>
                   <h2>Account &amp; Appearance</h2>
                   <p>Session, credits &amp; theme preferences</p>
@@ -672,18 +690,16 @@ export default function UserDashboard() {
                   >
                     <button
                       type="button"
-                      className={`${styles.themeOption} ${
-                        theme === "dark" ? styles.themeOptionActive : ""
-                      }`}
+                      className={`${styles.themeOption} ${theme === "dark" ? styles.themeOptionActive : ""
+                        }`}
                       onClick={() => setTheme("dark")}
                     >
                       <Moon size={13} /> Dark
                     </button>
                     <button
                       type="button"
-                      className={`${styles.themeOption} ${
-                        theme === "light" ? styles.themeOptionActive : ""
-                      }`}
+                      className={`${styles.themeOption} ${theme === "light" ? styles.themeOptionActive : ""
+                        }`}
                       onClick={() => setTheme("light")}
                     >
                       <Sun size={13} /> Light
@@ -713,8 +729,8 @@ export default function UserDashboard() {
         </div>
 
         {/* College Manual Prompt Template Panel */}
-        <section className={`${dashStyles.panel} ${styles.sectionCard}`} id="your-college-manual-prompt">
-          <div className={`${dashStyles.panelHeader} ${styles.sectionHeader}`}>
+        <section className={dashStyles.panel} id="your-college-manual-prompt">
+          <div className={dashStyles.panelHeader}>
             <div>
               <h2>Manual Prompt Template</h2>
               <p>
@@ -778,9 +794,8 @@ export default function UserDashboard() {
                     type="button"
                     role="tab"
                     aria-selected={promptPreset === item.id}
-                    className={`${styles.presetBtn} ${
-                      promptPreset === item.id ? styles.presetBtnActive : ""
-                    }`}
+                    className={`${styles.presetBtn} ${promptPreset === item.id ? styles.presetBtnActive : ""
+                      }`}
                     onClick={() => handlePresetChange(item.id)}
                   >
                     {item.label}
@@ -809,8 +824,8 @@ export default function UserDashboard() {
         </section>
 
         {/* Assignment History Panel */}
-        <section className={`${dashStyles.panel} ${styles.sectionCard}`}>
-          <div className={`${dashStyles.panelHeader} ${styles.sectionHeader}`}>
+        <section className={dashStyles.panel}>
+          <div className={dashStyles.panelHeader}>
             <div>
               <h2>Assignment History</h2>
               <p>

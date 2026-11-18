@@ -77,3 +77,66 @@
   .reviewGrid { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) { .section * { transition: none !important; } }
+
+:global([data-theme="dark"]) .section { color: #f4f4f5; }
+:global([data-theme="dark"]) .sectionHeader h2 { color: #f4f4f5; }
+:global([data-theme="dark"]) .sectionHeader h2 span { color: #a1a1aa; }
+:global([data-theme="dark"]) .sectionHeader > p { color: #a1a1aa; }
+:global([data-theme="dark"]) .inlineLink,
+:global([data-theme="dark"]) .openLab { color: #818cf8; }
+:global([data-theme="dark"]) .labButton { color: #a1a1aa; }
+:global([data-theme="dark"]) .labButton:hover { background: rgba(255, 255, 255, 0.06); color: #f4f4f5; }
+:global([data-theme="dark"]) .labButton[aria-pressed=true] {
+  background: #11131a;
+  border-color: rgba(255, 255, 255, 0.16);
+  color: #f4f4f5;
+  box-shadow: none;
+}
+:global([data-theme="dark"]) .status_available { background: rgba(16, 185, 129, 0.15); color: #6ee7b7; }
+:global([data-theme="dark"]) .status_studio { background: rgba(99, 102, 241, 0.18); color: #a5b4fc; }
+:global([data-theme="dark"]) .status_soon { background: rgba(255, 255, 255, 0.08); color: #a1a1aa; }
+:global([data-theme="dark"]) .labDescription { color: #a1a1aa; }
+:global([data-theme="dark"]) .templateChoices button {
+  background: #0c0e14;
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #a1a1aa;
+}
+:global([data-theme="dark"]) .templateChoices button:hover { border-color: rgba(255, 255, 255, 0.28); color: #f4f4f5; }
+:global([data-theme="dark"]) .templateChoices button[aria-pressed=true] {
+  background: #ffffff;
+  border-color: #ffffff;
+  color: #0a0a0a;
+}
+:global([data-theme="dark"]) .preview {
+  background: #0c0e14;
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 20px 44px -24px rgba(0, 0, 0, 0.75);
+}
+:global([data-theme="dark"]) .frame { background: #11131a; }
+:global([data-theme="dark"]) .preview figcaption { border-top-color: rgba(255, 255, 255, 0.08); color: #a1a1aa; }
+:global([data-theme="dark"]) .preview figcaption a { color: #f4f4f5; }
+:global([data-theme="dark"]) .soon,
+:global([data-theme="dark"]) .roadmap,
+:global([data-theme="dark"]) .reviewEmpty {
+  background: #0c0e14;
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #a1a1aa;
+}
+:global([data-theme="dark"]) .roadmap strong,
+:global([data-theme="dark"]) .reviewSummary strong,
+:global([data-theme="dark"]) .reviewEmpty h3 { color: #f4f4f5; }
+:global([data-theme="dark"]) .galleryFootnote { color: #71717a; }
+:global([data-theme="dark"]) .review {
+  background: #0c0e14;
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: none;
+}
+:global([data-theme="dark"]) .review blockquote { color: #e4e4e7; }
+:global([data-theme="dark"]) .review footer,
+:global([data-theme="dark"]) .reviewSummary span { color: #a1a1aa; }
+:global([data-theme="dark"]) .moreReviews {
+  background: #0c0e14;
+  border-color: rgba(255, 255, 255, 0.14);
+  color: #f4f4f5;
+}
+:global([data-theme="dark"]) .moreReviews:hover { background: #161922; }

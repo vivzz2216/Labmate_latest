@@ -4,6 +4,11 @@ import React, { useState, useEffect, useRef } from "react";
 import { UserCheck, Sparkles, Building2, BookOpen, Hash, User, X } from "lucide-react";
 import { apiService } from "@/lib/api";
 import { useAuth } from "@/contexts/BasicAuthContext";
+import SelectWithOther from "@/components/profile/SelectWithOther";
+import {
+  ENGINEERING_DEPARTMENTS,
+  TOP_MUMBAI_COLLEGES,
+} from "@/lib/studentOptions";
 
 interface StudentProfileModalProps {
   isOpen: boolean;
@@ -261,6 +266,7 @@ export default function StudentProfileModal({
             {/* Branch / Department */}
             <div>
               <label
+                htmlFor="modal-department"
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -273,14 +279,25 @@ export default function StudentProfileModal({
               >
                 <BookOpen size={15} color="#6366f1" /> Branch / Department
               </label>
-              <input
-                type="text"
+              <SelectWithOther
+                id="modal-department"
                 value={department}
-                aria-label="Department"
-                onChange={(e) => setDepartment(e.target.value)}
-                placeholder="e.g. Computer Science & Engineering"
+                ariaLabel="Department"
+                onChange={setDepartment}
+                options={ENGINEERING_DEPARTMENTS}
+                placeholder="Select your branch / department"
+                customPlaceholder="e.g. Computer Science & Engineering"
                 required
-                style={{
+                selectStyle={{
+                  width: "100%",
+                  padding: "10px 14px",
+                  fontSize: "14px",
+                  border: "1.5px solid #cbd5e1",
+                  borderRadius: "10px",
+                  outline: "none",
+                  backgroundColor: "#ffffff",
+                }}
+                inputStyle={{
                   width: "100%",
                   padding: "10px 14px",
                   fontSize: "14px",
@@ -294,6 +311,7 @@ export default function StudentProfileModal({
             {/* College / Institution */}
             <div>
               <label
+                htmlFor="modal-institution"
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -306,14 +324,25 @@ export default function StudentProfileModal({
               >
                 <Building2 size={15} color="#6366f1" /> College / Institution
               </label>
-              <input
-                type="text"
+              <SelectWithOther
+                id="modal-institution"
                 value={institution}
-                aria-label="Institution"
-                onChange={(e) => setInstitution(e.target.value)}
-                placeholder="e.g. Ramaiah Institute of Technology"
+                ariaLabel="Institution"
+                onChange={setInstitution}
+                options={TOP_MUMBAI_COLLEGES}
+                placeholder="Select your college"
+                customPlaceholder="Enter your college name"
                 required
-                style={{
+                selectStyle={{
+                  width: "100%",
+                  padding: "10px 14px",
+                  fontSize: "14px",
+                  border: "1.5px solid #cbd5e1",
+                  borderRadius: "10px",
+                  outline: "none",
+                  backgroundColor: "#ffffff",
+                }}
+                inputStyle={{
                   width: "100%",
                   padding: "10px 14px",
                   fontSize: "14px",
