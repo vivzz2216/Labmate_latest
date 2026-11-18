@@ -1497,7 +1497,7 @@ function AssignmentContent() {
                 pattern="orbit"
                 grid={3}
                 shape="round"
-                color={isProcessingActive ? "#ffffff" : "#94a3b8"}
+                color={isProcessingActive ? (theme === "light" ? "#18181b" : "#ffffff") : "#94a3b8"}
                 doneColor="#22c55e"
                 errorColor="#ef4444"
                 cellSize={7}
