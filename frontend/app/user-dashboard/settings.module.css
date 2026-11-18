@@ -599,8 +599,8 @@
    Inter throughout, 14px body, readable 13px secondary text, one radius scale (8 / 12).
    ======================================================== */
 .settingsStack {
-  max-width: 1080px;
-  margin: 0 auto;
+  max-width: none;
+  margin: 0;
   width: 100%;
   gap: 20px;
   font-family: var(--font-sans, "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);

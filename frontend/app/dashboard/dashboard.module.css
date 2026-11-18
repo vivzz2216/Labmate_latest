@@ -692,10 +692,10 @@
 
 .topbarTitle h1 {
   margin: 0;
-  font-family: var(--font-heading, -apple-system, sans-serif);
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: -0.03em;
+  font-family: var(--font-sans, "Inter", -apple-system, sans-serif);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
   color: var(--text-heading);
   white-space: nowrap;
   min-width: 0;
