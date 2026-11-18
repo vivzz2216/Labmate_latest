@@ -56,9 +56,10 @@ export default function PrivacyPage() {
       <section>
         <h2>4. How long we keep it</h2>
         <p>
-          We keep your account data and lab files while your account is active, so you can download your reports again.
-          When you ask us to delete your account, we delete your account, files and reports, except records we must keep by
-          law (such as payment records for tax purposes).
+          We keep your account details while your account is active. Uploaded manuals, screenshots and reports are deleted
+          automatically about 30 days after they were last used, so download your reports soon after they are made. When you ask
+          us to delete your account, we delete your account, files and reports, except records we must keep by law (such as
+          payment records for tax purposes).
         </p>
       </section>
 
