@@ -12,7 +12,8 @@
   max-width: 1320px;
   margin: 0 auto;
   padding: 96px 40px 72px;
-  background: var(--background);
+  position: relative;
+  isolation: isolate;
   color: var(--text);
   font-family: inherit;
   scroll-margin-top: 68px;
@@ -148,74 +149,117 @@
 }
 
 .plan {
+  position: relative;
   min-width: 0;
   height: 100%;
-  padding: 28px 24px 24px;
+  padding: 26px 24px 24px;
   display: flex;
   flex-direction: column;
-  background: var(--surface);
-  border: 1px solid var(--rule);
-  border-radius: 14px;
-  transition: border-color 160ms ease, background-color 160ms ease;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.055) 0%, rgba(255, 255, 255, 0.015) 100%), #0b0c10;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 30px 60px -36px rgba(0, 0, 0, 0.95);
+  transition: transform 200ms ease, border-color 200ms ease, box-shadow 200ms ease;
 }
 
 .plan:hover {
-  border-color: var(--rule-hover);
-  background: #13151a;
+  transform: translateY(-4px);
+  border-color: rgba(255, 255, 255, 0.18);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.09), 0 40px 80px -36px rgba(0, 0, 0, 1);
 }
 
+/* Featured pack: gradient hairline border and a soft coloured glow. */
 .featured {
-  background: var(--surface-featured);
-  border-color: #454954;
+  border: 1px solid transparent;
+  background:
+    linear-gradient(180deg, #15161f 0%, #0d0e14 100%) padding-box,
+    linear-gradient(150deg, #a78bfa 0%, #38bdf8 45%, rgba(255, 255, 255, 0.08) 85%) border-box;
+  box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.12), 0 40px 90px -40px rgba(99, 102, 241, 0.6);
+}
+
+.featured::before {
+  content: "";
+  position: absolute;
+  inset: -1px -1px auto -1px;
+  height: 140px;
+  border-radius: 22px 22px 0 0;
+  background: radial-gradient(260px 120px at 50% 0%, rgba(139, 92, 246, 0.22), transparent 75%);
+  pointer-events: none;
 }
 
 .featured:hover {
-  background: #191b22;
-  border-color: #5b606e;
+  border-color: transparent;
+  box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.2), 0 50px 100px -40px rgba(99, 102, 241, 0.75);
 }
 
 .planTop {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  min-height: 26px;
-  margin-bottom: 16px;
+  margin-bottom: 18px;
 }
 
-.planTop h3 {
-  font-size: 17px;
+.planIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  color: #e4e4e7;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.03));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.featured .planIcon {
+  color: #ffffff;
+  border-color: transparent;
+  background: linear-gradient(135deg, #8b5cf6, #38bdf8);
+  box-shadow: 0 10px 24px -10px rgba(139, 92, 246, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.planName {
+  position: relative;
+  font-size: 16px;
   font-weight: 600;
-  letter-spacing: -0.02em;
-  color: var(--text);
-  margin: 0;
+  letter-spacing: -0.015em;
+  color: #e4e4e7;
+  margin: 0 0 10px;
 }
 
 .planMarker {
   font-size: 11px;
-  font-weight: 500;
-  color: #f4f4f5;
-  background: #232630;
-  border: 1px solid #353946;
-  padding: 3px 9px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #ffffff;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.9), rgba(56, 189, 248, 0.9));
+  padding: 5px 11px;
   border-radius: 9999px;
   white-space: nowrap;
+  box-shadow: 0 6px 18px -8px rgba(139, 92, 246, 0.9);
 }
 
 .amount {
+  position: relative;
   display: flex;
   align-items: baseline;
   gap: 8px;
-  margin-bottom: 10px;
+  margin-bottom: 6px;
 }
 
 .amount strong {
-  font-size: clamp(36px, 3.4vw, 48px);
+  font-size: clamp(38px, 3.4vw, 50px);
   line-height: 1.05;
-  letter-spacing: -0.035em;
-  font-weight: 600;
+  letter-spacing: -0.04em;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: #ffffff;
+  background: linear-gradient(180deg, #ffffff 30%, #b4b4bf 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 .amount > span {
@@ -224,12 +268,28 @@
   white-space: nowrap;
 }
 
+.credits {
+  position: relative;
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: #d4d4d8;
+}
+
+.credits strong {
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.credits span {
+  color: var(--subtle);
+}
+
 .description {
   font-size: 13.5px;
   line-height: 1.55;
   color: var(--muted);
   margin: 0;
-  min-height: 44px;
+  min-height: 42px;
 }
 
 .discount {
@@ -237,7 +297,7 @@
   align-items: center;
   gap: 8px;
   min-height: 22px;
-  margin-top: 12px;
+  margin-top: 10px;
   font-size: 12px;
   color: var(--subtle);
 }
@@ -247,23 +307,23 @@
 }
 
 .discount s + span {
-  color: #e4e4e7;
-  font-weight: 500;
+  color: #86efac;
+  font-weight: 600;
 }
 
 .featureList {
   list-style: none;
-  padding: 20px 0 0;
-  margin: 20px 0 0;
-  border-top: 1px solid var(--rule);
+  padding: 18px 0 0;
+  margin: 18px 0 22px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 11px;
 }
 
 .featureList li {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
   font-size: 13px;
   line-height: 1.5;
@@ -272,16 +332,12 @@
 
 .featureList svg {
   flex-shrink: 0;
-  margin-top: 3px;
-  color: var(--muted);
-}
-
-.unitPrice {
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--subtle);
-  font-variant-numeric: tabular-nums;
-  margin: 20px 0 20px;
+  width: 18px;
+  height: 18px;
+  padding: 3px;
+  border-radius: 50%;
+  color: #4ade80;
+  background: rgba(74, 222, 128, 0.12);
 }
 
 .choose {
@@ -289,25 +345,25 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-height: 42px;
+  min-height: 44px;
   padding: 10px 16px;
   width: 100%;
   font-family: inherit;
-  font-weight: 500;
-  font-size: 13px;
+  font-weight: 600;
+  font-size: 13.5px;
   line-height: 1.4;
-  background: #181a20;
   color: var(--text);
-  border: 1px solid #2e313b;
-  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
   margin-top: auto;
   cursor: pointer;
-  transition: background-color 150ms ease, border-color 150ms ease;
+  transition: background-color 150ms ease, border-color 150ms ease, transform 150ms ease;
 }
 
 .choose:hover {
-  background: #22252d;
-  border-color: #4b4f5c;
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.22);
 }
 
 .choose:disabled {
@@ -319,18 +375,18 @@
   background: #f4f4f5;
   color: #09090b;
   border-color: #f4f4f5;
-  font-weight: 600;
+  box-shadow: 0 10px 28px -12px rgba(255, 255, 255, 0.5);
 }
 
 .featured .choose:hover {
-  background: #e4e4e7;
-  border-color: #e4e4e7;
+  background: #ffffff;
+  border-color: #ffffff;
 }
 
 .included {
-  border: 1px solid var(--rule);
-  border-radius: 12px;
-  background: #0b0c0f;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01));
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -363,7 +419,7 @@
 
 .included svg {
   flex-shrink: 0;
-  color: var(--muted);
+  color: #4ade80;
 }
 
 .textAction {
@@ -702,5 +758,36 @@
 @media (prefers-reduced-motion: reduce) {
   .pricing * {
     transition: none !important;
+  }
+}
+
+/* Atmosphere: violet and emerald glows behind the packs (decorative, full width; the page clips overflow). */
+.pricing::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 100vw;
+  transform: translateX(-50%);
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(760px 420px at 30% 44%, rgba(139, 92, 246, 0.22), transparent 70%),
+    radial-gradient(640px 400px at 78% 60%, rgba(16, 185, 129, 0.15), transparent 70%);
+}
+
+@media (max-width: 560px) {
+  .plan {
+    border-radius: 18px;
+  }
+  .featured::before {
+    border-radius: 18px 18px 0 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .plan:hover {
+    transform: none;
   }
 }

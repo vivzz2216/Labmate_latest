@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowRight, Check, Flame, LockKeyhole, Plus, RefreshCw } from 'lucide-react';
+import { ArrowRight, Check, Flame, FlaskConical, GraduationCap, Layers, LockKeyhole, Plus, RefreshCw, Zap, type LucideIcon } from 'lucide-react';
 import { billingApi, Catalogue, Pack, rupees } from '@/lib/billing';
 import styles from './PricingSection.module.css';
 
@@ -26,6 +26,12 @@ const STANDARD_CATALOGUE: Catalogue = {
   billing_enabled: true,
 };
 const RETRY_DELAYS_MS = [1500, 4000];
+const PACK_ICONS: Record<string, LucideIcon> = {
+  'quick-lab': Zap,
+  'lab-pack': FlaskConical,
+  'semester-pack': Layers,
+  'college-pack': GraduationCap,
+};
 
 const perExperiment = (pack: Pack) =>
   new Intl.NumberFormat('en-IN', {
@@ -151,14 +157,20 @@ export default function PricingSection() {
                 aria-labelledby={`plan-${pack.id}`}
               >
                 <div className={styles.planTop}>
-                  <h3 id={`plan-${pack.id}`}>{pack.name}</h3>
-                  {pack.featured && <span className={styles.planMarker}>Popular</span>}
+                  <span className={styles.planIcon} aria-hidden="true">
+                    {(() => { const Icon = PACK_ICONS[pack.id] || FlaskConical; return <Icon size={18} />; })()}
+                  </span>
+                  {pack.featured && <span className={styles.planMarker}>Most popular</span>}
                 </div>
+                <h3 id={`plan-${pack.id}`} className={styles.planName}>{pack.name}</h3>
 
                 <div className={styles.amount}>
                   <strong>{rupees(pack.amount)}</strong>
                   <span>one-time</span>
                 </div>
+                <p className={styles.credits}>
+                  <strong>{pack.credits}</strong> experiments <span>· {perExperiment(pack)} each</span>
+                </p>
 
                 <p className={styles.description}>{pack.description}</p>
 
@@ -176,7 +188,7 @@ export default function PricingSection() {
                 <ul className={styles.featureList}>
                   <li>
                     <Check size={15} aria-hidden="true" />
-                    <span>{pack.credits} experiment credits</span>
+                    <span>Real code execution</span>
                   </li>
                   <li>
                     <Check size={15} aria-hidden="true" />
@@ -188,7 +200,6 @@ export default function PricingSection() {
                   </li>
                 </ul>
 
-                <p className={styles.unitPrice}>{perExperiment(pack)} per experiment</p>
                 {checkoutLink(pack, `Choose ${pack.name}`, styles.choose)}
               </article>
             ))}
