@@ -164,7 +164,7 @@ export default function DashboardPage() {
             <p>
               {assignments.length === 0
                 ? "Upload a syllabus PDF or Word lab manual to extract questions, run verified solutions, and export a formatted report."
-                : `You have ${activeLabs} active lab${activeLabs === 1 ? "" : "s"} in progress and ${reportsReady} accredited Word report${reportsReady === 1 ? "" : "s"} ready for submission.`}
+                : `You have ${activeLabs} active lab${activeLabs === 1 ? "" : "s"} in progress and ${reportsReady} Word report${reportsReady === 1 ? "" : "s"} ready for submission.`}
             </p>
             <CreditStatus />
           </div>
@@ -223,7 +223,7 @@ export default function DashboardPage() {
             value={reportsReady}
             subtext={
               reportsReady > 0
-                ? "Accredited .docx ready to export"
+                ? ".docx ready to export"
                 : "Complete a lab to generate"
             }
             tone="blue"
@@ -366,10 +366,10 @@ export default function DashboardPage() {
                   <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                     <Cpu size={18} color="#c084fc" />
                     <div>
-                      <strong style={{ fontSize: "0.85rem", color: "#f4f4f5", display: "block" }}>
+                      <strong style={{ fontSize: "0.85rem", color: "var(--text-heading, #f4f4f5)", display: "block" }}>
                         Deep Learning Labs
                       </strong>
-                      <span style={{ fontSize: "0.75rem", color: "#a1a1aa" }}>
+                      <span style={{ fontSize: "0.75rem", color: "var(--text-muted, #a1a1aa)" }}>
                         PyTorch, TensorFlow &amp; Colab
                       </span>
                     </div>
@@ -393,10 +393,10 @@ export default function DashboardPage() {
                   <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                     <Network size={18} color="#38bdf8" />
                     <div>
-                      <strong style={{ fontSize: "0.85rem", color: "#f4f4f5", display: "block" }}>
+                      <strong style={{ fontSize: "0.85rem", color: "var(--text-heading, #f4f4f5)", display: "block" }}>
                         Distributed Computing Labs
                       </strong>
-                      <span style={{ fontSize: "0.75rem", color: "#a1a1aa" }}>
+                      <span style={{ fontSize: "0.75rem", color: "var(--text-muted, #a1a1aa)" }}>
                         Java RMI, TCP/UDP &amp; Sockets
                       </span>
                     </div>
@@ -443,7 +443,7 @@ export default function DashboardPage() {
               <div className={styles.panelHeader}>
                 <div>
                   <h2>Recent Reports</h2>
-                  <p>{reportsReady} accredited documents ready</p>
+                  <p>{reportsReady} documents ready</p>
                 </div>
                 {reportsReady > 0 && (
                   <button

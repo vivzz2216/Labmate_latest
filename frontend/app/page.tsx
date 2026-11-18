@@ -24,15 +24,6 @@ const LoginModal = dynamic(() => import("@/components/auth/LoginModal"), {
   ssr: false,
 });
 
-const DarkVeil = dynamic(() => import("@/components/visual/DarkVeil"), {
-  ssr: false,
-});
-
-const SpecularButton = dynamic(
-  () => import("@/components/ui/SpecularButton"),
-  { ssr: false }
-);
-
 export default function HomePage() {
   const { user, signOut } = useAuth();
   const isAuthenticated = Boolean(user);
@@ -51,15 +42,12 @@ export default function HomePage() {
 
   return (
     <div className={styles.page}>
-      {/* Ambient background glow */}
-      <div className={styles.backgroundGlow} />
-
       {/* Sticky Runway-Style Navbar */}
       <nav className={styles.navbar}>
         <div className={styles.navContainer}>
           <div className="flex items-center gap-8">
             <Link href="/" aria-label="LabMate Home">
-              <LabMateLogo size="md" theme="dark" />
+              <LabMateLogo size="md" theme="light" />
             </Link>
             <div className={styles.navLinks}>
               <a href="#how-it-works" className={styles.navLink}>How it works</a>
@@ -91,21 +79,9 @@ export default function HomePage() {
                 >
                   Log In
                 </button>
-                <SpecularButton
-                  href="/dashboard"
-                  onClick={(event) => requireAccount(event, "/dashboard")}
-                  size="sm"
-                  radius={9999}
-                  tint="#ffffff"
-                  tintOpacity={0.14}
-                  textColor="#ffffff"
-                  lineColor="#ffffff"
-                  baseColor="#71717a"
-                  intensity={1}
-                  glow={0.8}
-                >
-                  Get Started <ArrowRight size={14} />
-                </SpecularButton>
+                <Link href="/dashboard" onClick={(event) => requireAccount(event, "/dashboard")} className={styles.pillBtnPrimary}>
+                  Get started <ArrowRight size={14} aria-hidden="true" />
+                </Link>
               </>
             )}
           </div>
@@ -210,21 +186,9 @@ export default function HomePage() {
                 <FileText size={15} aria-hidden="true" />
                 <span>PDF</span><span className={styles.formatDivider} aria-hidden="true" /><span>Word (.docx)</span>
               </div>
-              <SpecularButton
-                href="/code-execution"
-                onClick={(event) => requireAccount(event, "/code-execution")}
-                size="sm"
-                radius={9999}
-                tint="#ffffff"
-                tintOpacity={0.14}
-                textColor="#ffffff"
-                lineColor="#38bdf8"
-                baseColor="#0284c7"
-                intensity={1.1}
-                glow={1}
-              >
+              <Link href="/code-execution" onClick={(event) => requireAccount(event, "/code-execution")} className={styles.pillBtnPrimary}>
                 Upload a manual <ArrowRight size={16} aria-hidden="true" />
-              </SpecularButton>
+              </Link>
             </div>
           </li>
           <li className={styles.workflowStep}>
@@ -259,10 +223,6 @@ export default function HomePage() {
           ======================================================== */}
       <section className={styles.ctaSection} aria-labelledby="cta-heading">
         <div className={styles.ctaCard}>
-          <div className={styles.ctaVeilWrap} aria-hidden="true">
-            <DarkVeil hueShift={125} speed={0.4} noiseIntensity={0.02} scanlineIntensity={0.08} scanlineFrequency={0.003} warpAmount={0.06} />
-            <div className={styles.ctaVeilOverlay} />
-          </div>
           <div className={styles.ctaContent}>
             <h2 id="cta-heading" className={styles.ctaHeading}>Ready to finish your lab record?</h2>
             <p className={styles.ctaDescription}>
@@ -284,8 +244,8 @@ export default function HomePage() {
       <footer className={styles.footer}>
         <div className={styles.footerContainer}>
           <div className={styles.footerBrandCol}>
-            <LabMateLogo size="md" theme="dark" />
-            <p className="text-xs text-zinc-500 leading-relaxed max-w-sm">
+            <LabMateLogo size="md" theme="light" />
+            <p style={{ fontSize: 13, lineHeight: 1.65, color: "#71717a", maxWidth: 360, margin: 0 }}>
               The automated lab manual intelligence tool for engineering students.
               Turn any raw manual into complete code, real terminal screenshots, and submission-ready reports.
             </p>
@@ -327,10 +287,10 @@ export default function HomePage() {
         <div className={styles.footerBottom}>
           <div>© {new Date().getFullYear()} LabMate. All rights reserved.</div>
           <nav aria-label="Legal" className="flex flex-wrap items-center gap-x-6 gap-y-2">
-            <Link href="/privacy" className="hover:text-zinc-300">Privacy Policy</Link>
-            <Link href="/terms" className="hover:text-zinc-300">Terms of Service</Link>
-            <Link href="/refund-policy" className="hover:text-zinc-300">Refund Policy</Link>
-            <Link href="/contact" className="hover:text-zinc-300">Contact</Link>
+            <Link href="/privacy" className={styles.footerLink}>Privacy Policy</Link>
+            <Link href="/terms" className={styles.footerLink}>Terms of Service</Link>
+            <Link href="/refund-policy" className={styles.footerLink}>Refund Policy</Link>
+            <Link href="/contact" className={styles.footerLink}>Contact</Link>
           </nav>
         </div>
       </footer>

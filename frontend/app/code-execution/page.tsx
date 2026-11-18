@@ -322,7 +322,7 @@ export default function AssignmentPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-zinc-400">
+        <div className="min-h-screen bg-white flex items-center justify-center text-zinc-500">
           Loading lab environment...
         </div>
       }
@@ -953,7 +953,7 @@ function AssignmentContent() {
         if (workflow?.stage === "generate") return "Generating code for the selected language...";
         if (workflow?.stage === "execute") return "Executing in 512MB POSIX sandbox...";
         if (workflow?.stage === "capture") return "Capturing terminal output & proofs...";
-        if (workflow?.stage === "report") return "Compiling accredited Word report...";
+        if (workflow?.stage === "report") return "Compiling Word report...";
         return "Executing assignment pipeline...";
       }
       return "Initializing sandbox execution pipeline...";
@@ -974,7 +974,7 @@ function AssignmentContent() {
         <header className={styles.header}>
           <div className={styles.headerLead}>
             <Link href="/" className={styles.brand} aria-label="LabMate home">
-              <LabMateLogo size="sm" theme="dark" />
+              <LabMateLogo size="sm" theme="light" />
             </Link>
             <div className={styles.headerCopy}>
               <h1>Code execution</h1>

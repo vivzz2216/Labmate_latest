@@ -55,7 +55,7 @@ export default function SampleReportsPage() {
         <div className={styles.navContainer}>
           <div className="flex items-center gap-8">
             <Link href="/" aria-label="LabMate Home">
-              <LabMateLogo size="md" theme="dark" />
+              <LabMateLogo size="md" theme="light" />
             </Link>
             <div className={styles.navLinks}>
               <Link href="/" className={styles.navLink}>Home</Link>
@@ -90,11 +90,11 @@ export default function SampleReportsPage() {
 
           <p className={styles.heroSubtitle}>
             Inspect real Word documents compiled by LabMate for engineering and science students.
-            Review how raw, messy syllabus prompts are transformed into accredited lab records with 1080p IDE evidence, verified code, and oral exam preparation.
+            Review how raw, messy syllabus prompts are transformed into complete lab records with 1080p IDE evidence, verified code, and oral exam preparation.
           </p>
         </section>
 
-        {/* Anatomy of an Accredited Lab Record */}
+        {/* Anatomy of a LabMate lab record */}
         <section className={styles.anatomySection}>
           <div className={styles.anatomyTitle}>
             <Sparkles size={16} className="text-amber-400" />
@@ -113,8 +113,8 @@ export default function SampleReportsPage() {
             </div>
             <div className={styles.anatomyStep}>
               <span className={styles.anatomyStepNum}>SECTION 03</span>
-              <h4 className={styles.anatomyStepTitle}>Tested, Bug-Free Code</h4>
-              <p className={styles.anatomyStepDesc}>Full executable scripts tested inside isolated runtime sandboxes with zero syntax errors.</p>
+              <h4 className={styles.anatomyStepTitle}>Tested code</h4>
+              <p className={styles.anatomyStepDesc}>Full executable scripts run inside isolated sandboxes so the output shown is real.</p>
             </div>
             <div className={styles.anatomyStep}>
               <span className={styles.anatomyStepNum}>SECTION 04</span>
@@ -245,8 +245,8 @@ export default function SampleReportsPage() {
               <span className="text-xs font-semibold text-sky-400 uppercase tracking-wider">
                 {inspectDoc.experimentNumber} &bull; {inspectDoc.categoryLabel}
               </span>
-              <h2 className="text-2xl font-bold text-white mt-1">{inspectDoc.title}</h2>
-              <p className="text-xs text-zinc-400 mt-1">{inspectDoc.subject} &bull; {inspectDoc.syllabusCode}</p>
+              <h2 className="text-2xl font-bold text-zinc-950 mt-1">{inspectDoc.title}</h2>
+              <p className="text-xs text-zinc-500 mt-1">{inspectDoc.subject} &bull; {inspectDoc.syllabusCode}</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -259,10 +259,10 @@ export default function SampleReportsPage() {
                     </span>
                     <span className="text-xs text-zinc-500 font-mono">{inspectDoc.before.fileSize}</span>
                   </div>
-                  <h4 className="text-sm font-semibold text-white mb-2">{inspectDoc.before.title}</h4>
-                  <p className="text-xs text-zinc-400 mb-3 leading-relaxed">{inspectDoc.before.description}</p>
+                  <h4 className="text-sm font-semibold text-zinc-950 mb-2">{inspectDoc.before.title}</h4>
+                  <p className="text-xs text-zinc-500 mb-3 leading-relaxed">{inspectDoc.before.description}</p>
                   
-                  <div className="bg-black/60 rounded-lg p-3 text-xs font-mono text-zinc-300 whitespace-pre-wrap max-h-40 overflow-y-auto mb-4 border border-zinc-800">
+                  <div className="bg-zinc-50 rounded-lg p-3 text-xs font-mono text-zinc-600 whitespace-pre-wrap max-h-40 overflow-y-auto mb-4 border border-zinc-800">
                     {inspectDoc.before.rawSnippet}
                   </div>
 
@@ -280,7 +280,7 @@ export default function SampleReportsPage() {
                   <a
                     href={inspectDoc.rawDownloadUrl}
                     download
-                    className="inline-flex items-center justify-center gap-2 w-full py-2 px-3 rounded-lg border border-zinc-700 hover:border-zinc-500 text-xs text-zinc-300 hover:text-white transition-colors"
+                    className="inline-flex items-center justify-center gap-2 w-full py-2 px-3 rounded-lg border border-zinc-300 hover:border-zinc-500 text-xs text-zinc-600 hover:text-zinc-950 transition-colors"
                   >
                     <FileCode size={13} />
                     <span>Download Raw Prompt ({inspectDoc.before.fileSize})</span>
@@ -297,17 +297,17 @@ export default function SampleReportsPage() {
                     </span>
                     <span className="text-xs text-emerald-400 font-mono font-medium">{inspectDoc.after.fileSize}</span>
                   </div>
-                  <h4 className="text-sm font-semibold text-white mb-2">{inspectDoc.after.title}</h4>
-                  <p className="text-xs text-zinc-400 mb-3 leading-relaxed">{inspectDoc.after.description}</p>
+                  <h4 className="text-sm font-semibold text-zinc-950 mb-2">{inspectDoc.after.title}</h4>
+                  <p className="text-xs text-zinc-500 mb-3 leading-relaxed">{inspectDoc.after.description}</p>
 
-                  <div className="relative aspect-video rounded-lg overflow-hidden border border-zinc-700 bg-black mb-4">
+                  <div className="relative aspect-video rounded-lg overflow-hidden border border-zinc-300 bg-zinc-100 mb-4">
                     <Image
                       src={inspectDoc.after.previewImage}
                       alt="Verified IDE output"
                       fill
                       className="object-cover"
                     />
-                    <div className="absolute bottom-2 right-2 bg-black/80 backdrop-blur px-2 py-0.5 rounded text-[10px] text-emerald-300 flex items-center gap-1 border border-emerald-500/30">
+                    <div className="absolute bottom-2 right-2 bg-white/90 backdrop-blur px-2 py-0.5 rounded text-[10px] text-emerald-700 flex items-center gap-1 border border-emerald-500/30">
                       <Terminal size={10} />
                       <span>{inspectDoc.after.ideTheme}</span>
                     </div>
@@ -315,7 +315,7 @@ export default function SampleReportsPage() {
 
                   <div className="space-y-2 mb-4">
                     {inspectDoc.after.highlights.map((h, i) => (
-                      <div key={i} className="flex items-start gap-2 text-xs text-zinc-200">
+                      <div key={i} className="flex items-start gap-2 text-xs text-zinc-700">
                         <CheckCircle2 size={13} className="text-emerald-400 shrink-0 mt-0.5" />
                         <span>{h}</span>
                       </div>
@@ -342,10 +342,10 @@ export default function SampleReportsPage() {
         <div className="max-w-4xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
           <div>&copy; {new Date().getFullYear()} LabMate &bull; Automated Lab Manual Intelligence</div>
           <div className="flex items-center gap-6">
-            <Link href="/" className="hover:text-zinc-400">Home</Link>
-            <Link href="/labs" className="hover:text-zinc-400">All Labs</Link>
-            <Link href="/workspace" className="hover:text-zinc-400">Workspace</Link>
-            <Link href="/code-execution" className="hover:text-zinc-400">Upload Manual</Link>
+            <Link href="/" className="hover:text-zinc-500">Home</Link>
+            <Link href="/labs" className="hover:text-zinc-500">All Labs</Link>
+            <Link href="/workspace" className="hover:text-zinc-500">Workspace</Link>
+            <Link href="/code-execution" className="hover:text-zinc-500">Upload Manual</Link>
           </div>
         </div>
       </footer>

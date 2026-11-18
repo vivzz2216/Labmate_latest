@@ -89,7 +89,7 @@ export default function UserOnboarding({isOpen, onComplete}: Props) {
   return (
     <div className={styles.backdrop}>
       <div ref={dialog} className={styles.dialog} role="dialog" aria-modal="true" aria-labelledby="profile-title" aria-describedby="profile-description">
-        <header className={styles.brand}><LabMateLogo theme="dark" size="md" /><span>STUDENT PROFILE</span></header>
+        <header className={styles.brand}><LabMateLogo theme="light" size="md" /><span>STUDENT PROFILE</span></header>
         <div className={styles.body}>
           <p className={styles.eyebrow}>Required before your first lab</p>
           <h1 id="profile-title">Your details.<br /><span>Your lab record.</span></h1>

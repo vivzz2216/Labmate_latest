@@ -98,8 +98,8 @@ export default function LabSectionDetailPage() {
       >
         <div className={styles.container}>
           <div className="text-center py-20">
-            <h1 className="text-2xl font-bold text-white mb-4">Lab Category Not Found</h1>
-            <p className="text-zinc-400 mb-6">
+            <h1 className="text-2xl font-bold text-zinc-950 mb-4">Lab Category Not Found</h1>
+            <p className="text-zinc-500 mb-6">
               Could not find any lab track matching &ldquo;{slug}&rdquo;.
             </p>
             <Link href="/labs" className={styles.primaryBtn}>
@@ -292,7 +292,7 @@ export default function LabSectionDetailPage() {
                 </div>
 
                 {/* Description */}
-                <p className="text-xs text-zinc-400 leading-relaxed mb-2">
+                <p className="text-xs text-zinc-500 leading-relaxed mb-2">
                   {exp.description}
                 </p>
 
@@ -303,7 +303,7 @@ export default function LabSectionDetailPage() {
                   </span>
                   <div className="flex flex-col gap-1">
                     {exp.expectedOutputs.map((out, idx) => (
-                      <div key={idx} className="flex items-center gap-1.5 text-xs text-zinc-300">
+                      <div key={idx} className="flex items-center gap-1.5 text-xs text-zinc-600">
                         <CheckCircle2 size={12} color="#10b981" className="shrink-0" />
                         <span>{out}</span>
                       </div>
@@ -322,7 +322,7 @@ export default function LabSectionDetailPage() {
                     ))}
                   </div>
                   <span className="text-[11px] text-zinc-500">
-                    Target Runtime: <strong className="text-zinc-400 capitalize">{exp.runtime}</strong>
+                    Target Runtime: <strong className="text-zinc-500 capitalize">{exp.runtime}</strong>
                   </span>
                 </div>
               </article>

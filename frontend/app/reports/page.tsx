@@ -289,7 +289,7 @@ export default function ReportsPage() {
       <section className={dashStyles.panel} style={{ flex: 1, minHeight: 0 }}>
         <div className={dashStyles.panelHeader}>
           <div>
-            <h2>Accredited Lab Records</h2>
+            <h2>Lab records</h2>
             <p>
               {filteredReports.length === allReports.length &&
               selectedCategory === "all" &&

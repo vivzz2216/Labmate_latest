@@ -208,7 +208,7 @@ export default function CheckoutPanel({packId}: {packId: string}) {
     <main className={styles.checkout}>
       <header className={styles.checkoutNav}>
         <Link href="/" aria-label="LabMate home">
-          <LabMateLogo theme="dark" size="md" />
+          <LabMateLogo theme="light" size="md" />
         </Link>
         <Link href="/#pricing" className={styles.backLink}>
           <ArrowLeft size={15} aria-hidden="true" /> All packs

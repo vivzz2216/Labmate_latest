@@ -181,7 +181,7 @@ export default function LoginModal({ isOpen, onClose, redirectTo = "/dashboard" 
             </div>
 
             {error && (
-              <div className="bg-red-500/10 border border-red-500/50 text-red-400 p-3 rounded-lg text-sm whitespace-pre-line">
+              <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg text-sm whitespace-pre-line">
                 {error}
               </div>
             )}

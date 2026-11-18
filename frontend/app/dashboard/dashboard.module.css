@@ -13,14 +13,15 @@
   --text-dim: #7c8da6;
   --text-heading: #0d1b39;
 
-  --sidebar-bg: linear-gradient(160deg, #0d1c37 0%, #09152a 58%, #081225 100%);
-  --sidebar-border: rgba(255, 255, 255, 0.08);
-  --sidebar-nav-color: #aebbd1;
-  --sidebar-nav-hover: rgba(255, 255, 255, 0.08);
-  --sidebar-nav-active: rgba(59, 130, 246, 0.22);
-  --sidebar-nav-active-border: rgba(96, 165, 250, 0.45);
-  --sidebar-account-border: rgba(255, 255, 255, 0.08);
-  --sidebar-signout: #8e9db7;
+  --sidebar-bg: #fafafa;
+  --sidebar-border: #e4e4e7;
+  --sidebar-nav-color: #52525b;
+  --sidebar-nav-hover: rgba(10, 10, 10, 0.05);
+  --sidebar-nav-active: #ffffff;
+  --sidebar-nav-active-border: #d4d4d8;
+  --sidebar-account-border: #e4e4e7;
+  --sidebar-signout: #71717a;
+  --sidebar-text: #0a0a0a;
 
   --topbar-bg: rgba(255, 255, 255, 0.88);
   --topbar-border: #dfe7f3;
@@ -128,6 +129,7 @@
    RUNWAY-GRADE DARK THEME (HOMEPAGE AESTHETIC)
    ======================================================== */
 .shell[data-theme="dark"] {
+  --sidebar-text: #ffffff;
   --bg-shell: #000000;
   --bg-ambient-opacity: 1;
   --text-main: #ffffff;
@@ -265,7 +267,7 @@
   padding: 14px 10px 14px;
   background: var(--sidebar-bg);
   border-right: 1px solid var(--sidebar-border);
-  color: #ffffff;
+  color: var(--sidebar-text, #ffffff);
   display: flex;
   flex-direction: column;
   z-index: 30;
@@ -395,9 +397,9 @@
 
 .navItemActive {
   background: var(--sidebar-nav-active);
-  color: #ffffff;
+  color: var(--sidebar-text, #ffffff);
   border-color: var(--sidebar-nav-active-border);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 2px 8px rgba(10, 10, 10, 0.08);
   font-weight: 600;
 }
 
@@ -405,7 +407,7 @@
 .sidebarCollapsed .navItemActive {
   background: rgba(59, 130, 246, 0.18);
   border-color: rgba(96, 165, 250, 0.42);
-  color: #ffffff;
+  color: var(--sidebar-text, #ffffff);
   box-shadow: 0 0 14px rgba(59, 130, 246, 0.18);
 }
 
@@ -532,7 +534,7 @@
 .accountText strong {
   font-size: 13px;
   font-weight: 600;
-  color: #ffffff;
+  color: var(--sidebar-text, #ffffff);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

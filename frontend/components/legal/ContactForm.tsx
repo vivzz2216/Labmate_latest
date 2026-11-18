@@ -34,7 +34,7 @@ export default function ContactForm() {
 
   return (
     <form onSubmit={send} className="space-y-3">
-      <label htmlFor="contact-message" className="block text-sm text-zinc-400">
+      <label htmlFor="contact-message" className="block text-sm text-zinc-600">
         Your message (we reply to {user.email})
       </label>
       <textarea
@@ -44,20 +44,20 @@ export default function ContactForm() {
         maxLength={4900}
         rows={6}
         required
-        className="w-full rounded-xl border border-zinc-800 bg-zinc-950 p-3 text-zinc-100 outline-none focus:border-zinc-600"
+        className="w-full rounded-xl border border-zinc-300 bg-white p-3 text-zinc-900 shadow-sm outline-none focus:border-indigo-500"
         placeholder="Tell us what happened. For payments, include the payment reference (starts with pay_)."
       />
       <div className="flex items-center gap-4">
         <button
           type="submit"
           disabled={state === "sending" || !message.trim()}
-          className="rounded-xl bg-zinc-100 px-5 py-2.5 text-sm font-semibold text-black hover:bg-white disabled:opacity-50"
+          className="rounded-xl bg-zinc-950 px-5 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-50"
         >
           {state === "sending" ? "Sending…" : "Send message"}
         </button>
         <span role="status" className="text-sm">
-          {state === "sent" && <span className="text-emerald-400">Sent. We will reply by email.</span>}
-          {state === "failed" && <span className="text-red-400">Could not send. Please try again.</span>}
+          {state === "sent" && <span className="text-emerald-600">Sent. We will reply by email.</span>}
+          {state === "failed" && <span className="text-red-600">Could not send. Please try again.</span>}
         </span>
       </div>
     </form>
