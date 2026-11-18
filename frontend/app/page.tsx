@@ -61,12 +61,11 @@ export default function HomePage() {
               <LabMateLogo size="md" theme="dark" />
             </Link>
             <div className={styles.navLinks}>
-              <a href="#how-it-works" className={styles.navLink}>How It Works</a>
-              <a href="#features" className={styles.navLink}>Features</a>
-              <Link href="/labs" className={styles.navLink}>Lab Sections</Link>
-              <a href="#labs" className={styles.navLink}>Labs &amp; templates</a>
+              <a href="#how-it-works" className={styles.navLink}>How it works</a>
+              <Link href="/labs" className={styles.navLink}>Lab catalogue</Link>
+              <a href="#labs" className={styles.navLink}>Screenshot styles</a>
               <a href="#pricing" className={styles.navLink}>Pricing</a>
-              <Link href="/workspace" className={styles.navLink}>Workspace</Link>
+              <Link href="/samples" className={styles.navLink}>Sample reports</Link>
             </div>
           </div>
 
@@ -192,7 +191,7 @@ export default function HomePage() {
           ======================================================== */}
       <section id="runtimes" className={styles.langTickerSection}>
         <div className={styles.langTickerTitle}>
-          Supported programming languages, runtimes &amp; laboratory tools:
+          Labs, runtimes &amp; outputs LabMate supports:
         </div>
         <div className={styles.langTickerRow}>
           {/* Deep Learning */}
@@ -391,12 +390,13 @@ export default function HomePage() {
           </div>
 
           <div>
-            <div className={styles.footerColTitle}>Capabilities</div>
+            <div className={styles.footerColTitle}>Explore</div>
             <ul className={styles.footerNavList}>
-              <li><a href="#how-it-works" className={styles.footerLink}>Question Parser</a></li>
-              <li><a href="#how-it-works" className={styles.footerLink}>Code Runner</a></li>
-              <li><a href="#features" className={styles.footerLink}>Terminal Screenshots</a></li>
-              <li><a href="#how-it-works" className={styles.footerLink}>Word (.docx) Export</a></li>
+              <li><a href="#how-it-works" className={styles.footerLink}>How it works</a></li>
+              <li><a href="#labs" className={styles.footerLink}>Screenshot styles</a></li>
+              <li><Link href="/samples" className={styles.footerLink}>Sample reports</Link></li>
+              <li><a href="#pricing" className={styles.footerLink}>Pricing</a></li>
+              <li><Link href="/contact" className={styles.footerLink}>Contact</Link></li>
             </ul>
           </div>
 
@@ -405,9 +405,9 @@ export default function HomePage() {
             <ul className={styles.footerNavList}>
               <li><Link href="/labs/deep-learning" className={styles.footerLink}>Deep Learning (PyTorch/TF)</Link></li>
               <li><Link href="/labs/distributed-computing" className={styles.footerLink}>Distributed Computing (Java)</Link></li>
-              <li><a href="#runtimes" className={styles.footerLink}>Python 3 &amp; Colab</a></li>
-              <li><a href="#runtimes" className={styles.footerLink}>Java OpenJDK &amp; C/C++</a></li>
-              <li><a href="#runtimes" className={styles.footerLink}>HTML5 &amp; WebDev</a></li>
+              <li><Link href="/labs" className={styles.footerLink}>Python, Java &amp; C/C++</Link></li>
+              <li><Link href="/labs" className={styles.footerLink}>Web, SQL &amp; Colab</Link></li>
+              <li><Link href="/networks/wireshark" className={styles.footerLink}>Wireshark practice studio</Link></li>
             </ul>
           </div>
         </div>

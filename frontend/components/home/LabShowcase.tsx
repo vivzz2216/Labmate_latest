@@ -11,11 +11,11 @@ const previews: Record<string, {src: string; width: number; height: number; disp
 
 const labs = [
   { id: "deep-learning", name: "Deep Learning", icon: Cpu, description: "Neural networks, PyTorch, TensorFlow and Keras practicals. Generates training loss plots, model metrics, and Colab notebook reports.", templates: [
-    { name: "Colab · Dark", image: "colab-dark", caption: "Deep learning training & loss curves · Colab dark theme" },
-    { name: "Colab · Light", image: "colab-light", caption: "Neural network architecture and evaluation · Colab light theme" },
+    { name: "Colab · Dark", image: "colab-dark", caption: "Notebook code and output · Colab-style dark theme (sample exercise)" },
+    { name: "Colab · Light", image: "colab-light", caption: "Notebook code and output · Colab-style light theme (sample exercise)" },
   ] },
   { id: "distributed", name: "Distributed Computing", icon: Network, description: "Multi-process Java topologies, TCP/UDP sockets, Java RMI, and consensus algorithms in VS Code.", templates: [
-    { name: "VS Code (Java)", image: "web-code", caption: "Distributed Java implementation · Visual Studio Code" },
+    { name: "VS Code", image: "web-code", caption: "VS Code Dark Modern capture style, used for your Java sources (sample file shown)" },
   ] },
   { id: "python", name: "Python", icon: Terminal, description: "Functions, OOP and programming practicals. Choose the editor you use in class.", templates: [
     { name: "IDLE editor", image: "idle", caption: "Python IDLE editor · Windows" },
