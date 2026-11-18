@@ -2322,7 +2322,7 @@
 /* Right panel: the dotted matrix sits on the panel itself so it shows behind the waiting card (light mode). */
 :global([data-theme="light"]) .workspaceBox {
   background-color: #f8f9fb;
-  background-image: radial-gradient(rgba(15, 23, 42, 0.2) 1.2px, transparent 1.2px);
+  background-image: radial-gradient(rgba(15, 23, 42, 0.34) 1.2px, transparent 1.2px);
   background-size: 22px 22px;
   border: 1px solid #e4e4e7;
   box-shadow: 0 1px 2px rgba(10, 10, 10, 0.05);

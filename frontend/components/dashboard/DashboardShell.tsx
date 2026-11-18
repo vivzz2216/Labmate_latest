@@ -357,7 +357,7 @@ export default function DashboardShell({
               data-tooltip="LabMate"
             >
               <LabMateLogo
-                size="md"
+                size="sm"
                 theme={theme === "light" ? "light" : "dark"}
                 showWordmark={false}
               />
@@ -371,7 +371,7 @@ export default function DashboardShell({
                 title="LabMate Dashboard"
               >
                 <LabMateLogo
-                  size="md"
+                  size="sm"
                   theme={theme === "light" ? "light" : "dark"}
                   showWordmark={true}
                 />
