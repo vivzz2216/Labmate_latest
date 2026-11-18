@@ -120,3 +120,60 @@
   .navActions .pillBtnPrimary svg { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .page * { transition: none !important; } }
+
+.themeBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 11px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--body);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 120ms ease, background 120ms ease, border-color 120ms ease;
+}
+.themeBtn:hover { color: var(--ink); background: #f4f4f5; }
+.footerTagline { font-size: 13px; line-height: 1.65; color: var(--muted); max-width: 360px; margin: 0; }
+
+/* ---------- Dark Theme ---------- */
+.page[data-theme="dark"] {
+  --bg: #07080c;
+  --ink: #f4f4f5;
+  --body: #a1a1aa;
+  --muted: #71717a;
+  --line: rgba(255, 255, 255, 0.1);
+  --surface: #11131a;
+  --card: #0c0e14;
+  --accent: #818cf8;
+  background: var(--bg);
+  color: var(--ink);
+  color-scheme: dark;
+}
+.page[data-theme="dark"] .navbar { background: rgba(7, 8, 12, 0.85); }
+.page[data-theme="dark"] .navLink:hover,
+.page[data-theme="dark"] .loginTextLink:hover,
+.page[data-theme="dark"] .themeBtn:hover { background: rgba(255, 255, 255, 0.08); }
+.page[data-theme="dark"] .pillBtnPrimary,
+.page[data-theme="dark"] .ctaPrimaryBtn { background: #ffffff; border-color: #ffffff; color: #0a0a0a; }
+.page[data-theme="dark"] .pillBtnPrimary:hover,
+.page[data-theme="dark"] .ctaPrimaryBtn:hover { background: #e4e4e7; }
+.page[data-theme="dark"] .pillBtnSecondary,
+.page[data-theme="dark"] .ctaSecondaryBtn {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.16);
+  color: #f4f4f5;
+}
+.page[data-theme="dark"] .pillBtnSecondary:hover,
+.page[data-theme="dark"] .ctaSecondaryBtn:hover {
+  background: rgba(255, 255, 255, 0.11);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+.page[data-theme="dark"] .heroSerifAccent { color: #a1a1aa; }
+.page[data-theme="dark"] .workflowStep { background: var(--card); }
+.page[data-theme="dark"] .stepNumber { background: rgba(99, 102, 241, 0.18); color: #a5b4fc; }
+.page[data-theme="dark"] .formatDivider { background: rgba(255, 255, 255, 0.16); }
+.page[data-theme="dark"] .ctaCard { background: linear-gradient(180deg, #0f1118, #090b10); }
+.page[data-theme="dark"] .footer { background: var(--bg); }

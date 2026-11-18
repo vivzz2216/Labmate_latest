@@ -3,8 +3,15 @@
 import {useEffect, useRef, useState, type FormEvent} from 'react'
 import {ArrowLeft, ArrowRight, Check, Loader2} from 'lucide-react'
 import LabMateLogo from '@/components/brand/LabMateLogo'
-import {useAuth} from '@/contexts/BasicAuthContext'
-import {apiService} from '@/lib/api'
+import SelectWithOther from '@/components/profile/SelectWithOther'
+import { useAuth } from '@/contexts/BasicAuthContext'
+import { apiService } from '@/lib/api'
+import {
+  ACADEMIC_YEARS,
+  ENGINEERING_DEPARTMENTS,
+  GRADUATION_YEARS,
+  TOP_MUMBAI_COLLEGES,
+} from '@/lib/studentOptions'
 import styles from './onboarding.module.css'
 
 interface Props {isOpen: boolean; onComplete: () => void | Promise<void>}
@@ -102,13 +109,62 @@ export default function UserOnboarding({isOpen, onComplete}: Props) {
           <form onSubmit={submit}>
             <div className={styles.stepTitle}><h2>{steps[step]}</h2><span>Step {step + 1} of 5</span></div>
             {step === 0 && <>{field('name', 'Full name', 'Your name as it should appear in your record', 200)}{field('roll', 'Roll number / USN', 'Your college roll number or USN', 80)}</>}
-            {step === 1 && field('institution', 'College / university name', 'Your college or university', 300)}
-            {step === 2 && field('course', 'Department / course', 'e.g. Computer Science and Engineering', 200)}
+            {step === 1 && (
+              <label className={styles.field} htmlFor="profile-institution">
+                <span>College / university name</span>
+                <SelectWithOther
+                  id="profile-institution"
+                  name="institution"
+                  value={form.institution}
+                  onChange={v => change('institution', v)}
+                  options={TOP_MUMBAI_COLLEGES}
+                  placeholder="Select your college"
+                  customPlaceholder="Enter your college or university name"
+                  maxLength={300}
+                  disabled={saving || fetching}
+                  required
+                />
+              </label>
+            )}
+            {step === 2 && (
+              <label className={styles.field} htmlFor="profile-course">
+                <span>Department / branch</span>
+                <SelectWithOther
+                  id="profile-course"
+                  name="course"
+                  value={form.course}
+                  onChange={v => change('course', v)}
+                  options={ENGINEERING_DEPARTMENTS}
+                  placeholder="Select your department"
+                  customPlaceholder="e.g. Computer Science and Engineering"
+                  maxLength={200}
+                  disabled={saving || fetching}
+                  required
+                />
+              </label>
+            )}
             {step === 3 && <label className={styles.field} htmlFor="profile-year"><span>Current academic year</span><select id="profile-year" value={form.year} onChange={e => change('year', e.target.value)} required disabled={saving || fetching}>
-              <option value="">Select your year</option>{['1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year', 'Graduate'].map(year => <option key={year}>{year}</option>)}
-              {form.year && !['1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year', 'Graduate'].includes(form.year) && <option>{form.year}</option>}
+              <option value="">Select your year</option>{ACADEMIC_YEARS.map(year => <option key={year} value={year}>{year}</option>)}
+              {form.year && !(ACADEMIC_YEARS as readonly string[]).includes(form.year) && <option value={form.year}>{form.year}</option>}
             </select></label>}
-            {step === 4 && field('graduation', 'Graduation year', 'e.g. 2027', 4)}
+            {step === 4 && (
+              <label className={styles.field} htmlFor="profile-graduation">
+                <span>Graduation year</span>
+                <SelectWithOther
+                  id="profile-graduation"
+                  name="graduation"
+                  value={form.graduation}
+                  onChange={v => change('graduation', v)}
+                  options={GRADUATION_YEARS}
+                  placeholder="Select graduation year"
+                  customPlaceholder="Enter graduation year (e.g. 2027)"
+                  inputMode="numeric"
+                  maxLength={4}
+                  disabled={saving || fetching}
+                  required
+                />
+              </label>
+            )}
             {error && <div className={styles.error} role="alert">{error}{fetching && <button type="button" onClick={() => setRetry(v => v + 1)}>Retry loading</button>}</div>}
             <footer className={styles.actions}>
               <button type="button" className={styles.back} disabled={step === 0 || saving || fetching} onClick={() => {setStep(step - 1); setError('')}}><ArrowLeft size={16} /> Previous</button>

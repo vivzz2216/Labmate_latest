@@ -9,10 +9,13 @@ import {
   ArrowRight,
   CheckCircle2,
   FileText,
-  Terminal,
+  Moon,
   Sparkles,
+  Sun,
+  Terminal,
 } from "lucide-react";
 import LabMateLogo from "@/components/brand/LabMateLogo";
+import { useDashboardTheme } from "@/components/dashboard/DashboardShell";
 import { useAuth } from "@/contexts/BasicAuthContext";
 import styles from "./home.module.css";
 import PricingSection from '@/components/billing/PricingSection';
@@ -30,6 +33,7 @@ const DarkVeil = dynamic(() => import("@/components/visual/DarkVeil"), {
 
 export default function HomePage() {
   const { user, signOut } = useAuth();
+  const { theme, toggleTheme } = useDashboardTheme();
   const isAuthenticated = Boolean(user);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [authDestination, setAuthDestination] = useState<"/dashboard" | "/code-execution">("/dashboard");
@@ -45,13 +49,13 @@ export default function HomePage() {
   };
 
   return (
-    <div className={styles.page}>
+    <div className={styles.page} data-theme={theme}>
       {/* Sticky Runway-Style Navbar */}
       <nav className={styles.navbar}>
         <div className={styles.navContainer}>
           <div className="flex items-center gap-8">
             <Link href="/" aria-label="LabMate Home">
-              <LabMateLogo size="md" theme="light" />
+              <LabMateLogo size="md" theme={theme} />
             </Link>
             <div className={styles.navLinks}>
               <a href="#how-it-works" className={styles.navLink}>How it works</a>
@@ -63,6 +67,16 @@ export default function HomePage() {
           </div>
 
           <div className={styles.navActions}>
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className={styles.themeBtn}
+              aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            >
+              {theme === "dark" ? <Sun size={14} aria-hidden="true" /> : <Moon size={14} aria-hidden="true" />}
+              <span>{theme === "dark" ? "Light" : "Dark"}</span>
+            </button>
             {isAuthenticated ? (
               <>
                 <Link href="/workspace" className={styles.pillBtnPrimary}>
@@ -252,8 +266,8 @@ export default function HomePage() {
       <footer className={styles.footer}>
         <div className={styles.footerContainer}>
           <div className={styles.footerBrandCol}>
-            <LabMateLogo size="md" theme="light" />
-            <p style={{ fontSize: 13, lineHeight: 1.65, color: "#71717a", maxWidth: 360, margin: 0 }}>
+            <LabMateLogo size="md" theme={theme} />
+            <p className={styles.footerTagline}>
               The automated lab manual intelligence tool for engineering students.
               Turn any raw manual into complete code, real terminal screenshots, and submission-ready reports.
             </p>

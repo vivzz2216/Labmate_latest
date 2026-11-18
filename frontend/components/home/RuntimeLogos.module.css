@@ -19,3 +19,11 @@
   .detail { font-size: 11px; }
 }
 @media (prefers-reduced-motion: reduce) { .chip { transition: none; } }
+
+:global([data-theme="dark"]) .title { color: #a1a1aa; }
+:global([data-theme="dark"]) .chip { background: #0c0e14; border-color: rgba(255, 255, 255, 0.1); box-shadow: none; }
+:global([data-theme="dark"]) .chip:hover { border-color: rgba(255, 255, 255, 0.24); box-shadow: 0 6px 20px -8px rgba(0, 0, 0, 0.6); }
+:global([data-theme="dark"]) .tile { background: #f4f4f5; }
+:global([data-theme="dark"]) .tile + .tile { box-shadow: 0 0 0 2px #0c0e14; }
+:global([data-theme="dark"]) .name { color: #f4f4f5; }
+:global([data-theme="dark"]) .detail { color: #a1a1aa; }
