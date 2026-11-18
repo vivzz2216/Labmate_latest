@@ -178,6 +178,8 @@ async def health_check(response: Response):
     result, worker = await asyncio.gather(asyncio.to_thread(_health_check_sync, response), worker_health.check(wait_timeout=2.0))
     result['services']['execution_worker'] = worker['status']
     result['execution_ready'] = worker['available']
+    if worker.get('resumes_at'):
+        result['execution_resumes_at'] = worker['resumes_at']
     return result
 
 

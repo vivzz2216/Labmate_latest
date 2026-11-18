@@ -14,11 +14,31 @@ server-only variables to the Labmate_latest service:
 EXECUTION_ISOLATION=required
 EXECUTION_BACKEND=railway_sandbox
 RAILWAY_API_TOKEN=<account-or-workspace-token-with-project-access>
-HEAVY_EXECUTION_LOCAL_LIMIT=1
-HEAVY_EXECUTION_GLOBAL_LIMIT=1
-BROWSER_CAPTURE_LOCAL_LIMIT=1
-BROWSER_CAPTURE_GLOBAL_LIMIT=1
+WORKFLOW_WORKERS=6
+HEAVY_EXECUTION_LOCAL_LIMIT=6
+HEAVY_EXECUTION_GLOBAL_LIMIT=6
+BROWSER_CAPTURE_LOCAL_LIMIT=2
+BROWSER_CAPTURE_GLOBAL_LIMIT=2
 ```
+
+Each program runs in its own VM, so the execution limit should match `WORKFLOW_WORKERS`. A limit of 1
+(right only for the single SSH worker) makes every student's program wait for everyone else's: in the
+2026-11-18 live test six 3-program manuals took 7.5–17.6 minutes at 1 and 1.8–3 minutes at 6.
+
+### Railway API allowance
+
+Creating a VM costs about 15 public-API requests (create, status polls while it boots, destroy), and the
+token's account has an hourly allowance: 1,000 requests on Hobby, 10,000 on Pro (check the
+`x-ratelimit-limit` response header). One VM per program capped the whole site at about 60 programs an
+hour. So:
+
+- `process_assignment` opens `sandbox_session()`: one bridge process (`bridge.mjs --session`) and one VM
+  serve all of a manual's programs. Each job still runs in its own Bubblewrap namespaces with fresh
+  `/work` and `/tmp`. A job needing a different image (Spark, notebook extras, DL caches) gets a second VM.
+- A 429 whose `retry-after` fits in 90 s is waited out and retried; a longer one pauses the manual with
+  "resumes in about N minutes (at HH:MM UTC)", and no further sandbox is attempted until then.
+- `/health/ready` (polled by every open student page) never creates a sandbox; it reports the startup
+  probe and the outcome of real jobs.
 
 Railway supplies RAILWAY_ENVIRONMENT_ID. Never set LABMATE_SANDBOX_WORKER on the
 API service and never put the API token in frontend variables or sandbox env.

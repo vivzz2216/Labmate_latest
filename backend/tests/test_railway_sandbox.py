@@ -43,7 +43,7 @@ async def test_railway_receipt_provenance_and_failure(monkeypatch):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('valid',[True,False])
-async def test_railway_health_executes_nonce_probe_and_caches(monkeypatch,valid):
+async def test_railway_health_executes_nonce_probe_only_when_forced_and_caches(monkeypatch,valid):
     monkeypatch.setattr(settings,'EXECUTION_BACKEND','railway_sandbox')
     monkeypatch.setattr(health,'isolation_required',lambda:True)
     async def reply(job):
@@ -51,7 +51,7 @@ async def test_railway_health_executes_nonce_probe_and_caches(monkeypatch,valid)
     exchange=AsyncMock(side_effect=reply)
     monkeypatch.setattr(adapter,'exchange',exchange)
     probe=health.WorkerHealth()
-    assert (await probe.check())['available'] is valid
+    assert (await probe.check(force=True))['available'] is valid
     assert (await probe.check())['available'] is valid
     exchange.assert_awaited_once()
 
@@ -72,17 +72,38 @@ async def test_railway_health_nonblocking_refresh(monkeypatch):
     monkeypatch.setattr(adapter, 'exchange', exchange)
 
     probe = health.WorkerHealth()
-    # First call with wait_timeout: returns immediately with 'checking' and starts background probe
-    res = await probe.check(wait_timeout=2.0)
+    # The startup probe (forced) runs in the background; polls meanwhile report 'checking'.
+    res = await probe.check(force=True, wait_timeout=2.0)
     assert res['status'] == 'checking'
     assert res['available'] is False
 
-    # Wait for the background probe to complete
     await asyncio.wait_for(started.wait(), timeout=1.0)
+    assert (await probe.check(wait_timeout=2.0))['status'] == 'checking'
     await asyncio.sleep(0.1)
 
-    # Subsequent call returns cached healthy status immediately
+    # Subsequent polls return the cached healthy status and never start another probe.
     res2 = await probe.check(wait_timeout=2.0)
     assert res2['status'] == 'healthy'
     assert res2['available'] is True
+    exchange.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_polled_health_never_creates_a_sandbox(monkeypatch):
+    """Every open student page polls /health/ready; a probe there would spend Railway's hourly API allowance."""
+    monkeypatch.setattr(settings, 'EXECUTION_BACKEND', 'railway_sandbox')
+    monkeypatch.setattr(health, 'isolation_required', lambda: True)
+    exchange = AsyncMock()
+    monkeypatch.setattr(adapter, 'exchange', exchange)
+    probe = health.WorkerHealth()
+    for _ in range(5):
+        res = await probe.check(wait_timeout=2.0)
+        assert res['available'] is True and res['status'] == 'ready'
+        assert (await probe.check())['available'] is True
+    exchange.assert_not_awaited()
+    probe.record_job(False)
+    assert (await probe.check(wait_timeout=2.0))['status'] == 'unavailable'
+    probe.record_job(True)
+    assert (await probe.check(wait_timeout=2.0))['status'] == 'healthy'
+    exchange.assert_not_awaited()
 
