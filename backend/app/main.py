@@ -90,6 +90,8 @@ async def lifespan(app: FastAPI):
     await performance_monitor.start_monitoring()
     start_background_workers(num_workers=3)
     start_workflow_workers()
+    from .services.storage_retention import start_retention_job, stop_retention_job
+    start_retention_job()
     from .services.worker_health import worker_health
     asyncio.create_task(worker_health.check(force=True))
     try:
@@ -99,6 +101,7 @@ async def lifespan(app: FastAPI):
         await performance_monitor.stop_monitoring()
         await stop_background_workers()
         await stop_workflow_workers()
+        await stop_retention_job()
         from .services.browser_capture import close_browser_pools
         await close_browser_pools()
 
