@@ -3,24 +3,33 @@
    Inherits theme variables from DashboardShell (dashboard.module.css)
    ======================================================== */
 
-.settingsGrid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.85fr);
-  gap: 20px;
-  align-items: start;
-}
-
-.formBody {
-  padding: 22px 24px;
+.settingsStack {
   display: flex;
   flex-direction: column;
   gap: 18px;
+  padding-bottom: 24px;
+}
+
+.settingsGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.85fr);
+  gap: 18px;
+  align-items: stretch;
+}
+
+.formBody {
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 16px;
+  flex: 1;
 }
 
 .fieldGrid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  gap: 14px 16px;
 }
 
 .fieldGroup {
@@ -33,23 +42,28 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text-muted);
 }
 
 .fieldInput,
 .fieldSelect {
-  height: 40px;
+  height: 36px;
   width: 100%;
-  padding: 0 13px;
-  border-radius: 10px;
+  padding: 0 12px;
+  border-radius: 8px;
   border: 1px solid var(--search-border);
   background: var(--search-bg);
   color: var(--search-text);
-  font-size: 13.5px;
+  font-size: 13px;
   outline: none;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: border-color 0.16s ease, background-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.fieldSelect option {
+  background: var(--panel-bg);
+  color: var(--text-main);
 }
 
 .fieldInput::placeholder {
@@ -60,11 +74,12 @@
 .fieldSelect:focus {
   border-color: var(--search-focus-border);
   background: var(--search-focus-bg);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
-.fieldInput:disabled {
-  opacity: 0.65;
+.fieldInput:disabled,
+.fieldSelect:disabled {
+  opacity: 0.6;
   cursor: not-allowed;
 }
 
@@ -79,14 +94,14 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding-top: 6px;
+  padding-top: 14px;
   border-top: 1px solid var(--panel-header-border);
   flex-wrap: wrap;
 }
 
 .feedbackBanner {
-  padding: 10px 14px;
-  border-radius: 10px;
+  padding: 9px 12px;
+  border-radius: 8px;
   font-size: 12.5px;
   font-weight: 500;
 }
@@ -107,98 +122,156 @@
 .rightColumn {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+}
+
+.rightColumn > section {
+  height: 100%;
 }
 
 .accountBody {
-  padding: 20px 24px;
+  padding: 18px 20px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  justify-content: flex-start;
+  gap: 0;
+  flex: 1;
 }
 
 .profileIdentity {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
+  padding-bottom: 14px;
 }
 
 .avatarLarge {
-  width: 52px;
-  height: 52px;
-  border-radius: 50%;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
   display: grid;
   place-items: center;
-  background: linear-gradient(135deg, #2563eb, #4f46e5);
-  color: #ffffff;
-  font-size: 20px;
+  background: var(--stat-blue-bg);
+  border: 1px solid var(--stat-blue-border);
+  color: var(--stat-blue-color);
+  font-size: 17px;
   font-weight: 700;
   flex-shrink: 0;
-  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .identityDetails {
   min-width: 0;
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
 }
 
-.identityDetails h3 {
-  margin: 0 0 3px;
+.identityNameRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.identityNameRow h3 {
+  margin: 0;
   font-family: var(--font-heading, -apple-system, sans-serif);
-  font-size: 16px;
-  font-weight: 700;
+  font-size: 15px;
+  font-weight: 600;
   color: var(--text-heading);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.identityDetails p {
-  margin: 0;
-  font-size: 12.5px;
+.rolePill {
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: var(--surface-elevated);
+  border: 1px solid var(--panel-header-border);
+  font-size: 10.5px;
+  font-weight: 600;
   color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.identityEmail {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text-dim);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.creditRow {
+  padding: 12px 0;
+  border-top: 1px solid var(--panel-header-border);
+}
+
+.creditRow:empty {
+  display: none;
+}
+
+.creditRow :global(p) {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--table-row-title);
+}
+
+.creditRow :global(a) {
+  color: var(--link-color);
+  font-weight: 600;
 }
 
 .preferenceRow {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
+  gap: 12px;
   padding: 12px 0;
   border-top: 1px solid var(--panel-header-border);
 }
 
+.preferenceLabel {
+  min-width: 0;
+}
+
 .preferenceLabel strong {
   display: block;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--table-row-title);
 }
 
 .preferenceLabel small {
+  display: block;
+  margin-top: 2px;
   font-size: 11.5px;
   color: var(--text-dim);
 }
 
 .themeSwitcher {
   display: inline-flex;
-  gap: 4px;
+  gap: 2px;
   padding: 3px;
-  border-radius: 9999px;
+  border-radius: 8px;
   background: var(--surface-subtle);
   border: 1px solid var(--panel-header-border);
+  flex-shrink: 0;
 }
 
 .themeOption {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 12px;
-  border-radius: 9999px;
+  gap: 5px;
+  height: 28px;
+  padding: 0 11px;
+  border-radius: 6px;
   border: 0;
   background: transparent;
   color: var(--text-muted);
@@ -208,50 +281,56 @@
   transition: all 0.15s ease;
 }
 
+.themeOption:hover {
+  color: var(--text-main);
+}
+
 .themeOptionActive {
   background: var(--btn-primary-bg);
   color: var(--btn-primary-text);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
 }
 
 .accountActions {
+  margin-top: auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding-top: 12px;
+  padding-top: 14px;
   border-top: 1px solid var(--panel-header-border);
   flex-wrap: wrap;
 }
 
 .dangerButton {
-  height: 38px;
+  height: 34px;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 0 16px;
-  border-radius: 9999px;
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  gap: 6px;
+  padding: 0 13px;
+  border-radius: 8px;
+  border: 1px solid rgba(239, 68, 68, 0.28);
   background: rgba(239, 68, 68, 0.08);
   color: #ef4444;
   font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.16s ease;
+  transition: all 0.15s ease;
 }
 
 .dangerButton:hover {
-  background: rgba(239, 68, 68, 0.16);
-  transform: translateY(-1px);
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.45);
 }
 
 /* ========================================================
-   YOUR COLLEGE MANUAL PROMPT (AGENT PROMPT TEMPLATE)
+   MANUAL PROMPT TEMPLATE
    ======================================================== */
 .promptBody {
-  padding: 20px 24px 22px;
+  padding: 16px 20px 18px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
 }
 
 .promptTopRow {
@@ -263,18 +342,22 @@
 }
 
 .presetGroup {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 9px;
+  background: var(--surface-subtle);
+  border: 1px solid var(--panel-header-border);
   flex-wrap: wrap;
 }
 
 .presetBtn {
-  height: 30px;
-  padding: 0 12px;
-  border-radius: 9999px;
-  border: 1px solid var(--panel-header-border);
-  background: var(--surface-subtle);
+  height: 28px;
+  padding: 0 11px;
+  border-radius: 6px;
+  border: 0;
+  background: transparent;
   color: var(--text-muted);
   font-size: 12px;
   font-weight: 600;
@@ -285,13 +368,23 @@
 
 .presetBtn:hover {
   color: var(--text-main);
-  border-color: var(--search-focus-border);
+  background: var(--surface-elevated);
 }
 
 .presetBtnActive {
   background: var(--btn-primary-bg);
-  border-color: var(--btn-primary-border);
   color: var(--btn-primary-text) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.promptProfileBadge {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-dim);
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: var(--surface-subtle);
+  border: 1px solid var(--panel-header-border);
 }
 
 .promptToolbarActions {
@@ -303,7 +396,7 @@
 
 .promptTextareaWrap {
   position: relative;
-  border-radius: 14px;
+  border-radius: 10px;
   border: 1px solid var(--code-border);
   background: var(--code-surface);
   overflow: hidden;
@@ -314,7 +407,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 9px 14px;
+  padding: 8px 14px;
   background: rgba(255, 255, 255, 0.03);
   border-bottom: 1px solid rgba(255, 255, 255, 0.07);
   font-size: 11.5px;
@@ -324,8 +417,8 @@
 
 .promptTextarea {
   width: 100%;
-  min-height: 250px;
-  padding: 16px 18px;
+  min-height: 220px;
+  padding: 14px 16px;
   border: 0;
   outline: none;
   resize: vertical;
@@ -333,40 +426,14 @@
   color: #e2e8f0;
   font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
   font-size: 12.5px;
-  line-height: 1.65;
+  line-height: 1.6;
 }
 
-.promptStepsGrid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-}
-
-.promptStepCard {
-  padding: 12px 14px;
-  border-radius: 12px;
-  background: var(--surface-subtle);
-  border: 1px solid var(--panel-header-border);
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.promptStepCard strong {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--table-row-title);
-}
-
-.promptStepCard span {
-  font-size: 11.5px;
-  color: var(--text-dim);
-  line-height: 1.45;
-}
-
-/* Assignment History List */
+/* ========================================================
+   ASSIGNMENT HISTORY LIST
+   ======================================================== */
 .historyScroll {
-  max-height: 440px;
+  max-height: 400px;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
@@ -386,8 +453,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 18px;
-  padding: 16px 24px;
+  gap: 16px;
+  padding: 13px 20px;
   border-bottom: 1px solid var(--table-row-border);
   background: var(--table-row-bg);
   transition: background 0.15s ease;
@@ -404,7 +471,7 @@
 .historyInfo {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 5px;
   min-width: 0;
   flex: 1;
 }
@@ -412,14 +479,14 @@
 .historyTitleRow {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
 .historyTitleRow h3 {
   margin: 0;
   font-family: var(--font-heading, -apple-system, sans-serif);
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 600;
   color: var(--table-row-title);
   white-space: nowrap;
@@ -428,8 +495,8 @@
 }
 
 .statusBadge {
-  padding: 2px 9px;
-  border-radius: 9999px;
+  padding: 2px 8px;
+  border-radius: 6px;
   font-size: 11px;
   font-weight: 600;
 }
@@ -471,14 +538,6 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-}
-
-.taskCounters {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  font-size: 12px;
-  flex-wrap: wrap;
 }
 
 .counterDone {
@@ -526,11 +585,212 @@
   .historyRow {
     flex-direction: column;
     align-items: flex-start;
-    padding: 16px 18px;
+    padding: 14px 16px;
   }
 
   .historyActions {
     width: 100%;
     justify-content: flex-end;
+  }
+}
+
+/* ========================================================
+   Professional settings system (typography, rhythm, controls)
+   Inter throughout, 14px body, readable 13px secondary text, one radius scale (8 / 12).
+   ======================================================== */
+.settingsStack {
+  max-width: 1080px;
+  margin: 0 auto;
+  width: 100%;
+  gap: 20px;
+  font-family: var(--font-sans, "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+  font-feature-settings: "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
+}
+.settingsStack .sectionCard {
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(10, 10, 10, 0.04);
+}
+.settingsStack .sectionHeader {
+  min-height: 0;
+  padding: 18px 24px 16px;
+  gap: 16px;
+  align-items: flex-start;
+}
+.settingsStack .sectionHeader h2 {
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.011em;
+  line-height: 1.35;
+  margin: 0;
+}
+.settingsStack .sectionHeader p {
+  margin: 3px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  max-width: 62ch;
+}
+
+/* Forms */
+.settingsStack .formBody {
+  padding: 22px 24px 20px;
+  gap: 22px;
+}
+.settingsStack .fieldGrid {
+  gap: 18px 20px;
+}
+.settingsStack .fieldGroup {
+  gap: 6px;
+}
+.settingsStack .fieldLabel {
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  line-height: 1.4;
+  color: var(--text-main);
+}
+.settingsStack .fieldLabel svg {
+  display: none;
+}
+.settingsStack .fieldInput,
+.settingsStack .fieldSelect {
+  height: 40px;
+  padding: 0 12px;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.4;
+  border-radius: 8px;
+}
+.settingsStack .fieldInput:focus,
+.settingsStack .fieldSelect:focus {
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.16);
+  border-color: #6366f1;
+}
+.settingsStack .fieldHint,
+.settingsStack .formFooter > span,
+.settingsStack .formFooter > p {
+  font-size: 13px;
+  line-height: 1.5;
+}
+.settingsStack .formFooter {
+  padding-top: 18px;
+  margin-top: 2px;
+}
+
+/* Account rows */
+.settingsStack .preferenceRow {
+  padding: 16px 0;
+  gap: 20px;
+}
+.settingsStack .preferenceLabel {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+.settingsStack .preferenceLabel + *,
+.settingsStack .preferenceLabel small,
+.settingsStack .preferenceLabel span {
+  font-size: 13px;
+  line-height: 1.5;
+}
+.settingsStack .identityEmail {
+  font-size: 13px;
+}
+.settingsStack .identityNameRow strong,
+.settingsStack .identityNameRow span:first-child {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.settingsStack .rolePill {
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.settingsStack .themeOption {
+  font-size: 13px;
+  font-weight: 500;
+  height: 32px;
+}
+
+/* Buttons used on this page */
+.settingsStack button {
+  font-family: inherit;
+}
+.settingsStack .presetBtn {
+  font-size: 13px;
+  font-weight: 500;
+  height: 32px;
+  padding: 0 12px;
+}
+
+/* Prompt template editor: monospace, comfortable measure; light theme gets a light editor */
+.settingsStack .promptTextarea {
+  font-size: 13px;
+  line-height: 1.7;
+  letter-spacing: 0;
+  tab-size: 2;
+  min-height: 280px;
+}
+.settingsStack .promptTextareaHeader {
+  font-size: 12px;
+  padding: 10px 16px;
+}
+.settingsStack .promptProfileBadge {
+  font-size: 12.5px;
+}
+:global([data-theme="light"]) .settingsStack .promptTextareaWrap {
+  background: #fafafa;
+  border: 1px solid #e4e4e7;
+}
+:global([data-theme="light"]) .settingsStack .promptTextareaHeader {
+  background: #f4f4f5;
+  border-bottom: 1px solid #e4e4e7;
+  color: #71717a;
+}
+:global([data-theme="light"]) .settingsStack .promptTextarea {
+  color: #27272a;
+}
+:global([data-theme="light"]) .settingsStack .promptTextarea::selection {
+  background: #c7d2fe;
+}
+:global([data-theme="light"]) .settingsStack .fieldInput,
+:global([data-theme="light"]) .settingsStack .fieldSelect {
+  background: #ffffff;
+  border-color: #d4d4d8;
+  color: #0a0a0a;
+}
+:global([data-theme="light"]) .settingsStack .fieldInput::placeholder {
+  color: #a1a1aa;
+}
+
+/* Assignment history */
+.settingsStack .historyRow {
+  padding: 16px 24px;
+  gap: 16px;
+}
+.settingsStack .historyTitleRow {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+.settingsStack .metaItem,
+.settingsStack .historyMetaRow {
+  font-size: 13px;
+}
+.settingsStack .statusBadge {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+@media (max-width: 720px) {
+  .settingsStack .sectionHeader,
+  .settingsStack .formBody {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+  .settingsStack .historyRow {
+    padding: 14px 18px;
   }
 }

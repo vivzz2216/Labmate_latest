@@ -14,7 +14,6 @@ import {
   Layers,
   ArrowUpRight,
   FileCheck2,
-  Sparkles,
   Cpu,
   Network,
 } from "lucide-react";
@@ -152,21 +151,20 @@ export default function DashboardPage() {
         searchPlaceholder="Search labs, languages, reports..."
         lockViewport={true}
       >
-        {/* Streamlined Command Banner */}
+        {/* Overview Header Bar */}
         <section className={styles.welcomeCard}>
           <div className={styles.welcomeCopy}>
-            <span className={styles.welcomeEyebrow}>
-              <Sparkles size={13} /> Lab Intelligence Studio
-            </span>
-            <h2>
-              Welcome back, <span>{displayName}</span>
-            </h2>
+            <div className={styles.welcomeTitleRow}>
+              <h2>Welcome back, {displayName}</h2>
+              <div className={styles.welcomeCredit}>
+                <CreditStatus />
+              </div>
+            </div>
             <p>
               {assignments.length === 0
-                ? "Upload a syllabus PDF or Word lab manual to extract questions, run verified solutions, and export a formatted report."
-                : `You have ${activeLabs} active lab${activeLabs === 1 ? "" : "s"} in progress and ${reportsReady} Word report${reportsReady === 1 ? "" : "s"} ready for submission.`}
+                ? "Upload a PDF or Word lab manual to extract tasks, run code, and export a report."
+                : `${activeLabs} lab${activeLabs === 1 ? "" : "s"} in progress · ${reportsReady} report${reportsReady === 1 ? "" : "s"} ready`}
             </p>
-            <CreditStatus />
           </div>
           <div className={styles.welcomeActions}>
             <button
@@ -174,21 +172,21 @@ export default function DashboardPage() {
               className={styles.primaryButton}
               onClick={() => go("/code-execution")}
             >
-              <UploadCloud size={16} strokeWidth={2} /> Upload Assignment
+              <UploadCloud size={15} strokeWidth={2} /> Upload Assignment
             </button>
             <button
               type="button"
               className={styles.secondaryButton}
               onClick={() => go("/labs")}
             >
-              <Layers size={16} strokeWidth={1.8} /> Lab Sections
+              <Layers size={15} strokeWidth={1.8} /> Lab Sections
             </button>
             <button
               type="button"
               className={styles.secondaryButton}
               onClick={() => go("/workspace")}
             >
-              <FolderGit2 size={16} strokeWidth={1.8} /> Open Workspace
+              <FolderGit2 size={15} strokeWidth={1.8} /> Workspace
             </button>
           </div>
         </section>
@@ -330,78 +328,39 @@ export default function DashboardPage() {
 
           {/* Right Rail: Continue Working, Lab Tracks & Recent Reports */}
           <aside className={styles.rightRail}>
-            {/* Lab Sections & Expanded Tracks */}
+            {/* Lab Tracks */}
             <section className={styles.panel}>
               <div className={styles.panelHeader}>
                 <div>
-                  <h2 style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                    <Sparkles size={16} color="#8b5cf6" />
-                    <span>Specialized Lab Tracks</span>
-                  </h2>
-                  <p>Dedicated academic tracks with real execution</p>
+                  <h2>Lab Tracks</h2>
+                  <p>Dedicated execution environments</p>
                 </div>
-                <Link
-                  href="/labs"
-                  className={styles.linkButton}
-                  style={{ display: "inline-flex", alignItems: "center", gap: "2px" }}
-                >
-                  All Labs <ChevronRight size={13} />
+                <Link href="/labs" className={styles.linkButton}>
+                  All Labs <ChevronRight size={13} strokeWidth={2} />
                 </Link>
               </div>
 
-              <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "4px" }}>
-                <Link
-                  href="/labs/deep-learning"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "10px 12px",
-                    borderRadius: "8px",
-                    background: "rgba(168, 85, 247, 0.08)",
-                    border: "1px solid rgba(168, 85, 247, 0.25)",
-                    textDecoration: "none",
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <Cpu size={18} color="#c084fc" />
-                    <div>
-                      <strong style={{ fontSize: "0.85rem", color: "var(--text-heading, #f4f4f5)", display: "block" }}>
-                        Deep Learning Labs
-                      </strong>
-                      <span style={{ fontSize: "0.75rem", color: "var(--text-muted, #a1a1aa)" }}>
-                        PyTorch, TensorFlow &amp; Colab
-                      </span>
-                    </div>
-                  </div>
-                  <ChevronRight size={14} color="#a1a1aa" />
+              <div className={styles.trackList}>
+                <Link href="/labs/deep-learning" className={styles.trackItem}>
+                  <span className={styles.trackIcon} aria-hidden="true">
+                    <Cpu size={15} strokeWidth={1.9} />
+                  </span>
+                  <span className={styles.trackText}>
+                    <strong>Deep Learning</strong>
+                    <small>PyTorch, TensorFlow &amp; Colab</small>
+                  </span>
+                  <ChevronRight size={14} className={styles.trackChevron} />
                 </Link>
 
-                <Link
-                  href="/labs/distributed-computing"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "10px 12px",
-                    borderRadius: "8px",
-                    background: "rgba(14, 165, 233, 0.08)",
-                    border: "1px solid rgba(14, 165, 233, 0.25)",
-                    textDecoration: "none",
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <Network size={18} color="#38bdf8" />
-                    <div>
-                      <strong style={{ fontSize: "0.85rem", color: "var(--text-heading, #f4f4f5)", display: "block" }}>
-                        Distributed Computing Labs
-                      </strong>
-                      <span style={{ fontSize: "0.75rem", color: "var(--text-muted, #a1a1aa)" }}>
-                        Java RMI, TCP/UDP &amp; Sockets
-                      </span>
-                    </div>
-                  </div>
-                  <ChevronRight size={14} color="#a1a1aa" />
+                <Link href="/labs/distributed-computing" className={styles.trackItem}>
+                  <span className={styles.trackIcon} aria-hidden="true">
+                    <Network size={15} strokeWidth={1.9} />
+                  </span>
+                  <span className={styles.trackText}>
+                    <strong>Distributed Computing</strong>
+                    <small>Java RMI, TCP/UDP &amp; Sockets</small>
+                  </span>
+                  <ChevronRight size={14} className={styles.trackChevron} />
                 </Link>
               </div>
             </section>

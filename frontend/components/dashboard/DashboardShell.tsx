@@ -181,10 +181,10 @@ export function EmptyState({
 
 export const dashboardNavItems = [
   { label: "Dashboard", icon: LayoutDashboard, href: "/dashboard", matchPrefix: "/dashboard" },
-  { label: "Lab Sections", icon: Layers, href: "/labs", matchPrefix: "/labs" },
-  { label: "MU Catalogue", icon: BookOpen, href: "/mumbai-university", matchPrefix: "/mumbai-university" },
+  { label: "Lab Tracks", icon: Layers, href: "/labs", matchPrefix: "/labs" },
+  { label: "Curriculum", icon: BookOpen, href: "/mumbai-university", matchPrefix: "/mumbai-university" },
   { label: "Workspace", icon: FolderGit2, href: "/workspace", matchPrefix: "/workspace" },
-  { label: "My Labs", icon: Terminal, href: "/code-execution", matchPrefix: "/code-execution" },
+  { label: "Code Studio", icon: Terminal, href: "/code-execution", matchPrefix: "/code-execution" },
   { label: "Reports", icon: FileText, href: "/reports", matchPrefix: "/reports" },
   { label: "Settings", icon: Settings, href: "/user-dashboard?tab=settings", matchPrefix: "/user-dashboard" },
 ];

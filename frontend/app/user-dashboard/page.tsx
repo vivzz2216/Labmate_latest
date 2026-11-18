@@ -23,7 +23,6 @@ import {
   Mail,
   Copy,
   Check,
-  Sparkles,
   RotateCcw,
   ShieldCheck,
 } from "lucide-react";
@@ -448,7 +447,7 @@ export default function UserDashboard() {
         title="Settings"
         subtitle="Manage your student profile, preferences, and account"
       >
-        <div className={dashStyles.panel}>
+        <div className={`${dashStyles.panel} ${styles.sectionCard}`}>
           <LoadingState message="Loading your account settings..." />
         </div>
       </DashboardShell>
@@ -464,499 +463,464 @@ export default function UserDashboard() {
   return (
     <DashboardShell
       title="Settings"
-      subtitle="Manage student credentials, YourCollegeManualPrompt template, theme preferences, and assignment history"
+      subtitle="Credentials, prompt template & lab preferences"
       searchValue={search}
       onSearchChange={setSearch}
       searchPlaceholder="Filter your assignments..."
     >
-      {/* Top Grid: Profile Settings (Left) + Account & Preferences (Right) */}
-      <div className={styles.settingsGrid}>
-        {/* Student Profile & Code Personalization Form */}
-        <section className={dashStyles.panel}>
-          <div className={dashStyles.panelHeader}>
-            <div>
-              <h2>Student Profile &amp; Code Personalization</h2>
-              <p>
-                Your credentials are automatically injected into generated code
-                classes, test cases, and IDE window titles.
-              </p>
-            </div>
-          </div>
-
-          <form onSubmit={handleSaveProfile} className={styles.formBody}>
-            <div className={styles.fieldGrid}>
-              <div className={styles.fieldGroup}>
-                <label className={styles.fieldLabel} htmlFor="settings-name">
-                  <User size={14} /> Full Student Name
-                </label>
-                <input
-                  id="settings-name"
-                  type="text"
-                  className={styles.fieldInput}
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. Rahul Sharma"
-                  disabled={profileLoading}
-                  required
-                />
-              </div>
-
-              <div className={styles.fieldGroup}>
-                <label className={styles.fieldLabel} htmlFor="settings-usn">
-                  <Hash size={14} /> USN / Roll Number
-                </label>
-                <input
-                  id="settings-usn"
-                  type="text"
-                  className={styles.fieldInput}
-                  value={usn}
-                  onChange={(e) => setUsn(e.target.value)}
-                  placeholder="e.g. 1MS21CS042"
-                  disabled={profileLoading}
-                />
-              </div>
-
-              <div className={styles.fieldGroup}>
-                <label className={styles.fieldLabel} htmlFor="settings-dept">
-                  <BookOpen size={14} /> Branch / Department
-                </label>
-                <input
-                  id="settings-dept"
-                  type="text"
-                  className={styles.fieldInput}
-                  value={department}
-                  onChange={(e) => setDepartment(e.target.value)}
-                  placeholder="e.g. Computer Science & Engineering"
-                  disabled={profileLoading}
-                />
-              </div>
-
-              <div className={styles.fieldGroup}>
-                <label className={styles.fieldLabel} htmlFor="settings-inst">
-                  <Building2 size={14} /> College / University
-                </label>
-                <input
-                  id="settings-inst"
-                  type="text"
-                  className={styles.fieldInput}
-                  value={institution}
-                  onChange={(e) => setInstitution(e.target.value)}
-                  placeholder="e.g. Engineering College"
-                  disabled={profileLoading}
-                />
-              </div>
-
-              <div className={styles.fieldGroup}>
-                <label className={styles.fieldLabel} htmlFor="settings-year">
-                  <GraduationCap size={14} /> Academic Year
-                </label>
-                <select
-                  id="settings-year"
-                  className={styles.fieldSelect}
-                  value={academicYear}
-                  onChange={(e) => setAcademicYear(e.target.value)}
-                  disabled={profileLoading}
-                >
-                  <option value="">Select academic year</option>
-                  <option value="1st Year">1st Year</option>
-                  <option value="2nd Year">2nd Year</option>
-                  <option value="3rd Year">3rd Year</option>
-                  <option value="4th Year">4th Year</option>
-                  <option value="Graduate">Graduate</option>
-                </select>
-              </div>
-
-              <div className={styles.fieldGroup}>
-                <label className={styles.fieldLabel} htmlFor="settings-grad">
-                  <Calendar size={14} /> Expected Graduation Year
-                </label>
-                <input
-                  id="settings-grad"
-                  type="text"
-                  className={styles.fieldInput}
-                  value={graduationYear}
-                  onChange={(e) => setGraduationYear(e.target.value)}
-                  placeholder="e.g. 2026"
-                  disabled={profileLoading}
-                />
-              </div>
-            </div>
-
-            {profileMessage && (
-              <div
-                role="status"
-                className={`${styles.feedbackBanner} ${
-                  profileMessage.type === "success"
-                    ? styles.feedbackSuccess
-                    : styles.feedbackError
-                }`}
-              >
-                {profileMessage.text}
-              </div>
-            )}
-
-            <div className={styles.formFooter}>
-              <p className={styles.fieldHint}>
-                Applied automatically to all future Python, Java, C/C++, SQL,
-                and Web lab runs.
-              </p>
-              <button
-                type="submit"
-                disabled={savingProfile || profileLoading}
-                className={dashStyles.primaryButton}
-              >
-                <UserCheck size={15} />
-                {savingProfile ? "Saving Changes..." : "Save Profile Settings"}
-              </button>
-            </div>
-          </form>
-        </section>
-
-        {/* Right Column: Account Overview & Theme Preferences */}
-        <aside className={styles.rightColumn}>
-          <section className={dashStyles.panel}>
-            <div className={dashStyles.panelHeader}>
+      <div className={styles.settingsStack}>
+        {/* Top Grid: Profile Settings (Left) + Account & Preferences (Right) */}
+        <div className={styles.settingsGrid}>
+          {/* Student Profile & Code Personalization Form */}
+          <section className={`${dashStyles.panel} ${styles.sectionCard}`}>
+            <div className={`${dashStyles.panelHeader} ${styles.sectionHeader}`}>
               <div>
-                <h2>Account &amp; Appearance</h2>
-                <p>Session details, manual credits, and interface theme</p>
+                <h2>Student Profile</h2>
+                <p>
+                  Auto-filled in generated code headers, lab reports &amp; IDE
+                  titles
+                </p>
               </div>
             </div>
 
-            <div className={styles.accountBody}>
-              <div className={styles.profileIdentity}>
-                <span className={styles.avatarLarge}>
-                  {displayName.charAt(0).toUpperCase()}
-                </span>
-                <div className={styles.identityDetails}>
-                  <h3>{displayName}</h3>
-                  <p>
-                    <Mail
-                      size={12}
-                      style={{ display: "inline", marginRight: 5 }}
-                    />
-                    {user.email}
-                  </p>
+            <form onSubmit={handleSaveProfile} className={styles.formBody}>
+              <div className={styles.fieldGrid}>
+                <div className={styles.fieldGroup}>
+                  <label className={styles.fieldLabel} htmlFor="settings-name">
+                    <User size={13} /> Full Name
+                  </label>
+                  <input
+                    id="settings-name"
+                    type="text"
+                    className={styles.fieldInput}
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="e.g. Rahul Sharma"
+                    disabled={profileLoading}
+                    required
+                  />
+                </div>
+
+                <div className={styles.fieldGroup}>
+                  <label className={styles.fieldLabel} htmlFor="settings-usn">
+                    <Hash size={13} /> USN / Roll Number
+                  </label>
+                  <input
+                    id="settings-usn"
+                    type="text"
+                    className={styles.fieldInput}
+                    value={usn}
+                    onChange={(e) => setUsn(e.target.value)}
+                    placeholder="e.g. 1MS21CS042"
+                    disabled={profileLoading}
+                  />
+                </div>
+
+                <div className={styles.fieldGroup}>
+                  <label className={styles.fieldLabel} htmlFor="settings-dept">
+                    <BookOpen size={13} /> Branch / Department
+                  </label>
+                  <input
+                    id="settings-dept"
+                    type="text"
+                    className={styles.fieldInput}
+                    value={department}
+                    onChange={(e) => setDepartment(e.target.value)}
+                    placeholder="e.g. Computer Science & Engineering"
+                    disabled={profileLoading}
+                  />
+                </div>
+
+                <div className={styles.fieldGroup}>
+                  <label className={styles.fieldLabel} htmlFor="settings-inst">
+                    <Building2 size={13} /> College / University
+                  </label>
+                  <input
+                    id="settings-inst"
+                    type="text"
+                    className={styles.fieldInput}
+                    value={institution}
+                    onChange={(e) => setInstitution(e.target.value)}
+                    placeholder="e.g. Engineering College"
+                    disabled={profileLoading}
+                  />
+                </div>
+
+                <div className={styles.fieldGroup}>
+                  <label className={styles.fieldLabel} htmlFor="settings-year">
+                    <GraduationCap size={13} /> Academic Year
+                  </label>
+                  <select
+                    id="settings-year"
+                    className={styles.fieldSelect}
+                    value={academicYear}
+                    onChange={(e) => setAcademicYear(e.target.value)}
+                    disabled={profileLoading}
+                  >
+                    <option value="">Select academic year</option>
+                    <option value="1st Year">1st Year</option>
+                    <option value="2nd Year">2nd Year</option>
+                    <option value="3rd Year">3rd Year</option>
+                    <option value="4th Year">4th Year</option>
+                    <option value="Graduate">Graduate</option>
+                  </select>
+                </div>
+
+                <div className={styles.fieldGroup}>
+                  <label className={styles.fieldLabel} htmlFor="settings-grad">
+                    <Calendar size={13} /> Graduation Year
+                  </label>
+                  <input
+                    id="settings-grad"
+                    type="text"
+                    className={styles.fieldInput}
+                    value={graduationYear}
+                    onChange={(e) => setGraduationYear(e.target.value)}
+                    placeholder="e.g. 2026"
+                    disabled={profileLoading}
+                  />
                 </div>
               </div>
 
-              <CreditStatus />
-
-              {user.is_admin && (
-                <div className={styles.preferenceRow}>
-                  <div className={styles.preferenceLabel}>
-                    <strong>Platform Owner Console</strong>
-                    <small>
-                      View registered students, usage &amp; live Razorpay
-                      revenue
-                    </small>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => router.push("/admin/dashboard")}
-                    className={dashStyles.primaryButton}
-                  >
-                    <ShieldCheck size={14} /> Owner Dashboard
-                  </button>
-                </div>
-              )}
-
-              <div className={styles.preferenceRow}>
-                <div className={styles.preferenceLabel}>
-                  <strong>Interface Theme</strong>
-                  <small>Synced across Dashboard, Workspace &amp; Reports</small>
-                </div>
+              {profileMessage && (
                 <div
-                  className={styles.themeSwitcher}
-                  role="group"
-                  aria-label="Theme selection"
-                >
-                  <button
-                    type="button"
-                    className={`${styles.themeOption} ${
-                      theme === "dark" ? styles.themeOptionActive : ""
-                    }`}
-                    onClick={() => setTheme("dark")}
-                  >
-                    <Moon size={13} /> Dark
-                  </button>
-                  <button
-                    type="button"
-                    className={`${styles.themeOption} ${
-                      theme === "light" ? styles.themeOptionActive : ""
-                    }`}
-                    onClick={() => setTheme("light")}
-                  >
-                    <Sun size={13} /> Light
-                  </button>
-                </div>
-              </div>
-
-              <div className={styles.accountActions}>
-                <button
-                  type="button"
-                  onClick={handleUploadNew}
-                  className={dashStyles.secondaryButton}
-                >
-                  <Upload size={14} /> Upload New Assignment
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSignOut}
-                  className={styles.dangerButton}
-                >
-                  <LogOut size={14} /> Sign Out
-                </button>
-              </div>
-            </div>
-          </section>
-        </aside>
-      </div>
-
-      {/* YourCollegeManualPrompt — Agent Prompt Template Panel */}
-      <section className={dashStyles.panel} id="your-college-manual-prompt">
-        <div className={dashStyles.panelHeader}>
-          <div>
-            <h2>
-              <Sparkles
-                size={15}
-                style={{
-                  display: "inline",
-                  marginRight: 7,
-                  verticalAlign: "-2px",
-                  color: "#60a5fa",
-                }}
-              />
-              YourCollegeManualPrompt — Agent Manual Prompt Template
-            </h2>
-            <p>
-              Copy this prompt template to structure any raw college lab manual
-              or customize how the LabMate Agent follows your manual&apos;s
-              conventions.
-            </p>
-          </div>
-          <div className={styles.promptToolbarActions}>
-            <button
-              type="button"
-              className={dashStyles.secondaryButton}
-              onClick={() => handlePresetChange(promptPreset)}
-              title="Reset to selected template preset with your current profile details"
-            >
-              <RotateCcw size={14} /> Reset Template
-            </button>
-            <button
-              type="button"
-              className={dashStyles.secondaryButton}
-              onClick={handleCopyPrompt}
-            >
-              {copiedPrompt ? (
-                <>
-                  <Check size={14} /> Copied to Clipboard!
-                </>
-              ) : (
-                <>
-                  <Copy size={14} /> Copy Agent Prompt
-                </>
-              )}
-            </button>
-            <button
-              type="button"
-              className={dashStyles.primaryButton}
-              disabled={savingProfile || profileLoading}
-              onClick={() => saveProfileAndPrompt(collegeManualPrompt)}
-            >
-              <UserCheck size={14} />
-              {savingProfile ? "Saving..." : "Save Agent Prompt"}
-            </button>
-          </div>
-        </div>
-
-        <div className={styles.promptBody}>
-          <div className={styles.promptTopRow}>
-            <div
-              className={styles.presetGroup}
-              role="tablist"
-              aria-label="Prompt template presets"
-            >
-              {(
-                [
-                  { id: "standard", label: "Standard College Manual" },
-                  {
-                    id: "strict_record",
-                    label: "Strict Record (Aim / Task / Output)",
-                  },
-                  { id: "webdev", label: "Web Dev / Full-Stack" },
-                  { id: "sql_colab", label: "SQL & Data Science (Colab)" },
-                ] as { id: PromptPresetId; label: string }[]
-              ).map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={promptPreset === item.id}
-                  className={`${styles.presetBtn} ${
-                    promptPreset === item.id ? styles.presetBtnActive : ""
+                  role="status"
+                  className={`${styles.feedbackBanner} ${
+                    profileMessage.type === "success"
+                      ? styles.feedbackSuccess
+                      : styles.feedbackError
                   }`}
-                  onClick={() => handlePresetChange(item.id)}
                 >
-                  {item.label}
+                  {profileMessage.text}
+                </div>
+              )}
+
+              <div className={styles.formFooter}>
+                <p className={styles.fieldHint}>
+                  Synced across Python, Java, C/C++, SQL &amp; Web lab runs.
+                </p>
+                <button
+                  type="submit"
+                  disabled={savingProfile || profileLoading}
+                  className={dashStyles.primaryButton}
+                >
+                  <UserCheck size={14} />
+                  {savingProfile ? "Saving..." : "Save Profile"}
                 </button>
-              ))}
-            </div>
-          </div>
+              </div>
+            </form>
+          </section>
 
-          <div className={styles.promptStepsGrid}>
-            <div className={styles.promptStepCard}>
-              <strong>1. Choose or Customize Template</strong>
-              <span>
-                Select a preset above or edit the prompt below with your
-                college&apos;s specific lab manual rules.
-              </span>
-            </div>
-            <div className={styles.promptStepCard}>
-              <strong>2. Format Raw Manuals Instantly</strong>
-              <span>
-                Click &ldquo;Copy Agent Prompt&rdquo; and paste it with your raw
-                syllabus into any AI to generate a clean `.docx` manual.
-              </span>
-            </div>
-            <div className={styles.promptStepCard}>
-              <strong>3. Saved for LabMate Agent Runs</strong>
-              <span>
-                Click &ldquo;Save Agent Prompt&rdquo; so LabMate&apos;s execution
-                agent automatically applies your manual preferences.
-              </span>
-            </div>
-          </div>
+          {/* Right Column: Account Overview & Theme Preferences */}
+          <aside className={styles.rightColumn}>
+            <section className={`${dashStyles.panel} ${styles.sectionCard}`}>
+              <div className={`${dashStyles.panelHeader} ${styles.sectionHeader}`}>
+                <div>
+                  <h2>Account &amp; Appearance</h2>
+                  <p>Session, credits &amp; theme preferences</p>
+                </div>
+              </div>
 
-          <div className={styles.promptTextareaWrap}>
-            <div className={styles.promptTextareaHeader}>
-              <span>YourCollegeManualPrompt.txt — Agent Prompt Template</span>
-              <span>
-                Auto-linked to {displayName} ({usn || "No USN set"})
-              </span>
-            </div>
-            <textarea
-              aria-label="College Manual Agent Prompt Template"
-              className={styles.promptTextarea}
-              value={collegeManualPrompt}
-              onChange={(e) => setCollegeManualPrompt(e.target.value)}
-              spellCheck={false}
-            />
-          </div>
-        </div>
-      </section>
-
-      {/* Assignment History & Task Breakdown Panel */}
-      <section className={dashStyles.panel}>
-        <div className={dashStyles.panelHeader}>
-          <div>
-            <h2>Your Assignment History</h2>
-            <p>
-              {filteredAssignments.length === assignments.length
-                ? `${assignments.length} total lab assignment${assignments.length === 1 ? "" : "s"} tracked`
-                : `Showing ${filteredAssignments.length} of ${assignments.length} assignments`}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={handleUploadNew}
-            className={dashStyles.primaryButton}
-          >
-            <Upload size={15} /> Upload New Assignment
-          </button>
-        </div>
-
-        {error && (
-          <div className={dashStyles.dashboardError} role="alert">
-            {error}
-          </div>
-        )}
-
-        {loading ? (
-          <LoadingState message="Loading your assignments..." />
-        ) : filteredAssignments.length === 0 ? (
-          <EmptyState
-            icon={FileText}
-            title={search ? "No Matching Assignments" : "No Assignments Yet"}
-            description={
-              search
-                ? "Try a different search query."
-                : "Upload your first lab assignment to get started with AI-powered processing."
-            }
-            action={{
-              label: search ? "Clear Search" : "Upload Your First Assignment",
-              onClick: () => (search ? setSearch("") : handleUploadNew()),
-            }}
-          />
-        ) : (
-          <div className={styles.historyScroll}>
-            {filteredAssignments.map((assignment) => (
-              <article key={assignment.id} className={styles.historyRow}>
-                <div className={styles.historyInfo}>
-                  <div className={styles.historyTitleRow}>
-                    <h3>
-                      {assignment.original_filename || assignment.filename}
-                    </h3>
-                    <span
-                      className={`${styles.statusBadge} ${getStatusBadgeClass(assignment)}`}
-                    >
-                      {getStatusText(assignment)}
-                    </span>
-                  </div>
-
-                  <div className={styles.historyMetaRow}>
-                    <span className={styles.metaItem}>
-                      <Calendar size={13} />
-                      <span>{formatDate(assignment.uploaded_at)}</span>
-                    </span>
-                    <span className={styles.metaItem}>
-                      <FileText size={13} />
-                      <span>{getLanguageDisplay(assignment.language)}</span>
-                    </span>
-                  </div>
-
-                  <div className={styles.taskCounters}>
-                    <span className={styles.counterDone}>
-                      <CheckCircle size={13} />
-                      {assignment.completed_tasks} completed
-                    </span>
-                    <span className={styles.counterFailed}>
-                      <XCircle size={13} />
-                      {assignment.failed_tasks} failed
-                    </span>
-                    <span className={styles.counterActive}>
-                      <Clock size={13} />
-                      {assignment.in_progress_tasks} in progress
-                    </span>
+              <div className={styles.accountBody}>
+                <div className={styles.profileIdentity}>
+                  <span className={styles.avatarLarge}>
+                    {displayName.charAt(0).toUpperCase()}
+                  </span>
+                  <div className={styles.identityDetails}>
+                    <div className={styles.identityNameRow}>
+                      <h3>{displayName}</h3>
+                      <span className={styles.rolePill}>
+                        {user.is_admin ? "Owner" : "Student"}
+                      </span>
+                    </div>
+                    <p className={styles.identityEmail}>
+                      <Mail size={12} />
+                      <span>{user.email}</span>
+                    </p>
                   </div>
                 </div>
 
-                <div className={styles.historyActions}>
-                  {(assignment.report_download_url || assignment.report_id) && (
+                <div className={styles.creditRow}>
+                  <CreditStatus />
+                </div>
+
+                {user.is_admin && (
+                  <div className={styles.preferenceRow}>
+                    <div className={styles.preferenceLabel}>
+                      <strong>Owner Console</strong>
+                      <small>Students, usage &amp; Razorpay revenue</small>
+                    </div>
                     <button
                       type="button"
+                      onClick={() => router.push("/admin/dashboard")}
                       className={dashStyles.secondaryButton}
-                      onClick={() => handleDownloadReport(assignment)}
                     >
-                      <Download size={14} />
-                      Download Report
+                      <ShieldCheck size={14} /> Open Console
                     </button>
-                  )}
+                  </div>
+                )}
+
+                <div className={styles.preferenceRow}>
+                  <div className={styles.preferenceLabel}>
+                    <strong>Appearance</strong>
+                    <small>Synced across Workspace &amp; Reports</small>
+                  </div>
+                  <div
+                    className={styles.themeSwitcher}
+                    role="group"
+                    aria-label="Theme selection"
+                  >
+                    <button
+                      type="button"
+                      className={`${styles.themeOption} ${
+                        theme === "dark" ? styles.themeOptionActive : ""
+                      }`}
+                      onClick={() => setTheme("dark")}
+                    >
+                      <Moon size={13} /> Dark
+                    </button>
+                    <button
+                      type="button"
+                      className={`${styles.themeOption} ${
+                        theme === "light" ? styles.themeOptionActive : ""
+                      }`}
+                      onClick={() => setTheme("light")}
+                    >
+                      <Sun size={13} /> Light
+                    </button>
+                  </div>
+                </div>
+
+                <div className={styles.accountActions}>
                   <button
                     type="button"
-                    className={dashStyles.primaryButton}
-                    onClick={() =>
-                      router.push(`/code-execution?assignment=${assignment.id}`)
-                    }
+                    onClick={handleUploadNew}
+                    className={dashStyles.secondaryButton}
                   >
-                    View Details <ArrowUpRight size={14} />
+                    <Upload size={14} /> Upload Assignment
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSignOut}
+                    className={styles.dangerButton}
+                  >
+                    <LogOut size={14} /> Sign Out
                   </button>
                 </div>
-              </article>
-            ))}
+              </div>
+            </section>
+          </aside>
+        </div>
+
+        {/* College Manual Prompt Template Panel */}
+        <section className={`${dashStyles.panel} ${styles.sectionCard}`} id="your-college-manual-prompt">
+          <div className={`${dashStyles.panelHeader} ${styles.sectionHeader}`}>
+            <div>
+              <h2>Manual Prompt Template</h2>
+              <p>
+                Customize how LabMate structures and formats your college
+                manuals.
+              </p>
+            </div>
+            <div className={styles.promptToolbarActions}>
+              <button
+                type="button"
+                className={dashStyles.secondaryButton}
+                onClick={() => handlePresetChange(promptPreset)}
+                title="Reset to selected preset with your current profile details"
+              >
+                <RotateCcw size={13} /> Reset
+              </button>
+              <button
+                type="button"
+                className={dashStyles.secondaryButton}
+                onClick={handleCopyPrompt}
+              >
+                {copiedPrompt ? (
+                  <>
+                    <Check size={13} /> Copied
+                  </>
+                ) : (
+                  <>
+                    <Copy size={13} /> Copy Prompt
+                  </>
+                )}
+              </button>
+              <button
+                type="button"
+                className={dashStyles.primaryButton}
+                disabled={savingProfile || profileLoading}
+                onClick={() => saveProfileAndPrompt(collegeManualPrompt)}
+              >
+                <UserCheck size={13} />
+                {savingProfile ? "Saving..." : "Save Template"}
+              </button>
+            </div>
           </div>
-        )}
-      </section>
+
+          <div className={styles.promptBody}>
+            <div className={styles.promptTopRow}>
+              <div
+                className={styles.presetGroup}
+                role="tablist"
+                aria-label="Prompt template presets"
+              >
+                {(
+                  [
+                    { id: "standard", label: "Standard Manual" },
+                    { id: "strict_record", label: "Aim / Task / Output" },
+                    { id: "webdev", label: "Web & Full-Stack" },
+                    { id: "sql_colab", label: "SQL & Colab" },
+                  ] as { id: PromptPresetId; label: string }[]
+                ).map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={promptPreset === item.id}
+                    className={`${styles.presetBtn} ${
+                      promptPreset === item.id ? styles.presetBtnActive : ""
+                    }`}
+                    onClick={() => handlePresetChange(item.id)}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+              <span className={styles.promptProfileBadge}>
+                Linked: {displayName} ({usn || "No USN"})
+              </span>
+            </div>
+
+            <div className={styles.promptTextareaWrap}>
+              <div className={styles.promptTextareaHeader}>
+                <span>YourCollegeManualPrompt.txt</span>
+                <span>Edit inline or copy to format raw PDFs</span>
+              </div>
+              <textarea
+                aria-label="College Manual Agent Prompt Template"
+                className={styles.promptTextarea}
+                value={collegeManualPrompt}
+                onChange={(e) => setCollegeManualPrompt(e.target.value)}
+                spellCheck={false}
+              />
+            </div>
+          </div>
+        </section>
+
+        {/* Assignment History Panel */}
+        <section className={`${dashStyles.panel} ${styles.sectionCard}`}>
+          <div className={`${dashStyles.panelHeader} ${styles.sectionHeader}`}>
+            <div>
+              <h2>Assignment History</h2>
+              <p>
+                {filteredAssignments.length === assignments.length
+                  ? `${assignments.length} lab assignment${assignments.length === 1 ? "" : "s"} tracked`
+                  : `Showing ${filteredAssignments.length} of ${assignments.length} assignments`}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleUploadNew}
+              className={dashStyles.primaryButton}
+            >
+              <Upload size={14} /> Upload Assignment
+            </button>
+          </div>
+
+          {error && (
+            <div className={dashStyles.dashboardError} role="alert">
+              {error}
+            </div>
+          )}
+
+          {loading ? (
+            <LoadingState message="Loading your assignments..." />
+          ) : filteredAssignments.length === 0 ? (
+            <EmptyState
+              icon={FileText}
+              title={search ? "No Matching Assignments" : "No Assignments Yet"}
+              description={
+                search
+                  ? "Try a different search query."
+                  : "Upload your first lab assignment to get started."
+              }
+              action={{
+                label: search ? "Clear Search" : "Upload Assignment",
+                onClick: () => (search ? setSearch("") : handleUploadNew()),
+              }}
+            />
+          ) : (
+            <div className={styles.historyScroll}>
+              {filteredAssignments.map((assignment) => (
+                <article key={assignment.id} className={styles.historyRow}>
+                  <div className={styles.historyInfo}>
+                    <div className={styles.historyTitleRow}>
+                      <h3>
+                        {assignment.original_filename || assignment.filename}
+                      </h3>
+                      <span
+                        className={`${styles.statusBadge} ${getStatusBadgeClass(assignment)}`}
+                      >
+                        {getStatusText(assignment)}
+                      </span>
+                    </div>
+
+                    <div className={styles.historyMetaRow}>
+                      <span className={styles.metaItem}>
+                        <Calendar size={12} />
+                        <span>{formatDate(assignment.uploaded_at)}</span>
+                      </span>
+                      <span className={styles.metaItem}>
+                        <FileText size={12} />
+                        <span>{getLanguageDisplay(assignment.language)}</span>
+                      </span>
+                      <span className={styles.counterDone}>
+                        <CheckCircle size={12} />
+                        {assignment.completed_tasks} done
+                      </span>
+                      {assignment.failed_tasks > 0 && (
+                        <span className={styles.counterFailed}>
+                          <XCircle size={12} />
+                          {assignment.failed_tasks} failed
+                        </span>
+                      )}
+                      {assignment.in_progress_tasks > 0 && (
+                        <span className={styles.counterActive}>
+                          <Clock size={12} />
+                          {assignment.in_progress_tasks} running
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className={styles.historyActions}>
+                    {(assignment.report_download_url || assignment.report_id) && (
+                      <button
+                        type="button"
+                        className={dashStyles.secondaryButton}
+                        onClick={() => handleDownloadReport(assignment)}
+                      >
+                        <Download size={13} />
+                        Download
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className={dashStyles.primaryButton}
+                      onClick={() =>
+                        router.push(`/code-execution?assignment=${assignment.id}`)
+                      }
+                    >
+                      Open Studio <ArrowUpRight size={13} />
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
     </DashboardShell>
   );
 }
