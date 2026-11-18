@@ -24,6 +24,10 @@ const LoginModal = dynamic(() => import("@/components/auth/LoginModal"), {
   ssr: false,
 });
 
+const DarkVeil = dynamic(() => import("@/components/visual/DarkVeil"), {
+  ssr: false,
+});
+
 export default function HomePage() {
   const { user, signOut } = useAuth();
   const isAuthenticated = Boolean(user);
@@ -223,6 +227,10 @@ export default function HomePage() {
           ======================================================== */}
       <section className={styles.ctaSection} aria-labelledby="cta-heading">
         <div className={styles.ctaCard}>
+          <div className={styles.ctaVeilWrap} aria-hidden="true">
+            <DarkVeil hueShift={125} speed={0.4} noiseIntensity={0.02} scanlineIntensity={0.08} scanlineFrequency={0.003} warpAmount={0.06} />
+            <div className={styles.ctaVeilOverlay} />
+          </div>
           <div className={styles.ctaContent}>
             <h2 id="cta-heading" className={styles.ctaHeading}>Ready to finish your lab record?</h2>
             <p className={styles.ctaDescription}>

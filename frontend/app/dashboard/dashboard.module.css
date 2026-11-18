@@ -1786,6 +1786,7 @@
     position: fixed;
     width: 250px;
     left: -270px;
+    visibility: hidden;
     top: 0;
     bottom: 0;
     height: 100vh;
@@ -1793,11 +1794,13 @@
     overflow-y: auto;
     overscroll-behavior: contain;
     z-index: 40;
-    transition: left 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: left 0.22s cubic-bezier(0.16, 1, 0.3, 1), visibility 0s 0.22s;
     padding-bottom: max(16px, env(safe-area-inset-bottom, 16px));
   }
   .sidebarOpen {
     left: 0;
+    visibility: visible;
+    transition-delay: 0s;
   }
   .sidebarToggleBtn {
     display: none;
@@ -1828,7 +1831,16 @@
     color: var(--text-main);
   }
   .mobileClose {
-    color: #a1a1aa;
+    width: 44px;
+    height: 44px;
+    color: var(--sidebar-nav-color);
+  }
+  .sidebar .navItem,
+  .sidebar .signOut {
+    min-height: 44px;
+  }
+  .sidebar .navItem:hover {
+    color: var(--sidebar-text);
   }
   .topbar {
     height: 60px;
@@ -2076,22 +2088,51 @@
     font-size: 12.5px;
   }
   .statsGrid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 8px;
+    align-items: start;
   }
   .statCard {
-    padding: 10px 14px;
-    min-height: 68px;
-    border-radius: 12px;
-    gap: 12px;
+    min-height: 0;
+    padding: 4px 0;
+    flex-direction: column;
+    gap: 6px;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    text-align: center;
   }
-  .statIcon {
-    width: 36px;
-    height: 36px;
-    border-radius: 9px;
+  .statCard:hover { transform: none; }
+  .statCard .statIcon { display: none; }
+  .statCard div { display: contents; }
+  .statCard div > span {
+    order: 2;
+    font-size: 11px;
+    line-height: 1.25;
+    white-space: normal;
   }
   .statCard strong {
+    display: grid;
+    place-items: center;
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: #dbeafe;
+    color: #16498a;
     font-size: 20px;
+  }
+  .statCard:nth-child(2) strong { background: #d4f5e3; color: #125c37; }
+  .statCard:nth-child(3) strong { background: #efe2ff; color: #623390; }
+  .statCard small {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
   .panelHeader {
     padding: 10px 14px;

@@ -255,19 +255,31 @@ export default function DashboardShell({
   const { user, signOut } = useAuth();
   const { theme, toggleTheme } = useDashboardTheme();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] = useState(false);
+  const sidebarCollapsed = !isMobile && desktopSidebarCollapsed;
 
   useEffect(() => {
+    // Keep this breakpoint aligned with the drawer layout in dashboard.module.css.
+    const mobileViewport = window.matchMedia("(max-width: 850px)");
+    const updateViewport = () => {
+      setIsMobile(mobileViewport.matches);
+      if (!mobileViewport.matches) setMobileNavOpen(false);
+    };
+    updateViewport();
+    mobileViewport.addEventListener("change", updateViewport);
+
     try {
       const saved = localStorage.getItem("labmate_sidebar_collapsed");
       if (saved === "true") {
-        setSidebarCollapsed(true);
+        setDesktopSidebarCollapsed(true);
       }
     } catch {
       // ignore storage errors
     }
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (mobileViewport.matches) return;
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b") {
         const target = e.target as HTMLElement;
         if (
@@ -284,11 +296,14 @@ export default function DashboardShell({
     };
 
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      mobileViewport.removeEventListener("change", updateViewport);
+    };
   }, []);
 
   const toggleSidebarCollapsed = () => {
-    setSidebarCollapsed((prev) => {
+    setDesktopSidebarCollapsed((prev) => {
       const next = !prev;
       try {
         localStorage.setItem("labmate_sidebar_collapsed", String(next));
@@ -346,6 +361,7 @@ export default function DashboardShell({
 
       {/* Unified Fixed Sidebar */}
       <aside
+        id="dashboard-sidebar"
         className={`${styles.sidebar} ${sidebarCollapsed ? styles.sidebarCollapsed : ""} ${mobileNavOpen ? styles.sidebarOpen : ""}`}
       >
         <div className={styles.sidebarTop}>
@@ -409,6 +425,7 @@ export default function DashboardShell({
                 className={`${styles.navItem} ${active ? styles.navItemActive : ""}`}
                 onClick={() => go(href)}
                 aria-current={active ? "page" : undefined}
+                aria-label={sidebarCollapsed ? label : undefined}
                 data-tooltip={sidebarCollapsed ? label : undefined}
                 title={!sidebarCollapsed ? undefined : label}
               >
@@ -436,6 +453,7 @@ export default function DashboardShell({
             type="button"
             className={styles.signOut}
             onClick={handleLogout}
+            aria-label={sidebarCollapsed ? "Sign out" : undefined}
             data-tooltip={sidebarCollapsed ? "Sign out" : undefined}
             title={sidebarCollapsed ? "Sign out" : undefined}
           >
@@ -493,6 +511,8 @@ export default function DashboardShell({
               className={styles.mobileMenu}
               onClick={() => setMobileNavOpen(true)}
               aria-label="Open navigation"
+              aria-controls="dashboard-sidebar"
+              aria-expanded={mobileNavOpen}
             >
               <Menu size={20} />
             </button>
