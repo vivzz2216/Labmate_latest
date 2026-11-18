@@ -15,7 +15,10 @@ def report_number(filename, question):
 
 
 def label_sql_comments(code, number):
-    if number is None:return code
+    if number is None:
+        return re.sub(r'^([ \t]*(?:--|\*)[ \t]*Experiment)[ \t]+None\b[ \t]*[:–—-]?[ \t]*',
+                      lambda match: match.group(1) + (': ' if match.end() < len(code) and code[match.end()] not in '\r\n' else ''),
+                      code, flags=re.M|re.I)
     return re.sub(r'^(\s*(?:--|\*)[^\n]*\bExperiment\s*[:–—-]?\s*)\d+\b',
                   lambda m:m.group(1)+str(number), code, flags=re.M|re.I)
 

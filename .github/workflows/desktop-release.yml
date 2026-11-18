@@ -1,0 +1,58 @@
+name: LabMate Windows Desktop Release
+
+on:
+  push:
+    tags:
+      - "desktop-v*"
+  workflow_dispatch:
+    inputs:
+      default_railway_url:
+        description: "Production Railway HTTPS URL (optional override)"
+        required: false
+        default: ""
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Install desktop dependencies
+        working-directory: desktop
+        run: npm ci || npm install
+
+      - name: Run desktop security & unit tests
+        working-directory: desktop
+        run: npm test
+
+      - name: Build Windows NSIS (.exe) & MSI (.msi) installers
+        working-directory: desktop
+        env:
+          LABMATE_DESKTOP_URL: ${{ inputs.default_railway_url }}
+          # Option A: Standard .pfx Authenticode certificate
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          # Option B: Azure Trusted Signing (eliminates SmartScreen immediately)
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+        run: npm run dist:win
+
+      - name: Upload installers and SHA256SUMS.txt
+        uses: actions/upload-artifact@v4
+        with:
+          name: labmate-windows-installers
+          path: |
+            desktop/dist/*.exe
+            desktop/dist/*.msi
+            desktop/dist/SHA256SUMS.txt

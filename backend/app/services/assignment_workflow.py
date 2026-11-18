@@ -39,7 +39,7 @@ from .evidence_planner import plan_experiment, select_evidence, verification_sum
 from .manual_sections import numbered_experiments, numbered_questions, ManualStructureError
 from .manual_limits import validate_manual, ManualLimitError
 from .worker_health import WorkerUnavailableError, worker_health
-from .student_identity import align_student_stdin, student_identity_error
+from .student_identity import align_student_stdin, identity_question_context, identity_repair_question, profile_name_required, student_identity_error
 
 logger = logging.getLogger(__name__)
 
@@ -953,6 +953,7 @@ async def _process_assignment(workflow_id: int):
             async def retry_status(attempt, delay, status):
                 record(workflow, db, workflow.stage, workflow.progress, f"{generation_service.provider_name} is busy. Retry {attempt} in {delay:.1f}s; completed questions are saved.")
             for index, question in enumerate(questions):
+                identity_question = identity_question_context(question['text'], source)
                 if index < len(workflow.results or []):
                     previous = workflow.results[index]
                     if continue_pending and previous.get('id')==question['id'] and previous.get('status')=='failed':
@@ -1120,6 +1121,11 @@ async def _process_assignment(workflow_id: int):
                             "Implement only the current exercise. Do not add passing-test messages, verification badges, accreditation claims, "
                             "or outputs from other exercises. Never claim code was executed or verified; the runner determines that."
                         )
+                        if (identity_question != question['text'] and language in {'python', 'c', 'cpp', 'java'}
+                                and profile_name_required(identity_question, student_name)):
+                            code_instruction += ("\nThe manual requires the current student's full profile name in the report. "
+                                                 "Use that name for this student's sample input and output; read spaces in full names. "
+                                                 "Other records may use different names, and names explicitly supplied by the exercise remain unchanged.")
                         if language in {"html", "react"}:
                             code_instruction += (
                                 "\n8. Return browser_tests as declarative browser steps, never JavaScript or Python test code. "
@@ -1146,7 +1152,9 @@ async def _process_assignment(workflow_id: int):
                             code_instruction += sql_instructions(question['text'])
                             from .sql_report import report_number
                             display_number = report_number(upload.original_filename if len(questions)==1 else '', question['text'])
-                            code_instruction += f' Label SQL comments Experiment {display_number}; the upload filename supplies the submission label. Do not copy conflicting class or department headers. '
+                            code_instruction += (f' Label SQL comments Experiment {display_number}; ' if display_number is not None
+                                                 else ' Use the question title in SQL comments without inventing an experiment number; ')
+                            code_instruction += 'Do not copy conflicting class or department headers. '
                         elif language=='colab':
                             code_instruction+='\nNOTEBOOK RUNTIME (CPU ONLY): Return Python source using numpy, pandas, sklearn, scipy, matplotlib, and when requested for deep learning, torch (PyTorch), tensorflow, and keras. Execution runs on CPU only: never call .cuda(), .to("cuda"), or tf.device("/GPU:0"). Keep neural networks compact (<=64 hidden units/filters and small batches; for nontrivial datasets use 5..15 epochs, but tiny logic gates may use up to 2000 deterministic updates until every truth-table row is correct) so CPU training finishes quickly. Read only supplied workspace datasets; if no dataset was supplied, create self-contained inline sample/synthetic data or use built-in offline toy datasets (e.g. load_iris, load_digits, make_classification, never substitute synthetic data for MNIST, Fashion-MNIST or IMDB; require supplied data when a mandatory dataset is not in the approved runtime cache). Never invent real training data or hardware capabilities. No os/subprocess imports, network, pip installs or Google Drive mounts. Do not download remote datasets or models (e.g. do not call fetch_20newsgroups, nltk.download, torch.hub.load, or torchvision.datasets). Use relative dataset paths or /content aliases. Prefer numeric_only=True explicitly when appropriate for mixed DataFrames. For required MNIST use keras.datasets.mnist.load_data(); approved cached genuine MNIST and ImageNet weights are provided by the trusted environment. For pretrained models use keras.applications.MobileNetV2(input_shape=(224,224,3), include_top=False, weights="imagenet", alpha=1.0) or ResNet50(include_top=False, weights="imagenet"); these exact official weight variants are cached. Train on a bounded genuine subset of MNIST (e.g. 5000 training and 1000 held-out examples) within the CPU deadline, reporting actual accuracy and subset sizes. Never replace a named dataset or pretrained model. For AND/OR/XOR print Predictions and Targets and assert exact truth-table equality. Implement every named optimizer (including SGD and RMSProp) when requested. Print training/evaluation metrics and sample predictions, and capture plots with plt.show().'
                             code_instruction+=' Use pandas Copy on Write compatible assignments: df[col] = df[col].fillna(value) or df.loc[mask, col] = value. Never use df[col].fillna(..., inplace=True) or other chained inplace updates. Do not suppress data correctness warnings. Check requested row counts and missing-value invariants after cleaning.'
@@ -1192,7 +1200,7 @@ async def _process_assignment(workflow_id: int):
                             code = neutralize_magics(code)
                         stdin_data = str(solution.get("stdin", ""))[:10000] or None
                         if actual_language in {'python', 'c', 'cpp', 'java'}:
-                            stdin_data = align_student_stdin(question['text'], code, stdin_data, student_name)
+                            stdin_data = align_student_stdin(identity_question, code, stdin_data, student_name)
                         browser_tests = solution.get("browser_tests", []) if actual_language in {"html", "react"} else []
                     except GenerationUnavailableError:
                         # Preserve checkpoints and wait for the real model to return.
@@ -1296,7 +1304,7 @@ async def _process_assignment(workflow_id: int):
                         verification = getattr(execution, "verification", None)
                         execution_stages = getattr(execution, "stages", None) or {}
                         if success and actual_language in {'python', 'c', 'cpp', 'java'}:
-                            identity_error = student_identity_error(question['text'], code, output, student_name)
+                            identity_error = student_identity_error(identity_question, code, output, student_name)
                             if identity_error:
                                 success, error = False, identity_error
                     except WorkerUnavailableError:
@@ -1312,7 +1320,9 @@ async def _process_assignment(workflow_id: int):
                             record(workflow, db, "execute", progress,
                                    f"Repairing question {index + 1} after execution failure (attempt {repair_attempt + 1}).")
                             try:
-                                repaired = await repair_generated_code(question["text"], actual_language, code, error or output)
+                                repair_question = (identity_repair_question(identity_question, student_name)
+                                                   if actual_language in {'python', 'c', 'cpp', 'java'} else question["text"])
+                                repaired = await repair_generated_code(repair_question, actual_language, code, error or output)
                                 code = repaired
                                 if actual_language == 'colab' or plan_experiment(question['text'], actual_language, code).get('category') == 'notebook':
                                     from .notebook_magics import neutralize_magics
@@ -1335,7 +1345,7 @@ async def _process_assignment(workflow_id: int):
                                 verification = getattr(execution, "verification", None)
                                 execution_stages = getattr(execution, "stages", None) or {}
                                 if success and actual_language in {'python', 'c', 'cpp', 'java'}:
-                                    identity_error = student_identity_error(question['text'], code, output, student_name)
+                                    identity_error = student_identity_error(identity_question, code, output, student_name)
                                     if identity_error:
                                         success, error = False, identity_error
                                 if success:
@@ -1361,7 +1371,9 @@ async def _process_assignment(workflow_id: int):
                                        "Expected output:\n" + "\n".join(evidence_plan["expected_output"]) + "\nActual output:\n" + str(output))
                             problem += expected_output_gap(evidence_plan["expected_output"], str(output), actual_language)
                             try:
-                                code = await repair_generated_code(question["text"], actual_language, code, problem)
+                                repair_question = (identity_repair_question(identity_question, student_name)
+                                                   if actual_language in {'python', 'c', 'cpp', 'java'} else question["text"])
+                                code = await repair_generated_code(repair_question, actual_language, code, problem)
                                 execution = await execute_solution(
                                     code, actual_language, question["text"], group, username, stdin_data, filename=src_filename,
                                     browser_tests=browser_tests, interaction_is_required=requires_interaction, project_config=notebook_config)
@@ -1369,7 +1381,7 @@ async def _process_assignment(workflow_id: int):
                                 verification = getattr(execution, "verification", None)
                                 execution_stages = getattr(execution, "stages", None) or {}
                                 if success and actual_language in {'python', 'c', 'cpp', 'java'}:
-                                    identity_error = student_identity_error(question['text'], code, output, student_name)
+                                    identity_error = student_identity_error(identity_question, code, output, student_name)
                                     if identity_error:
                                         success, error = False, identity_error
                             except (GenerationUnavailableError, WorkerUnavailableError):
@@ -1452,8 +1464,8 @@ async def _process_assignment(workflow_id: int):
                         source_policy='complete'
                     source_language='java_gui' if category in {'java_awt','java_swing'} else 'flask' if (project_config or {}).get('project_type')=='flask' else actual_language
                     source_theme = theme
-                    if actual_language in {'c','cpp','java'}:
-                        allowed = {'vscode', 'notepad'} if actual_language == 'java' else {'vscode', 'codeblocks'}
+                    if actual_language in {'python','c','cpp','java'}:
+                        allowed = {'vscode', 'notepad'} if actual_language == 'java' else {'vscode'} if actual_language == 'python' else {'vscode', 'codeblocks'}
                         if question.get('source_ide') in allowed:
                             source_theme = question['source_ide']
                             source_policy = 'complete'

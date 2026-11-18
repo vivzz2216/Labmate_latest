@@ -513,7 +513,6 @@
                 class="status-group"><span>Spaces: {{ indent_size }}</span><span>UTF-8</span><span>LF</span><span>{{
                     language_label }}</span>{{ icon('bell') }}</span></div>
     </div>
-    <div class="disclosure">{% if view_mode == 'editor' %}VS Code-style source preview{% if source_ranges|length > 1 %}; labelled excerpts retain original line numbers{% endif %}. Execution evidence is captured separately.{% else %}VS Code integrated terminal execution capture ({{ basename }}).{% endif %}</div>
 </body>
 
 </html>

@@ -12,6 +12,7 @@ from app.services.source_evidence import capture_source_evidence
 @pytest.mark.asyncio
 @pytest.mark.parametrize('language,theme,filename,code,selector,label',[
     ('python','idle','inheritance.py','\nclass Employee:\n    pass\n\nprint("LAST_LINE")\n','.idle-text','Python'),
+    ('python','vscode','inheritance.py','class Employee:\n    pass\n\nprint("LAST_LINE")\n','.line-code','Visual Studio Code'),
     ('java','notepad','Main.java','class Main {\n  // LAST_LINE\n}\n','.notepad-body','Main.java - Notepad'),
     ('java_gui','notepad','Window.java','class Window {\n  // LAST_LINE\n}\n','.notepad-body','Window.java - Notepad'),
     ('c','codeblocks','solution.c','#include <stdio.h>\nint main(void) {\n  puts("LAST_LINE");\n}\n','.cb-code-content','solution.c - Code::Blocks'),
@@ -25,6 +26,9 @@ async def test_assignment_source_uses_language_ui(tmp_path,monkeypatch,language,
     original=screenshot_service._take_screenshot
     async def inspect(html,path,**kwargs):
         assert label in html
+        if theme == 'vscode':
+            assert filename in html
+            assert 'VS Code-style source preview' not in html
         async with acquire_capture_context(java_script_enabled=False) as context:
             page=await context.new_page()
             await page.set_content(html)
@@ -42,8 +46,8 @@ async def test_assignment_source_uses_language_ui(tmp_path,monkeypatch,language,
 @pytest.mark.parametrize('language,theme,filename,selector,label',[
     ('python','idle','sum.py','.shell-stdout','Python IDLE Shell'),
     ('java','notepad','Main.java','.cmd-body','Command Prompt'),
-    ('c','codeblocks','solution.c','.cb-console-body','Captured program output'),
-    ('cpp','codeblocks','solution.cpp','.cb-console-body','Captured program output'),
+    ('c','codeblocks','solution.c','.cb-console-body','Command Prompt'),
+    ('cpp','codeblocks','solution.cpp','.cb-console-body','Command Prompt'),
 ])
 async def test_console_output_keeps_only_shell_and_exact_transcript(tmp_path,monkeypatch,language,theme,filename,selector,label):
     monkeypatch.setattr(settings,'SCREENSHOT_DIR',str(tmp_path))

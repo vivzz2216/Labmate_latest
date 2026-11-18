@@ -1,0 +1,19 @@
+{
+  "name": "labmate-desktop",
+  "version": "1.0.0",
+  "description": "LabMate Windows Desktop Client — Autonomous AI Lab Report Generator",
+  "main": "src/main.js",
+  "author": "LabMate",
+  "license": "PROPRIETARY",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test tests/desktop.test.mjs",
+    "pack:dir": "electron-builder --win --dir --config electron-builder.yml",
+    "dist:win": "electron-builder --win nsis msi --config electron-builder.yml && node scripts/build-checksums.mjs",
+    "checksums": "node scripts/build-checksums.mjs"
+  },
+  "devDependencies": {
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8"
+  }
+}

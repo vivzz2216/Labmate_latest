@@ -225,7 +225,10 @@ def plan_experiment(objective, language, code=""):
     intermediate = intermediate_states_required(objective)
     if intermediate and category in {"browser", "react", "flask", "java_awt", "java_swing", "javafx", "tkinter"}:
         requirements.append({"id": "intermediate", "description": "Distinct required intermediate and final states", "evidence": config["result"], "minimum_count": 2})
-    database = bool(re.search(r"\bdatabase\b|\bSQL\b", objective, re.I))
+    database = category == "database" or bool(re.search(
+        r"\b(?:database|DBMS|JDBC)\b|\bSQL\s+(?:query|queries|statement|database|table|join|view)\b|"
+        r"\b(?:SELECT|INSERT|UPDATE|DELETE)\s+(?:\*\s+)?(?:FROM|INTO|[A-Za-z_]+\s+(?:FROM|SET))\b|"
+        r"\bCREATE\s+(?:TABLE|DATABASE|VIEW)\b", objective, re.I))
     if re.search(r'\bdatabase\s+(?:is\s+)?optional\b|\bno database (?:is )?required\b', objective, re.I) and not re.search(r'\b(?:SQL|query|queries)\b', objective, re.I):
         database = False
     if database:

@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:;">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LabMate Desktop — Connect Server</title>
+  <link rel="stylesheet" href="connect.css">
+</head>
+<body>
+  <main class="shell">
+    <section class="card">
+      <div class="brand">
+        <div class="mark" aria-hidden="true">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10 2v7.31"></path>
+            <path d="M14 9.3V1.99"></path>
+            <path d="M8.5 2h7"></path>
+            <path d="M14 9.3a6.5 6.5 0 1 1-4 0"></path>
+            <path d="M5.52 16h12.96"></path>
+          </svg>
+        </div>
+        <div>
+          <h1>LABMATE</h1>
+          <p class="subtitle">Windows Desktop Client <span id="app-version"></span></p>
+        </div>
+      </div>
+
+      <h2 class="heading">Connect to your LabMate server</h2>
+      <p class="desc">
+        Enter your production Railway HTTPS URL (or use Localhost for local development).
+      </p>
+
+      <div id="status-banner" class="banner" style="display: none;"></div>
+
+      <form id="connect-form" class="form">
+        <label for="server-url">LabMate Server URL</label>
+        <input
+          id="server-url"
+          type="url"
+          placeholder="https://your-labmate.up.railway.app"
+          required
+          autocomplete="url"
+        />
+
+        <div class="actions">
+          <button type="submit" id="connect-btn" class="btn btn-primary">
+            Launch LabMate
+          </button>
+          <button type="button" id="local-btn" class="btn btn-secondary">
+            Use Localhost (localhost:3000)
+          </button>
+        </div>
+      </form>
+
+      <p class="security-note">
+        Protected session: Remote connections require HTTPS. External checkouts run in isolated windows.
+      </p>
+    </section>
+  </main>
+
+  <script>
+    (async () => {
+      const input = document.getElementById("server-url");
+      const form = document.getElementById("connect-form");
+      const localBtn = document.getElementById("local-btn");
+      const connectBtn = document.getElementById("connect-btn");
+      const banner = document.getElementById("status-banner");
+      const versionEl = document.getElementById("app-version");
+
+      function showBanner(text, isError) {
+        banner.textContent = text;
+        banner.className = isError ? "banner banner-error" : "banner banner-info";
+        banner.style.display = "block";
+      }
+
+      if (window.labmateDesktop) {
+        const ver = await window.labmateDesktop.getAppVersion();
+        if (ver) versionEl.textContent = "v" + ver;
+
+        const cfg = await window.labmateDesktop.getConfig();
+        if (cfg?.serverUrl) input.value = cfg.serverUrl;
+        if (cfg?.lastError) showBanner(cfg.lastError, true);
+      }
+
+      async function submitUrl(urlValue) {
+        connectBtn.disabled = true;
+        connectBtn.textContent = "Connecting...";
+        banner.style.display = "none";
+
+        const res = await window.labmateDesktop.connectToServer(urlValue);
+        if (!res?.ok) {
+          showBanner(res?.error || "Unable to connect to server.", true);
+          connectBtn.disabled = false;
+          connectBtn.textContent = "Launch LabMate";
+        }
+      }
+
+      form.addEventListener("submit", (e) => {
+        e.preventDefault();
+        submitUrl(input.value.trim());
+      });
+
+      localBtn.addEventListener("click", () => {
+        input.value = "http://localhost:3000";
+        submitUrl("http://localhost:3000");
+      });
+    })();
+  </script>
+</body>
+</html>

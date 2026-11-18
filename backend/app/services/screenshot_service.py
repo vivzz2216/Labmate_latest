@@ -175,7 +175,7 @@ class ScreenshotService:
                 if not filename.endswith(('.c', '.cpp')):
                     filename = "main.cpp" if "iostream" in code or "class " in code else "main.c"
             elif theme == 'vscode':
-                if not filename.endswith(('.html', '.js', '.jsx', '.ts', '.tsx', '.css')):
+                if not filename.endswith(('.html', '.js', '.jsx', '.ts', '.tsx', '.css', '.py', '.java', '.c', '.cpp')):
                     filename = "index.html" if "<!doctype" in code.lower() or "<html" in code.lower() else "app.jsx"
             
             start_line = kwargs.get("start_line", 1)
@@ -242,7 +242,7 @@ class ScreenshotService:
                     vp_width, min_height = 1040, 780
             elif theme == 'codeblocks':
                 if view_mode == 'output':
-                    vp_width, min_height = 1040, 480
+                    vp_width, min_height = 1040, 190
                 else:
                     vp_width, min_height = 1060, 760
             elif theme == 'vscode':
@@ -502,6 +502,9 @@ class ScreenshotService:
         preserve_whitespace: bool = False,
     ) -> str:
         """Apply syntax highlighting based on file extension and theme."""
+        if theme == "notepad":
+            from html import escape
+            return escape(code)
         try:
             ext = Path(filename).suffix.lower() if filename else ""
             ext_lexer_map = {

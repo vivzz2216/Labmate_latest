@@ -1,0 +1,37 @@
+appId: com.labmate.desktop
+productName: LabMate
+copyright: Copyright © 2026 LabMate
+directories:
+  output: dist
+  buildResources: assets
+asar: true
+files:
+  - src/**/*
+  - assets/**/*
+  - package.json
+win:
+  icon: assets/icon.ico
+  artifactName: LabMate-Setup-${version}.${ext}
+  requestedExecutionLevel: asInvoker
+  signAndEditExecutable: true
+  verifyUpdateCodeSignature: true
+  # Configure Azure Trusted Signing or EV Code Signing (.pfx via CSC_LINK) in CI / release environment:
+  # azureSignOptions:
+  #   publisherName: CN=Your Verified Publisher Name
+  #   endpoint: https://eus.codesigning.azure.net
+  #   certificateProfileName: your-profile
+  #   codeSigningAccountName: your-account
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: LabMate
+  installerIcon: assets/icon.ico
+  uninstallerIcon: assets/icon.ico
+  installerHeaderIcon: assets/icon.ico
+msi:
+  artifactName: LabMate-${version}.${ext}
+  oneClick: false
+  perMachine: false

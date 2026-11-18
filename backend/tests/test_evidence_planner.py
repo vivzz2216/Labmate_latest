@@ -84,6 +84,11 @@ class EvidencePlannerTests(unittest.TestCase):
         plan = plan_experiment("Create a Node.js API that inserts a row into a database", "node")
         self.assertEqual(verification_summary(plan, True, "saved")["checks"]["database"], "unverified")
 
+    def test_sql_word_in_java_sample_text_is_not_a_database_requirement(self):
+        plan = plan_experiment('Count words in "java sql java python sql java" using a HashMap.', 'java')
+        self.assertNotIn('database', [r['id'] for r in plan['requirements']])
+        self.assertIn('database', [r['id'] for r in plan_experiment('Run a SQL query with JDBC.', 'java')['requirements']])
+
     def test_api_cannot_be_verified_by_printing_a_fake_http_response(self):
         plan = plan_experiment("Create a Node.js REST API", "node", "console.log('HTTP 200')")
         summary = verification_summary(plan, True, "HTTP 200")

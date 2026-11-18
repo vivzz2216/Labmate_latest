@@ -29,6 +29,7 @@ class ExecutionEvidenceTests(unittest.TestCase):
 
     def test_super_initializer_is_allowed_but_introspection_is_not(self):
         validate_generated_code("class Child(Base):\n    def __init__(self):\n        super().__init__()", "python")
+        validate_generated_code("class Account:\n    def __init__(self):\n        self.__balance = 1000\n    def get(self):\n        return self.__balance", "python")
         with self.assertRaisesRegex(ValueError, "introspection"):
             validate_generated_code("print(object.__class__)", "python")
 

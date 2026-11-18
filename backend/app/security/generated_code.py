@@ -44,7 +44,10 @@ def validate_generated_code(code: str, language: str, capability=None, local_mod
                 and node.value.func.id == "super" and not node.value.keywords
                 and (not node.value.args or (len(node.value.args) == 2 and all(isinstance(a, ast.Name) for a in node.value.args)))
             )
-            if isinstance(node, ast.Attribute) and node.attr.startswith("__") and node.attr not in {"__version__", "__name__", "__qualname__", "__doc__"} and not safe_parent_initializer:
+            private_self_field = (isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name)
+                                  and node.value.id == "self" and node.attr.startswith("__")
+                                  and not node.attr.endswith("__"))
+            if isinstance(node, ast.Attribute) and node.attr.startswith("__") and node.attr not in {"__version__", "__name__", "__qualname__", "__doc__"} and not safe_parent_initializer and not private_self_field:
                 raise ValueError("Runtime introspection is not supported in lab execution.")
             if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
                 if node.func.id in {"eval", "exec", "compile", "__import__", "getattr", "setattr", "globals", "locals", "vars", "breakpoint"}:
