@@ -218,3 +218,15 @@ async def test_a_full_mysql_ide_gives_a_long_idle_slot_to_a_new_student(monkeypa
     with pytest.raises(HTTPException) as full:
         await ide_mysql.execute(ide_mysql.MysqlStatementInput(statement='SELECT 1'), type('U', (), {'id': 51})(), True)
     assert full.value.status_code == 503 and set(ide_mysql._sessions) == {1, 2, 50}
+
+
+def test_a_manual_without_heading_styles_still_gets_a_report():
+    """Found on the live site: a hand-built .docx has no 'Heading 2' style and report assembly raised KeyError."""
+    import docx
+    from app.services.compact_report import ensure_heading_style
+    document = docx.Document()
+    for style in [s for s in document.styles if s.name == 'Heading 2']:
+        style._element.getparent().remove(style._element)
+    assert 'Heading 2' not in [s.name for s in document.styles]
+    ensure_heading_style(document)
+    document.add_paragraph('Question 1', style='Heading 2')

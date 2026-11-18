@@ -90,8 +90,18 @@ def diagnostic_text(result):
     return '\n'.join(lines)
 
 
+def ensure_heading_style(document, name='Heading 2', size=13):
+    """A manual exported by some tools has no heading styles; add a plain one rather than failing the whole report."""
+    from docx.enum.style import WD_STYLE_TYPE
+    if name not in [style.name for style in document.styles]:
+        style = document.styles.add_style(name, WD_STYLE_TYPE.PARAGRAPH)
+        style.font.bold = True
+        style.font.size = Pt(size)
+
+
 def build_compact_report(upload,workflow):
     document,source_is_docx=create_report_document(upload)
+    ensure_heading_style(document)
     section=document.sections[-1]
     section.top_margin=section.bottom_margin=Inches(.6)
     languages={r.get('language') for r in workflow.results}
