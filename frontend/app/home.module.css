@@ -73,10 +73,17 @@
 
 /* ---------- Closing call to action ---------- */
 .ctaSection { max-width: 1120px; margin: 0 auto 96px; padding: 0 24px; }
-.ctaCard { text-align: center; padding: 64px 24px; border-radius: 20px; background: linear-gradient(180deg, #fafafa, #f4f4f5); border: 1px solid var(--line); }
-.ctaHeading { font-family: var(--font-heading); font-size: clamp(26px, 3vw, 36px); font-weight: 700; letter-spacing: -.03em; line-height: 1.15; color: var(--ink); margin: 0 auto 12px; max-width: 22ch; }
-.ctaDescription { font-size: 15px; line-height: 1.65; color: var(--body); max-width: 54ch; margin: 0 auto 28px; }
+.ctaCard { position: relative; overflow: hidden; text-align: center; padding: 64px 24px; border-radius: 20px; background: #0b1c16; border: 1px solid #285642; }
+.ctaVeilWrap { position: absolute; inset: 0; overflow: hidden; pointer-events: none; background: radial-gradient(ellipse at 30% 60%, #1b5239 0%, #103526 38%, #081c15 100%); }
+.ctaVeilOverlay { position: absolute; inset: 0; background: rgba(3, 14, 10, 0.48); }
+.ctaContent { position: relative; z-index: 1; }
+.ctaHeading { font-family: var(--font-heading); font-size: clamp(26px, 3vw, 36px); font-weight: 700; letter-spacing: -.03em; line-height: 1.15; color: #fff; margin: 0 auto 12px; max-width: 22ch; }
+.ctaDescription { font-size: 15px; line-height: 1.65; color: #d4e2d9; max-width: 54ch; margin: 0 auto 28px; }
 .ctaActions { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+.ctaCard .ctaPrimaryBtn { background: #fff; color: #102218; border-color: #fff; }
+.ctaCard .ctaSecondaryBtn { background: #17392b; color: #fff; border-color: #729681; }
+.ctaCard .ctaPrimaryBtn:hover { background: #e9f3ed; }
+.ctaCard .ctaSecondaryBtn:hover { background: #24553d; }
 
 /* ---------- Footer ---------- */
 .footer { border-top: 1px solid var(--line); background: #fff; padding: 56px 24px 32px; }
