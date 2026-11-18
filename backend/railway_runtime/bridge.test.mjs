@@ -95,3 +95,119 @@ test('cleanup failure cannot be reported as successful execution',async()=>{
   f.sdk.create=async(...args)=>{const vm=await create(...args);vm.destroy=async()=>{throw new Error('teardown failed')};return vm};
   await assert.rejects(run({bundle:'',job:{}},f.sdk,Buffer.from('deps')),/teardown failed/);
 });
+
+// --- Railway API allowance (2026-11-19): 429 handling and one VM per manual ---
+import {railwayFetch,RateLimitError,Session,serve,imageNeeds} from './bridge.mjs';
+import {PassThrough} from 'node:stream';
+
+const reply=(status,headers={})=>({status,headers:new Headers(headers)});
+
+test('a short 429 is waited out and retried, even for a create mutation',async()=>{
+  const answers=[reply(429,{'retry-after':'2'}),reply(200)];const waits=[];let calls=0;
+  const response=await railwayFetch('https://example.invalid',{body:JSON.stringify({query:'mutation Create {}'})},
+    async()=>answers[calls++],async ms=>{waits.push(ms)});
+  assert.equal(response.status,200);
+  assert.equal(calls,2);
+  assert.ok(waits[0]>=2000 && waits[0]<2600);
+});
+
+test('a long 429 is reported with the reset time instead of waiting',async()=>{
+  const reset='2026-11-18T20:49:11.380Z';let waited=false;
+  await assert.rejects(railwayFetch('https://example.invalid',{body:'{}'},async()=>reply(429,{'retry-after':'2006','x-ratelimit-reset':reset}),
+    async()=>{waited=true}),error=>error instanceof RateLimitError && error.message===`RAILWAY_RATE_LIMITED reset=${reset} retry_after=2006`);
+  assert.equal(waited,false);
+});
+
+test('repeated short 429s give up within the wait budget',async()=>{
+  let calls=0;
+  await assert.rejects(railwayFetch('https://example.invalid',{body:'{}'},async()=>{calls++;return reply(429,{'retry-after':'40'})},async()=>{},90000),RateLimitError);
+  assert.equal(calls,3);
+});
+
+function sessionSdk(results){
+  const calls={created:0,destroyed:0,installs:0,jobs:[]};
+  const recipe={run(){return this}};
+  let next=0;
+  const sdk={template(){return recipe},async create(){
+    const id=++calls.created;
+    return {id,files:{async write(){}},async destroy(){calls.destroyed++},
+      exec(command,options){
+        if(!options.stdin){calls.installs++;return Promise.resolve({exitCode:0});}
+        const promise=Promise.resolve(results[next++] ?? {exitCode:0,stdout:'{"success":true}'});
+        promise.stdin={async write(data){calls.jobs.push({vm:id,job:JSON.parse(data)})},async end(){}};
+        return promise;
+      }};
+  }};
+  return {calls,sdk};
+}
+
+test('one manual shares one VM and installs the runtime once',async()=>{
+  const {calls,sdk}=sessionSdk([]);
+  const session=new Session('',sdk,Buffer.from('deps'));
+  for(const code of ['print(1)','print(2)','#include <stdio.h>']) assert.deepEqual(await session.run({code}),{success:true});
+  assert.equal(calls.created,1);
+  assert.equal(calls.installs,1);
+  assert.deepEqual(calls.jobs.map(j=>j.vm),[1,1,1]);
+  await session.close();
+  assert.equal(calls.destroyed,1);
+});
+
+test('a job needing another image gets its own VM; at most two are kept',async()=>{
+  const {calls,sdk}=sessionSdk([]);
+  const session=new Session('',sdk,Buffer.from('deps'),Buffer.from('extra'));
+  await session.run({code:'print(1)'});
+  await session.run({code:'import nltk'});
+  await session.run({code:'print(2)'});
+  assert.equal(calls.created,2);
+  assert.notEqual(imageNeeds({code:'import nltk'}).key,imageNeeds({code:'print(1)'}).key);
+  await session.run({code:'from pyspark.sql import SparkSession'});
+  assert.equal(calls.created,3);
+  assert.equal(calls.destroyed,1);
+  await session.close();
+  assert.equal(calls.destroyed,3);
+});
+
+test('a VM that fails a job is destroyed and the next job gets a fresh one',async()=>{
+  const {calls,sdk}=sessionSdk([{exitCode:137,stdout:''}]);
+  const session=new Session('',sdk,Buffer.from('deps'));
+  await assert.rejects(session.run({code:'print(1)'}),/exit=137/);
+  assert.equal(calls.destroyed,1);
+  assert.deepEqual(await session.run({code:'print(2)'}),{success:true});
+  assert.equal(calls.created,2);
+  await session.close();
+});
+
+test('a kept VM that was reaped while idle is replaced once, transparently',async()=>{
+  const {calls,sdk}=sessionSdk([]);
+  const session=new Session('',sdk,Buffer.from('deps'));
+  await session.run({code:'print(1)'});
+  const vm=session.vms.values().next().value;
+  vm.exec=(command,options)=>{if(options.stdin){const p=Promise.reject(new Error('sandbox not found'));p.catch(()=>{});p.stdin={async write(){},async end(){}};return p}return Promise.resolve({exitCode:0})};
+  assert.deepEqual(await session.run({code:'print(2)'}),{success:true});
+  assert.equal(calls.created,2);
+  assert.equal(calls.destroyed,1);
+  // A fresh VM's failure is never retried, so a broken program does not run twice.
+  const {calls:c2,sdk:s2}=sessionSdk([]);
+  const fresh=new Session('',s2,Buffer.from('deps'));
+  s2.create=(orig=>async(...a)=>{const v=await orig(...a);v.exec=(command,options)=>{if(options.stdin){const p=Promise.reject(new Error('socket closed'));p.catch(()=>{});p.stdin={async write(){},async end(){}};return p}return Promise.resolve({exitCode:0})};return v})(s2.create);
+  await assert.rejects(fresh.run({code:'print(3)'}),/socket closed/);
+  assert.equal(c2.created,1);
+  await session.close();
+});
+
+test('session protocol answers one line per job and closes the session at end of input',async()=>{
+  const input=new PassThrough(), output=new PassThrough();let closed=0;const seen=[];
+  const lines=[];output.on('data',chunk=>lines.push(...chunk.toString().split('\n').filter(Boolean)));
+  const served=serve(input,output,bundle=>({bundle,async run(job){seen.push(job);if(job.fail)throw new Error('boom test-token-must-never-enter-vm');return {ok:job.n}},async close(){closed++}}));
+  input.write(JSON.stringify({bundle:'b64'})+'\n');
+  input.write(JSON.stringify({job:{n:1}})+'\n');
+  input.write(JSON.stringify({job:{fail:true}})+'\n');
+  input.end();
+  await served;
+  assert.deepEqual(JSON.parse(lines[0]),{ok:true,receipt:{ok:1}});
+  const failure=JSON.parse(lines[1]);
+  assert.equal(failure.ok,false);
+  assert.ok(failure.error.includes('boom') && !failure.error.includes('test-token-must-never-enter-vm'));
+  assert.equal(seen.length,2);
+  assert.equal(closed,1);
+});

@@ -764,6 +764,9 @@ async def execute_solution(code, language, question, group_id, username, stdin_d
         success=False
         errors='\n'.join(filter(None,[errors,*failures]))
         verification=dict(verification or {}, status='failed', semantic_failures=failures)
+    if stages.get('isolation') == 'rate_limited':
+        from .worker_health import ExecutionRateLimitedError
+        raise ExecutionRateLimitedError(stages.get('resumes_at'))
     if stages.get('isolation') == 'failed':
         from .worker_health import WorkerUnavailableError, worker_health
         worker_health.invalidate()
@@ -864,8 +867,11 @@ def saved_ubuntu_draft(previous, question):
 
 
 async def process_assignment(workflow_id: int, claim_token: str | None = None):
+    from .railway_sandbox import sandbox_session
     with claim_scope(workflow_id, claim_token):
-        return await _process_assignment(workflow_id)
+        # All of this manual's programs share sandbox VMs instead of creating one per run.
+        async with sandbox_session():
+            return await _process_assignment(workflow_id)
 
 
 
@@ -934,7 +940,11 @@ async def _process_assignment(workflow_id: int):
             needs_worker = any(not q.get('is_theory') and
                 (workflow.language if workflow.language != 'auto' else q.get('language')) not in {'sql', 'theory'}
                 for q in workflow.questions)
-            if needs_worker and not (await worker_health.check())['available']:
+            worker_state = await worker_health.check() if needs_worker else {'available': True}
+            if not worker_state['available']:
+                if worker_state.get('status') == 'rate_limited':
+                    from .worker_health import ExecutionRateLimitedError
+                    raise ExecutionRateLimitedError(worker_state.get('resumes_at'))
                 raise WorkerUnavailableError()
             continuing_resume = workflow.stage == 'resume'
             from .brain_agent import make_plan, task_plan

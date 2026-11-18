@@ -17,6 +17,20 @@ class WorkerUnavailableError(RuntimeError):
         super().__init__('Execution worker unavailable. Completed results are saved; retry processing after the worker recovers.')
 
 
+class ExecutionRateLimitedError(WorkerUnavailableError):
+    """Railway's hourly API allowance is used up; execution resumes at a known time."""
+    def __init__(self, resumes_at=None):
+        from .railway_sandbox import rate_limit_message, rate_limited_until
+        until = rate_limited_until()
+        if not until and resumes_at:
+            try:
+                until = datetime.fromisoformat(str(resumes_at)).timestamp()
+            except ValueError:
+                until = 0.0
+        RuntimeError.__init__(self, rate_limit_message(until) if until else
+                              'Code execution has reached its hourly limit with the sandbox provider. Completed results are saved; retry in a few minutes.')
+
+
 class RuntimePreparingError(WorkerUnavailableError):
     def __init__(self):
         RuntimeError.__init__(self, 'This execution environment is being prepared for its first run. Completed results are saved; retry processing in a few minutes.')
@@ -31,19 +45,39 @@ class WorkerHealth:
         self._probe = None  # The loop keeps only weak references to tasks.
 
     def invalidate(self):
-        self._expires = 0.0
+        # A Railway job records its own outcome (record_job); dropping it would only hide the failure.
+        if settings.EXECUTION_BACKEND != 'railway_sandbox':
+            self._expires = 0.0
+
+    def record_job(self, available):
+        """A real Railway sandbox job just succeeded, or failed at the infrastructure level."""
+        self._identity = ('railway_sandbox',)
+        ttl = settings.RAILWAY_SANDBOX_HEALTH_TTL if available else settings.WORKER_HEALTH_TTL
+        self._expires = time.monotonic() + max(1, ttl)
+        self._result = {'status': 'healthy' if available else 'unavailable', 'available': bool(available),
+                        'checked_at': datetime.now(timezone.utc).isoformat()}
 
     async def check(self, force=False, wait_timeout=None):
         if not isolation_required():
             return {'status': 'not_required', 'available': True, 'checked_at': None}
         if settings.EXECUTION_BACKEND == 'railway_sandbox':
-            if wait_timeout is not None and self._lock.locked():
-                return dict(self._result)
-            if wait_timeout is not None and (force or time.monotonic() >= self._expires):
+            from .railway_sandbox import rate_limited_until
+            until = rate_limited_until()
+            if until:
+                return {'status': 'rate_limited', 'available': False, 'checked_at': self._result.get('checked_at'),
+                        'resumes_at': datetime.fromtimestamp(until, timezone.utc).isoformat()}
+            if not force:
+                # A probe creates a whole sandbox and spends the account's hourly Railway API allowance, and every
+                # open student page polls this. Report the startup probe or the latest real job instead; a real job
+                # that cannot run still fails with a clear message.
+                if self._lock.locked() or time.monotonic() < self._expires:
+                    return dict(self._result)
+                return {'status': 'ready', 'available': True, 'checked_at': self._result.get('checked_at')}
+            if wait_timeout is not None:
                 if not self._lock.locked():
-                    asyncio.create_task(self._railway_check(force))
+                    self._probe = asyncio.create_task(self._railway_check(True))
                 return dict(self._result)
-            return await self._railway_check(force)
+            return await self._railway_check(True)
         identity = (settings.SANDBOX_SSH_HOST, settings.SANDBOX_SSH_PORT,
                     settings.SANDBOX_SSH_USER, settings.SANDBOX_SSH_KEY, settings.SANDBOX_KNOWN_HOSTS)
         async with self._lock:
@@ -96,6 +130,9 @@ class WorkerHealth:
             except (OSError,ValueError,RuntimeError,TimeoutError) as error:
                 # Transport errors are scrubbed by the adapter before logging.
                 logger.warning('Railway sandbox health probe failed (%s): %s', type(error).__name__, error)
+                from .railway_sandbox import RATE_LIMIT_MARK, note_rate_limit
+                if RATE_LIMIT_MARK in str(error):
+                    note_rate_limit(str(error))
             self._identity=('railway_sandbox',)
             self._expires=time.monotonic()+max(1,settings.RAILWAY_SANDBOX_HEALTH_TTL if available else settings.WORKER_HEALTH_TTL)
             self._result={'status':'healthy' if available else 'unavailable','available':bool(available),
