@@ -135,7 +135,22 @@ async def upload_file(
                 await asyncio.to_thread(validate_docx_archive, file_path)
             except ValueError as error:
                 raise HTTPException(400, detail=str(error)) from None
-        
+        elif file_extension == 'pdf':
+            # A damaged or password-protected PDF passes the signature check but can never be read; say so now
+            # instead of failing later with a generic extraction error.
+            from ..services.pdf_ocr import UNREADABLE_PDF
+
+            def _pdf_page_count(path):
+                import pdfplumber
+                with pdfplumber.open(path) as document:
+                    return len(document.pages)
+            try:
+                pages = await asyncio.to_thread(_pdf_page_count, file_path)
+            except Exception:
+                pages = 0
+            if not pages:
+                raise HTTPException(400, detail=UNREADABLE_PDF)
+
         # Validate MIME type using python-magic (more reliable than extension)
         # FIXED: Properly handle MIME validation errors as 400, not 500
         try:

@@ -6,6 +6,14 @@ SECTION = re.compile(r"^\s*(?:\d+[.)]\s*)?(?:theory(?:\s*&\s*viva)?|theoretical\
 THEORETICAL = re.compile(r"\b(?:theory\s+(?:question|section)|viva(?:\s*voce)?|objective\s+(?:question|section)|conceptual\s+question)\b|^\s*(?:\d+[.)]\s*)?(?:define|explain|discuss|describe|differentiate|compare|what\s+(?:is|are)|why\s+|list\s+the\s+(?:advantages|types)|state\s+(?:the|a))\b", re.I)
 ACTION = re.compile(r"\b(?:write|create|develop|implement|build|design|execute|run|compile|debug|modify|demonstrate|construct|perform|generate|calculate|compute|find|display|print|read|sort|reverse|check|convert|simulate|evaluate|compare|apply|measure|train|fit|predict|classify|analyze)\b|^(?:code|program)\b", re.I)
 PROGRAM = re.compile(r"\b(?:program(?:ming)?|code|script|function|application|app|web\s*page|website|html|css|javascript|react|node(?:\.js)?|python|java|c\+\+|algorithm|array|matrix|file|linked\s+list|stack|queue|tree|factorial|fibonacci|palindrome|prime|number|string|loop|class|inheritance|exception|gui|sort(?:ing)?|classifier|classification|metric|dataset|model)\b", re.I)
+# Further task verbs, trusted only for a question the extraction model already labelled with a programming language.
+# Without them "Count the null values in every column" or "WAP to swap two numbers" was silently dropped.
+MODEL_TASK_ACTION = re.compile(r"\b(?:wap|count|save|store|load|import|export|swap|plot|draw|visuali[sz]e|insert|delete|update|"
+                               r"search|merge|split|concatenate|filter|accept|input|show|list|handle|validate|connect|send|"
+                               r"receive|query|select|fetch|clean|preprocess|transform|encode|tokeni[sz]e|scrape|parse|"
+                               r"test|verify|install|configure|set\s+up|use|make|add|remove|replace|rename|copy|open|"
+                               r"traverse|perform|initiali[sz]e|declare|access|deploy|summari[sz]e)\b", re.I)
+CODE_LANGUAGES = {"html", "react", "node", "python", "java", "c", "cpp", "sql", "colab", "ubuntu", "distributed", "r"}
 EXPLICIT_PROGRAM = re.compile(r"\b(?:write|create|develop|implement|build)\s+(?:a\s+|an\s+)?(?:(?:python|java|c\+\+|c|html|react|node)\s+)?(?:program|code|script|application|web\s+page)\b", re.I)
 
 
@@ -136,7 +144,16 @@ def programming_lines(lines, mode: str = "code_only"):
     return output
 
 
-def filter_lab_tasks(tasks, mode: str = "code_only"):
+def model_labelled_task(text: str, language: str) -> bool:
+    """A task the model filed under a programming language whose verb is outside ACTION (count, save, swap...)."""
+    question = re.sub(r"^\s*(?:(?:q(?:uestion)?|step)[.\s]*)?(?:\d+(?:\.\d+)*|[a-z]|[ivxlcdm]+)[.):\-]\s*", "", str(text or "").strip(), flags=re.I)
+    return bool(language.lower() in CODE_LANGUAGES and len(question) >= 12 and MODEL_TASK_ACTION.search(question)
+                and not is_handwritten_question(question) and not SECTION.match(question)
+                and not THEORETICAL.search(practical_text(question)))
+
+
+def filter_lab_tasks(tasks, mode: str = "code_only", model_labelled: bool = False):
+    """Keep actionable tasks. model_labelled: the tasks come from the extraction model, which already labelled each one."""
     result = []
     for task in tasks:
         text = task.get("question_text") or task.get("text") or ""
@@ -151,7 +168,8 @@ def filter_lab_tasks(tasks, mode: str = "code_only"):
         if mode == "theory_and_code" and language.lower() in {"theory", "viva", "concept", "objective"} and (is_actionable_lab_question(text, "") or mixed_program):
             detected = re.search(r"\b(c\+\+|python|java|react|html|node(?:\.js)?|c)\b", text, re.I)
             language = {"c++": "cpp", "node.js": "node"}.get(detected.group(1).lower(), detected.group(1).lower()) if detected else "python"
-        if is_actionable_lab_question(text, language) or (mixed_program and language.lower() not in {"theory", "viva", "concept", "objective"}):
+        if (is_actionable_lab_question(text, language) or (model_labelled and model_labelled_task(text, language))
+                or (mixed_program and language.lower() not in {"theory", "viva", "concept", "objective"})):
             clean = dict(task)
             clean["id"] = len(result) + 1
             clean["language"] = language or "python"

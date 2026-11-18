@@ -34,11 +34,25 @@ class StreamingUploadTests(unittest.IsolatedAsyncioTestCase):
                 upload.id = 42
                 upload.uploaded_at = datetime.now(timezone.utc)
             db.refresh.side_effect = refresh
-            with patch("app.routers.upload.magic") as magic:
+            pdf = Mock(pages=[object()])
+            pdf.__enter__ = Mock(return_value=pdf)
+            pdf.__exit__ = Mock(return_value=False)
+            # The payload is a stand-in, not a real PDF; the page check is covered by the next test.
+            with patch("app.routers.upload.magic") as magic, patch("pdfplumber.open", return_value=pdf):
                 magic.Magic.return_value.from_buffer.return_value = "application/pdf"
                 result = await upload_file(None, file, db, SimpleNamespace(id=1), True)
             self.assertEqual(result.id, 42)
             self.assertLessEqual(payload.largest_read, 1024 * 1024)
+
+    async def test_unreadable_pdf_is_rejected_at_upload_and_removed(self):
+        with tempfile.TemporaryDirectory() as directory, patch.object(settings, "UPLOAD_DIR", directory):
+            file = UploadFile(filename="lab.pdf", file=CountingFile(b"%PDF-1.4 junk"))
+            with patch("app.routers.upload.magic") as magic, self.assertRaises(HTTPException) as result:
+                magic.Magic.return_value.from_buffer.return_value = "application/pdf"
+                await upload_file(None, file, Mock(), SimpleNamespace(id=1), True)
+            self.assertEqual(result.exception.status_code, 400)
+            self.assertIn("damaged or password-protected", result.exception.detail)
+            self.assertEqual(list(Path(directory).iterdir()), [])
 
     async def test_oversize_upload_is_rejected_and_removed(self):
         with tempfile.TemporaryDirectory() as directory, patch.object(settings, "UPLOAD_DIR", directory), patch.object(settings, "MAX_FILE_SIZE", 1024):
