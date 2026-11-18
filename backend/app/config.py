@@ -103,6 +103,16 @@ class Settings(BaseSettings):
     UPLOAD_QUEUE_WAIT_SECONDS: int = 20   # how long an upload waits for a parser slot before "busy" (0 = refuse at once)
     UPLOAD_QUEUE_LIMIT: int = 64          # uploads allowed to wait at once
     MIN_FREE_DISK_MB: int = 200           # refuse new uploads below this much free space on the storage volume
+
+    # Storage retention (local volume only; object storage is not touched).
+    # A file is deleted only when it is older than RETENTION_DAYS *and* nothing that was
+    # active in that window (a workflow, job, report or upload) still refers to it.
+    RETENTION_ENABLED: bool = True
+    RETENTION_DRY_RUN: bool = False       # log what would be deleted without deleting
+    RETENTION_DAYS: int = 30              # uploads, screenshots and reports
+    RETENTION_TEMP_HOURS: int = 24        # runtime scratch folders left behind by a crash
+    RETENTION_INTERVAL_HOURS: float = 6
+    RETENTION_START_DELAY_SECONDS: int = 600
     MAX_CODE_LENGTH: int = 5000
     
     # OpenAI settings
