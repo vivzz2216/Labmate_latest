@@ -36,9 +36,9 @@ import {
   Sparkles,
   Archive,
   Layers,
-  Info,
-} from "lucide-react";
+  Info, Moon, Sun} from "lucide-react";
 import api, { apiService, type UploadResponse } from "@/lib/api";
+import { useDashboardTheme } from "@/components/dashboard/DashboardShell";
 import { useAuth } from "@/contexts/BasicAuthContext";
 import StudentProfileModal from "@/components/dashboard/StudentProfileModal";
 import LabMateLogo from "@/components/brand/LabMateLogo";
@@ -334,6 +334,7 @@ export default function AssignmentPage() {
 
 function AssignmentContent() {
   const { user, loading: authLoading } = useAuth();
+  const { theme, toggleTheme } = useDashboardTheme();
   const router = useRouter();
   const searchParams = useSearchParams();
   const trackParam = searchParams.get("track") || "";
@@ -962,6 +963,7 @@ function AssignmentContent() {
   };
 
   return (
+    <div data-theme={theme} style={{ display: "contents" }}>
     <div className={styles.page}>
       {/* Background DotGrid: pure CSS dot matrix, instant 0ms load */}
       <div className={styles.pageDotsContainer} />
@@ -974,14 +976,19 @@ function AssignmentContent() {
         <header className={styles.header}>
           <div className={styles.headerLead}>
             <Link href="/" className={styles.brand} aria-label="LabMate home">
-              <LabMateLogo size="sm" theme="light" />
+              <LabMateLogo size="sm" theme={theme === "light" ? "light" : "dark"} />
             </Link>
             <div className={styles.headerCopy}>
-              <h1>Code execution</h1>
-              <p>Turn a lab manual into tested code and a submission-ready report.</p>
+              <h1>Code Execution</h1>
+              <p>Run, verify and generate submission-ready lab reports.</p>
             </div>
           </div>
           <div className={styles.account}>
+            <button type="button" className={styles.themeSwitch} onClick={toggleTheme}
+              aria-label={theme === "light" ? "Switch to dark theme" : "Switch to light theme"}>
+              {theme === "light" ? <Moon size={14} aria-hidden="true" /> : <Sun size={14} aria-hidden="true" />}
+              {theme === "light" ? "Dark" : "Light"}
+            </button>
             <span className={styles.topAvatar}>{user?.name?.charAt(0).toUpperCase() || "L"}</span>
             <strong>{user?.name || "LabMate"}</strong>
           </div>
@@ -1587,6 +1594,7 @@ function AssignmentContent() {
         </section>
         </main>
       </section>
+    </div>
     </div>
   );
 }

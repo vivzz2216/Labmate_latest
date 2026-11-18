@@ -942,3 +942,11 @@
   outline: 2px solid var(--mu-ink);
   outline-offset: 2px;
 }
+
+/* Light theme: the cover artwork is drawn on a near-black ground; invert it so cards are not heavy black blocks. */
+:global([data-theme="light"]) .cardMedia {
+  background: #f4f5f7;
+}
+:global([data-theme="light"]) .cardMediaImg {
+  filter: invert(1) hue-rotate(180deg);
+}

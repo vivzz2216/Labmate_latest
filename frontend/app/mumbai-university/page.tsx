@@ -65,27 +65,21 @@ export default function MumbaiUniversityCataloguePage() {
   return (
     <DashboardShell
       title="Mumbai University Engineering Laboratory Catalogue"
-      subtitle="Official NEP 2020 curriculum directory across Semesters I–VI"
+      subtitle="NEP 2020 curriculum directory"
     >
       <div className={styles.catalogueContainer}>
         {/* Clean Editorial Directory Header */}
         <header className={styles.directoryHeader}>
           <div className={styles.directoryTitleRow}>
-            <h1 className={styles.directoryTitle}>
-              University of Mumbai Computing Laboratories (NEP 2020)
-            </h1>
+            <h1 className={styles.directoryTitle}>University of Mumbai | NEP 2020</h1>
             <div className={styles.directoryStatsInline}>
-              <span>{MUMBAI_UNIVERSITY_LABS.length} Verified Computing Labs (Sem I–VI)</span>
+              <span>{MUMBAI_UNIVERSITY_LABS.length} Verified Computing Labs</span>
+              <span className={styles.statDivider} aria-hidden="true">&middot;</span>
+              <span>Semesters I–VI</span>
               <span className={styles.statDivider} aria-hidden="true">&middot;</span>
               <span>6 Programmes</span>
-              <span className={styles.statDivider} aria-hidden="true">&middot;</span>
-              <span>Non-Computing &amp; Electronics (ESL102) Excluded</span>
             </div>
           </div>
-          <p className={styles.directorySubtitle}>
-            Verified practical syllabi for B.E. Computer Engineering, Information Technology, CSIT,
-            CSE (AI&amp;ML), CSE (Data Science), and AI &amp; Data Science under affiliated-college NEP 2020 documents.
-          </p>
         </header>
 
         {/* Filter Controls & Search */}

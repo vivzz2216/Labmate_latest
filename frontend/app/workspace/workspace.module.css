@@ -5,9 +5,11 @@
 
 .workspaceGrid {
   display: grid;
-  grid-template-columns: 320px minmax(0, 1fr);
+  grid-template-columns: clamp(300px, 26vw, 400px) minmax(0, 1fr);
   gap: 20px;
-  align-items: start;
+  align-items: stretch;
+  /* Both cards fill the content area: viewport minus the 60px top bar and the page padding. */
+  min-height: calc(100vh - 60px - 20px - 40px);
 }
 
 /* Left Panel: Manuals List */
@@ -89,7 +91,7 @@
 }
 
 .manualList {
-  max-height: calc(100vh - 250px);
+  flex: 1 1 auto;
   min-height: 340px;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -212,6 +214,10 @@
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+.mainPane > .statePanel:only-child {
+  flex: 1 1 auto;
 }
 
 .statePanel {
@@ -745,6 +751,7 @@
 @media (max-width: 1024px) {
   .workspaceGrid {
     grid-template-columns: 1fr;
+    min-height: 0;
   }
 
   .manualList {

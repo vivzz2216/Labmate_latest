@@ -23,12 +23,21 @@
   padding: 2rem 2.5rem 2.25rem;
   margin-bottom: 1.75rem;
   background:
-    radial-gradient(68% 130% at 78% 105%, rgba(56, 102, 224, 0.28) 0%, rgba(173, 182, 217, 0.14) 45%, transparent 72%),
+    radial-gradient(68% 130% at 78% 105%, rgba(56, 102, 224, 0.28) 0%, rgba(28, 42, 92, 0.14) 45%, transparent 72%),
+    radial-gradient(45% 95% at 52% 110%, rgba(99, 102, 241, 0.18) 0%, transparent 65%),
+    linear-gradient(135deg, #07090f 0%, #0b101d 55%, #0c1324 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+  color: #f8fafc;
+}
+:global([data-theme="light"]) .heroBanner {
+  background: radial-gradient(68% 130% at 78% 105%, rgba(56, 102, 224, 0.28) 0%, rgba(173, 182, 217, 0.14) 45%, transparent 72%),
     radial-gradient(45% 95% at 52% 110%, rgba(99, 102, 241, 0.18) 0%, transparent 65%),
     linear-gradient(135deg, #f9f9fb 0%, #e5e8f1 55%, #dfe4ef 100%);
   border: 1px solid rgba(0, 0, 0, 0.08);
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.135);
-  color: #040506;}
+  color: #040506;
+}
 
 /* Subtle glowing planet-horizon arc */
 .heroArc {
@@ -42,16 +51,29 @@
     circle at 35% 30%,
     rgba(96, 165, 250, 0.22) 0%,
     rgba(59, 130, 246, 0.09) 28%,
+    rgba(15, 23, 42, 0.4) 58%,
+    transparent 75%
+  );
+  border-top: 1.5px solid rgba(147, 197, 253, 0.35);
+  box-shadow: inset 0 12px 40px rgba(96, 165, 250, 0.18);
+  pointer-events: none;
+}
+:global([data-theme="light"]) .heroArc {
+  background: radial-gradient(
+    circle at 35% 30%,
+    rgba(96, 165, 250, 0.22) 0%,
+    rgba(59, 130, 246, 0.09) 28%,
     rgba(217, 223, 236, 0.4) 58%,
     transparent 75%
   );
   border-top: 1.5px solid rgba(18, 53, 92, 0.35);
   box-shadow: inset 0 12px 40px rgba(96, 165, 250, 0.108);
-  pointer-events: none;}
+}
 
 .heroInner {
   position: relative;
-  z-index: 1;}
+  z-index: 1;
+}
 
 /* Breadcrumbs inside Hero */
 .breadcrumbs {
@@ -59,37 +81,59 @@
   align-items: center;
   gap: 0.45rem;
   font-size: 0.8rem;
+  color: rgba(203, 213, 225, 0.65);
+  margin-bottom: 1.35rem;
+}
+:global([data-theme="light"]) .breadcrumbs {
   color: rgba(33, 40, 49, 0.65);
-  margin-bottom: 1.35rem;}
+}
 
 .breadcrumbs a {
-  color: rgba(33, 40, 49, 0.72);
+  color: rgba(203, 213, 225, 0.72);
   text-decoration: none;
   font-weight: 500;
-  transition: color 0.15s ease;}
+  transition: color 0.15s ease;
+}
+:global([data-theme="light"]) .breadcrumbs a {
+  color: rgba(33, 40, 49, 0.72);
+}
 
 .breadcrumbs a:hover {
-  color: #000000;}
+  color: #ffffff;
+}
+:global([data-theme="light"]) .breadcrumbs a:hover {
+  color: #000000;
+}
 
 .breadcrumbSeparator {
+  color: rgba(148, 163, 184, 0.45);
+  font-size: 0.75rem;
+}
+:global([data-theme="light"]) .breadcrumbSeparator {
   color: rgba(71, 86, 107, 0.45);
-  font-size: 0.75rem;}
+}
 
 .breadcrumbActive {
+  color: #f8fafc;
+  font-weight: 600;
+}
+:global([data-theme="light"]) .breadcrumbActive {
   color: #040506;
-  font-weight: 600;}
+}
 
 .heroGrid {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 2.5rem;
-  flex-wrap: wrap;}
+  flex-wrap: wrap;
+}
 
 .heroContent {
   flex: 1;
   min-width: 300px;
-  max-width: 640px;}
+  max-width: 640px;
+}
 
 .titleRow {
   display: flex;
@@ -113,16 +157,23 @@
   font-size: 2.25rem;
   font-weight: 700;
   letter-spacing: -0.03em;
-  color: #0a0a0a;
+  color: #ffffff;
   margin: 0;
   line-height: 1.15;
+}
+:global([data-theme="light"]) .title {
+  color: #000000;
 }
 
 .heroSubtitle {
   font-size: 1rem;
-  color: rgba(33, 40, 49, 0.78);
+  color: rgba(203, 213, 225, 0.78);
   line-height: 1.55;
-  margin: 0 0 1.15rem 0;}
+  margin: 0 0 1.15rem 0;
+}
+:global([data-theme="light"]) .heroSubtitle {
+  color: rgba(33, 40, 49, 0.78);
+}
 
 .heroFeaturesRow {
   display: flex;
@@ -131,15 +182,24 @@
   gap: 1.25rem;
   margin-bottom: 1.5rem;
   font-size: 0.8125rem;
-  color: rgba(17, 21, 27, 0.8);}
+  color: rgba(226, 232, 240, 0.8);
+}
+:global([data-theme="light"]) .heroFeaturesRow {
+  color: rgba(17, 21, 27, 0.8);
+}
 
 .heroFeatureItem {
   display: inline-flex;
   align-items: center;
-  gap: 0.45rem;}
+  gap: 0.45rem;
+}
 
 .heroFeatureItem svg {
-  color: rgba(71, 86, 107, 0.85);}
+  color: rgba(148, 163, 184, 0.85);
+}
+:global([data-theme="light"]) .heroFeatureItem svg {
+  color: rgba(71, 86, 107, 0.85);
+}
 
 .actionsBar {
   display: flex;
@@ -152,76 +212,115 @@
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
-  background: #000000;
-  color: #ebeef4;
+  background: #ffffff;
+  color: #090d16;
   padding: 0.6rem 1.3rem;
   font-size: 0.85rem;
   font-weight: 600;
   border-radius: 9999px;
   text-decoration: none;
-  border: 1px solid #000000;
+  border: 1px solid #ffffff;
   cursor: pointer;
   transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
-  box-shadow: 0 4px 18px rgba(255, 255, 255, 0.084);}
+  box-shadow: 0 4px 18px rgba(255, 255, 255, 0.14);
+}
+:global([data-theme="light"]) .heroPrimaryPill {
+  background: #000000;
+  color: #ebeef4;
+  border: 1px solid #000000;
+  box-shadow: 0 4px 18px rgba(255, 255, 255, 0.084);
+}
 
 .heroPrimaryPill:hover {
-  background: #070a0d;
+  background: #f1f5f9;
   transform: translateY(-1px);
-  box-shadow: 0 6px 22px rgba(255, 255, 255, 0.132);}
+  box-shadow: 0 6px 22px rgba(255, 255, 255, 0.22);
+}
+:global([data-theme="light"]) .heroPrimaryPill:hover {
+  background: #070a0d;
+  box-shadow: 0 6px 22px rgba(255, 255, 255, 0.132);
+}
 
 .heroSecondaryPill {
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
-  background: rgba(0, 0, 0, 0.06);
-  color: #11151b;
+  background: rgba(255, 255, 255, 0.06);
+  color: #e2e8f0;
   padding: 0.6rem 1.3rem;
   font-size: 0.85rem;
   font-weight: 600;
   border-radius: 9999px;
   text-decoration: none;
-  border: 1px solid rgba(0, 0, 0, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   cursor: pointer;
   backdrop-filter: blur(8px);
-  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;}
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+:global([data-theme="light"]) .heroSecondaryPill {
+  background: rgba(0, 0, 0, 0.06);
+  color: #11151b;
+  border: 1px solid rgba(0, 0, 0, 0.14);
+}
 
 .heroSecondaryPill:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.28);
+  color: #ffffff;
+}
+:global([data-theme="light"]) .heroSecondaryPill:hover {
   background: rgba(0, 0, 0, 0.12);
   border-color: rgba(0, 0, 0, 0.28);
-  color: #000000;}
+  color: #000000;
+}
 
 /* Right-side Divider Stats */
 .heroStats {
   display: flex;
   align-items: center;
   gap: 0;
-  padding: 0.5rem 0;}
+  padding: 0.5rem 0;
+}
 
 .heroStatTile {
   display: flex;
   flex-direction: column;
   padding: 0 1.75rem;
-  border-left: 1px solid rgba(0, 0, 0, 0.12);}
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+}
+:global([data-theme="light"]) .heroStatTile {
+  border-left: 1px solid rgba(0, 0, 0, 0.12);
+}
 
 .heroStatTile:first-child {
   border-left: none;
-  padding-left: 0;}
+  padding-left: 0;
+}
 
 .heroStatTile:last-child {
-  padding-right: 0.5rem;}
+  padding-right: 0.5rem;
+}
 
 .heroStatValue {
   font-size: 1.75rem;
   font-weight: 700;
   letter-spacing: -0.02em;
+  color: #ffffff;
+  line-height: 1.15;
+}
+:global([data-theme="light"]) .heroStatValue {
   color: #000000;
-  line-height: 1.15;}
+}
 
 .heroStatLabel {
   font-size: 0.775rem;
   font-weight: 500;
+  color: rgba(148, 163, 184, 0.85);
+  margin-top: 0.3rem;
+}
+:global([data-theme="light"]) .heroStatLabel {
   color: rgba(71, 86, 107, 0.85);
-  margin-top: 0.3rem;}
+}
 
 /* ========================================================
    FILTER & SEARCH TOOLBAR
@@ -621,16 +720,22 @@
 /* Responsive */
 @media (max-width: 768px) {
   .heroBanner {
-    padding: 1.5rem 1.25rem;}
+    padding: 1.5rem 1.25rem;
+  }
   .title {
     font-size: 1.65rem;
   }
   .heroStats {
     width: 100%;
     padding-top: 0.75rem;
-    border-top: 1px solid rgba(0, 0, 0, 0.1);}
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+  }
+:global([data-theme="light"]) .heroStats {
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+}
   .heroStatTile {
-    padding: 0 1rem;}
+    padding: 0 1rem;
+  }
   .categoryGrid {
     grid-template-columns: 1fr;
   }

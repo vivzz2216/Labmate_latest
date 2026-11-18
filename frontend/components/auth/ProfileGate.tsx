@@ -4,10 +4,12 @@ import {useEffect, useState, type ReactNode} from 'react'
 import {usePathname} from 'next/navigation'
 import {useAuth} from '@/contexts/BasicAuthContext'
 import UserOnboarding from './UserOnboarding'
+import {useDashboardTheme} from '@/components/dashboard/DashboardShell'
 
 export default function ProfileGate({children}: {children: ReactNode}) {
   const pathname = usePathname()
   const {user, loading, checkProfileComplete} = useAuth()
+  const {theme} = useDashboardTheme()
   const protectedPage = ['/dashboard', '/workspace', '/code-execution'].some(path => pathname === path || pathname.startsWith(path + '/'))
   const [checked, setChecked] = useState('')
   const [complete, setComplete] = useState(false)
@@ -20,7 +22,7 @@ export default function ProfileGate({children}: {children: ReactNode}) {
     return () => {active = false}
   }, [protectedPage, loading, userId, key, checkProfileComplete])
   if (!protectedPage || (!loading && !user)) return <>{children}</>
-  if (loading || checked !== key) return <div role="status" style={{minHeight:'100vh',display:'grid',placeItems:'center',background:'#050506',color:'#a1a1aa'}}>Loading your profile…</div>
+  if (loading || checked !== key) return <div role="status" style={{minHeight:'100vh',display:'grid',placeItems:'center',background:theme==='light'?'#ffffff':'#050506',color:theme==='light'?'#71717a':'#a1a1aa'}}>Loading your profile…</div>
   if (!complete) return <UserOnboarding isOpen onComplete={async () => {
     if (!await checkProfileComplete()) throw new Error('Your profile is incomplete. Please check every field and try again.')
     setComplete(true)
