@@ -6,7 +6,7 @@ import { ArrowLeft, ArrowRight, LockKeyhole, RefreshCw, Search, ShieldCheck } fr
 import { useAuth } from '@/contexts/BasicAuthContext'
 import LabMateLogo from '@/components/brand/LabMateLogo'
 import LoginModal from '@/components/auth/LoginModal'
-import { fetchAdminOverview, fetchAdminUsers, fetchAdminPayments, type AdminOverview, type StudentPage, type PaymentPage, type PaymentMode } from '@/lib/adminApi'
+import { fetchAdminOverview, fetchAdminUsers, fetchAdminPayments, fetchAdminMessages, type AdminOverview, type StudentPage, type PaymentPage, type PaymentMode, type MessagePage } from '@/lib/adminApi'
 import styles from './admin.module.css'
 
 const money = (paise: number, currency = 'INR') => new Intl.NumberFormat('en-IN', { style: 'currency', currency, maximumFractionDigits: 2 }).format(paise / 100)
@@ -18,7 +18,8 @@ export default function AdminDashboardPage() {
   const [overview, setOverview] = useState<AdminOverview | null>(null)
   const [students, setStudents] = useState<StudentPage | null>(null)
   const [payments, setPayments] = useState<PaymentPage | null>(null)
-  const [tab, setTab] = useState<'students' | 'payments'>('students')
+  const [messages, setMessages] = useState<MessagePage | null>(null)
+  const [tab, setTab] = useState<'students' | 'payments' | 'messages'>('students')
   const [search, setSearch] = useState('')
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState('all')
@@ -44,21 +45,24 @@ export default function AdminDashboardPage() {
     setLoading(true); setError(''); setDenied(false)
     const detail = tab === 'students'
       ? fetchAdminUsers({ search: query, paid: filter === 'paid' ? true : filter === 'unpaid' ? false : undefined, active: filter === 'inactive' ? false : undefined, offset: page * 25, limit: 25 }, controller.signal)
-      : fetchAdminPayments(mode, page * 25, controller.signal)
+      : tab === 'payments' ? fetchAdminPayments(mode, page * 25, controller.signal)
+      : fetchAdminMessages(controller.signal)
     Promise.all([fetchAdminOverview(controller.signal), detail]).then(([summary, records]) => {
       if (controller.signal.aborted) return
       setOverview(summary)
       if (tab === 'students') setStudents(records as StudentPage)
-      else setPayments(records as PaymentPage)
+      else if (tab === 'payments') setPayments(records as PaymentPage)
+      else setMessages(records as MessagePage)
     }).catch((err) => {
       if (controller.signal.aborted) return
       if ([401, 403].includes(err?.response?.status)) { setDenied(true); setOverview(null) }
       else setError('Dashboard data could not be loaded. Refresh to try again.')
     }).finally(() => { if (!controller.signal.aborted) setLoading(false) })
     return () => controller.abort()
-  }, [authLoading, userId, isAdmin, tab, query, filter, mode, page, refresh])
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- messages load once per tab visit; paging them is local
+  }, [authLoading, userId, isAdmin, tab, query, filter, mode, tab === 'messages' ? 0 : page, refresh])
 
-  const total = tab === 'students' ? students?.total || 0 : payments?.total || 0
+  const total = tab === 'students' ? students?.total || 0 : tab === 'payments' ? payments?.total || 0 : messages?.feedback.length || 0
   const checkingAccess = authLoading || (!!user && !user.is_admin && !overview && loading && !denied)
   const allowed = !!user && (!!user.is_admin || !!overview) && !denied
 
@@ -106,18 +110,29 @@ export default function AdminDashboardPage() {
           <div className={styles.tabs} role="tablist" aria-label="Records">
             <button role="tab" aria-selected={tab === 'students'} aria-controls="owner-records" onClick={() => { setTab('students'); setPage(0) }}>Students {overview && <span>{number(overview.total_students)}</span>}</button>
             <button role="tab" aria-selected={tab === 'payments'} aria-controls="owner-records" onClick={() => { setTab('payments'); setPage(0) }}>Payments</button>
+            <button role="tab" aria-selected={tab === 'messages'} aria-controls="owner-records" onClick={() => { setTab('messages'); setPage(0) }}>Messages</button>
           </div>
           <div className={styles.tools}>
             {tab === 'students' ? <>
               <label className={styles.search}><Search size={16} /><input aria-label="Search students" placeholder="Search students by name or email" value={search} maxLength={120} onChange={e => setSearch(e.target.value)} /></label>
               <select aria-label="Student payment filter" value={filter} onChange={e => { setFilter(e.target.value); setPage(0) }}><option value="all">All students</option><option value="paid">Paid students · live</option><option value="unpaid">No retained live payment</option><option value="inactive">Disabled accounts</option></select>
+            </> : tab === 'messages' ? <>
+              <div><h2>Student messages</h2><p>Contact-page messages, support notes and ratings. Reply by email; latest 200 shown.</p></div>
             </> : <>
               <div><h2>Credit-pack purchases</h2><p>One-time payments. Pending orders are excluded from revenue.</p></div>
               <select aria-label="Payment mode" value={mode} onChange={e => { setMode(e.target.value as PaymentMode); setPage(0) }}><option value="live">Live payments</option><option value="test">Test payments · simulated</option></select>
             </>}
           </div>
           <div id="owner-records" role="tabpanel" tabIndex={0} className={styles.tableWrap}>
-            {loading ? <p className={styles.empty} role="status">Loading records…</p> : error ? <p className={styles.empty}>Refresh to load records.</p> : total === 0 ? <div className={styles.empty}><h2>{tab === 'students' ? (query || filter !== 'all' ? 'No matching students' : 'No students yet') : `No ${mode} payments yet`}</h2><p>{tab === 'students' ? 'Registered student accounts will appear here.' : 'Recorded orders and verified payments will appear here.'}</p></div> : tab === 'students' ?
+            {loading ? <p className={styles.empty} role="status">Loading records…</p> : error ? <p className={styles.empty}>Refresh to load records.</p> : total === 0 ? <div className={styles.empty}><h2>{tab === 'students' ? (query || filter !== 'all' ? 'No matching students' : 'No students yet') : tab === 'messages' ? 'No messages yet' : `No ${mode} payments yet`}</h2><p>{tab === 'students' ? 'Registered student accounts will appear here.' : tab === 'messages' ? 'Messages from the contact page and student ratings will appear here.' : 'Recorded orders and verified payments will appear here.'}</p></div> : tab === 'messages' ?
+              <table><caption className={styles.srOnly}>Student messages and ratings</caption><thead><tr><th>Student</th><th>Message</th><th>Rating</th><th>Received</th></tr></thead><tbody>
+                {messages?.feedback.slice(page * 25, page * 25 + 25).map(item => <tr key={item.id}>
+                  <td><strong>{item.user_name || 'Unknown student'}</strong>{item.user_email ? <a href={`mailto:${item.user_email}`}>{item.user_email}</a> : <small>No email on record</small>}</td>
+                  <td style={{ whiteSpace: 'pre-wrap', maxWidth: 520 }}>{item.message}</td>
+                  <td>{item.rating ? `${item.rating} / 5` : <small>Message</small>}</td>
+                  <td>{date(item.created_at)}</td>
+                </tr>)}
+              </tbody></table> : tab === 'students' ?
               <table><caption className={styles.srOnly}>Registered students and their platform usage</caption><thead><tr><th>Student</th><th>Last activity</th><th>Lab activity</th><th>Live payments</th><th>Credits · {overview?.billing_mode}</th><th>Account</th></tr></thead><tbody>
                 {students?.users.map(student => <tr key={student.id}>
                   <td><strong>{student.name}</strong><span>{student.email}</span><small>{[student.institution, student.course].filter(Boolean).join(' · ') || 'Profile not completed'}</small><small>Joined {date(student.created_at)}</small></td>

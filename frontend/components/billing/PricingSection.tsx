@@ -6,6 +6,27 @@ import { ArrowRight, Check, Flame, LockKeyhole, Plus, RefreshCw } from 'lucide-r
 import { billingApi, Catalogue, Pack, rupees } from '@/lib/billing';
 import styles from './PricingSection.module.css';
 
+// Standard prices, shown only when the price API cannot be reached (for example while the backend restarts),
+// so the section never shows an error box instead of prices. Keep in step with PACKS in
+// backend/app/services/billing_service.py. Checkout stays disabled until the live catalogue loads.
+const STANDARD_CATALOGUE: Catalogue = {
+  packs: [
+    { id: 'quick-lab', name: 'Quick Lab', amount: 2900, credits: 10, currency: 'INR', featured: false,
+      description: 'For your next set of practicals.' },
+    { id: 'lab-pack', name: 'Lab Pack', amount: 7900, credits: 35, currency: 'INR', featured: true,
+      description: 'Room for a few lab manuals.' },
+    { id: 'semester-pack', name: 'Semester Pack', amount: 14900, credits: 80, currency: 'INR', featured: false,
+      description: 'Keep several subjects moving.' },
+    { id: 'college-pack', name: 'College Pack', amount: 59900, credits: 300, currency: 'INR', featured: false,
+      description: '300 credits for one student’s full term of practicals.' },
+  ],
+  trial_credits: 100,
+  mode: 'live',
+  checkout_available: false,
+  billing_enabled: true,
+};
+const RETRY_DELAYS_MS = [1500, 4000];
+
 const perExperiment = (pack: Pack) =>
   new Intl.NumberFormat('en-IN', {
     style: 'currency',
@@ -21,21 +42,32 @@ export default function PricingSection() {
 
   useEffect(() => {
     const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
     setError(false);
-    billingApi
-      .catalogue(controller.signal)
-      .then((data) => {
-        if (!Array.isArray(data.packs)) throw new Error('Invalid pack catalogue');
-        if (!controller.signal.aborted) setCatalogue(data);
-      })
-      .catch(() => {
-        if (!controller.signal.aborted) setError(true);
-      });
-    return () => controller.abort();
+    const attempt = (index: number) => {
+      billingApi
+        .catalogue(controller.signal)
+        .then((data) => {
+          if (!Array.isArray(data.packs)) throw new Error('Invalid pack catalogue');
+          if (!controller.signal.aborted) setCatalogue(data);
+        })
+        .catch(() => {
+          if (controller.signal.aborted) return;
+          // Retry quietly first; a brief backend restart should not show visitors an error.
+          if (index < RETRY_DELAYS_MS.length) timer = setTimeout(() => attempt(index + 1), RETRY_DELAYS_MS[index]);
+          else setError(true);
+        });
+    };
+    attempt(0);
+    return () => {
+      controller.abort();
+      if (timer) clearTimeout(timer);
+    };
   }, [retry]);
 
+  const shown = catalogue ?? (error ? STANDARD_CATALOGUE : null);
   const packs =
-    catalogue?.packs.filter(
+    shown?.packs.filter(
       (pack) => !pack.admin_only && !['payment-check', 'owner-payment-check'].includes(pack.id)
     ) || [];
   const offer = packs.find((pack) => pack.offer_active);
@@ -61,11 +93,11 @@ export default function PricingSection() {
     <section id="pricing" className={styles.pricing} aria-labelledby="pricing-heading">
       <div className={styles.header}>
         <h2 id="pricing-heading">
-          A little spend.<span>A lot less lab work.</span>
+          A little spend.<span>A lot less busywork.</span>
         </h2>
         <div className={styles.intro}>
           <p>
-            Try <strong>{catalogue?.trial_credits ?? 100} experiments free.</strong>
+            Try <strong>{shown?.trial_credits ?? 100} experiments free.</strong>
             <br />
             Pick a pack when you need more.
           </p>
@@ -100,16 +132,16 @@ export default function PricingSection() {
         </div>
       )}
       {error && (
-        <div className={styles.error} role="alert">
-          <p>We couldn’t load the latest prices.</p>
+        <div className={styles.error} role="status">
+          <p>Showing standard prices. Checkout opens once the latest prices load.</p>
           <button onClick={() => setRetry((value) => value + 1)}>
             <RefreshCw size={15} aria-hidden="true" />
-            Try again
+            Refresh prices
           </button>
         </div>
       )}
 
-      {catalogue && packs.length > 0 && (
+      {shown && packs.length > 0 && (
         <div className={styles.comparison}>
           <div className={styles.plans}>
             {packs.map((pack) => (
@@ -181,7 +213,7 @@ export default function PricingSection() {
           </div>
         </div>
       )}
-      {catalogue && packs.length === 0 && !error && (
+      {shown && packs.length === 0 && !error && (
         <p className={styles.notice}>No student packs are available right now. Please check back soon.</p>
       )}
 

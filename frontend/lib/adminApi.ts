@@ -36,6 +36,12 @@ export async function fetchAdminOverview(signal?: AbortSignal): Promise<AdminOve
 export async function fetchAdminUsers(params: { search: string; paid?: boolean; active?: boolean; offset: number; limit: number }, signal?: AbortSignal): Promise<StudentPage> {
   return (await api.get('/api/admin/users', { params, signal })).data
 }
+export interface AdminMessage { id: number; user_id: number | null; user_email: string | null; user_name: string | null; rating: number | null; message: string; created_at: string | null }
+export interface MessagePage { feedback: AdminMessage[] }
+/** Student messages: contact-page messages, support notes and ratings (latest 200). */
+export async function fetchAdminMessages(signal?: AbortSignal): Promise<MessagePage> {
+  return (await api.get('/api/admin/feedback', { signal })).data
+}
 export async function fetchAdminPayments(mode: PaymentMode, offset: number, signal?: AbortSignal): Promise<PaymentPage> {
   return (await api.get('/api/admin/payments', { params: { mode, offset, limit: 25 }, signal })).data
 }

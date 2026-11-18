@@ -314,7 +314,13 @@
   justify-content: center;
   gap: 16px;
   flex-wrap: wrap;
-  margin-bottom: 48px;
+  margin-bottom: 14px;
+}
+
+.heroTrialNote {
+  font-size: 13px;
+  color: #71717a;
+  margin: 0 0 44px 0;
 }
 
 .metricHighlights {

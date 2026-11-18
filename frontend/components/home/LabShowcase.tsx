@@ -123,8 +123,8 @@ export default function LabShowcase() {
       <div className={styles.upcomingRoadmap}>
         <Terminal size={18} aria-hidden="true" />
         <div>
-          <p><strong>Coming next:</strong> Ubuntu lab is expected within a few weeks.</p>
-          <p>Git, GitHub, Jenkins, Docker, Kubernetes, Terraform, Ansible, MLflow, Airflow, PROLOG, Packet Tracer, GNS3, Wireshark and Mininet are planned or in progress.</p>
+          <p><strong>Also available:</strong> R programming, Social Media Analytics, and practice studios for <Link href="/networks/wireshark">Wireshark</Link> and <Link href="/networks/packet-tracer">Packet Tracer</Link>.</p>
+          <p><strong>In development:</strong> Ubuntu / Linux, Git &amp; GitHub, DevOps (Jenkins, Docker, Kubernetes, Terraform, Ansible), MLOps (MLflow, Airflow), PROLOG, GNS3 and Mininet.</p>
         </div>
       </div>
     </section>

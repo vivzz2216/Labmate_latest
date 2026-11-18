@@ -8,7 +8,7 @@ type Review = { id: number; rating: number; message: string; created_at: string 
 type ReviewPage = { reviews: Review[]; total: number; average_rating: number | null };
 
 export default function StudentReviews() {
-  const section = useRef<HTMLElement>(null);
+  const section = useRef<HTMLDivElement>(null);
   const [data, setData] = useState<ReviewPage | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
@@ -29,6 +29,10 @@ export default function StudentReviews() {
     if (section.current) observer.observe(section.current);
     return () => observer.disconnect();
   }, [load]);
+
+  // Until students have shared ratings, show nothing: an empty "be the first" box tells visitors nobody uses
+  // LabMate yet. The invisible marker still triggers the first load when the visitor scrolls near it.
+  if (!data || data.total === 0) return <div ref={section} aria-hidden="true" />;
 
   return <section id="reviews" ref={section} className={styles.section} aria-labelledby="reviews-heading">
     <div className={styles.sectionHeader}>

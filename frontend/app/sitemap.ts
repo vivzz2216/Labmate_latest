@@ -10,6 +10,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: 'weekly',
       priority: 1,
     },
+    ...['/privacy', '/terms', '/refund-policy', '/contact'].map((path) => ({
+      url: baseUrl + path,
+      lastModified: new Date(),
+      changeFrequency: 'yearly' as const,
+      priority: 0.3,
+    })),
   ]
 }
 

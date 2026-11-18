@@ -7,7 +7,7 @@
 @media(prefers-reduced-motion:reduce){.section *{scroll-behavior:auto!important;transition:none!important}}
 
 .review{display:flex;flex-direction:column}.review footer{margin-top:auto}
-.upcomingRoadmap{display:flex;align-items:flex-start;gap:12px;margin-top:24px;padding:18px 20px;border:1px solid #303035;border-radius:12px;background:#111116;color:#a1a1aa;font-size:13px;line-height:1.6}.upcomingRoadmap>svg{flex:none;margin-top:2px;color:#9ecab3}.upcomingRoadmap p{margin:0}.upcomingRoadmap p+p{margin-top:5px}.upcomingRoadmap strong{color:#f4f4f5;font-weight:600}
+.upcomingRoadmap{display:flex;align-items:flex-start;gap:12px;margin-top:24px;padding:18px 20px;border:1px solid #303035;border-radius:12px;background:#111116;color:#a1a1aa;font-size:13px;line-height:1.6}.upcomingRoadmap>svg{flex:none;margin-top:2px;color:#9ecab3}.upcomingRoadmap p{margin:0}.upcomingRoadmap p+p{margin-top:5px}.upcomingRoadmap strong{color:#f4f4f5;font-weight:600}.upcomingRoadmap a{color:#9ecab3;text-decoration:underline;text-underline-offset:2px}.upcomingRoadmap a:hover{color:#c6e5d4}
 
 /* Preserve the native app proportions and lossless retina text. */
 .previewControls{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:9px 13px;background:#16161c;border-bottom:1px solid #303039;color:#8f8f9b;font-size:11px}

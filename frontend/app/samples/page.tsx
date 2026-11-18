@@ -340,7 +340,7 @@ export default function SampleReportsPage() {
       {/* Footer */}
       <footer className={styles.footer}>
         <div className="max-w-4xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-          <div>&copy; {new Date().getFullYear()} LabMate AI &bull; Automated Lab Manual Intelligence</div>
+          <div>&copy; {new Date().getFullYear()} LabMate &bull; Automated Lab Manual Intelligence</div>
           <div className="flex items-center gap-6">
             <Link href="/" className="hover:text-zinc-400">Home</Link>
             <Link href="/labs" className="hover:text-zinc-400">All Labs</Link>

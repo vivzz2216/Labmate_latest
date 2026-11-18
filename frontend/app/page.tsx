@@ -41,7 +41,7 @@ export default function HomePage() {
     if (new URLSearchParams(window.location.search).get('login') === '1' && !user) setIsLoginOpen(true);
   }, [user]);
 
-  const requireAccount = (event: React.MouseEvent<HTMLButtonElement>, destination: "/dashboard" | "/code-execution") => {
+  const requireAccount = (event: React.MouseEvent<HTMLElement>, destination: "/dashboard" | "/code-execution") => {
     if (isAuthenticated) return;
     event.preventDefault();
     setAuthDestination(destination);
@@ -65,7 +65,6 @@ export default function HomePage() {
               <a href="#features" className={styles.navLink}>Features</a>
               <Link href="/labs" className={styles.navLink}>Lab Sections</Link>
               <a href="#labs" className={styles.navLink}>Labs &amp; templates</a>
-              <a href="#reviews" className={styles.navLink}>Reviews</a>
               <a href="#pricing" className={styles.navLink}>Pricing</a>
               <Link href="/workspace" className={styles.navLink}>Workspace</Link>
             </div>
@@ -113,21 +112,36 @@ export default function HomePage() {
         </div>
       </nav>
 
-      {/* Hero Section */}
+      {/* Hero Section: rendered visible on the server. It used to start at opacity 0 and appear only once
+          JavaScript had loaded, so slow phones showed a blank screen first. */}
       <motion.header
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
+        initial={{ y: 12 }}
+        animate={{ y: 0 }}
         transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
         className={styles.heroSection}
       >
         <h1 className={styles.heroHeading}>
-          Building Autonomous <br />
-          <span className={styles.heroSerifAccent}>Lab Intelligence.</span>
+          Upload your lab manual. <br />
+          <span className={styles.heroSerifAccent}>Get the finished record.</span>
         </h1>
 
         <p className={styles.heroDescription}>
-          Transform raw lab manuals into tested code, execution evidence, and formatted Word reports.
+          LabMate turns your lab manual into tested code, real execution screenshots, and a formatted Word report.
         </p>
+
+        <div className={styles.heroCtas}>
+          <Link
+            href="/code-execution"
+            onClick={(event) => requireAccount(event, "/code-execution")}
+            className={styles.ctaPrimaryBtn}
+          >
+            Upload a manual <ArrowRight size={16} aria-hidden="true" />
+          </Link>
+          <Link href="/labs" className={styles.ctaSecondaryBtn}>
+            See lab sections
+          </Link>
+        </div>
+        <p className={styles.heroTrialNote}>100 experiments free. No card needed.</p>
 
         <div className={styles.metricHighlights}>
           <div className={styles.metricItem}>
@@ -155,8 +169,8 @@ export default function HomePage() {
       {/* LabMate workflow showcase */}
       <section className={styles.heroMediaSection}>
         <motion.div
-          initial={{ opacity: 0, scale: 0.98 }}
-          animate={{ opacity: 1, scale: 1 }}
+          initial={{ scale: 0.98 }}
+          animate={{ scale: 1 }}
           transition={{ duration: 0.7, delay: 0.2 }}
           className={styles.heroMediaCard}
         >
@@ -261,17 +275,6 @@ export default function HomePage() {
             <span>Word DOCX</span>
           </div>
 
-          {/* Google Drive */}
-          <div className={styles.langItem} title="Google Drive Integration">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M8.2 3.8L2.5 13.8l3.8 6.5 5.7-9.9L8.2 3.8z" fill="#0066DA" />
-              <path d="M15.8 3.8H8.2l3.8 6.6 5.8 10L21.5 14 15.8 3.8z" fill="#00AC47" />
-              <path d="M6.3 20.3h11.5l3.8-6.5H10.1L6.3 20.3z" fill="#EA4335" />
-              <path d="M15.8 3.8h-7.6L12 10.4l3.8-6.6z" fill="#FFBA00" />
-            </svg>
-            <span>Google Drive</span>
-          </div>
-
         </div>
       </section>
 
@@ -330,7 +333,7 @@ export default function HomePage() {
           <CheckCircle2 size={24} aria-hidden="true" />
           <div>
             <h3>Code, execution, screenshots, and the Word file—all automatic.</h3>
-            <p>No copying code from ChatGPT, running it in an IDE, taking screenshots, or pasting them into Word yourself. Upload, execute, download.</p>
+            <p>No switching between an AI chat, an IDE, a screenshot tool, and Word. LabMate runs the code for real and records the actual output, so you can check every result before you submit.</p>
           </div>
         </div>
       </section>
@@ -410,11 +413,13 @@ export default function HomePage() {
         </div>
 
         <div className={styles.footerBottom}>
-          <div>© {new Date().getFullYear()} LabMate AI. All rights reserved.</div>
-          <div className="flex items-center gap-6">
-            <span className="hover:text-zinc-400 cursor-pointer">Privacy Policy</span>
-            <span className="hover:text-zinc-400 cursor-pointer">Terms of Service</span>
-          </div>
+          <div>© {new Date().getFullYear()} LabMate. All rights reserved.</div>
+          <nav aria-label="Legal" className="flex flex-wrap items-center gap-x-6 gap-y-2">
+            <Link href="/privacy" className="hover:text-zinc-300">Privacy Policy</Link>
+            <Link href="/terms" className="hover:text-zinc-300">Terms of Service</Link>
+            <Link href="/refund-policy" className="hover:text-zinc-300">Refund Policy</Link>
+            <Link href="/contact" className="hover:text-zinc-300">Contact</Link>
+          </nav>
         </div>
       </footer>
 
