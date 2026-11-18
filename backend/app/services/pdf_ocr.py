@@ -63,15 +63,40 @@ def _render_without_poppler(filename, pages, root):
                 raise ValueError('Embedded PDF scan cannot be decoded; configure Poppler or PDFium.') from error
 
 
+UNREADABLE_PDF = 'This PDF could not be opened. It may be damaged or password-protected; save it again or upload the Word file.'
+
+
 def pdf_text_pages(filename):
-    """Shared, ordered text/OCR path for workflow and fallback parser."""
+    """Shared, ordered text/OCR path for workflow and fallback parser.
+
+    Only a page that carries an image is scanned text. A blank page, or a page whose only content is a short header,
+    has nothing to recognise and is kept as it is rather than sent to OCR.
+    """
     import pdfplumber
-    with pdfplumber.open(filename) as document:
-        if len(document.pages) > 100: raise ValueError('Please upload an assignment of 100 pages or fewer.')
-        texts = [page.extract_text() or '' for page in document.pages]
-    scanned = [i + 1 for i, text in enumerate(texts) if len(text.strip()) < 20]
-    recognized = ocr_pdf_pages(filename, scanned)
-    return [recognized.get(i + 1, text) for i, text in enumerate(texts)]
+    try:
+        with pdfplumber.open(filename) as document:
+            if len(document.pages) > 100: raise ValueError('Please upload an assignment of 100 pages or fewer.')
+            texts, has_image = [], []
+            for page in document.pages:
+                texts.append(page.extract_text() or '')
+                has_image.append(bool(page.images))
+    except ValueError:
+        raise
+    except Exception as error:
+        raise ValueError(UNREADABLE_PDF) from error
+    scanned = [i + 1 for i, text in enumerate(texts) if len(text.strip()) < 20 and has_image[i]]
+    # A page that OCR reads as (almost) nothing is a diagram or an output screenshot when the rest of the manual is
+    # readable; only a manual with no readable page at all is rejected.
+    readable_elsewhere = any(len(text.strip()) >= 20 for text in texts)
+    recognized = ocr_pdf_pages(filename, scanned, allow_empty=True)
+    short = [number for number in scanned if len(recognized.get(number, '').strip()) < 20]
+    # A wholly scanned manual whose pages mostly fail OCR is a bad scan; one blank or picture-only page is not.
+    if short and not readable_elsewhere and len(short) * 2 > len(scanned):
+        raise ValueError('Some scanned pages could not be read reliably; upload a clearer scan.')
+    pages = [recognized.get(i + 1, text) for i, text in enumerate(texts)]
+    if not any(len(text.strip()) >= 20 for text in pages):
+        raise ValueError('No readable text was found. Upload a text-based PDF, a clearer scan, or the Word file.')
+    return pages
 
 
 def _refine_unix_command_lines(root,script):
@@ -103,7 +128,7 @@ def _refine_unix_command_lines(root,script):
             text_file.write_text(text.replace(old,new,1),encoding='utf8')
 
 
-def ocr_pdf_pages(filename,pages):
+def ocr_pdf_pages(filename,pages,allow_empty=False):
     if not pages:return {}
     if len(pages)>25:raise ValueError('Scanned manuals support up to 25 OCR pages; split this file.')
     if any(type(page) is not int or page < 1 for page in pages):raise ValueError('OCR pages must be positive page numbers.')
@@ -133,5 +158,6 @@ def ocr_pdf_pages(filename,pages):
             _refine_unix_command_lines(root,script)
         else:raise ValueError('Scanned PDF requires tesseract-ocr on the backend.')
         result={page:(root/f'page-{page:03}.txt').read_text(encoding='utf-8-sig').strip() for page in pages}
-        if any(len(text)<20 for text in result.values()):raise ValueError('Some scanned pages could not be read reliably; upload a clearer scan.')
+        # allow_empty: the caller has readable text on other pages, so a near-empty page is a diagram or screenshot.
+        if any(len(text)<20 for text in result.values()) and not allow_empty:raise ValueError('Some scanned pages could not be read reliably; upload a clearer scan.')
         return result

@@ -12,6 +12,7 @@ FRONT_MATTER_END = re.compile(r"^(?:general\s+(?:requirements|instructions)|expe
 REQUIREMENTS = re.compile(r"^(?:aim|problem statement|experiment question|requirements|tasks|expected output)\s*(?::.*)?$", re.I)
 PAGE_REFERENCE = re.compile(r"(?:\.{2,}\s*|\s{2,}|\|\s*|\s+page\s+)\d+\s*$", re.I)
 QUESTION_HEADING = re.compile(r'^\s*(?:question|q)\s*([1-9]\d{0,2})\s*[:.)-]\s*(.*)$', re.I)
+TASK_TITLE = re.compile(r"\b(?:write|wap|create|develop|implement|build|design|construct|perform|demonstrate|simulate)\b.{8,}", re.I)
 QUESTION_END = re.compile(r'^(?:submission and verification|conclusion|references|bibliography)\s*$', re.I)
 
 
@@ -168,6 +169,9 @@ def numbered_experiments(text):
         if is_handwritten_question(body): continue
         objective_lines = [line for line in block[1:] if not SECTION.match(line) or re.match(
             r'^(?:aim|problem statement)\s*:\s*.*\b(?:write|build|create|implement|design|develop|print|execute|run|train|fit|import|evaluate|analyze|analyse|query|count|calculate|compute|find|sort|search|use)\b',line,re.I)]
+        if not objective_lines and TASK_TITLE.search(match.group(2)):
+            # "Experiment 1: Write a Python program to ..." - the heading line is the whole problem statement.
+            objective_lines = [match.group(2)]
         if not objective_lines:
             raise ManualStructureError(f"Experiment {match.group(1)} has no problem statement or requirements.")
         title=match.group(2).strip() or (block[1] if len(block)>1 else '')
