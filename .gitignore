@@ -143,3 +143,6 @@ docs/_build/
 # Local test/capture scratch folders
 backend/pytest-of-*/
 backend/labmate-browser-tmp/
+
+# Sample reports shown on /samples must reach the deployed site.
+!frontend/public/samples/*.docx
