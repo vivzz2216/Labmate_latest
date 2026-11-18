@@ -341,36 +341,47 @@
 .cardMedia {
   position: relative;
   width: 100%;
-  height: 112px;
+  height: 164px;
   background: #0d0f14;
   border-bottom: 1px solid var(--mu-border);
   overflow: hidden;
+}
+
+.cardMedia::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(10, 12, 18, 0.42) 0%, rgba(10, 12, 18, 0.06) 45%, rgba(10, 12, 18, 0.14) 100%);
+  pointer-events: none;
 }
 
 .cardMediaImg {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center;
   display: block;
   transition: transform 0.35s ease;
 }
 
 .labCard:hover .cardMediaImg {
-  transform: scale(1.02);
+  transform: scale(1.03);
 }
 
 .codeOverlayBadge {
   position: absolute;
+  z-index: 2;
   top: 10px;
   left: 12px;
   font-size: 0.6875rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  padding: 0.2rem 0.5rem;
+  padding: 0.22rem 0.55rem;
   border-radius: 5px;
-  background: rgba(13, 15, 20, 0.88);
+  background: rgba(13, 15, 20, 0.84);
+  backdrop-filter: blur(6px);
   color: #f4f4f5;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.16);
 }
 
 .cardBody {
@@ -943,10 +954,6 @@
   outline-offset: 2px;
 }
 
-/* Light theme: the cover artwork is drawn on a near-black ground; invert it so cards are not heavy black blocks. */
 :global([data-theme="light"]) .cardMedia {
   background: #f4f5f7;
-}
-:global([data-theme="light"]) .cardMediaImg {
-  filter: invert(1) hue-rotate(180deg);
 }

@@ -52,8 +52,8 @@ export default function LabCard({
         <Image
           src={visual.imageSrc}
           alt={visual.altText}
-          width={640}
-          height={220}
+          width={960}
+          height={540}
           className={styles.cardMediaImg}
           unoptimized
         />

@@ -435,6 +435,25 @@ test("SQLite: supports PRAGMA, DDL, GUI cell/row helpers, exports, and error han
 
 // ============================================================================
 // 4. MySQL CLI Engine (frontend/lib/ide/mysqlEngine.ts)
+
+test("MySQL CLI: views reflect current rows and are listed as views", () => {
+  const session = createMysqlSession();
+  const run = (sql: string) => executeMysqlInput(session, sql).outputs.map((item) => item.text).join("\n");
+  assert.match(run("CREATE DATABASE lab_view_test;"), /Query OK/);
+  assert.match(run("USE lab_view_test;"), /Database changed/);
+  assert.match(run("CREATE TABLE inventory (item VARCHAR(30), qty INT, price INT);"), /Query OK/);
+  assert.match(run("INSERT INTO inventory VALUES ('Mouse', 20, 200);"), /Query OK/);
+  assert.match(run("CREATE VIEW stock_value AS SELECT item, qty, price, qty*price AS total_value FROM inventory;"), /Query OK/);
+  assert.match(run("SELECT SUM(total_value) AS total FROM stock_value;"), /4000/);
+  assert.match(run("UPDATE inventory SET qty = 22 WHERE item = 'Mouse';"), /Query OK/);
+  assert.match(run("SELECT SUM(total_value) AS total FROM stock_value;"), /4400/);
+  assert.match(run("CREATE TABLE stock_value (id INT);"), /ERROR 1050/);
+  assert.match(run("USE university; SELECT SUM(total_value) FROM lab_view_test.stock_value;"), /4400/);
+  assert.match(run("USE lab_view_test;"), /Database changed/);
+  assert.match(run("SHOW FULL TABLES;"), /VIEW/);
+  assert.match(run("DROP VIEW stock_value;"), /Query OK/);
+  assert.match(run("SELECT * FROM stock_value;"), /ERROR 1146/);
+});
 // ============================================================================
 
 test("MySQL: banner, SHOW DATABASES, USE, DESCRIBE, SELECT, \\G, \\s, \\h, \\c, \\q", () => {

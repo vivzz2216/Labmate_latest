@@ -36,6 +36,7 @@ export interface MysqlTable {
 export interface MysqlDatabase {
   name: string;
   tables: Record<string, MysqlTable>;
+  views?: Record<string, SelectStmt>;
 }
 
 export interface MysqlOutputBlock {
@@ -61,6 +62,7 @@ export interface MysqlSession {
   startedAt: number;
   /** When true, SQL statements are not interpreted here: they come back as "remote" blocks for the real MySQL server. */
   remote?: boolean;
+  resolvingViews?: readonly SelectStmt[];
 }
 
 export interface MysqlExecutionResult {
@@ -1010,6 +1012,10 @@ function findTableKey(db: MysqlDatabase, name: string): string | null {
     if (keys[i].toLowerCase() === lower) return keys[i];
   }
   return null;
+}
+
+function findViewKey(db: MysqlDatabase, name: string): string | undefined {
+  return Object.keys(db.views || {}).find((key) => key.toLowerCase() === name.toLowerCase());
 }
 
 function findColumnDef(table: MysqlTable, colName: string): MysqlColumnDef | null {
@@ -2453,7 +2459,8 @@ function evalScalarExpr(
 function resolveTableFromSession(
   session: MysqlSession,
   dbName: string | undefined,
-  tableName: string
+  tableName: string,
+  readView = false
 ): { db: MysqlDatabase; table: MysqlTable } {
   refreshInformationSchema(session);
   let targetDbKey: string | null = null;
@@ -2475,6 +2482,17 @@ function resolveTableFromSession(
   const db = session.databases[targetDbKey];
   const tKey = findTableKey(db, tableName);
   if (!tKey) {
+    const viewKey = findViewKey(db, tableName);
+    const view = viewKey && db.views?.[viewKey];
+    if (view && viewKey) {
+      if (!readView || session.resolvingViews?.includes(view)) {
+        throw new MysqlError("ERROR 1356 (HY000): View '" + db.name + "." + tableName + "' is unavailable for this operation");
+      }
+      const result = executeSelectPlan({ ...session, currentDb: targetDbKey, resolvingViews: [...(session.resolvingViews || []), view] }, view);
+      const columns = result.columns.map((name, i) => makeCol(name, result.numericCols[i] ? "double" : "varchar(255)"));
+      const rows = result.rows.map((values) => Object.fromEntries(values.map((value, i) => [result.columns[i], value])));
+      return { db, table: { name: viewKey, columns, rows, nextAutoIncrement: 1, engine: "VIEW", charset: "utf8mb4" } };
+    }
     throw new MysqlError("ERROR 1146 (42S02): Table '" + db.name + "." + tableName + "' doesn't exist");
   }
   return { db: db, table: db.tables[tKey] };
@@ -2493,7 +2511,7 @@ function buildJoinedRows(session: MysqlSession, from: TableRef[]): {
   const tableOrder: string[] = [];
 
   const firstRef = from[0];
-  const firstResolved = resolveTableFromSession(session, firstRef.db, firstRef.table);
+  const firstResolved = resolveTableFromSession(session, firstRef.db, firstRef.table, true);
   schemas[firstRef.alias] = firstResolved.table;
   tableOrder.push(firstRef.alias);
 
@@ -2506,7 +2524,7 @@ function buildJoinedRows(session: MysqlSession, from: TableRef[]): {
 
   for (let j = 1; j < from.length; j++) {
     const ref = from[j];
-    const resolved = resolveTableFromSession(session, ref.db, ref.table);
+    const resolved = resolveTableFromSession(session, ref.db, ref.table, true);
     if (Object.prototype.hasOwnProperty.call(schemas, ref.alias)) {
       throw new MysqlError("ERROR 1066 (42000): Not unique table/alias: '" + ref.alias + "'");
     }
@@ -3315,13 +3333,13 @@ function executeSingleSqlStatement(
         likePattern = cur.next().value;
       }
       const db = session.databases[dbKey];
-      const tNames = Object.keys(db.tables).sort();
+      const tNames = Object.keys(db.tables).concat(Object.keys(db.views || {})).sort();
       const re = likePattern !== null ? likeToRegex(likePattern) : null;
       const rows: MysqlValue[][] = [];
       for (let i = 0; i < tNames.length; i++) {
         if (!re || re.test(tNames[i])) {
           if (fullTables) {
-            rows.push([tNames[i], db.name === "information_schema" ? "SYSTEM VIEW" : "BASE TABLE"]);
+            rows.push([tNames[i], db.views && db.views[tNames[i]] ? "VIEW" : db.name === "information_schema" ? "SYSTEM VIEW" : "BASE TABLE"]);
           } else {
             rows.push([tNames[i]]);
           }
@@ -3444,8 +3462,25 @@ function executeSingleSqlStatement(
     return renderResult(["Field", "Type", "Null", "Key", "Default", "Extra"], rows, [false, false, false, false, false, false]);
   }
 
-  // CREATE DATABASE / TABLE
+  // CREATE DATABASE / TABLE / VIEW
   if (cur.matchWord("CREATE")) {
+    if (cur.matchWord("VIEW")) {
+      const ref = cur.parseTableName();
+      const dbName = ref.db || session.currentDb;
+      if (!dbName) throw new MysqlError("ERROR 1046 (3D000): No database selected");
+      const dbKey = findDatabaseKey(session.databases, dbName);
+      if (!dbKey) throw new MysqlError("ERROR 1049 (42000): Unknown database '" + dbName + "'");
+      const db = session.databases[dbKey];
+      if (findTableKey(db, ref.table) || findViewKey(db, ref.table)) {
+        throw new MysqlError("ERROR 1050 (42S01): Table '" + ref.table + "' already exists");
+      }
+      cur.expectWord("AS");
+      const query = parseSelectStatement(cur);
+      if (!cur.eof()) throw new SqlSyntaxError(cur.nearHere());
+      executeSelectPlan({ ...session, currentDb: dbKey }, query);
+      (db.views ||= Object.create(null))[ref.table] = query;
+      return { kind: "text", text: "Query OK, 0 rows affected (0.01 sec)" };
+    }
     if (cur.matchWord("DATABASE") || cur.matchWord("SCHEMA")) {
       let ifNotExists = false;
       if (cur.matchWord("IF")) {
@@ -3478,7 +3513,7 @@ function executeSingleSqlStatement(
       const dbKey = findDatabaseKey(session.databases, dbName);
       if (!dbKey) throw new MysqlError("ERROR 1049 (42000): Unknown database '" + dbName + "'");
       const db = session.databases[dbKey];
-      const existingTbl = findTableKey(db, ref.table);
+      const existingTbl = findTableKey(db, ref.table) || findViewKey(db, ref.table);
 
       cur.expectPunct("(");
       const cols: MysqlColumnDef[] = [];
@@ -3550,6 +3585,21 @@ function executeSingleSqlStatement(
 
   // DROP DATABASE / TABLE
   if (cur.matchWord("DROP")) {
+    if (cur.matchWord("VIEW")) {
+      const ifExists = cur.matchWord("IF");
+      if (ifExists) cur.expectWord("EXISTS");
+      const ref = cur.parseTableName();
+      if (!cur.eof()) throw new SqlSyntaxError(cur.nearHere());
+      const dbName = ref.db || session.currentDb;
+      if (!dbName) throw new MysqlError("ERROR 1046 (3D000): No database selected");
+      const dbKey = findDatabaseKey(session.databases, dbName);
+      if (!dbKey) throw new MysqlError("ERROR 1049 (42000): Unknown database '" + dbName + "'");
+      const db = session.databases[dbKey];
+      const viewKey = findViewKey(db, ref.table);
+      if (!viewKey && !ifExists) throw new MysqlError("ERROR 1051 (42S02): Unknown table '" + ref.table + "'");
+      if (viewKey) delete db.views![viewKey];
+      return { kind: "text", text: "Query OK, 0 rows affected (0.01 sec)" };
+    }
     if (cur.matchWord("DATABASE") || cur.matchWord("SCHEMA")) {
       let ifExists = false;
       if (cur.matchWord("IF")) {
@@ -3617,7 +3667,7 @@ function executeSingleSqlStatement(
     cur.expectWord("TO");
     const newRef = cur.parseTableName();
     const resolved = resolveTableFromSession(session, oldRef.db, oldRef.table);
-    if (findTableKey(resolved.db, newRef.table)) {
+    if (findTableKey(resolved.db, newRef.table) || findViewKey(resolved.db, newRef.table)) {
       throw new MysqlError("ERROR 1050 (42S01): Table '" + newRef.table + "' already exists");
     }
     const oldKey = findTableKey(resolved.db, oldRef.table)!;
@@ -3716,7 +3766,7 @@ function executeSingleSqlStatement(
     if (cur.matchWord("RENAME")) {
       cur.matchWord("TO") || cur.matchWord("AS");
       const newName = cur.parseIdent();
-      if (findTableKey(resolved.db, newName)) {
+      if (findTableKey(resolved.db, newName) || findViewKey(resolved.db, newName)) {
         throw new MysqlError("ERROR 1050 (42S01): Table '" + newName + "' already exists");
       }
       const oldKey = findTableKey(resolved.db, ref.table)!;

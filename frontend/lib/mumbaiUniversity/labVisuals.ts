@@ -6,171 +6,212 @@ export interface LabVisualMeta {
   subjectLabel: string;
 }
 
-/**
- * Deterministically maps each Mumbai University computing lab to a uniform,
- * domain-appropriate monochrome cover plate under /images/mu-labs/.
- */
-export function getLabVisualMeta(lab: UniversityLabEntry): LabVisualMeta {
-  const haystack = `${lab.id} ${lab.name} ${lab.courseName} ${lab.domainTags.join(" ")}`.toLowerCase();
-
-  if (haystack.includes("java")) {
+function matchDomainPhoto(lab: UniversityLabEntry, text: string): LabVisualMeta | null {
+  if (text.includes("c programming")) {
     return {
-      imageSrc: "/images/mu-labs/java.svg",
-      altText: `${lab.name} Java programming runtime emblem`,
+      imageSrc: "/images/mu-labs/c-programming.jpg",
+      altText: `${lab.name} C programming code on dark editor`,
+      subjectLabel: "C Programming",
+    };
+  }
+  if (text.includes("data structure") || text.includes("ads lab")) {
+    return {
+      imageSrc: "/images/mu-labs/data-structures.jpg",
+      altText: `${lab.name} connected nodes and tree structure`,
+      subjectLabel: "Data Structures",
+    };
+  }
+  if (text.includes("algorithm")) {
+    return {
+      imageSrc: "/images/mu-labs/algorithms.jpg",
+      altText: `${lab.name} algorithmic mathematics and analysis`,
+      subjectLabel: "Algorithms",
+    };
+  }
+  if (text.includes("java")) {
+    return {
+      imageSrc: "/images/mu-labs/java.jpg",
+      altText: `${lab.name} full-stack Java workstation`,
       subjectLabel: "Java SE",
     };
   }
-  if (haystack.includes("python")) {
+  if (text.includes("python")) {
     return {
-      imageSrc: "/images/mu-labs/python.svg",
-      altText: `${lab.name} Python runtime emblem`,
+      imageSrc: "/images/mu-labs/python.jpg",
+      altText: `${lab.name} Python development environment`,
       subjectLabel: "Python 3",
     };
   }
   if (
-    haystack.includes("sql") ||
-    haystack.includes("dbms") ||
-    haystack.includes("database") ||
-    haystack.includes("datawarehouse") ||
-    haystack.includes("mining")
+    text.includes("sql") ||
+    text.includes("dbms") ||
+    text.includes("database") ||
+    text.includes("datawarehouse") ||
+    text.includes("mining")
   ) {
     return {
-      imageSrc: "/images/mu-labs/database.svg",
-      altText: `${lab.name} relational database schema emblem`,
+      imageSrc: "/images/mu-labs/database.jpg",
+      altText: `${lab.name} database server racks`,
       subjectLabel: "SQL / DBMS",
     };
   }
   if (
-    haystack.includes("security") ||
-    haystack.includes("blockchain") ||
-    haystack.includes("crypt")
+    text.includes("security") ||
+    text.includes("blockchain") ||
+    text.includes("crypt")
   ) {
     return {
-      imageSrc: "/images/mu-labs/security.svg",
-      altText: `${lab.name} security and blockchain emblem`,
+      imageSrc: "/images/mu-labs/security.jpg",
+      altText: `${lab.name} cybersecurity and encryption`,
       subjectLabel: "Security",
     };
   }
   if (
-    haystack.includes("graphics") ||
-    haystack.includes("rendering") ||
-    haystack.includes("opengl")
+    text.includes("graphics") ||
+    text.includes("rendering") ||
+    text.includes("opengl")
   ) {
     return {
-      imageSrc: "/images/mu-labs/graphics.svg",
-      altText: `${lab.name} computer graphics wireframe emblem`,
+      imageSrc: "/images/mu-labs/graphics.jpg",
+      altText: `${lab.name} 3D wireframe graphics rendering`,
       subjectLabel: "Graphics",
     };
   }
   if (
-    haystack.includes("compiler") ||
-    haystack.includes("system programming") ||
-    haystack.includes("spcc")
+    text.includes("compiler") ||
+    text.includes("system programming") ||
+    text.includes("spcc")
   ) {
     return {
-      imageSrc: "/images/mu-labs/systems-compiler.svg",
-      altText: `${lab.name} compiler and AST pipeline emblem`,
+      imageSrc: "/images/mu-labs/compilers.jpg",
+      altText: `${lab.name} compiler syntax and systems code`,
       subjectLabel: "Compilers",
     };
   }
   if (
-    haystack.includes("operating system") ||
-    haystack.includes("unix") ||
-    haystack.includes("shell")
+    text.includes("operating system") ||
+    text.includes("unix") ||
+    text.includes("shell")
   ) {
     return {
-      imageSrc: "/images/mu-labs/linux-os.svg",
-      altText: `${lab.name} Unix and OS kernel shell emblem`,
+      imageSrc: "/images/mu-labs/operating-systems.jpg",
+      altText: `${lab.name} Unix and Linux terminal shell`,
       subjectLabel: "OS / Unix",
     };
   }
-  if (
-    haystack.includes("network") ||
-    haystack.includes("cloud")
-  ) {
+  if (text.includes("cloud")) {
     return {
-      imageSrc: "/images/mu-labs/network-cloud.svg",
-      altText: `${lab.name} networks and cloud topology emblem`,
-      subjectLabel: "Networks & Cloud",
+      imageSrc: "/images/mu-labs/cloud-computing.jpg",
+      altText: `${lab.name} cloud infrastructure data center`,
+      subjectLabel: "Cloud Computing",
+    };
+  }
+  if (text.includes("network")) {
+    return {
+      imageSrc: "/images/mu-labs/networks.jpg",
+      altText: `${lab.name} network switch and fiber optic cabling`,
+      subjectLabel: "Networks",
     };
   }
   if (
-    haystack.includes("organization") ||
-    haystack.includes("architecture") ||
-    haystack.includes("microprocessor")
+    text.includes("organization") ||
+    text.includes("architecture") ||
+    text.includes("microprocessor")
   ) {
     return {
-      imageSrc: "/images/mu-labs/architecture.svg",
-      altText: `${lab.name} computer architecture CPU emblem`,
+      imageSrc: "/images/mu-labs/architecture.jpg",
+      altText: `${lab.name} CPU microchip hardware architecture`,
       subjectLabel: "Architecture",
     };
   }
   if (
-    haystack.includes("devops") ||
-    haystack.includes("software engineering") ||
-    haystack.includes("agile")
+    text.includes("devops") ||
+    text.includes("software engineering") ||
+    text.includes("agile")
   ) {
     return {
-      imageSrc: "/images/mu-labs/devops-se.svg",
-      altText: `${lab.name} software engineering pipeline emblem`,
+      imageSrc: "/images/mu-labs/devops-se.jpg",
+      altText: `${lab.name} software engineering and DevOps pipeline`,
       subjectLabel: "SE & DevOps",
     };
   }
   if (
-    haystack.includes("internet programming") ||
-    haystack.includes("web lab") ||
-    haystack.includes("web engineering")
+    text.includes("internet programming") ||
+    text.includes("web lab") ||
+    text.includes("web engineering")
   ) {
     return {
-      imageSrc: "/images/mu-labs/web-dev.svg",
-      altText: `${lab.name} web engineering browser code emblem`,
+      imageSrc: "/images/mu-labs/web-dev.jpg",
+      altText: `${lab.name} web engineering and frontend markup`,
       subjectLabel: "Web Engineering",
     };
   }
   if (
-    haystack.includes("ai ") ||
-    haystack.includes("ml") ||
-    haystack.includes("machine learning") ||
-    haystack.includes("soft computing") ||
-    haystack.includes("data science") ||
-    haystack.includes("data analytics") ||
-    haystack.includes("swarm") ||
-    haystack.includes("statistics")
+    text.includes("data science") ||
+    text.includes("data analytics") ||
+    text.includes("statistics") ||
+    text.includes("visualization")
   ) {
     return {
-      imageSrc: "/images/mu-labs/ai-ml.svg",
-      altText: `${lab.name} AI and machine learning graph emblem`,
-      subjectLabel: "AI / ML / DS",
+      imageSrc: "/images/mu-labs/data-science.jpg",
+      altText: `${lab.name} data analytics and metrics dashboard`,
+      subjectLabel: "Data Science",
     };
   }
   if (
-    haystack.includes("c programming") ||
-    haystack.includes("data structure") ||
-    haystack.includes("algorithm") ||
-    haystack.includes("ads lab")
+    text.includes("ai ") ||
+    text.includes("ml") ||
+    text.includes("machine learning") ||
+    text.includes("soft computing") ||
+    text.includes("swarm")
   ) {
     return {
-      imageSrc: "/images/mu-labs/c-cpp.svg",
-      altText: `${lab.name} C and algorithms emblem`,
-      subjectLabel: "C & Algorithms",
+      imageSrc: "/images/mu-labs/ai-ml.jpg",
+      altText: `${lab.name} artificial intelligence neural network`,
+      subjectLabel: "AI / ML",
     };
   }
   if (
-    haystack.includes("mini project") ||
-    haystack.includes("mini-project") ||
-    haystack.includes("innovation")
+    text.includes("mini project") ||
+    text.includes("mini-project") ||
+    text.includes("innovation")
   ) {
     return {
-      imageSrc: "/images/mu-labs/project.svg",
-      altText: `${lab.name} capstone project architecture emblem`,
+      imageSrc: "/images/mu-labs/mini-project.jpg",
+      altText: `${lab.name} hardware and software project workbench`,
       subjectLabel: "Mini Project",
     };
   }
 
-  // Uniform technical plate fallback for electives & multidisciplinary minors
+  return null;
+}
+
+/**
+ * Deterministically maps each Mumbai University computing lab to a domain-matched
+ * landscape photograph stored locally under /images/mu-labs/.
+ * Prioritizes primary title/courseName before falling back to tags so broad tags
+ * never override a lab's actual subject image.
+ */
+export function getLabVisualMeta(lab: UniversityLabEntry): LabVisualMeta {
+  const titleText = `${lab.name} ${lab.courseName}`.toLowerCase();
+  const titleMatch = matchDomainPhoto(lab, titleText);
+  if (titleMatch) return titleMatch;
+
+  const fullText = `${lab.id} ${titleText} ${lab.domainTags.join(" ")}`.toLowerCase();
+  const fullMatch = matchDomainPhoto(lab, fullText);
+  if (fullMatch) return fullMatch;
+
+  if (lab.category === "Departmental Elective") {
+    return {
+      imageSrc: "/images/mu-labs/compilers.jpg",
+      altText: `${lab.name} specialized computing elective`,
+      subjectLabel: "Elective",
+    };
+  }
+
   return {
-    imageSrc: "/images/mu-labs/project.svg",
-    altText: `${lab.name} curriculum track emblem`,
-    subjectLabel: lab.category === "Departmental Elective" ? "Elective" : "Applied Track",
+    imageSrc: "/images/mu-labs/mini-project.jpg",
+    altText: `${lab.name} applied multidisciplinary engineering lab`,
+    subjectLabel: "Applied Track",
   };
 }

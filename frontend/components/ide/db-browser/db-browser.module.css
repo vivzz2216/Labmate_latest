@@ -987,6 +987,35 @@
   font-size: 12px;
 }
 
+@media (max-width: 600px) {
+  .workspace {
+    flex-direction: column;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  .mainToolbar,
+  .mainTabScrollList {
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .mainToolbar > * {
+    flex-shrink: 0;
+  }
+
+  .leftPane,
+  .rightPane {
+    width: 100% !important;
+    min-width: 0;
+    flex: 0 0 58vh;
+  }
+
+  .vSplitter {
+    display: none;
+  }
+}
+
 .schemaTh {
   background: #ffffff;
   border-right: 1px solid #e0e0e0;

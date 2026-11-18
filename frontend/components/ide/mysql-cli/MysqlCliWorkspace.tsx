@@ -963,6 +963,7 @@ export function MysqlCliWorkspace() {
                     key={entry.id}
                     className={[
                       styles.lineBlock,
+                      entry.kind === "table" ? styles.lineTable : "",
                       entry.kind === "error" ? styles.lineError : "",
                     ].join(" ")}
                   >

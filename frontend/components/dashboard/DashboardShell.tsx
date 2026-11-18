@@ -488,17 +488,6 @@ export default function DashboardShell({
       >
         <header className={styles.topbar}>
           <div className={styles.topbarTitle}>
-            {sidebarCollapsed && (
-              <button
-                type="button"
-                className={styles.topbarSidebarToggle}
-                onClick={toggleSidebarCollapsed}
-                aria-label="Expand sidebar (Ctrl+B)"
-                title="Expand sidebar (Ctrl+B)"
-              >
-                <PanelLeftOpen size={16} strokeWidth={1.85} />
-              </button>
-            )}
             <button
               type="button"
               className={styles.mobileMenu}
