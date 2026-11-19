@@ -5,9 +5,10 @@ import Image from "next/image";
 import Link from "next/link";
 import type { IconType } from "react-icons";
 import { FaJava } from "react-icons/fa";
-import { Network } from "lucide-react";
+import { BarChart3, Network } from "lucide-react";
 import {
   SiCplusplus,
+  SiAndroidstudio,
   SiGooglecolab,
   SiHtml5,
   SiMysql,
@@ -87,6 +88,12 @@ const labs: Lab[] = [
       { name: "Clean and summarise data", image: "showcase-colab-cleaning.webp", caption: "Colab notebook · Pandas cleaning code, grouped marks, and the resulting chart" },
       { name: "Evaluate a classifier", image: "showcase-colab-classifier.webp", caption: "Colab notebook · Iris classification results and a held-out confusion matrix" },
     ] },
+  { id: "android-studio", name: "Android Studio", icon: SiAndroidstudio, color: "#3DDC84", href: "/android-studio", status: "studio",
+    description: "Explore LabMate’s Android Studio-inspired workspace for Android development.",
+    templates: [] },
+  { id: "power-bi", name: "Power BI", icon: BarChart3, color: "#E9BA13", href: "/power-bi", status: "studio",
+    description: "Explore LabMate’s Power BI-inspired workspace for working with CSV data and reports.",
+    templates: [] },
   { id: "packet-tracer", name: "Cisco Packet Tracer", icon: Network, color: "#049FD9", href: "/networks/packet-tracer", status: "studio",
     description: "A practice studio for network labs: place devices, cable them and follow guided steps. It is LabMate's own simulator, not Cisco's software.",
     templates: [
@@ -169,8 +176,8 @@ export default function LabShowcase() {
             </>
           ) : (
             <div className={styles.soon}>
-              <SiUbuntu size={28} color="#E95420" aria-hidden="true" />
-              <p>Ubuntu desktop and terminal screenshots are captured from a native Ubuntu session, so none are shown until this lab ships.</p>
+              <lab.icon size={28} color={lab.color} aria-hidden="true" />
+              <p>Open the workspace to explore this environment.</p>
             </div>
           )}
         </div>
