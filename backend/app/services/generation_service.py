@@ -118,7 +118,8 @@ class GenerationService:
                 errors.append(error)
                 logger.warning('Configured AI route failed; trying enabled backups (%s).',type(error).__name__)
         else:
-            routes=[primary]+[p for p in routes if p!=primary]
+            # Groq and Gemini (when their keys are set) back up a GLM/DeepSeek/OpenRouter primary; the free routes come last.
+            routes=[primary]+[p for p in self._key_backups()+routes if p!=primary]
         for provider in routes:
             identity=self._route_identity(provider)
             if time.monotonic()<self._free_unavailable_until.get(identity,0):
@@ -132,6 +133,10 @@ class GenerationService:
                 if provider == 'glm':
                     from .glm_service import generate_glm_json
                     return await generate_glm_json(instructions,content,schema)
+                if provider == 'groq':
+                    return await self._primary(instructions,content,schema,on_retry,True,provider_override='groq')
+                if provider == 'gemini':
+                    return await self._gemini(instructions,content,schema,on_retry)
                 return await self._free_generation(provider,instructions,content,schema)
             except GenerationError as error:
                 errors.append(error)
@@ -162,6 +167,9 @@ class GenerationService:
             raise GenerationError('FREE_LLM_FALLBACK_ORDER must list openrouter and/or opencode once each.')
         return [p for p in order if enabled[p]]
 
+    def _key_backups(self):
+        return [name for name,key in (('groq',settings.GROQ_API_KEY),('gemini',settings.GEMINI_API_KEY)) if key]
+
     def _backup_routes(self):
         routes = self._free_providers()
         if settings.DEEPSEEK_ENABLED and settings.DEEPSEEK_API_KEY:
@@ -174,6 +182,10 @@ class GenerationService:
         import hashlib
         if provider == 'deepseek':
             key, model = settings.DEEPSEEK_API_KEY, settings.DEEPSEEK_MODEL
+        elif provider == 'groq':
+            key, model = settings.GROQ_API_KEY, settings.GROQ_MODEL
+        elif provider == 'gemini':
+            key, model = settings.GEMINI_API_KEY, settings.GEMINI_MODEL
         elif provider == 'glm':
             key, model = settings.GLM_API_KEY, settings.GLM_MODEL
         else:
@@ -265,8 +277,8 @@ class GenerationService:
                     raise invalid_answer("Gemini returned an invalid structured answer.", result) from None
                 raise GenerationError(str(error)) from None
 
-    async def _primary(self, instructions, content, schema, on_retry, can_fallback=False, model_override=None):
-        provider = settings.LLM_PROVIDER.lower()
+    async def _primary(self, instructions, content, schema, on_retry, can_fallback=False, model_override=None, provider_override=None):
+        provider = provider_override or settings.LLM_PROVIDER.lower()
         if provider == "gemini":
             return await self._gemini(instructions, content, schema, on_retry)
         if provider != "groq":
