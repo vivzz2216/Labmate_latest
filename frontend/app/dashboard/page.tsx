@@ -450,7 +450,7 @@ function LabTable({
         <span style={{ textAlign: "right" }}>Action</span>
       </div>
       {assignments.map((assignment) => {
-        const meta = getLanguage(assignment.language);
+        const meta = getLanguage(assignment.lab_environment || assignment.language);
         const Icon = meta.icon;
         const progress = getProgress(assignment);
         return (
@@ -502,7 +502,7 @@ function ContinueCard({
   assignment: Assignment;
   onOpen: () => void;
 }) {
-  const meta = getLanguage(assignment.language);
+  const meta = getLanguage(assignment.lab_environment || assignment.language);
   const Icon = meta.icon;
   const progress = getProgress(assignment);
   return (
