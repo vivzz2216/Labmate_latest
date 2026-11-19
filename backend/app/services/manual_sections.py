@@ -95,6 +95,22 @@ def _body_boundaries(lines, boundaries):
     return []
 
 
+# "7. Program/Code:" followed by a line that is only the language name, as manuals print it above the listing.
+CODE_LABEL = re.compile(r"^[^\n]*\b(?:program|code|listing|source)\s*(?:/\s*code)?\s*:\s*\n\s*(C\+\+|CPP|C|Java)\s*$", re.I | re.M)
+C_CODE = re.compile(r"^\s*#\s*include\s*<(?:stdio|stdlib|string|strings|math|ctype|unistd|fcntl|pthread|omp|time|limits|stdbool|stdint|signal|errno|semaphore|mpi|sys/[a-z_]+)\.h>", re.M)
+CPP_CODE = re.compile(r"^\s*#\s*include\s*<(?:iostream|vector|string|algorithm|map|set|queue|stack|fstream|sstream|iomanip|list|deque|unordered_map|memory|stdexcept|exception|thread|mutex)>|\bstd::|\bcout\s*<<|\bcin\s*>>", re.M)
+JAVA_CODE = re.compile(r"\bpublic\s+static\s+void\s+main\s*\(\s*String|\bSystem\.out\.print")
+
+
+def declared_code_language(content):
+    """The language a manual names on the line under its 'Program/Code:' heading (only C, C++ and Java are trusted here)."""
+    match = CODE_LABEL.search(content or "")
+    if not match:
+        return None
+    label = match.group(1).lower()
+    return {"c": "c", "c++": "cpp", "cpp": "cpp", "java": "java"}[label]
+
+
 def section_language(title, content, default="python"):
     # Mixed React/Express is a full-stack Node assignment, never raw JSX in Node.
     text = title + "\n" + content
@@ -108,6 +124,14 @@ def section_language(title, content, default="python"):
     if re.search(r"\b(?:java|swing|awt|javafx)\b",title,re.I):return 'java'
     if re.search(r"\b(?:python|flask|tkinter)\b",title,re.I):return 'python'
     if re.search(r"\b(?:html5?|css3?|javascript|portfolio|registration)\b", title, re.I): return "html"
+    # Titles often name the topic, not the language ("Quadratic Equation Roots", "Linked-List Stack ADT"). Before
+    # guessing from words in the text, trust the language the manual labels its program with, then the code itself:
+    # a C program used to fall through to python and a Java/JDBC program to sql (2026-11-20 audit).
+    declared = declared_code_language(content)
+    if declared: return declared
+    if CPP_CODE.search(content): return "cpp"
+    if C_CODE.search(content): return "c"
+    if JAVA_CODE.search(content): return "java"
     if re.search(r'\b(?:SQL|MySQL|Structured Query Lab)\b', content, re.I): return 'sql'
     # Academic titles often name the concept rather than the language. Route
     # executable SQL and scientific Python to their actual supported runtimes.

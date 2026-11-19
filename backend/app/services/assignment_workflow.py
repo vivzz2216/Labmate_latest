@@ -291,9 +291,12 @@ def conclusion_brief(results):
     return "\n".join(lines)[:6000]
 
 
-async def write_conclusion(manual_text, results, personalization_prompt="", on_retry=None):
+async def write_conclusion(manual_text, results, personalization_prompt="", on_retry=None, additional_instructions=""):
     """A short Conclusion for the report, grounded in the aim and the real results. Empty when generation fails: a
     missing conclusion must never cost the student the whole report."""
+    from .instruction_policy import clean_instructions
+
+    extra = clean_instructions(additional_instructions)
     aim = next((line.strip() for line in str(manual_text or "").splitlines() if re.match(r"\s*aim\b", line, re.I)), "")
     instruction = (
         "Write the Conclusion section of an undergraduate lab record in the first person, 3 to 5 sentences. "
@@ -301,9 +304,10 @@ async def write_conclusion(manual_text, results, personalization_prompt="", on_r
         "with their real outputs. Do not invent numbers, results, accuracies or tools that are not in that list. "
         "If the data was practice data, do not present it as real users or real companies. No greetings, headings or bullet points. "
         "Return only schema JSON with the conclusion in answer and the table fields empty.")
+    extra_block = f"\nAdditional instructions:\n{extra}" if extra else ""
     try:
         result = await generation_service.generate_json(
-            instruction, f"{personalization_prompt}\n{aim}\nCompleted parts:\n{conclusion_brief(results)}",
+            instruction, f"{personalization_prompt}\n{aim}{extra_block}\nCompleted parts:\n{conclusion_brief(results)}",
             THEORY_ANSWER_SCHEMA, on_retry=on_retry)
     except (GenerationError, GenerationUnavailableError) as error:
         logger.warning("Conclusion could not be generated (%s); the report is built without it.", type(error).__name__)
@@ -514,8 +518,10 @@ async def _extract_assignment(workflow_id: int):
             original_text = await asyncio.to_thread(document_text, document_snapshot(upload))
             # A Computer Networks manual (Wireshark, Packet Tracer) is not a programming assignment: its parts are built in
             # LabMate's own studios from the packet/network engines, so no language model is involved in recognising them.
-            from .network_labs import detect_network_lab
-            network_parts = detect_network_lab(original_text)
+            from .network_labs import detect_network_lab, experiment_heading_count, network_parts_for
+            # Only a single-experiment networks manual is recognised as a whole; in a manual with several experiments each
+            # experiment is checked on its own after extraction, so the others are never dropped.
+            network_parts = detect_network_lab(original_text) if experiment_heading_count(original_text) <= 1 else None
             if network_parts:
                 validate_manual(network_parts)
                 workflow.questions = network_parts
@@ -533,13 +539,15 @@ async def _extract_assignment(workflow_id: int):
                 unix_sections = unix_manual_tasks(original_text, mode=mode)
             sections = unix_sections or ((numbered_experiments(original_text) or numbered_questions(original_text)) if mode == 'code_only' else [])
             if sections:
+                sections, studio_count = network_parts_for(sections)
                 validate_manual(sections)
                 workflow.questions = sections
                 workflow.error = None
                 upload.language = next((item['language'] for item in sections if item['language'] != 'theory'), 'theory')
                 workflow.status = "queued" if workflow.batch_id else "ready"
                 record(workflow, db, "generate" if workflow.batch_id else "review", 20,
-                       f"Preserved all {len(sections)} numbered experiments and their original requirements without model rewriting.")
+                       f"Preserved all {len(sections)} numbered experiments and their original requirements without model rewriting."
+                       + (f" {studio_count} networks experiment(s) will be built in LabMate's practice environment." if studio_count else ""))
                 return
             text = "\n".join(programming_lines(original_text.splitlines(), mode=mode))
             record(workflow, db, "extract", 10, f"Document read. Identifying assignment questions with {generation_service.provider_name}.")
@@ -609,6 +617,7 @@ async def _extract_assignment(workflow_id: int):
             clean = dedupe_certificate_slots(clean)
             if not clean:
                 raise ValueError("No programming tasks could be identified. Check that the document includes the lab exercise or program statement, then retry extraction.")
+            clean, _studio_count = network_parts_for(clean)
             workflow.questions = clean
             upload.language = next((item["language"] for item in clean if item["language"] != "theory"), "theory")
             if workflow.batch_id:
@@ -975,6 +984,9 @@ async def _process_assignment(workflow_id: int):
                               else "").strip()
             college_manual_prompt = str(metadata.get("college_manual_prompt") or "").strip()
             personalization_prompt = student_personalization_prompt(student_name, roll_no, department, institution, college_manual_prompt)
+            from .instruction_policy import filter_output_only_candidates, parse_instruction_preferences
+
+            workflow_prefs = parse_instruction_preferences(workflow.instructions)
             username = student_name.split()[0] if student_name else "Student"
             questions = workflow.questions
             continue_pending=continuing_resume
@@ -1008,7 +1020,7 @@ async def _process_assignment(workflow_id: int):
                 record(workflow, db, "generate", progress, f"Generating answer {index + 1} of {len(questions)}.")
                 if question.get("studio"):
                     from .network_labs import run_studio_part
-                    record(workflow, db, "execute", progress, f"Building part {index + 1} of {len(questions)} in the practice environment.")
+                    record(workflow, db, "execute", progress, f"Building part {index + 1} of {len(questions)} in the studio workspace.")
                     store_workflow_result(workflow, index, await run_studio_part(workflow, db, question))
                     record(workflow, db, "generate", 20 + int(65 * (index + 1) / len(questions)), f"Part {index + 1} finished.")
                     continue
@@ -1051,11 +1063,14 @@ async def _process_assignment(workflow_id: int):
                             "5. No greetings, no AI phrases, no closing summary. End with a two-sentence conclusion about what the practical shows.\n"
                             "6. Do not return source code, code fences or fabricated screenshots. Return only schema JSON."
                         )
+                    if workflow_prefs.no_extra_questions:
+                        theory_instruction += "\nDo NOT invent, list, or answer any extra questions, viva questions, or sub-questions."
+                    extra_inst = f"\nAdditional instructions:\n{workflow_prefs.raw}" if workflow_prefs.raw else ""
                     theory = await generation_service.generate_json(
                         theory_instruction,
                         # A part of a multi-part lab experiment is answered on its own: the manual text holds every other
                         # part too, and handing it over made one part repeat another's answer.
-                        f"{personalization_prompt}\nQuestion (answer only this):\n{question['text']}"
+                        f"{personalization_prompt}{extra_inst}\nQuestion (answer only this):\n{question['text']}"
                         + sibling_note(questions, question)
                         + ("" if question.get("kind") else f"\nContext (background only; do not answer its other questions):\n{source[:2000]}"),
                         THEORY_ANSWER_SCHEMA, on_retry=retry_status,
@@ -1098,10 +1113,18 @@ async def _process_assignment(workflow_id: int):
                     command_question={**question,'text':question.get('manual_text') or question['text']}
                     command_plan=command_lab_plan(command_question['text'],student_name=student_name,
                         experiment_number=question.get('experiment_label'),roll_no=roll_no,
-                        department=department,institution=institution)
+                        department=department,institution=institution,instructions=workflow.instructions or '')
                     if command_plan:
                         record(workflow,db,'execute',progress,'Running Ubuntu commands individually in the native terminal.')
                         result=await run_command_lab(command_question,command_plan)
+                        if workflow_prefs.output_only_screenshots:
+                            frames = (result.get('verification') or {}).get('evidence_frames') or []
+                            kept_frames = filter_output_only_candidates(frames)
+                            if result.get('verification') and frames:
+                                result['verification']['evidence_frames'] = kept_frames
+                            if kept_frames:
+                                result['screenshot_paths'] = [f['path'] for f in kept_frames if f.get('path')]
+                                result['screenshot_captions'] = [f.get('caption', '') for f in kept_frames if f.get('path')]
                         store_workflow_result(workflow,index,result)
                         record(workflow,db,'capture',20+int(65*(index+1)/len(questions)),
                                'Native command evidence captured.' if result['status']=='completed' else 'Command evidence needs review.')
@@ -1205,7 +1228,7 @@ async def _process_assignment(workflow_id: int):
                             repaired_code=draft['code']
                             needs_repair=bool((previous.get('verification') or {}).get('repairable_errors')) or previous.get('execution_stages',{}).get('execution')!='passed'
                             if needs_repair and '/etc/profile.d/' not in draft['error']:
-                                repaired_code=await repair_generated_code(question['text'],'ubuntu',repaired_code,draft['error'])
+                                repaired_code=await repair_generated_code(question['text'],'ubuntu',repaired_code,draft['error'],workflow.instructions or '')
                             solution={'language':'ubuntu','answer':draft['answer'],'code':repaired_code,'stdin':draft['stdin'],'browser_tests':[]}
                         else:
                             solution = await generation_service.generate_json(
@@ -1350,7 +1373,7 @@ async def _process_assignment(workflow_id: int):
                             try:
                                 repair_question = (identity_repair_question(identity_question, student_name)
                                                    if actual_language in {'python', 'c', 'cpp', 'java'} else question["text"])
-                                repaired = await repair_generated_code(repair_question, actual_language, code, error or output)
+                                repaired = await repair_generated_code(repair_question, actual_language, code, error or output, workflow.instructions or '')
                                 code = repaired
                                 if actual_language == 'colab' or plan_experiment(question['text'], actual_language, code).get('category') == 'notebook':
                                     from .notebook_magics import neutralize_magics
@@ -1401,7 +1424,7 @@ async def _process_assignment(workflow_id: int):
                             try:
                                 repair_question = (identity_repair_question(identity_question, student_name)
                                                    if actual_language in {'python', 'c', 'cpp', 'java'} else question["text"])
-                                code = await repair_generated_code(repair_question, actual_language, code, problem)
+                                code = await repair_generated_code(repair_question, actual_language, code, problem, workflow.instructions or '')
                                 execution = await execute_solution(
                                     code, actual_language, question["text"], group, username, stdin_data, filename=src_filename,
                                     browser_tests=browser_tests, interaction_is_required=requires_interaction, project_config=notebook_config)
@@ -1497,29 +1520,30 @@ async def _process_assignment(workflow_id: int):
                         if question.get('source_ide') in allowed:
                             source_theme = question['source_ide']
                             source_policy = 'complete'
-                    sources,source_errors=([], []) if actual_language in {'sql','ubuntu','r'} or category=='notebook' else await capture_source_evidence(
+                    sources,source_errors=([], []) if (workflow_prefs.output_only_screenshots or actual_language in {'sql','ubuntu','r'} or category=='notebook') else await capture_source_evidence(
                         capture_files,code,src_filename,theme=source_theme,group=group,username=username,
                         language=source_language,screenshot_style=screenshot_style,
                         requested_files=(project_config or {}).get('source_capture_files'), policy=source_policy, jupyter_theme=question.get('jupyter_theme','light'))
                     source_errors.extend(browser_frame_errors)
                     candidates.extend(sources)
-                    source_plan=source_capture_plan(capture_files,code,src_filename,source_language,(project_config or {}).get('source_capture_files'),policy=source_policy)
-                    evidence_plan['required_source_files']=[src_filename] if actual_language in {'ubuntu','r'} else [name for name,_ in source_plan['files']]
-                    if source_policy == 'complete':
-                        evidence_plan['complete_source_lines']={name:len(text.splitlines()) for name,text in source_plan['files']}
-                    evidence_plan['source_selection']=({'policy': 'complete', 'renderer': 'mysql_workbench', 'captured_files': [src_filename]} if actual_language == 'sql' else {k:v for k,v in source_plan.items() if k!='files'})
-                    if category == 'rstudio':
-                        evidence_plan['complete_source_lines']={src_filename:(verification or {}).get('source_lines',len(code.splitlines()))}
-                        evidence_plan['source_selection']={'policy':'complete','renderer':'rstudio','theme':question.get('rstudio_theme','light'),'captured_files':[src_filename]}
-                    if category == 'notebook':
-                        nb_renderer = (notebook_config or {}).get('notebook_template', 'jupyter' if question.get('python_template') == 'jupyter' else 'colab')
-                        nb_theme = (notebook_config or {}).get('jupyter_theme', question.get('jupyter_theme', 'light')) if nb_renderer == 'jupyter' else question.get('colab_theme', 'dark')
-                        evidence_plan['required_source_files']=[src_filename]
-                        evidence_plan['complete_source_lines']={src_filename:(verification or {}).get('source_lines',len(code.splitlines()))}
-                        renderer = (notebook_config or {}).get('notebook_template', 'colab')
-                        evidence_plan['source_selection']={'policy':'complete','renderer':renderer,'theme':question.get('jupyter_theme','light') if renderer == 'jupyter' else question.get('colab_theme','dark'),'captured_files':[src_filename]}
-                    if actual_language == 'sql' and code:
-                        evidence_plan['complete_source_lines'] = {src_filename: len(code.splitlines())}
+                    if not workflow_prefs.output_only_screenshots:
+                        source_plan=source_capture_plan(capture_files,code,src_filename,source_language,(project_config or {}).get('source_capture_files'),policy=source_policy)
+                        evidence_plan['required_source_files']=[src_filename] if actual_language in {'ubuntu','r'} else [name for name,_ in source_plan['files']]
+                        if source_policy == 'complete':
+                            evidence_plan['complete_source_lines']={name:len(text.splitlines()) for name,text in source_plan['files']}
+                        evidence_plan['source_selection']=({'policy': 'complete', 'renderer': 'mysql_workbench', 'captured_files': [src_filename]} if actual_language == 'sql' else {k:v for k,v in source_plan.items() if k!='files'})
+                        if category == 'rstudio':
+                            evidence_plan['complete_source_lines']={src_filename:(verification or {}).get('source_lines',len(code.splitlines()))}
+                            evidence_plan['source_selection']={'policy':'complete','renderer':'rstudio','theme':question.get('rstudio_theme','light'),'captured_files':[src_filename]}
+                        if category == 'notebook':
+                            nb_renderer = (notebook_config or {}).get('notebook_template', 'jupyter' if question.get('python_template') == 'jupyter' else 'colab')
+                            nb_theme = (notebook_config or {}).get('jupyter_theme', question.get('jupyter_theme', 'light')) if nb_renderer == 'jupyter' else question.get('colab_theme', 'dark')
+                            evidence_plan['required_source_files']=[src_filename]
+                            evidence_plan['complete_source_lines']={src_filename:(verification or {}).get('source_lines',len(code.splitlines()))}
+                            renderer = (notebook_config or {}).get('notebook_template', 'colab')
+                            evidence_plan['source_selection']={'policy':'complete','renderer':renderer,'theme':question.get('jupyter_theme','light') if renderer == 'jupyter' else question.get('colab_theme','dark'),'captured_files':[src_filename]}
+                        if actual_language == 'sql' and code:
+                            evidence_plan['complete_source_lines'] = {src_filename: len(code.splitlines())}
                     if source_errors:
                         success=False
                         error=(error+'\n'+'\n'.join(source_errors)).strip()
@@ -1551,6 +1575,8 @@ async def _process_assignment(workflow_id: int):
                             success = False
                             error = (error + f"\n{capture_view.title()} evidence could not be captured.").strip()
                     # Prefer source, then execution state; deduplicate within this experiment only.
+                    if workflow_prefs.output_only_screenshots:
+                        candidates = filter_output_only_candidates(candidates)
                     candidates.sort(key=lambda item: item["kind"] != "source_preview")
                     selection = select_evidence(evidence_plan, candidates)
                     screenshots = [item["path"] for item in selection["selected"]]
@@ -1602,8 +1628,11 @@ async def _process_assignment(workflow_id: int):
                                  for row in db.query(WorkflowEvidence).filter_by(workflow_id=workflow.id).all()]
                 report_results = await asyncio.to_thread(attach_evidence, workflow.results, workflow.questions, evidence_rows)
             conclusion = ""
-            if (workflow.mode or "") == "theory_and_code" and asks_for_conclusion(source):
-                conclusion = await write_conclusion(source, report_results, personalization_prompt, retry_status)
+            if (workflow.mode or "") == "theory_and_code" and not (workflow_prefs.no_conclusion or workflow_prefs.no_extra_questions) and asks_for_conclusion(source):
+                conclusion = await write_conclusion(
+                    source, report_results, personalization_prompt, retry_status,
+                    additional_instructions=workflow.instructions or "",
+                )
             report_data = SimpleNamespace(
                 id=workflow.id,
                 mode=workflow.mode,
@@ -1696,10 +1725,15 @@ def report_safe_values(value):
 
 def build_word_report(upload, workflow):
     """Keep code reports compact; preserve explicitly requested theory formatting."""
+    from .compact_report import _filter_output_only_paths
+    from .docx_layout import embed_screenshots_after, find_question_anchor
+    from .instruction_policy import parse_instruction_preferences
+
     upload = SimpleNamespace(**{**vars(upload), 'file_path': local_upload_path(upload.file_path)})
     fields={key:report_safe_values(getattr(workflow,key)) for key in
         ('id','output_name','instructions','mode','results','student_name','roll_no','department','institution','conclusion') if hasattr(workflow,key)}
     workflow=SimpleNamespace(**fields)
+    prefs = parse_instruction_preferences(getattr(workflow, 'instructions', ''))
     if ((getattr(workflow,'mode',None) or 'code_only')=='code_only' and workflow.results
             and not any(r.get('is_theory') or r.get('language') in {'theory','ubuntu'} for r in workflow.results)):
         from .compact_report import build_compact_report
@@ -1710,21 +1744,35 @@ def build_word_report(upload, workflow):
     if workflow.results and all(r.get('language') == 'sql' for r in workflow.results):
         from .sql_report import clean_report
         return clean_report(upload, workflow, document_text(upload))
+    can_paste_inline = (
+        prefs.paste_under_question
+        and upload.file_type == "docx"
+        and os.path.isfile(str(getattr(upload, "file_path", "") or ""))
+    )
     if upload.file_type == "docx":
         document = Document(upload.file_path)
     else:
         document = Document()
-        document.add_heading("Laboratory Manual & Problem Statements", 0)
-        document.add_paragraph(upload.original_filename)
-        with pdfplumber.open(upload.file_path) as pdf:
-            for page in pdf.pages:
-                image = page.to_image(resolution=130).original
-                buffer = io.BytesIO()
-                image.save(buffer, format="PNG")
-                buffer.seek(0)
-                document.add_picture(buffer, width=Inches(6.2))
-                document.add_page_break()
-    if workflow.results and upload.file_type == "docx":
+        if not prefs.no_extra_manual_pages:
+            document.add_heading("Laboratory Manual & Problem Statements", 0)
+            document.add_paragraph(upload.original_filename)
+            with pdfplumber.open(upload.file_path) as pdf:
+                for page in pdf.pages:
+                    image = page.to_image(resolution=130).original
+                    buffer = io.BytesIO()
+                    image.save(buffer, format="PNG")
+                    buffer.seek(0)
+                    document.add_picture(buffer, width=Inches(6.2))
+                    document.add_page_break()
+    if upload.file_type != "docx" and (prefs.font_name or prefs.font_size):
+        from docx.shared import Pt as _Pt
+        for name in ('Normal', 'Title', 'Heading 1', 'Heading 2'):
+            if name in [s.name for s in document.styles]:
+                if prefs.font_name:
+                    document.styles[name].font.name = prefs.font_name
+                if prefs.font_size and name == 'Normal':
+                    document.styles[name].font.size = _Pt(prefs.font_size)
+    if workflow.results and upload.file_type == "docx" and not can_paste_inline:
         document.add_page_break()
     
     student_name = getattr(workflow, "student_name", "Student")
@@ -1733,7 +1781,34 @@ def build_word_report(upload, workflow):
     institution = getattr(workflow, "institution", "")
     apply_student_metadata(document, student_name, roll_no, department, institution, getattr(workflow, "output_name", "Lab Report"))
 
+    anchor_cursor = 0
+    appended_started = False
     for idx, result in enumerate(workflow.results):
+        if prefs.output_only_screenshots and result.get("screenshot_paths"):
+            filtered_paths, filtered_caps = _filter_output_only_paths(
+                result.get("screenshot_paths") or [],
+                result.get("screenshot_captions") or [],
+                result,
+            )
+            result = {**result, "screenshot_paths": filtered_paths, "screenshot_captions": filtered_caps}
+        is_theory = result.get("is_theory") or result.get("language") == "theory"
+        if can_paste_inline and not is_theory and result.get("status") == "completed":
+            anchor = find_question_anchor(document, result.get("question", ""), start_index=anchor_cursor)
+            if anchor:
+                valid_paths = [p for p in (result.get("screenshot_paths") or []) if os.path.isfile(p)]
+                if valid_paths:
+                    embed_screenshots_after(
+                        document,
+                        anchor,
+                        valid_paths,
+                        captions=[None if (prefs.output_only_screenshots and prefs.no_extra_questions) else c for c in (result.get("screenshot_captions") or [])],
+                    )
+                    if anchor[0] == "paragraph" and anchor[1] is not None:
+                        anchor_cursor = anchor[1] + 1
+                    continue
+        if can_paste_inline and upload.file_type == "docx" and not appended_started:
+            document.add_page_break()
+        appended_started = True
         decision = result.get('agent_decision') or {}
         if decision.get('report_policy') == 'images_only':
             if idx>0: document.add_page_break()
@@ -1870,7 +1945,7 @@ def build_word_report(upload, workflow):
                     # integrity check. Never silently export a passing report
                     # with an omitted screenshot.
                     raise ValueError(f"Cannot export question {result['id']}: a required screenshot is missing.")
-    if getattr(workflow, "conclusion", ""):
+    if getattr(workflow, "conclusion", "") and not prefs.no_conclusion:
         embed_conclusion(document, workflow.conclusion)
     filename = normalize_output_name(workflow.output_name or "lab_report", max_length=80)
     filename += ".docx"
