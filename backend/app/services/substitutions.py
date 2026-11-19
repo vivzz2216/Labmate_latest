@@ -59,6 +59,8 @@ def dataset_swap_notes(question, code):
     with the diabetes dataset and only said so in a code comment), so this check does not depend on it.
     """
     question, code = str(question or ""), str(code or "")
+    # Comments explain the swap ("fetch_california_housing() downloads its data...") and must not count as a call.
+    code = re.sub(r"(?m)#.*$", "", code)
     notes = []
     for fetcher, (name, pattern) in DOWNLOAD_ONLY_DATASETS.items():
         if not re.search(pattern, question, re.I) or re.search(rf"\b{fetcher}\s*\(", code):

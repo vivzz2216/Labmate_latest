@@ -103,6 +103,10 @@ def test_dataset_swap_is_flagged_without_the_models_cooperation():
                   "MedInc = rng.lognormal(0.9, 0.5, 2000)\nMedHouseVal = 0.6 * MedInc\n")
     note = dataset_swap_notes(question, fabricated)
     assert len(note) == 1 and "data generated inside the program" in note[0] and "not the real dataset" in note[0]
+    # live re-test 3: the comment names the real loader with brackets; it is not a call
+    commented = ("# NOTE: fetch_california_housing() downloads its data from the network\n"
+                 "from sklearn.datasets import load_diabetes\nhousing = load_diabetes(as_frame=True)\n")
+    assert "load_diabetes" in dataset_swap_notes(question, commented)[0]
     # an explicit SUBSTITUTION line about the same dataset is not repeated
     declared = "SUBSTITUTION: The California Housing dataset was replaced by load_diabetes because downloads are disabled"
     assert len(all_substitution_notes(declared, question, swapped)) == 1
