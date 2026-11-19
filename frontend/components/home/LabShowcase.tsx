@@ -9,9 +9,11 @@ import { BarChart3, Network } from "lucide-react";
 import {
   SiCplusplus,
   SiAndroidstudio,
+  SiDocker,
   SiGooglecolab,
   SiHtml5,
   SiMysql,
+  SiKubernetes,
   SiPython,
   SiPytorch,
   SiUbuntu,
@@ -26,7 +28,7 @@ type Lab = {
   icon: IconType;
   color: string;
   href?: string;
-  status: "available" | "studio" | "soon";
+  status: "available" | "studio" | "soon" | "planned";
   description: string;
   templates: Template[];
 };
@@ -88,25 +90,29 @@ const labs: Lab[] = [
       { name: "Clean and summarise data", image: "showcase-colab-cleaning.webp", caption: "Colab notebook · Pandas cleaning code, grouped marks, and the resulting chart" },
       { name: "Evaluate a classifier", image: "showcase-colab-classifier.webp", caption: "Colab notebook · Iris classification results and a held-out confusion matrix" },
     ] },
-  { id: "android-studio", name: "Android Studio", icon: SiAndroidstudio, color: "#3DDC84", href: "/android-studio", status: "studio",
-    description: "Explore LabMate’s Android Studio-inspired workspace for Android development.",
+  { id: "android-studio", name: "Android Studio", icon: SiAndroidstudio, color: "#3DDC84", status: "soon",
+    description: "An Android development workspace is in development.",
     templates: [] },
-  { id: "power-bi", name: "Power BI", icon: BarChart3, color: "#E9BA13", href: "/power-bi", status: "studio",
-    description: "Explore LabMate’s Power BI-inspired workspace for working with CSV data and reports.",
+  { id: "docker", name: "Docker", icon: SiDocker, color: "#2496ED", status: "soon",
+    description: "A Docker learning workspace is in development.", templates: [] },
+  { id: "kubernetes", name: "Kubernetes", icon: SiKubernetes, color: "#326CE5", status: "soon",
+    description: "A Kubernetes learning workspace is in development.", templates: [] },
+  { id: "power-bi", name: "Power BI", icon: BarChart3, color: "#E9BA13", href: "/power-bi", status: "planned",
+    description: "A Power BI-inspired workspace for CSV data and reports.",
     templates: [] },
-  { id: "packet-tracer", name: "Cisco Packet Tracer", icon: Network, color: "#049FD9", href: "/networks/packet-tracer", status: "studio",
+  { id: "packet-tracer", name: "Cisco Packet Tracer", icon: Network, color: "#049FD9", href: "/networks/packet-tracer", status: "planned",
     description: "A practice studio for network labs: place devices, cable them and follow guided steps. It is LabMate's own simulator, not Cisco's software.",
     templates: [
       { name: "Network topology", image: "showcase-packet-tracer.webp", caption: "LabMate practice studio · three PCs connected in a star topology through a hub" },
       { name: "Device configuration", image: "showcase-packet-tracer-config.webp", caption: "LabMate practice studio · inspecting a PC's network configuration" },
     ] },
-  { id: "wireshark", name: "Wireshark", icon: SiWireshark, color: "#1679A7", href: "/networks/wireshark", status: "studio",
+  { id: "wireshark", name: "Wireshark", icon: SiWireshark, color: "#1679A7", href: "/networks/wireshark", status: "planned",
     description: "A practice packet analyser: open a capture, apply display filters, read headers and follow streams. LabMate's own engine, not Wireshark.",
     templates: [
       { name: "Packet list", image: "showcase-wireshark-packets.webp", caption: "LabMate practice capture · ARP, DNS, TCP, HTTP, and ICMP traffic" },
       { name: "DNS inspection", image: "showcase-wireshark-dns.webp", caption: "LabMate packet analyser · DNS filter, packet headers, and captured bytes" },
     ] },
-  { id: "ubuntu", name: "Ubuntu", icon: SiUbuntu, color: "#E95420", status: "soon",
+  { id: "ubuntu", name: "Ubuntu", icon: SiUbuntu, color: "#E95420", status: "planned",
     description: "A preview from LabMate’s local Ubuntu environment, with native terminal and text editor captures.",
     templates: [
       { name: "Terminal", image: "showcase-ubuntu-native-terminal.webp", caption: "Ubuntu terminal · running a Bash arithmetic practical with inputs 12 and 4" },
@@ -114,7 +120,7 @@ const labs: Lab[] = [
     ] },
 ];
 
-const STATUS_LABEL = { available: "Available", studio: "Practice studio", soon: "In development" } as const;
+const STATUS_LABEL = { available: "Available", studio: "Practice studio", soon: "In development", planned: "Developed · coming later" } as const;
 
 export default function LabShowcase() {
   const [labIndex, setLabIndex] = useState(0);
@@ -151,9 +157,12 @@ export default function LabShowcase() {
           <div className={styles.detailHeading}>
             <h3>{lab.name}</h3>
             <span className={`${styles.status} ${styles[`status_${lab.status}`]}`}>{STATUS_LABEL[lab.status]}</span>
-            {lab.href && <Link href={lab.href} className={styles.openLab}>Open lab →</Link>}
+            {lab.href && lab.status !== "planned" && <Link href={lab.href} className={styles.openLab}>Open lab →</Link>}
           </div>
           <p className={styles.labDescription}>{lab.description}</p>
+          {lab.status === "planned" && (
+            <p className={styles.labDescription}>Available when LabMate reaches 100+ students and included in your pack.</p>
+          )}
 
           {template ? (
             <>
@@ -177,7 +186,7 @@ export default function LabShowcase() {
           ) : (
             <div className={styles.soon}>
               <lab.icon size={28} color={lab.color} aria-hidden="true" />
-              <p>Open the workspace to explore this environment.</p>
+              <p>{lab.status === "soon" ? "This workspace is in development." : "This workspace is coming later."}</p>
             </div>
           )}
         </div>
@@ -185,7 +194,7 @@ export default function LabShowcase() {
       <p className={styles.galleryFootnote}>Screenshots from LabMate sample exercises. Open a preview at full size to read the code and results.</p>
 
       <p className={styles.roadmap}>
-        <strong>Also available:</strong> R programming and Social Media Analytics. <strong>In development:</strong> Git and GitHub, DevOps (Jenkins, Docker, Kubernetes, Terraform, Ansible), MLOps (MLflow, Airflow), PROLOG, GNS3 and Mininet.
+        <strong>Also available:</strong> R programming and Social Media Analytics. <strong>In development:</strong> Git and GitHub, DevOps (Jenkins, Terraform, Ansible), MLOps (MLflow, Airflow), PROLOG, GNS3 and Mininet.
       </p>
     </section>
   );
