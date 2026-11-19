@@ -63,12 +63,12 @@ def dataset_swap_notes(question, code):
     for fetcher, (name, pattern) in DOWNLOAD_ONLY_DATASETS.items():
         if not re.search(pattern, question, re.I) or re.search(rf"\b{fetcher}\s*\(", code):
             continue
+        # The runtime blocks the download, so a program that ran cannot have used the real data, whatever it used instead.
+        # A live re-test even produced random numbers under California Housing's own column names.
         used = [loader for loader in dict.fromkeys(REPLACEMENT_LOADER.findall(code)) if loader not in DOWNLOAD_ONLY_DATASETS]
-        if not used:
-            continue
-        what = ", ".join(used[:3])
+        what = (", ".join(used[:3]) + " instead") if used else "data generated inside the program instead (not the real dataset)"
         notes.append(f"The manual's {name} dataset needs a download that the offline lab runtime blocks, so the program used "
-                     f"{what} instead. Results differ from the manual.")
+                     f"{what}. Results differ from the manual.")
     return notes
 
 

@@ -98,6 +98,11 @@ def test_dataset_swap_is_flagged_without_the_models_cooperation():
     assert dataset_swap_notes("Experiment 1: KNN on the Iris dataset", "from sklearn.datasets import load_iris\nload_iris()") == []
     generated = "from sklearn.datasets import make_regression\nX, y = make_regression(n_samples=200)"
     assert "make_regression" in dataset_swap_notes(question, generated)[0]
+    # live re-test: random numbers under the real dataset's column names, no loader at all
+    fabricated = ("# fetch_california_housing requires a network download\nimport numpy as np\nrng = np.random.default_rng(7)\n"
+                  "MedInc = rng.lognormal(0.9, 0.5, 2000)\nMedHouseVal = 0.6 * MedInc\n")
+    note = dataset_swap_notes(question, fabricated)
+    assert len(note) == 1 and "data generated inside the program" in note[0] and "not the real dataset" in note[0]
     # an explicit SUBSTITUTION line about the same dataset is not repeated
     declared = "SUBSTITUTION: The California Housing dataset was replaced by load_diabetes because downloads are disabled"
     assert len(all_substitution_notes(declared, question, swapped)) == 1
