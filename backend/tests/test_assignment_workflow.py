@@ -25,7 +25,8 @@ class AssignmentReportTests(unittest.TestCase):
             with patch('app.services.assignment_workflow.settings.REPORT_DIR',str(root/'reports')):
                 path,_=build_word_report(upload,workflow)
             text='\n'.join(p.text for p in Document(path).paragraphs)
-            self.assertIn('Genuine Vite failure',text)
+            self.assertIn('did not verify all of the experiment requirements',text)
+            self.assertNotIn('Genuine Vite failure',text)
             self.assertIn('Observed page text: 23',text)
             self.assertNotIn('\x1b',text)
             self.assertIn('\x1b',result['error'])

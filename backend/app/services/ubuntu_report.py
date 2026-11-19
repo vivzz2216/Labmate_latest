@@ -97,12 +97,10 @@ def build_ubuntu_report(upload,workflow):
             doc.add_paragraph('Theory answer only. No command execution is claimed.')
             doc.add_paragraph(result.get('answer',''))
         elif result.get('error'):
-            # The exact Bash transcript is already captured below. Keep the
-            # first page readable instead of repeating pages of shell tracing.
-            reason=str(result['error']).splitlines()[0]
-            doc.add_paragraph(reason[:1200])
+            from .student_diagnostics import student_failure_message
+            doc.add_paragraph(student_failure_message(result))
             for limitation in (result.get('verification') or {}).get('limitations',[]):
-                if limitation!=reason:doc.add_paragraph(limitation)
+                doc.add_paragraph(limitation)
         else:doc.add_paragraph('Executed in an isolated Ubuntu lab. The images show '+('commands' if verification.get('command_mode') else 'the source')+' and actual recorded output.')
         add_simulated_output_section(doc,result)
         if not complete:add_postlab_notes(doc,result)

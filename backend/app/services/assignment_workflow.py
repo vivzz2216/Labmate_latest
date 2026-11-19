@@ -36,7 +36,8 @@ from .parser_service import parser_service
 from .analysis_service import normalize_generated_code, repair_generated_code
 from .profile_service import UserProfileService
 from .evidence_planner import plan_experiment, select_evidence, verification_summary
-from .manual_sections import numbered_experiments, numbered_questions, ManualStructureError
+from .manual_sections import distributed_java_requested, numbered_experiments, numbered_questions, ManualStructureError
+from .pdf_ocr import NotLabManualError
 from .manual_limits import validate_manual, ManualLimitError
 from .worker_health import WorkerUnavailableError, worker_health
 from .student_identity import align_student_stdin, identity_question_context, identity_repair_question, profile_name_required, student_identity_error
@@ -512,6 +513,9 @@ async def _extract_assignment(workflow_id: int):
             mode = workflow.mode or "code_only"
             workflow.agent_plan = {}
             original_text = await asyncio.to_thread(document_text, document_snapshot(upload))
+            if upload.file_type == "pdf":
+                from .pdf_ocr import validate_lab_pdf
+                validate_lab_pdf(original_text)
             # A Computer Networks manual (Wireshark, Packet Tracer) is not a programming assignment: its parts are built in
             # LabMate's own studios from the packet/network engines, so no language model is involved in recognising them.
             from .network_labs import detect_network_lab, experiment_heading_count, network_parts_for
@@ -582,6 +586,8 @@ async def _extract_assignment(workflow_id: int):
                 # The model sometimes keeps the manual's heading inside the question ("Implementation: Create ...").
                 question_text = strip_section_label(question.get("text", ""))
                 language = question.get("language", "python")
+                if language in {"java", "distributed"} and distributed_java_requested(question_text):
+                    language = "distributed"
                 if not question_text or len(question_text) > 15000 or language not in [*LANGUAGES, "theory"]:
                     raise ValueError("A question could not be extracted correctly. Please retry extraction.")
                 if language == "python":
@@ -622,7 +628,7 @@ async def _extract_assignment(workflow_id: int):
             else:
                 workflow.status = "ready"
                 record(workflow, db, "review", 20, f"Extracted {len(clean)} questions. Ready for review and processing.")
-        except (ManualStructureError, ManualLimitError) as error:
+        except (ManualStructureError, ManualLimitError, NotLabManualError) as error:
             workflow.questions = []
             workflow.status, workflow.error = 'failed', str(error)
             record(workflow, db, 'extract', workflow.progress, str(error))
@@ -639,6 +645,8 @@ async def _extract_assignment(workflow_id: int):
                     for index, task in enumerate(local_tasks):
                         question_text = str(task.get("question_text") or task.get("text") or "").strip()
                         language = task.get("detected_language") or task.get("language") or "python"
+                        if language == "java" and distributed_java_requested(question_text):
+                            language = "distributed"
                         if language not in LANGUAGES:
                             language = "python"
                         clean.append({"id": index + 1, "text": question_text, "language": language})
@@ -1009,6 +1017,8 @@ async def _process_assignment(workflow_id: int):
                     record(workflow, db, "generate", workflow.progress, f"Retrying question {index + 1}; earlier evidence was incomplete.")
                 planned = task_plan(workflow.agent_plan, question['id'])
                 language = planned.get('language') or (question["language"] if workflow.language == "auto" else workflow.language)
+                if language == 'java' and distributed_java_requested(question['text']):
+                    language = 'distributed'
                 progress = 20 + int(65 * index / len(questions))
                 record(workflow, db, "generate", progress, f"Generating answer {index + 1} of {len(questions)}.")
                 if question.get("studio"):
@@ -1355,7 +1365,12 @@ async def _process_assignment(workflow_id: int):
                             try:
                                 repair_question = (identity_repair_question(identity_question, student_name)
                                                    if actual_language in {'python', 'c', 'cpp', 'java'} else question["text"])
-                                repaired = await repair_generated_code(repair_question, actual_language, code, error or output)
+                                repaired = code
+                                if actual_language == 'sql':
+                                    from .sql_result_checks import repair_input_table_displays
+                                    repaired = repair_input_table_displays(code, verification or {})
+                                if repaired == code:
+                                    repaired = await repair_generated_code(repair_question, actual_language, code, error or output)
                                 code = repaired
                                 if actual_language == 'colab' or plan_experiment(question['text'], actual_language, code).get('category') == 'notebook':
                                     from .notebook_magics import neutralize_magics
@@ -1440,7 +1455,8 @@ async def _process_assignment(workflow_id: int):
                                 'the program printed exactly the same output when every number in its input was changed, so it '
                                 'may print a fixed copy of the sample instead of computing the result.']
                             verification['input_dependence'] = 'failed'
-                    # Capture exactly what the runtime returned, including failures.
+                    # Capture program output only after a successful runtime invocation.
+                    ran_successfully = success
                     if actual_language in {'java', 'distributed'}:
                         from .runtime_engine import java_class_name
                         class_name = java_class_name(code)
@@ -1473,7 +1489,7 @@ async def _process_assignment(workflow_id: int):
                     # Source is a labelled preview. Browser images are genuine runner pixels.
                     category = evidence_plan["category"]
                     actual_http = (verification or {}).get("kind") in {"http", "fullstack"}
-                    capture_views = ("output",) if category in {"console", "api"} or actual_http else ()
+                    capture_views = ("output",) if ran_successfully and (category in {"console", "api"} or actual_http) else ()
                     browser_captures = list(screenshots)
                     candidates = ([{'path':p,'kind':'gui','caption':'Actual Java UI component capture (private display)'} for p in browser_captures]
                                   if category in {'java_awt','java_swing'} else
@@ -1529,7 +1545,7 @@ async def _process_assignment(workflow_id: int):
                         success=False
                         error=(error+'\n'+'\n'.join(source_errors)).strip()
                     input_echoed = actual_language == "python"
-                    display_output = output if success else (output + "\n" + (error or "Execution did not complete.")).strip()
+                    display_output = output
                     if stdin_data and actual_language != "python":
                         display_output = "Supplied stdin:\n" + stdin_data + "\nCaptured stdout/stderr:\n" + display_output
                         input_echoed = True  # Already represented separately, never guess prompt timing.
@@ -1541,7 +1557,7 @@ async def _process_assignment(workflow_id: int):
                         ok, path, _, _ = await screenshot_service.generate_screenshot(
                             code, display_output, "vscode" if use_vscode_terminal else theme, group, username, src_filename,
                             project_files=project_files_for_shot,
-                            screenshot_style=screenshot_style, error=error if not success else "",
+                            screenshot_style=screenshot_style,
                             stdin_data=stdin_data, input_echoed=input_echoed, view_mode=capture_view,
                             presentation="vscode_evidence" if actual_language == 'distributed' or use_vscode_terminal else "ide_evidence" if actual_language in {"python", "java", "c", "cpp"} and not actual_http else "evidence", language='java' if actual_language == 'distributed' else actual_language,
                             palette=question.get("jupyter_theme", "light") if theme == "jupyter" else "dark" if use_vscode_terminal or screenshot_style == "style_2" else "light",
@@ -1701,10 +1717,15 @@ def report_safe_values(value):
 
 def build_word_report(upload, workflow):
     """Keep code reports compact; preserve explicitly requested theory formatting."""
+    from .student_diagnostics import execution_was_not_attempted, student_failure_message
     upload = SimpleNamespace(**{**vars(upload), 'file_path': local_upload_path(upload.file_path)})
     fields={key:report_safe_values(getattr(workflow,key)) for key in
         ('id','output_name','instructions','mode','results','student_name','roll_no','department','institution','conclusion') if hasattr(workflow,key)}
     workflow=SimpleNamespace(**fields)
+    for result in workflow.results or []:
+        if result.get('status') == 'failed' and execution_was_not_attempted(result):
+            # Older reports may have saved a diagnostic as a program image.
+            result.update(screenshot_paths=[], screenshot_captions=[])
     if ((getattr(workflow,'mode',None) or 'code_only')=='code_only' and workflow.results
             and not any(r.get('is_theory') or r.get('language') in {'theory','ubuntu'} for r in workflow.results)):
         from .compact_report import build_compact_report
@@ -1746,7 +1767,7 @@ def build_word_report(upload, workflow):
             if (decision.get('include_description') or result.get('language') == 'sql') and result.get('answer'):
                 document.add_paragraph(result['answer'])
             if result.get('status')=='failed':
-                document.add_paragraph('Diagnostic report: verification failed. '+(result.get('error') or 'Required evidence is missing.'))
+                document.add_paragraph('Diagnostic report: ' + student_failure_message(result))
             captions=result.get('screenshot_captions') or []
             for index,path in enumerate(result.get('screenshot_paths',[])):
                 if os.path.isfile(path):
@@ -1785,12 +1806,10 @@ def build_word_report(upload, workflow):
                 document.add_paragraph("; ".join(f"{key}: {value}" for key, value in result["execution_stages"].items()))
             plan = result.get("evidence_plan") or {}
             if result.get("status") == "failed":
-                for message in (result.get("verification") or {}).get("console_errors", []):
-                    document.add_paragraph("Browser console error: " + message)
                 for uncertainty in plan.get("uncertainties", []):
                     document.add_paragraph("Uncertain requirement: " + uncertainty)
                 document.add_paragraph("Diagnostic report - this experiment has not passed execution and evidence verification.")
-                document.add_paragraph("Failure details: " + (result.get("error") or "Required evidence is missing."))
+                document.add_paragraph(student_failure_message(result))
                 missing = (plan.get("evidence") or {}).get("missing_requirements", [])
                 if missing:
                     document.add_paragraph("Missing evidence requirements: " + ", ".join(missing))
@@ -1811,9 +1830,10 @@ def build_word_report(upload, workflow):
                     if result.get("answer"):
                         document.add_paragraph(result["answer"])
                     for chk in verification.get("checks", []):
-                        document.add_paragraph(f"[{'PASS' if chk.get('passed') else 'FAIL'}] {chk.get('name', 'Database check')}: {chk.get('detail', '')}")
-                if verification.get("error"):
-                    document.add_paragraph(f"Verification details: {verification['error']}")
+                        label = f"[{'PASS' if chk.get('passed') else 'FAIL'}] {chk.get('name', 'Database check')}"
+                        if chk.get('passed') or chk.get('name') != 'SQL script execution':
+                            label += f": {chk.get('detail', '')}"
+                        document.add_paragraph(label)
                 if verification.get('coverage'):
                     document.add_paragraph('Declared requirement checks: ' + '; '.join(f'{k}: {v}' for k,v in verification['coverage'].items()))
                 if verification.get('scope'): document.add_paragraph(verification['scope'])
@@ -1829,19 +1849,14 @@ def build_word_report(upload, workflow):
                         document.add_paragraph("Expected visible text: " + "; ".join(test["expected_text"]))
                     if test.get("observed_text"):
                         document.add_paragraph("Observed page text: " + str(test["observed_text"])[:2000])
-                    if test.get("error"):
-                        document.add_paragraph("Failure details: " + str(test["error"])[:500])
                 api_verification=verification.get('api_verification')
                 if api_verification:
                     document.add_paragraph('Backend HTTP request verification: '+str(api_verification.get('status','unknown')).upper())
                     for test in api_verification.get('tests',[]):
                         document.add_paragraph(str(test.get('status','unknown')).upper()+': '+test.get('name','API request'))
                         document.add_paragraph(test.get('observed_text','')[:2000])
-                        if test.get('error'): document.add_paragraph('Failure details: '+test['error'])
                 if verification.get("status") == "failed":
                     document.add_paragraph("Diagnostic report — this SQL solution has not passed MySQL execution or result verification." if verification.get("kind") == "database" else "Diagnostic report — this solution has not passed " + {"rstudio": "R execution and RStudio evidence", "notebook": "notebook execution", "gui": "Java UI interaction", "http": "HTTP request", "ubuntu": "Ubuntu execution"}.get(verification.get("kind"), "browser") + " verification.")
-                    if result.get("error"):
-                        document.add_paragraph("Execution details: " + str(result["error"])[:2000])
                     if result.get('language') != 'sql':
                         document.add_paragraph("Source code:")
                         document.add_paragraph(result.get("code", "")[:20000])

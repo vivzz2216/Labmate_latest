@@ -50,3 +50,32 @@ def test_incomplete_practical_cannot_pass(script):
         assert verified['failures']
     finally:
         session.close()
+
+
+def test_repair_adds_select_for_each_missing_input_table():
+    from app.services.sql_result_checks import repair_input_table_displays
+
+    script = SCRIPT.replace('SELECT * FROM marks;', '''
+CREATE TABLE PASSENGER (id INT PRIMARY KEY, name VARCHAR(20));
+INSERT INTO `PASSENGER` VALUES (1,'Asha'); INSERT INTO PASSENGER VALUES (2,'Ravi');
+''')
+    session = SQLSession()
+    try:
+        receipt = session.execute_script(script)
+        assert receipt['success'], receipt.get('error')
+        verification = verify_sql_exercise(OBJECTIVE, script, receipt)
+        repaired = repair_input_table_displays(script, {**verification, 'statements': receipt['statements']})
+        assert repaired.count('SELECT * FROM PASSENGER;') == 1
+        assert 'SELECT * FROM marks;' in repaired
+    finally:
+        session.close()
+    session = SQLSession()
+    try:
+        receipt = session.execute_script(repaired)
+        verification = verify_sql_exercise(OBJECTIVE, repaired, receipt)
+        assert verification['verified'], verification['failures']
+        passengers = next(query for query in receipt['select_results'] if 'FROM PASSENGER' in query['statement'])
+        assert {row['name'] for row in passengers['rows']} == {'Asha', 'Ravi'}
+        assert repair_input_table_displays(repaired, {**verification, 'statements': receipt['statements']}) == repaired
+    finally:
+        session.close()

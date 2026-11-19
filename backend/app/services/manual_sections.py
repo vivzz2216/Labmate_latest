@@ -111,9 +111,18 @@ def declared_code_language(content):
     return {"c": "c", "c++": "cpp", "cpp": "cpp", "java": "java"}[label]
 
 
+def distributed_java_requested(text):
+    return bool(re.search(r'\b(?:RMI|remote method invocation)\b', text, re.I)
+                or (re.search(r'\bJava\b', text, re.I)
+                    and re.search(r'\b(?:TCP|UDP|Distributed Computing Lab)\b', text, re.I))
+                or len(set(re.findall(r'\b[\w$]+\.java\b', text, re.I))) > 1)
+
+
 def section_language(title, content, default="python"):
     # Mixed React/Express is a full-stack Node assignment, never raw JSX in Node.
     text = title + "\n" + content
+    if distributed_java_requested(text):
+        return "distributed"
     if re.search(r'\b(?:Subject\s*:\s*UNIX\s+LAB|ITL\s*402)\b|^\s*#!\s*/(?:usr/)?bin/(?:ba)?sh\b',text,re.I|re.M):return 'ubuntu'
     if re.search(r'\b(?:UNIX|Ubuntu|Bash|shell script(?:s|ing)?|(?:sed|awk|grep|egrep|perl)\s+(?:script|program)(?:s|ming)?|system administrati(?:on|ve tasks))\b',title,re.I):return 'ubuntu'
     if re.search(r'\bR\s?Studio\b|\bRscript\b|\bR\s+(?:programming|language|lab|script)\b|\b(?:in|using|with|via)\s+(?-i:R)(?![\w.+#-])',title,re.I):return 'r'

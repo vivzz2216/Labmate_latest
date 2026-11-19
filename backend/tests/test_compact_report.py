@@ -91,7 +91,8 @@ def test_failed_report_keeps_a_short_diagnostic(tmp_path,monkeypatch):
     texts=[p.text for p in Document(path).paragraphs if p.text]
     assert texts[0]=='Original manual cover and long instructions'
     assert len(texts)==3
-    assert 'has not passed verification' in texts[2] and 'Compiler rejected' in texts[2]
+    assert 'has not passed verification' in texts[2] and 'could not be compiled' in texts[2]
+    assert 'Compiler rejected' not in texts[2]
     assert 'Execution evidence unavailable.' in texts[2]
     assert 'Browser evidence unavailable.' not in texts[2]
 

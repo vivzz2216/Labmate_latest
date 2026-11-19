@@ -95,8 +95,11 @@ def clean_report(upload, workflow, source):
         doc.add_heading('Result and Observation',1)
         doc.add_paragraph(f'{len(steps)} statements executed; {len(queries)} query outputs recorded. '+('The saved execution and required result checks succeeded.' if ok else 'Diagnostic report: the experiment is incomplete; the details require correction.'))
         for check in v.get('checks',[]):
-            if not check.get('passed'):doc.add_paragraph('Correction required: '+check.get('detail',''))
-        if not ok and result.get('error'):doc.add_paragraph(str(result['error'])[:2000])
+            if not check.get('passed') and check.get('name') != 'SQL script execution':
+                doc.add_paragraph('Correction required: '+check.get('detail',''))
+        if not ok:
+            from .student_diagnostics import student_failure_message
+            doc.add_paragraph(student_failure_message(result))
         table = doc.add_table(rows=1,cols=3);table.style='Light Shading Accent 1'
         for cell,text in zip(table.rows[0].cells,('Query','Executed statement','Returned rows')):cell.text=text
         for index,step in enumerate(queries,1):

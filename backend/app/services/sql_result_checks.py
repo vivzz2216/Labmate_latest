@@ -47,8 +47,43 @@ def practical_table_checks(statements):
         # case-sensitively; repair advice must preserve the authored name.
         actual_table = inserted.get('tableName') or table
         checks.append({'name': f'Input table {actual_table} displayed completely', 'passed': displayed,
+                       'after_statement': inserted['index'],
                        'detail': 'All inserted records are visible.' if displayed else f'After inserting records, run SELECT * FROM `{actual_table}`; without WHERE or LIMIT, before experiment queries.'})
     return checks
+
+
+def repair_input_table_displays(code, verification):
+    """Insert real queries for verification failures tied to successful inserts."""
+    checks = verification.get('checks') or []
+    missing_names = {check['name'] for check in checks if not check.get('passed')
+                     and check['name'].startswith('Input table ')}
+    if not missing_names or not any(check['name'] == 'SQL script execution' and check.get('passed') for check in checks):
+        return code
+    # Adding a SELECT before a caller observes the prior statement's row count
+    # would change the exercise's behavior. Let the model handle those scripts.
+    if re.search(r'\b(?:ROW_COUNT|FOUND_ROWS)\s*\(', code, re.I):
+        return code
+    from .sql_runtime import split_sql_statements
+
+    source = code.replace('\r\n', '\n').replace('\r', '\n')
+    statements = split_sql_statements(source)
+    edits = []
+    identifier = r'(?:`[A-Za-z0-9_$]+`|[A-Za-z0-9_$]+)'
+    for check in practical_table_checks(verification.get('statements') or []):
+        if check['passed'] or check['name'] not in missing_names:
+            continue
+        index = check['after_statement'] - 1
+        if not 0 <= index < len(statements):
+            continue
+        statement = statements[index]
+        match = re.match(rf'^INSERT\s+(?:IGNORE\s+)?INTO\s+({identifier}(?:\s*\.\s*{identifier})?)'
+                         r'(?=\s|\(|$)', statement['statement'], re.I)
+        if match and statement.get('delimiter') == ';':
+            offset = statement['end_offset']
+            edits.append((offset, f'\nSELECT * FROM {match[1]};\n'))
+    for offset, query in sorted(edits, reverse=True):
+        source = source[:offset] + query + source[offset:]
+    return source if edits else code
 
 
 def join_expected(statement, tables, mode=None):
