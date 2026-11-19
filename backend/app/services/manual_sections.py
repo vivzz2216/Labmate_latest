@@ -217,3 +217,120 @@ def numbered_experiments(text):
                         "experiment_number": int(re.match(r"\d+", match.group(1)).group()), "experiment_label": match.group(1).upper(), "title": title or block[0],
                         "extraction_method": "original_numbered_section"})
     return results
+
+
+_VIVA_SECTION_HEAD = re.compile(
+    r"^\s*(?:#+\s*)?(?:\d+[.)]\s*)?(?:viva(?:\s*[-–]?\s*voce)?(?:\s+questions?)?|review\s+questions?|oral\s+questions?)\s*:?\s*(.*)$",
+    re.I,
+)
+_VIVA_SECTION_END = re.compile(
+    r"^\s*(?:#+\s*)?(?:\d+[.)]\s*)?(?:aim|objectives?|theory|procedure|implementation|algorithm|program|code|execution|output|"
+    r"results?(?:\s*(?:and|&|/)\s*conclusions?)?|conclusions?(?:\s*(?:and|&|/)\s*results?)?|"
+    r"references?|bibliography|submission|rubric|evaluation|appendix|experiment(?:\s*no\.?)?\s*\d+)\b\s*(?::.*)?$",
+    re.I,
+)
+_ITEM_PREFIX = re.compile(r"^\s*(?:(?:q(?:uestion)?\s*)?\d+[.):\-]\s*|[-•*]\s+|[a-z][.)]\s+)", re.I)
+
+_CONCLUSION_HEAD = re.compile(
+    r"^\s*(?:#+\s*)?(?:\d+[.)]\s*)?(result\s*(?:and|&|/)\s*conclusion|conclusion\s*(?:and|&|/)\s*result|conclusions?|results?)\s*(?::|\s*$)\s*(.*)$",
+    re.I,
+)
+_CONCLUSION_STOP = re.compile(
+    r"^\s*(?:#+\s*)?(?:\d+[.)]\s*)?(?:viva(?:\s*[-–]?\s*voce)?(?:\s+questions?)?|review\s+questions?|references?|bibliography|"
+    r"post[- ]?experiment(?:al)?|rubric|evaluation|marks|grade|signature|experiment(?:\s*no\.?)?\s*\d+)\b",
+    re.I,
+)
+_PLACEHOLDER_LINE = re.compile(r"^[_\.\-\s\[\]()]{3,}$|^\[(?:write|enter|add)\b[^\]]*\]$", re.I)
+
+
+def extract_viva_questions(text: str) -> list[str]:
+    """Extract Viva / Viva-Voce questions from the uploaded manual text as a clean ordered list."""
+    items: list[str] = []
+    seen: set[str] = set()
+    inside = False
+    current = ""
+
+    def flush():
+        nonlocal current
+        cleaned = re.sub(r"\s+", " ", current).strip()
+        current = ""
+        if len(cleaned) >= 6 and not _PLACEHOLDER_LINE.match(cleaned):
+            key = cleaned.lower()
+            if key not in seen:
+                seen.add(key)
+                items.append(cleaned)
+
+    for raw in str(text or "").splitlines():
+        line = re.sub(r"\s+", " ", raw).strip()
+        if not line:
+            if inside:
+                flush()
+            continue
+        head_match = _VIVA_SECTION_HEAD.match(line)
+        if head_match:
+            flush()
+            inside = True
+            inline = _ITEM_PREFIX.sub("", head_match.group(1) or "").strip()
+            if inline and len(inline) >= 6:
+                current = inline
+            continue
+        if inside and _VIVA_SECTION_END.match(line):
+            flush()
+            inside = False
+            continue
+        if inside:
+            if _ITEM_PREFIX.match(line):
+                flush()
+                current = _ITEM_PREFIX.sub("", line).strip()
+            elif current:
+                current += " " + line
+            elif len(line) >= 6:
+                current = line
+    flush()
+    return items
+
+
+def extract_manual_conclusion(text: str) -> str:
+    """Extract the original experiment's Result/Conclusion prose from manual text (e.g. PDF)."""
+    candidates: list[tuple[int, str]] = []
+    inside = False
+    priority = 0
+    lines_buf: list[str] = []
+
+    def flush():
+        nonlocal inside, lines_buf
+        if inside and lines_buf:
+            joined = "\n".join(lines_buf).strip()
+            if len(joined) >= 12:
+                candidates.append((priority, joined))
+        inside = False
+        lines_buf = []
+
+    for raw in str(text or "").splitlines():
+        line = re.sub(r"\s+", " ", raw).strip()
+        if not line:
+            continue
+        if re.match(r"^\s*result\s*/\s*observation", line, re.I):
+            flush()
+            continue
+        head_match = _CONCLUSION_HEAD.match(line)
+        if head_match:
+            flush()
+            label = (head_match.group(1) or "").lower()
+            priority = 2 if "conclusion" in label else 1
+            inside = True
+            inline = (head_match.group(2) or "").strip()
+            if inline and not _PLACEHOLDER_LINE.match(inline):
+                lines_buf.append(inline)
+            continue
+        if inside and _CONCLUSION_STOP.match(line):
+            flush()
+            continue
+        if inside:
+            if not _PLACEHOLDER_LINE.match(line):
+                lines_buf.append(line)
+    flush()
+    if not candidates:
+        return ""
+    candidates.sort(key=lambda pair: -pair[0])
+    return candidates[0][1][:3000]

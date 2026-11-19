@@ -17,6 +17,8 @@ def student_failure_message(result):
         return "Java RMI needs separate server and client programs that run on the same machine. This solution did not provide a runnable pair."
     if stages.get("compile") == "failed" or error.startswith(("compilation error", "compiler rejected")):
         return "The program could not be compiled. Review the source and retry."
+    if "gpu execution is unavailable" in error:
+        return "This experiment asks for a GPU, but the lab runtime is CPU-only. Change the code to run on the CPU and retry."
     if stages.get("capture") == "unavailable" or "could not be captured" in error:
         return "The required screenshot could not be captured. Retry to generate the evidence."
     if (result.get("verification") or {}).get("status") == "failed":

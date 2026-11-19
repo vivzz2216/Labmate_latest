@@ -321,7 +321,8 @@ async def test_timeout_and_invalid_code_produce_diagnostic_report(tmp_path, monk
     built = Document(report_path)
     full_text = "\n".join(p.text for p in built.paragraphs)
     assert "Diagnostic report" in full_text
-    assert "GPU execution is unavailable in the CPU lab runtime" in full_text
+    # Student-facing wording (student_diagnostics) that still tells the student what to change.
+    assert "the lab runtime is CPU-only" in full_text
 
 
 

@@ -188,6 +188,9 @@ async def _shots(tool, state, steps, out_dir):
 
 async def run_studio_part(workflow, db, question):
     """The finished result dict of one studio part (answer, screenshots, tables and observations)."""
+    from .instruction_policy import parse_instruction_preferences
+
+    prefs = parse_instruction_preferences(getattr(workflow, "instructions", ""))
     studio = question["studio"]
     out_dir = os.path.join(settings.SCREENSHOT_DIR, f"studio_{workflow.id}_{question['id']}_{uuid.uuid4().hex[:6]}")
     base = {"id": question["id"], "question": question["text"], "language": "theory", "is_theory": True, "code": "", "output": "", "error": "",
@@ -201,11 +204,11 @@ async def run_studio_part(workflow, db, question):
         steps, missing = await asyncio.to_thread(wireshark_lab.plan, session)
         state = await asyncio.to_thread(wireshark_lab.studio_state, session, source, steps)
         shots, failure = await _shots("wireshark", state, steps, out_dir)
-        answer = wireshark_lab.procedure(session, source, steps)
-        note = _wireshark_note(source)
+        answer = "" if (prefs.output_only_screenshots and prefs.no_extra_questions) else wireshark_lab.procedure(session, source, steps)
+        note = "" if (prefs.output_only_screenshots and prefs.no_extra_questions) else _wireshark_note(source)
         if note:
             answer += "\n" + note
-        tables = await asyncio.to_thread(wireshark_lab.tables, session)
+        tables = [] if prefs.no_extra_questions else await asyncio.to_thread(wireshark_lab.tables, session)
         result = {**base, "answer": answer, "auto_evidence": shots, "tables_after": tables,
                   "notes": missing}
         if failure:
@@ -224,8 +227,15 @@ async def run_studio_part(workflow, db, question):
             raise ValueError("Unknown Packet Tracer experiment.")
         state = {"tool": "packettracer", "spec": run["spec"], "name": run["title"]}
         shots, failure = await _shots("packettracer", state, run["frames"], out_dir)
-        result = {**base, "answer": procedure, "auto_evidence": shots, "tables_before": before, "observations": run["observations"],
-                  "notes": _assumptions(experiment)}
+        result = {
+            **base,
+            "answer": "" if (prefs.output_only_screenshots and prefs.no_extra_questions) else procedure,
+            "auto_evidence": shots,
+            "tables_before": [] if (prefs.output_only_screenshots and prefs.no_extra_questions) else before,
+            "observations": [] if prefs.no_extra_questions else run["observations"],
+            # The assumed topology and practice-environment notes are disclosures; they stay whatever the instructions say.
+            "notes": _assumptions(experiment),
+        }
         if failure:
             result["studio_error"] = "The practice simulator screenshots could not be captured automatically (%s). Generate the report again." % failure
         return result

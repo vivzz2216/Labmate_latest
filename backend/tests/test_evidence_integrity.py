@@ -128,8 +128,11 @@ class FailedReportGateTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIn("diagnostic report", result.error)
                 report = db.get(Report, result.report_id)
                 text = "\n".join(p.text for p in Document(report.file_path).paragraphs)
-                self.assertIn("Execution rejected", text)
+                # The report shows the student-facing message (student_diagnostics); the raw runner error stays in the
+                # workflow data for diagnosis instead of being printed in the student's lab report.
                 self.assertIn("has not passed", text)
+                self.assertNotIn("Execution rejected", text)
+                self.assertIn("Execution rejected", result.results[0]["error"])
             engine.dispose()
 
     async def test_failed_html_interaction_creates_downloadable_diagnostic_report(self):

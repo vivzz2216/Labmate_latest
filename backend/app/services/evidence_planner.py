@@ -211,12 +211,15 @@ def expected_outputs(objective):
 
 
 def plan_experiment(objective, language, code=""):
+    from .instruction_policy import parse_instruction_preferences
+
+    prefs = parse_instruction_preferences(objective)
     category = experiment_category(language, objective, code)
     config = TEMPLATE_CATEGORIES[category]
     expected = expected_outputs(objective)
     interaction = bool(re.search(r"\b(click|button|submit|validation|calculator|interactive|toggle|search|filter|to.do)\b", objective, re.I))
-    requirements = [{"id": "source", "description": "Relevant source implementation", "evidence": "source_preview"},
-                    {"id": "execution", "description": "Actual execution or rendered application", "evidence": config["result"]}]
+    requirements = [] if prefs.output_only_screenshots else [{"id": "source", "description": "Relevant source implementation", "evidence": "source_preview"}]
+    requirements.append({"id": "execution", "description": "Actual execution or rendered application", "evidence": config["result"]})
     if interaction and category in {"browser", "react", "flask", "java_awt", "java_swing", "javafx", "tkinter"}:
         requirements.append({"id": "interaction", "description": "Required interaction changes the visible state", "evidence": config["result"]})
     responsive = responsive_requested(objective)
@@ -249,7 +252,7 @@ def plan_experiment(objective, language, code=""):
     return {"version": 1, "objective": objective[:15000], "language": language, "category": category,
             "supported": config["available"], "requirements": requirements, "expected_output": expected,
             "expected_states": ["after required interactions"] if interaction else ["final execution state"],
-            "recommended_screenshots": [config["source"], config["result"]],
+            "recommended_screenshots": [config["result"]] if prefs.output_only_screenshots else [config["source"], config["result"]],
             "intermediate_required": intermediate,
             "responsive_required": responsive, "uncertainties": uncertainty}
 

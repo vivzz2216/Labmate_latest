@@ -63,7 +63,10 @@ def answer_question(question):
 
 
 def clean_report(upload, workflow, source):
-    doc,source_is_docx = create_report_document(upload, landscape=True)
+    from .instruction_policy import filter_output_only_candidates, parse_instruction_preferences
+
+    prefs = parse_instruction_preferences(getattr(workflow, 'instructions', ''))
+    doc,source_is_docx = create_report_document(upload, landscape=True, include_pdf_pages=not prefs.no_extra_manual_pages)
     section = doc.sections[-1]
     section.top_margin = section.bottom_margin = Inches(.5)
     if not source_is_docx:
@@ -116,7 +119,7 @@ def clean_report(upload, workflow, source):
                     paragraph.paragraph_format.space_after=Pt(2)
                     paragraph.paragraph_format.line_spacing=1.0
                     for run in paragraph.runs:run.font.size=Pt(9)
-        questions=post_questions(source)
+        questions=[] if prefs.no_extra_questions else post_questions(source)
         if questions:
             questions_heading=doc.add_heading('Post Experiment Questions',1)
             questions_heading.paragraph_format.page_break_before=True
@@ -124,9 +127,12 @@ def clean_report(upload, workflow, source):
                 answer=answer_question(q)
                 if not answer:raise ValueError('A completed SQL report needs an answer to: '+q)
                 doc.add_paragraph(f'{index}. {q}',style='Heading 2');doc.add_paragraph(answer)
-        doc.add_heading('Conclusion',1)
-        doc.add_paragraph((f'The experiment demonstrated {title.rstrip(".").lower()} on MySQL. The recorded results contain {len(queries)} query outputs and the required execution checks succeeded.') if ok else 'The experiment did not meet every required execution or result check. The diagnostic evidence must be corrected before submission.')
+        if not prefs.no_conclusion:
+            doc.add_heading('Conclusion',1)
+            doc.add_paragraph((f'The experiment demonstrated {title.rstrip(".").lower()} on MySQL. The recorded results contain {len(queries)} query outputs and the required execution checks succeeded.') if ok else 'The experiment did not meet every required execution or result check. The diagnostic evidence must be corrected before submission.')
         frames=v.get('evidence_frames') or [{'path':p,'kind':'database','caption':c} for p,c in zip(result.get('screenshot_paths',[]),result.get('screenshot_captions',[]))]
+        if prefs.output_only_screenshots:
+            frames = filter_output_only_candidates(frames)
         for frame in frames:
             if not os.path.isfile(frame['path']):raise ValueError('Required SQL evidence image is missing: '+frame['path'])
             evidence_heading=doc.add_heading('SQL Program' if frame.get('kind')=='source_preview' else 'Output',1)
