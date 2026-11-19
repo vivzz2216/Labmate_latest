@@ -104,6 +104,8 @@ async def lifespan(app: FastAPI):
         await stop_retention_job()
         from .services.browser_capture import close_browser_pools
         await close_browser_pools()
+        from .services.ide_sessions import ide_sessions
+        await ide_sessions.close_all()
 
 # Create FastAPI app
 app = FastAPI(

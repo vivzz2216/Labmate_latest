@@ -39,6 +39,10 @@ hour. So:
   "resumes in about N minutes (at HH:MM UTC)", and no further sandbox is attempted until then.
 - `/health/ready` (polled by every open student page) never creates a sandbox; it reports the startup
   probe and the outcome of real jobs.
+- The Eclipse/IntelliJ Run button (`/api/ide/java/run`) keeps one session per student
+  (`services/ide_sessions.py`): closed after 4 idle minutes (Railway reaps idle VMs at 5), at most 12 kept
+  at once, least recently used closed first. Live: 3 runs = 10 requests, repeat runs 5-6 s. Each student
+  also has at most 12 runs a minute and 60 an hour.
 
 Railway supplies RAILWAY_ENVIRONMENT_ID. Never set LABMATE_SANDBOX_WORKER on the
 API service and never put the API token in frontend variables or sandbox env.
