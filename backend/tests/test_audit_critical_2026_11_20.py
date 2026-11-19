@@ -130,9 +130,11 @@ def test_existing_manual_numbers_are_kept_when_nothing_is_replaced():
     assert network_parts_for(questions) == (questions, 0)
 
 
-def test_the_image_ships_the_ubuntu_curriculum_next_to_the_sandbox_files():
-    dockerfile = (Path(__file__).resolve().parents[1] / "Dockerfile").read_text(encoding="utf-8")
-    line = next(l for l in dockerfile.splitlines() if l.startswith("COPY") and "./scripts/" in l)
+@pytest.mark.parametrize("dockerfile", ["Dockerfile", "backend/Dockerfile"])
+def test_the_image_ships_the_ubuntu_curriculum_next_to_the_sandbox_files(dockerfile):
+    # Railway builds the API from the repository root (railway.json -> Dockerfile); backend/Dockerfile is kept in step.
+    text = (Path(__file__).resolve().parents[2] / dockerfile).read_text(encoding="utf-8")
+    line = next(l for l in text.splitlines() if l.startswith("COPY") and "./scripts/" in l)
     for name in ("ubuntu_curriculum.py", "sandbox_job.py", "sandbox_broker.py"):
         assert f"backend/scripts/{name}" in line
     # the modules the Ubuntu labs import must exist where the image copies them from
