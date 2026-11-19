@@ -75,7 +75,6 @@ export default function HomePage() {
               title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
             >
               {theme === "dark" ? <Sun size={14} aria-hidden="true" /> : <Moon size={14} aria-hidden="true" />}
-              <span>{theme === "dark" ? "Light" : "Dark"}</span>
             </button>
             {isAuthenticated ? (
               <>
