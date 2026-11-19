@@ -85,3 +85,19 @@ def test_compact_report_prints_the_note_under_the_heading(tmp_path, monkeypatch)
     heading = next(i for i, t in enumerate(text) if t.startswith("Experiment 2"))
     note = next(i for i, t in enumerate(text) if t.startswith("Differs from the manual:"))
     assert note > heading and "120 training" in text[note]
+
+
+def test_dataset_swap_is_flagged_without_the_models_cooperation():
+    from app.services.substitutions import all_substitution_notes, dataset_swap_notes
+    question = ("Experiment 2: Exploratory Data Analysis and Locally Weighted Regression\n"
+                "Load the California Housing dataset with fetch_california_housing() and print the top correlations with MedHouseVal.")
+    swapped = "from sklearn.datasets import load_diabetes\n# NOTE: download disabled\nraw = load_diabetes(as_frame=True)\n"
+    notes = dataset_swap_notes(question, swapped)
+    assert len(notes) == 1 and "California Housing" in notes[0] and "load_diabetes" in notes[0]
+    assert dataset_swap_notes(question, "from sklearn.datasets import fetch_california_housing\nd = fetch_california_housing()") == []
+    assert dataset_swap_notes("Experiment 1: KNN on the Iris dataset", "from sklearn.datasets import load_iris\nload_iris()") == []
+    generated = "from sklearn.datasets import make_regression\nX, y = make_regression(n_samples=200)"
+    assert "make_regression" in dataset_swap_notes(question, generated)[0]
+    # an explicit SUBSTITUTION line about the same dataset is not repeated
+    declared = "SUBSTITUTION: The California Housing dataset was replaced by load_diabetes because downloads are disabled"
+    assert len(all_substitution_notes(declared, question, swapped)) == 1

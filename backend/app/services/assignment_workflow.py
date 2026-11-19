@@ -1608,8 +1608,8 @@ async def _process_assignment(workflow_id: int):
                           **({'project_files': project_config.get('project_files', {}), 'project_type': project_config.get('project_type')} if project_config else {}),
                           **({"screenshot_captions": screenshot_captions} if screenshot_captions is not None else {}),
                           **({"verification": verification} if verification is not None else {})}
-                from .substitutions import substitution_notes
-                notes = substitution_notes(output)
+                from .substitutions import all_substitution_notes
+                notes = all_substitution_notes(output, question["text"], code)
                 if notes:
                     result["substitutions"] = notes
                 store_workflow_result(workflow,index,result)

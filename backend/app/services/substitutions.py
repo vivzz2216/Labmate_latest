@@ -42,5 +42,45 @@ def substitution_notes(output):
     return unique[:5]
 
 
+# Datasets the offline notebook runtime refuses to download (colab_worker.validate_cell), with the names manuals use.
+DOWNLOAD_ONLY_DATASETS = {
+    "fetch_california_housing": ("California Housing", r"california\s+housing|fetch_california_housing|MedHouseVal"),
+    "fetch_20newsgroups": ("20 Newsgroups", r"20\s*news\s*groups|fetch_20newsgroups"),
+    "fetch_lfw_people": ("Labeled Faces in the Wild (LFW)", r"\blfw\b|labeled\s+faces\s+in\s+the\s+wild|fetch_lfw_people"),
+    "fetch_openml": ("OpenML", r"fetch_openml"),
+}
+REPLACEMENT_LOADER = re.compile(r"\b((?:load|fetch|make)_\w+)\s*\(")
+
+
+def dataset_swap_notes(question, code):
+    """A note when the manual names a download-only dataset and the generated code loads something else.
+
+    The model is asked to print a SUBSTITUTION line, but it does not always do so (AI/ML Exp 2 replaced California Housing
+    with the diabetes dataset and only said so in a code comment), so this check does not depend on it.
+    """
+    question, code = str(question or ""), str(code or "")
+    notes = []
+    for fetcher, (name, pattern) in DOWNLOAD_ONLY_DATASETS.items():
+        if not re.search(pattern, question, re.I) or re.search(rf"\b{fetcher}\s*\(", code):
+            continue
+        used = [loader for loader in dict.fromkeys(REPLACEMENT_LOADER.findall(code)) if loader not in DOWNLOAD_ONLY_DATASETS]
+        if not used:
+            continue
+        what = ", ".join(used[:3])
+        notes.append(f"The manual's {name} dataset needs a download that the offline lab runtime blocks, so the program used "
+                     f"{what} instead. Results differ from the manual.")
+    return notes
+
+
+def all_substitution_notes(output, question="", code=""):
+    """Notes from the program's output and from the dataset check, without repeating a dataset the output already explains."""
+    notes = substitution_notes(output)
+    for note in dataset_swap_notes(question, code):
+        name = note.split("The manual's ", 1)[1].split(" dataset", 1)[0]
+        if not any(name.lower() in existing.lower() for existing in notes):
+            notes.append(note)
+    return notes[:5]
+
+
 def report_note(notes):
     return "Differs from the manual: " + " ".join(notes) if notes else ""
