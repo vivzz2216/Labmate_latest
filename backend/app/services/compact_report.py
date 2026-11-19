@@ -123,6 +123,11 @@ def build_compact_report(upload,workflow):
             aim_paragraph.paragraph_format.keep_with_next=True
         if result.get('status')!='completed':
             document.add_paragraph(diagnostic_text(result))
+        if result.get('substitutions'):
+            from .substitutions import report_note
+            note = document.add_paragraph()
+            note.add_run(report_note(result['substitutions'])).bold = True
+            note.paragraph_format.keep_with_next = True
         paths=result.get('screenshot_paths') or []
         if result.get('is_theory') or result.get('language') == 'theory':
             from .docx_layout import embed_theory_block

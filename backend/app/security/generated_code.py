@@ -3,6 +3,18 @@
 import ast
 import re
 
+def class_name_read(node, parents):
+    """`obj.__class__.__name__` (or `__qualname__`): the class's name only, which lab manuals print to show polymorphism.
+
+    `__class__` followed by anything else (`__bases__`, `__subclasses__`, `__mro__`, `__dict__`, `__init__`) is still refused:
+    that chain is how sandboxed Python escapes to arbitrary classes.
+    """
+    parent = parents.get(node)
+    return (isinstance(node, ast.Attribute) and node.attr == "__class__" and isinstance(node.ctx, ast.Load)
+            and isinstance(parent, ast.Attribute) and parent.value is node and parent.attr in {"__name__", "__qualname__"}
+            and isinstance(parent.ctx, ast.Load))
+
+
 def validate_generated_code(code: str, language: str, capability=None, local_modules=()):
     """Restrict generated lab programs before the existing local execution fallback."""
     if len(code) > 50000:
@@ -24,6 +36,7 @@ def validate_generated_code(code: str, language: str, capability=None, local_mod
         if capability=='flask':safe_modules.update({'flask','markupsafe',*local_modules})
         if capability=='spark':safe_modules.add('pyspark')
         if capability=='notebook':safe_modules.update({'numpy','pandas','sklearn','scipy','matplotlib','seaborn','nltk','skfuzzy','pgmpy','torch','tensorflow','keras','time','warnings','io','pprint','networkx','bs4','PIL'})
+        parents = {child: parent for parent in ast.walk(tree) for child in ast.iter_child_nodes(parent)}
         for node in ast.walk(tree):
             if capability=='flask':
                 if isinstance(node,ast.Call) and isinstance(node.func,ast.Attribute) and node.func.attr in {'send_file','send_from_directory','open_resource','open_instance_resource','from_pyfile'}:
@@ -47,7 +60,7 @@ def validate_generated_code(code: str, language: str, capability=None, local_mod
             private_self_field = (isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name)
                                   and node.value.id == "self" and node.attr.startswith("__")
                                   and not node.attr.endswith("__"))
-            if isinstance(node, ast.Attribute) and node.attr.startswith("__") and node.attr not in {"__version__", "__name__", "__qualname__", "__doc__"} and not safe_parent_initializer and not private_self_field:
+            if isinstance(node, ast.Attribute) and node.attr.startswith("__") and node.attr not in {"__version__", "__name__", "__qualname__", "__doc__"} and not safe_parent_initializer and not private_self_field and not class_name_read(node, parents):
                 raise ValueError("Runtime introspection is not supported in lab execution.")
             if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
                 if node.func.id in {"eval", "exec", "compile", "__import__", "getattr", "setattr", "globals", "locals", "vars", "breakpoint"}:

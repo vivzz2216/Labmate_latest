@@ -1164,6 +1164,8 @@ async def _process_assignment(workflow_id: int):
                             "Implement only the current exercise. Do not add passing-test messages, verification badges, accreditation claims, "
                             "or outputs from other exercises. Never claim code was executed or verified; the runner determines that."
                         )
+                        from .substitutions import GENERATION_RULE
+                        code_instruction += GENERATION_RULE
                         if (identity_question != question['text'] and language in {'python', 'c', 'cpp', 'java'}
                                 and profile_name_required(identity_question, student_name)):
                             code_instruction += ("\nThe manual requires the current student's full profile name in the report. "
@@ -1606,8 +1608,13 @@ async def _process_assignment(workflow_id: int):
                           **({'project_files': project_config.get('project_files', {}), 'project_type': project_config.get('project_type')} if project_config else {}),
                           **({"screenshot_captions": screenshot_captions} if screenshot_captions is not None else {}),
                           **({"verification": verification} if verification is not None else {})}
+                from .substitutions import substitution_notes
+                notes = substitution_notes(output)
+                if notes:
+                    result["substitutions"] = notes
                 store_workflow_result(workflow,index,result)
-                record(workflow, db, "capture", 20 + int(65 * (index + 1) / len(questions)), f"Question {index + 1} finished" + ("." if success else " with an execution warning."))
+                record(workflow, db, "capture", 20 + int(65 * (index + 1) / len(questions)), f"Question {index + 1} finished" + ("." if success else " with an execution warning.")
+                       + (" It differs from the manual: " + " ".join(notes) if notes else ""))
             incomplete = [result.get("id") for result in (workflow.results or []) if
                           result.get("status") != "completed" or (
                               not result.get("is_theory") and result.get("language") != "theory"
@@ -1798,6 +1805,9 @@ def build_word_report(upload, workflow):
             else:
                 question.add_run(f"Program {result['id']}: ").bold = True
                 question.add_run(q_text)
+            if result.get("substitutions"):
+                from .substitutions import report_note
+                document.add_paragraph().add_run(report_note(result["substitutions"])).bold = True
             summary = result.get("verification_summary")
             if summary and result.get("status") == "failed":
                 document.add_paragraph("Verification scope: " + summary["status"].replace("_", " "))

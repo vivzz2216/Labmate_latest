@@ -568,7 +568,19 @@ def validate_cell(code):
             'itertools','functools','decimal','fractions','datetime','json','csv','sys','warnings',
             're','string','typing','io','operator','copy','pprint','time','nltk','skfuzzy','pgmpy','torch','tensorflow','keras',
             'networkx','bs4','PIL'}
-    for node in ast.walk(ast.parse(code)):
+    tree = ast.parse(code)
+    parents = {child: parent for parent in ast.walk(tree) for child in ast.iter_child_nodes(parent)}
+
+    def name_read(node):
+        # type(model).__name__ and obj.__class__.__name__ only read a class's name; __class__ followed by anything else
+        # (__bases__, __subclasses__, __mro__, __dict__) stays refused because that chain escapes the sandbox.
+        if node.attr in {'__name__', '__qualname__', '__doc__'} and isinstance(node.ctx, ast.Load):
+            return True
+        parent = parents.get(node)
+        return (node.attr == '__class__' and isinstance(node.ctx, ast.Load) and isinstance(parent, ast.Attribute)
+                and parent.value is node and parent.attr in {'__name__', '__qualname__'} and isinstance(parent.ctx, ast.Load))
+
+    for node in ast.walk(tree):
         if isinstance(node, (ast.Import, ast.ImportFrom)):
             modules = [x.name for x in node.names] if isinstance(node, ast.Import) else [node.module or '']
             if _CPU_HAS_AVX is False and any(m.split('.')[0] in {'tensorflow','keras'} for m in modules):
@@ -596,7 +608,7 @@ def validate_cell(code):
                          and isinstance(node.value, ast.Call) and isinstance(node.value.func, ast.Name)
                          and node.value.func.id == 'super' and not node.value.keywords
                          and (not node.value.args or (len(node.value.args) == 2 and all(isinstance(a, ast.Name) for a in node.value.args))))
-        if isinstance(node, ast.Attribute) and node.attr.startswith('_') and node.attr != '__version__' and not is_super_init:
+        if isinstance(node, ast.Attribute) and node.attr.startswith('_') and node.attr != '__version__' and not is_super_init and not name_read(node):
             raise PermissionError('Private runtime introspection is unavailable in notebook cells.')
         if isinstance(node, ast.Name) and node.id.startswith('__') and node.id != '__name__':
             raise PermissionError('Runtime introspection is unavailable in notebook cells.')
