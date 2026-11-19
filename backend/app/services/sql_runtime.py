@@ -233,6 +233,8 @@ def split_sql_statements(sql: str) -> list[dict[str, Any]]:
                         "statement": stmt_text,
                         "start_line": s_line,
                         "end_line": e_line,
+                        "end_offset": i + len(delimiter),
+                        "delimiter": delimiter,
                         "comment_start_line": comment_start_line or s_line,
                         "leading_comment": " | ".join(pending_comments).strip(),
                     }

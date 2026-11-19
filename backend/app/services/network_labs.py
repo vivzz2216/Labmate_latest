@@ -35,8 +35,12 @@ def _part(number, title, studio, args, text, slots=()):
     return part
 
 
-def detect_network_lab(manual_text):
-    """Question parts for a Wireshark or Packet Tracer manual, or None when the manual is something else."""
+def detect_network_lab(manual_text, strict=False):
+    """Question parts for a Wireshark or Packet Tracer manual, or None when the manual is something else.
+
+    strict (one experiment's own text, see network_parts_for): the three-router exercise is used only when the experiment
+    asks for RIP routing, so a different Packet Tracer lab (one router, two subnets) is not swapped for it.
+    """
     text = str(manual_text or "")
     low = text.lower()
     if low.count("wireshark") >= 3 and re.search(r"\bpackets?\b", low) and not re.search(r"packet\s+tracer", low):
@@ -54,7 +58,7 @@ def detect_network_lab(manual_text):
                 parts.append(_part(len(parts) + 1, PT7_MESH[1], "packettracer", {"experiment": PT7_MESH[0]},
                                    "Post-experimental exercise: implement a mesh topology using a hub and switches."))
             return parts
-        if len(re.findall(r"\brouters?\b", low)) >= 3:
+        if len(re.findall(r"\brouters?\b", low)) >= 3 and (not strict or re.search(r"\brip(?:v2)?\b", low)):
             return [_part(1, PT9[1], "packettracer", {"experiment": PT9[0]},
                           "Design a network of three routers, configure the interfaces and RIP dynamic routing, test with Simple PDUs, then disable one "
                           "router-to-router link and show the path the network chooses.")]
@@ -62,6 +66,32 @@ def detect_network_lab(manual_text):
 
 
 # ------------------------------------------------------------------------------------------------ the written procedures
+def network_parts_for(questions):
+    """Replace only the experiments that are themselves a Wireshark or Packet Tracer exercise LabMate builds.
+
+    A whole-document check used to turn any manual mentioning Packet Tracer and routers into one built-in exercise, dropping
+    every other experiment (a 3-experiment networks manual and a 21-experiment mixed manual, 2026-11-20 audit). Each
+    experiment is now checked on its own text; the rest stay as they are. Returns (questions renumbered from 1, replaced count).
+    """
+    out, replaced = [], 0
+    for question in questions:
+        parts = None if question.get("studio") else detect_network_lab(question.get("text", ""), strict=True)
+        if parts:
+            replaced += 1
+            out.extend(parts)
+        else:
+            out.append(question)
+    if not replaced:
+        return questions, 0  # keep the manual's own experiment numbers
+    return [{**item, "id": index} for index, item in enumerate(out, 1)], replaced
+
+
+def experiment_heading_count(text):
+    """Distinct 'Experiment N' headings in a document (a networks manual is recognised as a whole only when there is one)."""
+    from .manual_sections import HEADING
+    return len({match.group(1).upper() for line in str(text or "").splitlines() if (match := HEADING.match(line))})
+
+
 def _pt7_procedure(experiment, spec):
     devices = spec["devices"]
     kinds = {d["type"] for d in devices}
@@ -158,6 +188,9 @@ async def _shots(tool, state, steps, out_dir):
 
 async def run_studio_part(workflow, db, question):
     """The finished result dict of one studio part (answer, screenshots, tables and observations)."""
+    from .instruction_policy import parse_instruction_preferences
+
+    prefs = parse_instruction_preferences(getattr(workflow, "instructions", ""))
     studio = question["studio"]
     out_dir = os.path.join(settings.SCREENSHOT_DIR, f"studio_{workflow.id}_{question['id']}_{uuid.uuid4().hex[:6]}")
     base = {"id": question["id"], "question": question["text"], "language": "theory", "is_theory": True, "code": "", "output": "", "error": "",
@@ -171,15 +204,15 @@ async def run_studio_part(workflow, db, question):
         steps, missing = await asyncio.to_thread(wireshark_lab.plan, session)
         state = await asyncio.to_thread(wireshark_lab.studio_state, session, source, steps)
         shots, failure = await _shots("wireshark", state, steps, out_dir)
-        answer = wireshark_lab.procedure(session, source, steps)
-        note = _wireshark_note(source)
+        answer = "" if (prefs.output_only_screenshots and prefs.no_extra_questions) else wireshark_lab.procedure(session, source, steps)
+        note = "" if (prefs.output_only_screenshots and prefs.no_extra_questions) else _wireshark_note(source)
         if note:
             answer += "\n" + note
-        tables = await asyncio.to_thread(wireshark_lab.tables, session)
+        tables = [] if prefs.no_extra_questions else await asyncio.to_thread(wireshark_lab.tables, session)
         result = {**base, "answer": answer, "auto_evidence": shots, "tables_after": tables,
-                  "notes": missing}
+                  "notes": [] if (prefs.output_only_screenshots and prefs.no_extra_questions) else missing}
         if failure:
-            result["studio_error"] = "The practice analyser screenshots could not be captured automatically (%s). Generate the report again." % failure
+            result["studio_error"] = "The Wireshark screenshots could not be captured automatically (%s). Generate the report again." % failure
         return result
     if studio == "packettracer":
         experiment = (question.get("studio_args") or {}).get("experiment", "")
@@ -194,9 +227,15 @@ async def run_studio_part(workflow, db, question):
             raise ValueError("Unknown Packet Tracer experiment.")
         state = {"tool": "packettracer", "spec": run["spec"], "name": run["title"]}
         shots, failure = await _shots("packettracer", state, run["frames"], out_dir)
-        result = {**base, "answer": procedure, "auto_evidence": shots, "tables_before": before, "observations": run["observations"],
-                  "notes": _assumptions(experiment)}
+        result = {
+            **base,
+            "answer": "" if (prefs.output_only_screenshots and prefs.no_extra_questions) else procedure,
+            "auto_evidence": shots,
+            "tables_before": [] if (prefs.output_only_screenshots and prefs.no_extra_questions) else before,
+            "observations": [] if prefs.no_extra_questions else run["observations"],
+            "notes": [] if (prefs.output_only_screenshots and prefs.no_extra_questions) else _assumptions(experiment),
+        }
         if failure:
-            result["studio_error"] = "The practice simulator screenshots could not be captured automatically (%s). Generate the report again." % failure
+            result["studio_error"] = "The Cisco Packet Tracer screenshots could not be captured automatically (%s). Generate the report again." % failure
         return result
     raise ValueError("Unknown studio.")

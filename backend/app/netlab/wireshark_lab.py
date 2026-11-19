@@ -11,7 +11,7 @@ from .scenario import build_scenario
 
 PASSWORD_KEY = re.compile(r"pass|pwd|secret", re.I)
 INTERFACES = ["Ethernet", "Wi-Fi", "Loopback: Adapter for loopback traffic capture"]
-PRACTICE_NOTE = "LabMate practice environment (not Wireshark)"
+PRACTICE_NOTE = ""
 
 
 def load(capture_bytes=None):
@@ -250,4 +250,4 @@ def studio_state(session, source, steps, facts=None):
                            if login else [], "values": dict(login.layers["http"].get("form", [])) if login else {}}
     return {"tool": "wireshark", "source": source, "packets": session.rows(), "details": details, "filters": filters, "streams": streams,
             "pages": pages, "interfaces": INTERFACES, "steps": steps, "practice": PRACTICE_NOTE,
-            "file": "practice-capture.pcap" if source == "scenario" else "your-capture.pcap"}
+            "file": "capture.pcap" if source == "scenario" else "your-capture.pcap"}

@@ -75,7 +75,6 @@ export default function HomePage() {
               title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
             >
               {theme === "dark" ? <Sun size={14} aria-hidden="true" /> : <Moon size={14} aria-hidden="true" />}
-              <span>{theme === "dark" ? "Light" : "Dark"}</span>
             </button>
             {isAuthenticated ? (
               <>
@@ -301,7 +300,7 @@ export default function HomePage() {
               <li><Link href="/labs/distributed-computing" className={styles.footerLink}>Distributed Computing (Java)</Link></li>
               <li><Link href="/labs" className={styles.footerLink}>Python, Java &amp; C/C++</Link></li>
               <li><Link href="/labs" className={styles.footerLink}>Web, SQL &amp; Colab</Link></li>
-              <li><Link href="/networks/wireshark" className={styles.footerLink}>Wireshark practice studio</Link></li>
+              <li><Link href="/networks/wireshark" className={styles.footerLink}>Wireshark &amp; Packet Tracer</Link></li>
             </ul>
           </div>
         </div>

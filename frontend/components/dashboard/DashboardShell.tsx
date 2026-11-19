@@ -23,8 +23,10 @@ import {
   ShieldCheck,
   Layers,
   BookOpen,
+  BrainCircuit,
 } from "lucide-react";
-import { SiC, SiCplusplus, SiHtml5, SiPython } from "react-icons/si";
+import { SiC, SiCisco, SiCplusplus, SiGooglecolab, SiHtml5, SiMysql, SiNodedotjs, SiPython, SiR, SiReact, SiUbuntu, SiWireshark } from "react-icons/si";
+import { Network } from "lucide-react";
 import { FaJava } from "react-icons/fa";
 import LabMateLogo from "@/components/brand/LabMateLogo";
 import { useAuth } from "@/contexts/BasicAuthContext";
@@ -35,6 +37,7 @@ export interface Assignment {
   filename: string;
   original_filename: string;
   language?: string;
+  lab_environment?: string | null;
   uploaded_at: string;
   total_tasks: number;
   completed_tasks: number;
@@ -50,20 +53,24 @@ export const languageMeta: Record<
   { label: string; icon: any; className: string }
 > = {
   python: { label: "Python", icon: SiPython, className: styles.python },
-  colab: { label: "Python Notebook", icon: SiPython, className: styles.python },
+  colab: { label: "Google Colab", icon: SiGooglecolab, className: styles.colab },
   java: { label: "Java", icon: FaJava, className: styles.java },
   c: { label: "C", icon: SiC, className: styles.c },
   cpp: { label: "C++", icon: SiCplusplus, className: styles.cpp },
   webdev: { label: "Web Development", icon: SiHtml5, className: styles.html },
   "web-dev": { label: "Web Development", icon: SiHtml5, className: styles.html },
   html: { label: "Web Development", icon: SiHtml5, className: styles.html },
-  react: { label: "React (Web Dev)", icon: SiHtml5, className: styles.html },
-  node: { label: "Node.js (Web Dev)", icon: SiHtml5, className: styles.html },
-  sql: { label: "SQL", icon: Terminal, className: styles.c },
-  ubuntu: { label: "Ubuntu / Linux", icon: Terminal, className: styles.fileIcon },
-  r: { label: "R / RStudio", icon: Terminal, className: styles.fileIcon },
-  deep_learning: { label: "Deep Learning", icon: SiPython, className: styles.python },
-  "deep-learning": { label: "Deep Learning", icon: SiPython, className: styles.python },
+  react: { label: "React (Web Dev)", icon: SiReact, className: styles.react },
+  node: { label: "Node.js (Web Dev)", icon: SiNodedotjs, className: styles.node },
+  sql: { label: "SQL", icon: SiMysql, className: styles.sql },
+  ubuntu: { label: "Ubuntu / Linux", icon: SiUbuntu, className: styles.ubuntu },
+  unix: { label: "Ubuntu / Linux", icon: SiUbuntu, className: styles.ubuntu },
+  wireshark: { label: "Wireshark", icon: SiWireshark, className: styles.wireshark },
+  packettracer: { label: "Cisco Packet Tracer", icon: SiCisco, className: styles.wireshark },
+  network: { label: "Networking", icon: Network, className: styles.wireshark },
+  r: { label: "R / RStudio", icon: SiR, className: styles.r },
+  deep_learning: { label: "Deep Learning", icon: BrainCircuit, className: styles.deepLearning },
+  "deep-learning": { label: "Deep Learning", icon: BrainCircuit, className: styles.deepLearning },
   distributed: { label: "Distributed Computing", icon: FaJava, className: styles.java },
   "distributed-computing": { label: "Distributed Computing", icon: FaJava, className: styles.java },
 };

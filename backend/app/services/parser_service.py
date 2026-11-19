@@ -449,8 +449,9 @@ class ParserService:
         return self._extract_tasks_from_lines(lines)
     
     async def _parse_pdf(self, file_path: str) -> List[Dict[str, Any]]:
-        from .pdf_ocr import pdf_text_pages
+        from .pdf_ocr import pdf_text_pages, validate_lab_pdf
         page_text = await asyncio.to_thread(pdf_text_pages, file_path)
+        validate_lab_pdf("\n".join(page_text))
         lines = [line.strip() for text in page_text for line in text.splitlines() if line.strip()]
         return self._extract_tasks_from_lines(lines)
 

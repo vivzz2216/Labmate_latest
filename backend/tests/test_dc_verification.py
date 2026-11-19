@@ -42,6 +42,47 @@ def test_server_and_client_run_is_independently_verified():
     assert summary["status"] == "verified" and summary["checks"]["output"] == "passed"
 
 
+def test_rmi_compiles_shared_interface_and_runs_two_processes():
+    import socket
+
+    with socket.socket() as listener:
+        listener.bind(("127.0.0.1", 0))
+        port = listener.getsockname()[1]
+    source = """// File: LabRemote.java
+public interface LabRemote extends java.rmi.Remote {
+    int add(int a, int b) throws java.rmi.RemoteException;
+}
+// File: LabServer.java
+import java.net.*;
+import java.rmi.registry.*;
+import java.rmi.server.*;
+public class LabServer {
+    static final int PORT = PORT_NUMBER;
+    public static void main(String[] args) throws Exception {
+        System.setProperty("java.rmi.server.hostname", "127.0.0.1");
+        RMIServerSocketFactory local = port -> new ServerSocket(port, 0, InetAddress.getByName("127.0.0.1"));
+        Registry registry = LocateRegistry.createRegistry(PORT, null, local);
+        LabRemote remote = (a, b) -> a + b;
+        registry.rebind("Calculator", UnicastRemoteObject.exportObject(remote, 0, null, local));
+        System.out.println("READY");
+    }
+}
+// File: LabClient.java
+import java.rmi.registry.*;
+public class LabClient {
+    public static void main(String[] args) throws Exception {
+        Registry registry = LocateRegistry.getRegistry("127.0.0.1", PORT_NUMBER);
+        LabRemote remote = (LabRemote) registry.lookup("Calculator");
+        System.out.println("Sum: " + remote.add(7, 5));
+    }
+}
+"""
+    result = run(source.replace("PORT_NUMBER", str(port)))
+    assert result.success, result.error
+    assert "READY" in result.output and "Sum: 12" in result.output
+    assert result.verification["status"] == "passed"
+
+
 def test_port_already_held_by_an_earlier_server_is_reported(tmp_path):
     import socket
     from app.services.dc_runtime import _busy_ports

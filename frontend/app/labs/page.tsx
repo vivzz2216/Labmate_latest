@@ -50,7 +50,7 @@ const runtimeLabelMap: Record<string, string> = {
   ubuntu: "Ubuntu / Bash",
   r: "R / RStudio",
   sma: "Social Media Analytics",
-  networks: "Practice studios",
+  networks: "Computer Networks",
 };
 
 function badgeClass(track: string) {

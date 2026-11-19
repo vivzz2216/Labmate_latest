@@ -211,12 +211,15 @@ def expected_outputs(objective):
 
 
 def plan_experiment(objective, language, code=""):
+    from .instruction_policy import parse_instruction_preferences
+
+    prefs = parse_instruction_preferences(objective)
     category = experiment_category(language, objective, code)
     config = TEMPLATE_CATEGORIES[category]
     expected = expected_outputs(objective)
     interaction = bool(re.search(r"\b(click|button|submit|validation|calculator|interactive|toggle|search|filter|to.do)\b", objective, re.I))
-    requirements = [{"id": "source", "description": "Relevant source implementation", "evidence": "source_preview"},
-                    {"id": "execution", "description": "Actual execution or rendered application", "evidence": config["result"]}]
+    requirements = [] if prefs.output_only_screenshots else [{"id": "source", "description": "Relevant source implementation", "evidence": "source_preview"}]
+    requirements.append({"id": "execution", "description": "Actual execution or rendered application", "evidence": config["result"]})
     if interaction and category in {"browser", "react", "flask", "java_awt", "java_swing", "javafx", "tkinter"}:
         requirements.append({"id": "interaction", "description": "Required interaction changes the visible state", "evidence": config["result"]})
     responsive = responsive_requested(objective)
@@ -225,12 +228,20 @@ def plan_experiment(objective, language, code=""):
     intermediate = intermediate_states_required(objective)
     if intermediate and category in {"browser", "react", "flask", "java_awt", "java_swing", "javafx", "tkinter"}:
         requirements.append({"id": "intermediate", "description": "Distinct required intermediate and final states", "evidence": config["result"], "minimum_count": 2})
-    database = category == "database" or bool(re.search(
-        r"\b(?:database|DBMS|JDBC)\b|\bSQL\s+(?:query|queries|statement|database|table|join|view)\b|"
-        r"\b(?:SELECT|INSERT|UPDATE|DELETE)\s+(?:\*\s+)?(?:FROM|INTO|[A-Za-z_]+\s+(?:FROM|SET))\b|"
-        r"\bCREATE\s+(?:TABLE|DATABASE|VIEW)\b", objective, re.I))
-    if re.search(r'\bdatabase\s+(?:is\s+)?optional\b|\bno database (?:is )?required\b', objective, re.I) and not re.search(r'\b(?:SQL|query|queries)\b', objective, re.I):
-        database = False
+    database_target = r'(?:database|dbms|mysql|sqlite|postgresql|jdbc)'
+    excluded = (rf'\b(?:no|without|do not use)\s+(?:an?\s+)?{database_target}\b|'
+                rf'\b{database_target}\b\s*(?:\(\s*|is\s+)?(?:optional|not required)\b')
+    clauses = re.split(r'[;.!?\n]+', objective)
+    database = category == "database" or any(
+        not re.search(excluded, clause, re.I) and re.search(
+            rf'\b(?:persists?|saves?|stores?|inserts?|updates?|deletes?|fetch(?:es)?|reads?|retrieves?|connects?|quer(?:y|ies)|creates?)\b'
+            rf'[^;\n]{{0,100}}\b{database_target}\b|'
+            rf'\b(?:use|using)\s+(?:an?\s+)?{database_target}\s+to\s+(?:store|persist|query|insert|update|delete|retrieve)\b|'
+            r'\b(?:CREATE\s+(?:TABLE|DATABASE|VIEW)|SELECT\s+.+?\s+FROM|INSERT\s+INTO|DELETE\s+FROM|UPDATE\s+\w+\s+SET)\b|'
+            r'\b(?:run|execute|write|perform)\s+(?:an?\s+)?SQL\s+(?:query|queries|statement)\b|'
+            rf'\brequire[sd]?\s+(?:an?\s+)?{database_target}\b', clause, re.I)
+        for clause in clauses
+    )
     if database:
         requirements.append({"id": "database", "description": "Actual database query and result evidence", "evidence": "database"})
     uncertainty = []
@@ -241,7 +252,7 @@ def plan_experiment(objective, language, code=""):
     return {"version": 1, "objective": objective[:15000], "language": language, "category": category,
             "supported": config["available"], "requirements": requirements, "expected_output": expected,
             "expected_states": ["after required interactions"] if interaction else ["final execution state"],
-            "recommended_screenshots": [config["source"], config["result"]],
+            "recommended_screenshots": [config["result"]] if prefs.output_only_screenshots else [config["source"], config["result"]],
             "intermediate_required": intermediate,
             "responsive_required": responsive, "uncertainties": uncertainty}
 

@@ -32,6 +32,10 @@ from typing import Any, Dict, List, Optional, Union
 APPROVED_CORPUS_DIR = Path('/opt/labmate-runtime/nltk_data')
 
 import numpy as np
+try:
+    np.set_printoptions(legacy="1.25")
+except Exception:
+    pass
 import pandas as pd
 import sklearn
 import sklearn.metrics
@@ -90,6 +94,16 @@ def configure_colab_matplotlib_theme():
             'legend.facecolor':'white','legend.edgecolor':'#dadce0','savefig.facecolor':'white'})
 
 
+_NP_INT_SCALAR_RE = re.compile(r"\bnp\.(?:int|uint)(?:8|16|32|64)\(\s*([-+]?\d+)\s*\)")
+
+
+def strip_numpy_scalar_repr(text: str) -> str:
+    """Format NumPy integer scalar reprs like np.int64(0) as plain integers."""
+    if not text:
+        return ""
+    return _NP_INT_SCALAR_RE.sub(r"\1", text)
+
+
 def clean_notebook_text(text: str, is_stderr: bool = False) -> str:
     """Normalize Keras/tqdm carriage-return progress bars and strip C++ runtime noise."""
     if not text:
@@ -116,7 +130,7 @@ def clean_notebook_text(text: str, is_stderr: bool = False) -> str:
             collapsed[-1] = line
         else:
             collapsed.append(line)
-    return "\n".join(collapsed).strip()
+    return strip_numpy_scalar_repr("\n".join(collapsed).strip())
 
 
 def _offline_keras_dataset(name: str, num_words: Optional[int] = None):
@@ -488,6 +502,10 @@ class NotebookKernelWorker:
 
         try:
             configure_colab_matplotlib_theme()
+            try:
+                np.set_printoptions(legacy="1.25")
+            except Exception:
+                pass
             with redirect_stdout(stdout_buf), redirect_stderr(stderr_buf), warnings.catch_warnings():
                 _configure_dl_libraries_for_code(code, self.builtin_datasets)
                 # Under pandas Copy on Write, chained inplace operations can
@@ -509,7 +527,7 @@ class NotebookKernelWorker:
                         else:
                             val_type_str = type(val).__module__
                             if not val_type_str.startswith("matplotlib"):
-                                last_repr = repr(val)
+                                last_repr = strip_numpy_scalar_repr(repr(val))
                 else:
                     exec(compile(tree, filename="<colab-cell>", mode="exec"), self.namespace)
 

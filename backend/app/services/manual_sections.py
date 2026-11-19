@@ -95,9 +95,34 @@ def _body_boundaries(lines, boundaries):
     return []
 
 
+# "7. Program/Code:" followed by a line that is only the language name, as manuals print it above the listing.
+CODE_LABEL = re.compile(r"^[^\n]*\b(?:program|code|listing|source)\s*(?:/\s*code)?\s*:\s*\n\s*(C\+\+|CPP|C|Java)\s*$", re.I | re.M)
+C_CODE = re.compile(r"^\s*#\s*include\s*<(?:stdio|stdlib|string|strings|math|ctype|unistd|fcntl|pthread|omp|time|limits|stdbool|stdint|signal|errno|semaphore|mpi|sys/[a-z_]+)\.h>", re.M)
+CPP_CODE = re.compile(r"^\s*#\s*include\s*<(?:iostream|vector|string|algorithm|map|set|queue|stack|fstream|sstream|iomanip|list|deque|unordered_map|memory|stdexcept|exception|thread|mutex)>|\bstd::|\bcout\s*<<|\bcin\s*>>", re.M)
+JAVA_CODE = re.compile(r"\bpublic\s+static\s+void\s+main\s*\(\s*String|\bSystem\.out\.print")
+
+
+def declared_code_language(content):
+    """The language a manual names on the line under its 'Program/Code:' heading (only C, C++ and Java are trusted here)."""
+    match = CODE_LABEL.search(content or "")
+    if not match:
+        return None
+    label = match.group(1).lower()
+    return {"c": "c", "c++": "cpp", "cpp": "cpp", "java": "java"}[label]
+
+
+def distributed_java_requested(text):
+    return bool(re.search(r'\b(?:RMI|remote method invocation)\b', text, re.I)
+                or (re.search(r'\bJava\b', text, re.I)
+                    and re.search(r'\b(?:TCP|UDP|Distributed Computing Lab)\b', text, re.I))
+                or len(set(re.findall(r'\b[\w$]+\.java\b', text, re.I))) > 1)
+
+
 def section_language(title, content, default="python"):
     # Mixed React/Express is a full-stack Node assignment, never raw JSX in Node.
     text = title + "\n" + content
+    if distributed_java_requested(text):
+        return "distributed"
     if re.search(r'\b(?:Subject\s*:\s*UNIX\s+LAB|ITL\s*402)\b|^\s*#!\s*/(?:usr/)?bin/(?:ba)?sh\b',text,re.I|re.M):return 'ubuntu'
     if re.search(r'\b(?:UNIX|Ubuntu|Bash|shell script(?:s|ing)?|(?:sed|awk|grep|egrep|perl)\s+(?:script|program)(?:s|ming)?|system administrati(?:on|ve tasks))\b',title,re.I):return 'ubuntu'
     if re.search(r'\bR\s?Studio\b|\bRscript\b|\bR\s+(?:programming|language|lab|script)\b|\b(?:in|using|with|via)\s+(?-i:R)(?![\w.+#-])',title,re.I):return 'r'
@@ -108,6 +133,14 @@ def section_language(title, content, default="python"):
     if re.search(r"\b(?:java|swing|awt|javafx)\b",title,re.I):return 'java'
     if re.search(r"\b(?:python|flask|tkinter)\b",title,re.I):return 'python'
     if re.search(r"\b(?:html5?|css3?|javascript|portfolio|registration)\b", title, re.I): return "html"
+    # Titles often name the topic, not the language ("Quadratic Equation Roots", "Linked-List Stack ADT"). Before
+    # guessing from words in the text, trust the language the manual labels its program with, then the code itself:
+    # a C program used to fall through to python and a Java/JDBC program to sql (2026-11-20 audit).
+    declared = declared_code_language(content)
+    if declared: return declared
+    if CPP_CODE.search(content): return "cpp"
+    if C_CODE.search(content): return "c"
+    if JAVA_CODE.search(content): return "java"
     if re.search(r'\b(?:SQL|MySQL|Structured Query Lab)\b', content, re.I): return 'sql'
     # Academic titles often name the concept rather than the language. Route
     # executable SQL and scientific Python to their actual supported runtimes.
@@ -184,3 +217,120 @@ def numbered_experiments(text):
                         "experiment_number": int(re.match(r"\d+", match.group(1)).group()), "experiment_label": match.group(1).upper(), "title": title or block[0],
                         "extraction_method": "original_numbered_section"})
     return results
+
+
+_VIVA_SECTION_HEAD = re.compile(
+    r"^\s*(?:#+\s*)?(?:\d+[.)]\s*)?(?:viva(?:\s*[-–]?\s*voce)?(?:\s+questions?)?|review\s+questions?|oral\s+questions?)\s*:?\s*(.*)$",
+    re.I,
+)
+_VIVA_SECTION_END = re.compile(
+    r"^\s*(?:#+\s*)?(?:\d+[.)]\s*)?(?:aim|objectives?|theory|procedure|implementation|algorithm|program|code|execution|output|"
+    r"results?(?:\s*(?:and|&|/)\s*conclusions?)?|conclusions?(?:\s*(?:and|&|/)\s*results?)?|"
+    r"references?|bibliography|submission|rubric|evaluation|appendix|experiment(?:\s*no\.?)?\s*\d+)\b\s*(?::.*)?$",
+    re.I,
+)
+_ITEM_PREFIX = re.compile(r"^\s*(?:(?:q(?:uestion)?\s*)?\d+[.):\-]\s*|[-•*]\s+|[a-z][.)]\s+)", re.I)
+
+_CONCLUSION_HEAD = re.compile(
+    r"^\s*(?:#+\s*)?(?:\d+[.)]\s*)?(result\s*(?:and|&|/)\s*conclusion|conclusion\s*(?:and|&|/)\s*result|conclusions?|results?)\s*(?::|\s*$)\s*(.*)$",
+    re.I,
+)
+_CONCLUSION_STOP = re.compile(
+    r"^\s*(?:#+\s*)?(?:\d+[.)]\s*)?(?:viva(?:\s*[-–]?\s*voce)?(?:\s+questions?)?|review\s+questions?|references?|bibliography|"
+    r"post[- ]?experiment(?:al)?|rubric|evaluation|marks|grade|signature|experiment(?:\s*no\.?)?\s*\d+)\b",
+    re.I,
+)
+_PLACEHOLDER_LINE = re.compile(r"^[_\.\-\s\[\]()]{3,}$|^\[(?:write|enter|add)\b[^\]]*\]$", re.I)
+
+
+def extract_viva_questions(text: str) -> list[str]:
+    """Extract Viva / Viva-Voce questions from the uploaded manual text as a clean ordered list."""
+    items: list[str] = []
+    seen: set[str] = set()
+    inside = False
+    current = ""
+
+    def flush():
+        nonlocal current
+        cleaned = re.sub(r"\s+", " ", current).strip()
+        current = ""
+        if len(cleaned) >= 6 and not _PLACEHOLDER_LINE.match(cleaned):
+            key = cleaned.lower()
+            if key not in seen:
+                seen.add(key)
+                items.append(cleaned)
+
+    for raw in str(text or "").splitlines():
+        line = re.sub(r"\s+", " ", raw).strip()
+        if not line:
+            if inside:
+                flush()
+            continue
+        head_match = _VIVA_SECTION_HEAD.match(line)
+        if head_match:
+            flush()
+            inside = True
+            inline = _ITEM_PREFIX.sub("", head_match.group(1) or "").strip()
+            if inline and len(inline) >= 6:
+                current = inline
+            continue
+        if inside and _VIVA_SECTION_END.match(line):
+            flush()
+            inside = False
+            continue
+        if inside:
+            if _ITEM_PREFIX.match(line):
+                flush()
+                current = _ITEM_PREFIX.sub("", line).strip()
+            elif current:
+                current += " " + line
+            elif len(line) >= 6:
+                current = line
+    flush()
+    return items
+
+
+def extract_manual_conclusion(text: str) -> str:
+    """Extract the original experiment's Result/Conclusion prose from manual text (e.g. PDF)."""
+    candidates: list[tuple[int, str]] = []
+    inside = False
+    priority = 0
+    lines_buf: list[str] = []
+
+    def flush():
+        nonlocal inside, lines_buf
+        if inside and lines_buf:
+            joined = "\n".join(lines_buf).strip()
+            if len(joined) >= 12:
+                candidates.append((priority, joined))
+        inside = False
+        lines_buf = []
+
+    for raw in str(text or "").splitlines():
+        line = re.sub(r"\s+", " ", raw).strip()
+        if not line:
+            continue
+        if re.match(r"^\s*result\s*/\s*observation", line, re.I):
+            flush()
+            continue
+        head_match = _CONCLUSION_HEAD.match(line)
+        if head_match:
+            flush()
+            label = (head_match.group(1) or "").lower()
+            priority = 2 if "conclusion" in label else 1
+            inside = True
+            inline = (head_match.group(2) or "").strip()
+            if inline and not _PLACEHOLDER_LINE.match(inline):
+                lines_buf.append(inline)
+            continue
+        if inside and _CONCLUSION_STOP.match(line):
+            flush()
+            continue
+        if inside:
+            if not _PLACEHOLDER_LINE.match(line):
+                lines_buf.append(line)
+    flush()
+    if not candidates:
+        return ""
+    candidates.sort(key=lambda pair: -pair[0])
+    return candidates[0][1][:3000]

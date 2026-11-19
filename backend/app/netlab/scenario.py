@@ -14,7 +14,7 @@ CLIENT_MAC, GATEWAY_MAC = "08:00:27:3a:5c:11", "00:0c:29:7e:41:b2"
 CLIENT_IP, GATEWAY_IP = "192.168.1.10", "192.168.1.1"
 GAIA_IP = "128.119.245.12"                       # the host the manual's URL points to
 LOGIN_IP, LOGIN_HOST = "198.51.100.20", "login.labmate.test"
-LOGIN_USER, LOGIN_PASSWORD = "student01", "Practice@123"
+LOGIN_USER, LOGIN_PASSWORD = "student01", "LabAccess@2024"
 START_EPOCH = 1794304863.512345                  # fixed so the scenario is identical on every run
 
 
@@ -139,7 +139,7 @@ def _http_exchange(builder, server_ip, client_port, request, response, isn_clien
     add(0.0005, c(0x10))
 
 
-GAIA_PAGE = (b"<html>\n<head><title>Practice page</title></head>\n"
+GAIA_PAGE = (b"<html>\n<head><title>Wireshark Lab 1</title></head>\n"
              b"<body>Congratulations! You have downloaded the first lab file.</body>\n</html>\n")
 LOGIN_FORM = (b"<html>\n<head><title>Student Portal</title></head>\n<body>\n<h2>Student Portal Login</h2>\n"
               b"<form method=\"POST\" action=\"/login.php\">\nUsername: <input name=\"uname\" type=\"text\">\n"

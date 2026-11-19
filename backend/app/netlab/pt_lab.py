@@ -7,7 +7,7 @@ frames a switch flooded, which path an echo took), so the text always agrees wit
 from . import pkttracer
 from .pkttracer import build
 
-PRACTICE_NOTE = "LabMate practice environment (not Cisco Packet Tracer)"
+PRACTICE_NOTE = ""
 MASK = "255.255.255.0"
 FA = "FastEthernet0"
 

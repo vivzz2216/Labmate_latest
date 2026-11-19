@@ -77,7 +77,10 @@ export function PtDeviceModal({ spec, device, onUpdateDevice, onClose }: PtDevic
     ripMode: false,
   });
   const [cliLines, setCliLines] = useState<string[]>([
-    `Cisco IOS Software, ${device.model || "PT"} Software, Experimental Simulation`,
+    `Cisco IOS Software, ${device.model || "C2960"} Software (${device.model || "C2960"}-LANBASEK9-M), Version 15.0(2)SE4, RELEASE SOFTWARE (fc1)`,
+    "Technical Support: http://www.cisco.com/techsupport",
+    "Copyright (c) 1986-2023 by Cisco Systems, Inc.",
+    "",
     "Type 'enable' or '?' for available commands.",
     "",
   ]);

@@ -7,6 +7,7 @@ import tempfile
 import io
 import json
 import re
+from collections import Counter
 
 
 def _run_stage(command, **kwargs):
@@ -64,6 +65,71 @@ def _render_without_poppler(filename, pages, root):
 
 
 UNREADABLE_PDF = 'This PDF could not be opened. It may be damaged or password-protected; save it again or upload the Word file.'
+NOT_LAB_MANUAL = 'This PDF does not appear to be a lab manual or exercise sheet. Upload a PDF containing the lab instructions or questions.'
+
+class NotLabManualError(ValueError):
+    """A readable PDF did not contain recognizable lab work."""
+
+
+_LAB_HEADING = re.compile(
+    r"^\s*(?:\d+[.)]\s*)?(?:(?:[\w /&-]+\s+)?lab(?:oratory)?\s+manual\b|"
+    r"(?:pre[- ]?|post[- ]?)?lab(?:oratory)?\s+(?:exercise|assignment|questions?)\b|"
+    r"(?:experiment|practical|exercise)\s*(?:no\.?\s*)?[-–—:#]?\s*\d+\b)", re.I | re.M)
+_TASK_START = re.compile(
+    r"^\s*(?:(?:q(?:uestion)?\s*)?\d+\s*[.):–-]\s*|[a-z][.)]\s*|(?:aim|task|objective)\s*:\s*)?"
+    r"(?:to\s+)?(?:write|wap|implement|create|develop|design|build|execute|run|compile|"
+    r"demonstrate|perform|simulate|configure|train|calculate|find|display|define|explain|"
+    r"list|describe|compare|identify|count|plot|insert|select|use|solve|construct)\b", re.I | re.M)
+
+
+def validate_lab_pdf(text):
+    """Require evidence of an exercise sheet before sending PDF text to extraction."""
+    lab_heading = _LAB_HEADING.search(text)
+    paper = re.search(r'^\s*(?:abstract|executive summary)\b', text, re.I | re.M) and re.search(
+        r'^\s*(?:\d+(?:\.\d+)*[.)]?\s+)?(?:references|bibliography|works cited)\b', text, re.I | re.M)
+    teaching_heading = re.search(r'^\s*[^\n]{0,80}\blab(?:oratory)?\s+(?:manual|exercise|assignment|questions?)\b',
+                                 text, re.I | re.M)
+    if (paper and not teaching_heading) or (not lab_heading and not _TASK_START.search(text)):
+        raise NotLabManualError(NOT_LAB_MANUAL)
+
+
+def strip_running_page_text(pages, edge_candidates=None):
+    """Strip recurring margin text and page labels without changing the page body."""
+    lines_by_page = [page.splitlines() for page in pages]
+    edges = []
+    for index, lines in enumerate(lines_by_page):
+        nonempty = [i for i, line in enumerate(lines) if line.strip()]
+        margins = edge_candidates[index] if edge_candidates is not None else None
+        if margins is None:  # OCR has text but no reliable coordinates.
+            margins = ([lines[i] for i in nonempty[:1]], [lines[i] for i in nonempty[-1:]]) if len(nonempty) >= 3 else ([], [])
+        page_edges = []
+        for positions, margin in zip((nonempty[:3], nonempty[-3:]), margins):
+            keys = {' '.join(line.split()).casefold() for line in margin}
+            page_edges.append({i: ' '.join(lines[i].split()).casefold() for i in positions
+                               if ' '.join(lines[i].split()).casefold() in keys})
+        edges.append(page_edges)
+
+    counts = [Counter(key for pair in edges for key in set(pair[side].values())) for side in (0, 1)]
+    page_labels = [re.fullmatch(r'(?:page\s+)?(\d{1,3})(?:\s*(?:of|/)\s*\d{1,3})?', key)
+                   for pair in edges for key in pair[1].values()]
+    numbers = {int(match[1]) for match in page_labels if match}
+    sequential_numbers = any(number + 1 in numbers for number in numbers)
+    cleaned = []
+    for page_index, (lines, (top, bottom)) in enumerate(zip(lines_by_page, edges)):
+        remove = set()
+        for side, margin in enumerate((top, bottom)):
+            for i, key in margin.items():
+                heading = _LAB_HEADING.match(lines[i])
+                recurring_title = heading and re.search(r'\blab(?:oratory)?\s+manual\b', key)
+                code_line = re.search(r'^[\s]*(?:#include\b|#!|>>>|\$\s|(?:return|import|from|public|class)\s)|[;{}]\s*$', lines[i])
+                if code_line or _TASK_START.match(lines[i]) or (heading and (not recurring_title or page_index == 0)):
+                    continue
+                if re.fullmatch(r'page\s+\d+(?:\s*(?:of|/)\s*\d+)?', key) or (
+                    side == 1 and sequential_numbers and re.fullmatch(r'\d{1,3}', key)
+                ) or counts[side][key] >= max(2, (2 * len(pages) + 2) // 3):
+                    remove.add(i)
+        cleaned.append('\n'.join(line for i, line in enumerate(lines) if i not in remove))
+    return cleaned
 
 
 def pdf_text_pages(filename):
@@ -76,15 +142,28 @@ def pdf_text_pages(filename):
     try:
         with pdfplumber.open(filename) as document:
             if len(document.pages) > 100: raise ValueError('Please upload an assignment of 100 pages or fewer.')
-            texts, has_image = [], []
+            texts, has_image, margins = [], [], []
             for page in document.pages:
                 texts.append(page.extract_text() or '')
                 has_image.append(bool(page.images))
+                if hasattr(page, 'crop') and texts[-1]:
+                    x0, y0, x1, y1 = page.bbox
+                    band = (y1 - y0) * 0.08
+                    margins.append(tuple((page.crop(box).extract_text() or '').splitlines() for box in (
+                        (x0, y0, x1, y0 + band), (x0, y1 - band, x1, y1))))
+                else:
+                    margins.append(None)
     except ValueError:
         raise
     except Exception as error:
         raise ValueError(UNREADABLE_PDF) from error
-    scanned = [i + 1 for i, text in enumerate(texts) if len(text.strip()) < 20 and has_image[i]]
+    def body_length(index):
+        if margins[index] is None:
+            return len(texts[index].strip())
+        margin_lines = {line.strip() for side in margins[index] for line in side}
+        return len('\n'.join(line for line in texts[index].splitlines() if line.strip() not in margin_lines).strip())
+
+    scanned = [i + 1 for i in range(len(texts)) if body_length(i) < 20 and has_image[i]]
     # A page that OCR reads as (almost) nothing is a diagram or an output screenshot when the rest of the manual is
     # readable; only a manual with no readable page at all is rejected.
     readable_elsewhere = any(len(text.strip()) >= 20 for text in texts)
@@ -94,6 +173,7 @@ def pdf_text_pages(filename):
     if short and not readable_elsewhere and len(short) * 2 > len(scanned):
         raise ValueError('Some scanned pages could not be read reliably; upload a clearer scan.')
     pages = [recognized.get(i + 1, text) for i, text in enumerate(texts)]
+    pages = strip_running_page_text(pages, [None if i + 1 in recognized else m for i, m in enumerate(margins)])
     if not any(len(text.strip()) >= 20 for text in pages):
         raise ValueError('No readable text was found. Upload a text-based PDF, a clearer scan, or the Word file.')
     return pages

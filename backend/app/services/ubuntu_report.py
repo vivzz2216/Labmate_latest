@@ -52,9 +52,12 @@ def add_postlab_notes(doc,result):
 
 
 def build_ubuntu_report(upload,workflow):
+    from .instruction_policy import filter_output_only_candidates, parse_instruction_preferences
+
+    prefs = parse_instruction_preferences(getattr(workflow, 'instructions', ''))
     command_mode=bool(workflow.results) and all(r.get('language')=='theory' or
         (r.get('verification') or {}).get('command_mode') for r in workflow.results)
-    doc,source_is_docx=create_report_document(upload,landscape=not command_mode)
+    doc,source_is_docx=create_report_document(upload,landscape=not command_mode,include_pdf_pages=not prefs.no_extra_manual_pages)
     source_paragraph_count=len(doc.paragraphs)
     section=doc.sections[-1]
     section.orientation=WD_ORIENT.PORTRAIT if command_mode else WD_ORIENT.LANDSCAPE
@@ -97,18 +100,18 @@ def build_ubuntu_report(upload,workflow):
             doc.add_paragraph('Theory answer only. No command execution is claimed.')
             doc.add_paragraph(result.get('answer',''))
         elif result.get('error'):
-            # The exact Bash transcript is already captured below. Keep the
-            # first page readable instead of repeating pages of shell tracing.
-            reason=str(result['error']).splitlines()[0]
-            doc.add_paragraph(reason[:1200])
+            from .student_diagnostics import student_failure_message
+            doc.add_paragraph(student_failure_message(result))
             for limitation in (result.get('verification') or {}).get('limitations',[]):
-                if limitation!=reason:doc.add_paragraph(limitation)
+                doc.add_paragraph(limitation)
         else:doc.add_paragraph('Executed in an isolated Ubuntu lab. The images show '+('commands' if verification.get('command_mode') else 'the source')+' and actual recorded output.')
         add_simulated_output_section(doc,result)
-        if not complete:add_postlab_notes(doc,result)
+        if not complete and not prefs.no_extra_questions:add_postlab_notes(doc,result)
         frames=(result.get('verification') or {}).get('evidence_frames') or []
+        if prefs.output_only_screenshots:
+            frames = filter_output_only_candidates(frames)
         from .unix_theory import unix_postlab_notes
-        long_notes=complete and len(unix_postlab_notes(result.get('question',''),profile=plan.get('profile')))>=4
+        long_notes=(not prefs.no_extra_questions) and complete and len(unix_postlab_notes(result.get('question',''),profile=plan.get('profile')))>=4
         for frame_index,frame in enumerate(frames):
             if not Path(frame.get('path','')).is_file():raise ValueError('A required native Ubuntu frame is missing.')
             label={'editor':'Text file','files':'Files and folders'}.get(frame.get('component'),'Command output')
@@ -123,8 +126,8 @@ def build_ubuntu_report(upload,workflow):
             doc.add_picture(frame['path'],width=Inches(width))
             p=doc.paragraphs[-1];p.paragraph_format.line_spacing=1.0
             p.paragraph_format.space_before=p.paragraph_format.space_after=Pt(0)
-        if complete:add_postlab_notes(doc,result)
-        if complete:
+        if complete and not prefs.no_extra_questions:add_postlab_notes(doc,result)
+        if complete and not prefs.no_conclusion:
             from .unix_theory import unix_conclusion
             conclusion=unix_conclusion(result)
             if conclusion:

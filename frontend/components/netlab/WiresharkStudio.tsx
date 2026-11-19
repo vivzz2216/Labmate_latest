@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from "react";
 import api from "@/lib/api";
 import { buildEducationalHttpsDnsCapture, evaluateSampleFilter } from "@/lib/netlab/wsSampleCapture";
-import { PracticeBanner } from "./PracticeBanner";
 import { WsPacketDiagram } from "./WsPacketDiagram";
 import { useStudioHook } from "./studioHook";
 import styles from "./wireshark.module.css";
@@ -526,7 +525,7 @@ export function WiresharkStudio() {
     if (name === "File")
       return [
         { label: "Open...", shortcut: "Ctrl+O", action: () => upload.current?.click() },
-        { label: "Open Practice Capture (HTTP/ARP)", shortcut: "", action: () => void openCapture() },
+        { label: "Open lab-capture.pcap (HTTP/ARP)", shortcut: "", action: () => void openCapture() },
         { label: "Open Sample: DNS (google.com) + TLS :443", shortcut: "", action: openGoogleDnsSample },
         { divider: true },
         { label: "Close", shortcut: "Ctrl+W", disabled: !inCaptureView, action: closeCapture },
@@ -572,12 +571,11 @@ export function WiresharkStudio() {
         { divider: true },
         { label: "Follow > TCP Stream", shortcut: "Ctrl+Alt+Shift+T", disabled: !canFollowStream, action: () => detail && void followStream(detail.row.stream) },
       ];
-    return [{ label: `${name} options (practice workspace)`, disabled: true, action: () => {} }];
+    return [{ label: `${name} options`, disabled: true, action: () => {} }];
   };
 
   return (
     <div className={styles.wsRoot}>
-      <PracticeBanner tool="Wireshark" />
 
       {view !== "browser" ? (
         <>
@@ -893,7 +891,7 @@ export function WiresharkStudio() {
               <WiresharkLogoIcon size={26} />
               <h1>Welcome to Wireshark</h1>
             </div>
-            <p className={styles.welcomeSubtitle}>LabMate Practice Capture Engine · Version 4.2</p>
+            <p className={styles.welcomeSubtitle}>Version 4.2.0 (v4.2.0-0-g54e7c5b6b140)</p>
           </div>
 
           <div className={styles.welcomeBody}>
@@ -935,7 +933,7 @@ export function WiresharkStudio() {
               {!isCaptureMode && (
                 <div className={styles.welcomeActions}>
                   <button type="button" className={styles.btnPrimary} onClick={() => void openCapture()} disabled={!!busy}>
-                    Start a practice capture
+                    Start capture
                   </button>
                   <button type="button" className={styles.btnSecondary} onClick={() => upload.current?.click()} disabled={!!busy}>
                     Open a .pcap or .pcapng file
@@ -956,11 +954,11 @@ export function WiresharkStudio() {
               <div className={styles.recentList}>
                 <button type="button" className={styles.recentLink} onClick={() => void openCapture()}>
                   <WsOpenFolderIcon size={15} />
-                  <span>practice-capture.pcap (Built-in ARP, DNS, ICMP, TCP &amp; HTTP lab capture · 40 packets)</span>
+                  <span>lab-capture.pcap (ARP, DNS, ICMP, TCP &amp; HTTP · 40 packets)</span>
                 </button>
                 <button type="button" className={styles.recentLink} onClick={openGoogleDnsSample}>
                   <WsOpenFolderIcon size={15} />
-                  <span>google-dns-tls-sample.pcapng [Simulated] (DNS query for www.google.com + TCP/TLS port 443 · 12 packets)</span>
+                  <span>google-dns-tls.pcapng (DNS query for www.google.com + TCP/TLS port 443 · 12 packets)</span>
                 </button>
                 <button type="button" className={styles.recentLink} onClick={() => upload.current?.click()}>
                   <WsOpenFolderIcon size={15} />
@@ -1043,9 +1041,7 @@ export function WiresharkStudio() {
                   );
                 })}
                 <div className={styles.loginSubmit}>Login</div>
-                <p style={{ fontSize: 11.5, color: "#7a5b12", marginTop: 14, marginBottom: 0 }}>
-                  This page is served over HTTP without TLS, so the form credentials are transmitted in plain text on the wire.
-                </p>
+
               </div>
             </div>
           </div>
@@ -1150,8 +1146,8 @@ export function WiresharkStudio() {
                 <table style={{ width: "100%", borderCollapse: "collapse" }}>
                   <tbody>
                     {[
-                      ["File name", file || "practice-capture.pcap"],
-                      ["Capture source", localSampleMode ? "Simulated Lab Sample Dataset" : "LabMate Practice Packet Engine"],
+                      ["File name", file || "lab-capture.pcap"],
+                      ["Capture source", localSampleMode ? "Local Area Connection (Npcap version 1.79)" : "Local Area Connection (Npcap version 1.79)"],
                       ["Total packets", String(rows.length)],
                       ["Displayed packets", `${shown.length} (${pct}%)`],
                       ["Active display filter", applied || "(none)"],

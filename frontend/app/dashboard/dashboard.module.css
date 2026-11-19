@@ -1285,6 +1285,14 @@
 }
 
 .python { color: #387eb8; }
+.colab { color: #d77c00; }
+.ubuntu { color: #e95420; }
+.wireshark { color: #1679a7; }
+.sql { color: #00618a; }
+.react { color: #087ea4; }
+.node { color: #39752e; }
+.r { color: #276dc3; }
+.deepLearning { color: #8b5cf6; }
 .java { color: #e76f00; }
 .c { color: #00599c; }
 .cpp { color: #00599c; }

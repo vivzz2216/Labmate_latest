@@ -175,7 +175,7 @@ export function buildEducationalHttpsDnsCapture(): {
   }
 
   return {
-    file: "google-dns-tls-sample.pcapng [Simulated]",
+    file: "google-dns-tls.pcapng",
     packets: rows,
     details,
     streams: {

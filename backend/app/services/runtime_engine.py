@@ -256,6 +256,18 @@ PYTHON_INPUT_ECHO_RUNNER = (
     "    print(value, flush=True)\n"
     "    return value\n"
     "builtins.input = _visible_input\n"
+    "_original_import = builtins.__import__\n"
+    "def _labmate_import(name, *args, **kwargs):\n"
+    "    mod = _original_import(name, *args, **kwargs)\n"
+    "    np_mod = sys.modules.get('numpy')\n"
+    "    if np_mod is not None and hasattr(np_mod, 'set_printoptions') and not getattr(np_mod, '_labmate_legacy_set', False):\n"
+    "        try:\n"
+    "            np_mod.set_printoptions(legacy='1.25')\n"
+    "            np_mod._labmate_legacy_set = True\n"
+    "        except Exception:\n"
+    "            pass\n"
+    "    return mod\n"
+    "builtins.__import__ = _labmate_import\n"
     "runpy.run_path(sys.argv[1], run_name='__main__')\n"
 )
 
@@ -496,6 +508,8 @@ class RuntimeEngine:
                     # Restricted local fallback has no credential environment, an isolated cwd, and kernel resource bounds.
                     limits = {"max_memory_bytes": 512 * 1024 * 1024, "max_cpu_seconds": 15}
                     result = await run_process([sys.executable, "-I", "-X", "utf8", "-u", "-c", PYTHON_INPUT_ECHO_RUNNER, source], directory, inputs, resource_limits=limits)
+                if result.output:
+                    result.output = re.sub(r"\bnp\.(?:int|uint)(?:8|16|32|64)\(\s*([-+]?\d+)\s*\)", r"\1", result.output)
                 if collect_files:
                     result.files = collect_files(directory, context, name)
                 return result

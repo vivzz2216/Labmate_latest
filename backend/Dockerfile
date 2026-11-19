@@ -24,6 +24,10 @@ COPY backend/app ./app
 COPY frontend/lib/lab-catalog.json ./app/data/lab_catalog.json
 COPY backend/templates ./templates
 COPY backend/scripts/sandbox_job.py backend/scripts/sandbox_broker.py ./runtime_scripts/
+# The Ubuntu command labs import scripts.ubuntu_curriculum (app/services/unix_command_lab.py, ubuntu_runtime.py); without it
+# every Ubuntu manual crashed with "No module named 'scripts'". railway_sandbox.runtime_bundle() reads the sandbox job and
+# broker from ./scripts whenever that folder exists, so they are copied here as well.
+COPY backend/scripts/ubuntu_curriculum.py backend/scripts/sandbox_job.py backend/scripts/sandbox_broker.py ./scripts/
 COPY backend/railway_runtime ./railway_runtime
 RUN cd /app/railway_runtime && npm ci --omit=dev --ignore-scripts --no-audit --no-fund
 COPY backend/start.sh ./start.sh

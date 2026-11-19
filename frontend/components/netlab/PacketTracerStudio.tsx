@@ -24,7 +24,6 @@ import type {
   PtShape,
   PtSpec,
 } from "@/lib/netlab/ptTypes";
-import { PracticeBanner } from "./PracticeBanner";
 import { PtDeviceModal } from "./PtDeviceModal";
 import { PtPhysicalWorkspace, PtPduModal } from "./PtPduModal";
 import { useStudioHook } from "./studioHook";
@@ -281,7 +280,7 @@ export function PacketTracerStudio() {
         ];
         return {
           id: "free",
-          title: "Free practice",
+          title: name || "Topology Workspace",
           view: "simulation",
           explain: replay.results.length ? `Last result: ${replay.results[replay.results.length - 1].success ? "successful" : "failed"}.` : "",
           filter: Array.from(simFilterSet),
@@ -292,7 +291,7 @@ export function PacketTracerStudio() {
       }
       return {
         id: "free-local",
-        title: "Free practice",
+        title: name || "Topology Workspace",
         view: "simulation",
         explain: "Interactive workspace: place devices, connect ports with cables, configure CLI/IPs, or send Simple PDUs.",
         filter: Array.from(simFilterSet),
@@ -305,7 +304,7 @@ export function PacketTracerStudio() {
       };
     }
     return frame;
-  }, [mode, replay, frame, localEvents, localPdus, simFilterSet, spec]);
+  }, [mode, replay, frame, localEvents, localPdus, simFilterSet, spec, name]);
 
   const viewBoxObj = useMemo(() => {
     const devices = spec?.devices ?? [];
@@ -656,15 +655,13 @@ export function PacketTracerStudio() {
     if (item === "Options")
       return [
         { label: "Toggle Tiled Canvas Tint", action: () => setCanvasBg((b) => (b === "#ffffff" ? "#f4f7fb" : "#ffffff")) },
-        { label: "Set Free Practice Mode", action: () => setMode("free") },
+        { label: "Preferences…", disabled: true, action: () => {} },
       ];
-    return [{ label: `${item} (Practice Environment)`, disabled: true, action: () => {} }];
+    return [{ label: item, disabled: true, action: () => {} }];
   };
 
   return (
     <div className={styles.ptRoot}>
-      <PracticeBanner tool="Cisco Packet Tracer" />
-
       {/* Title Bar */}
       <div className={styles.titleBar}>
         <div className={styles.titleLeft}>
@@ -826,31 +823,6 @@ export function PacketTracerStudio() {
         >
           <PtDrawingPaletteIcon />
         </button>
-        {placingModel ? (
-          <span style={{ marginLeft: 8, background: "#dbeafe", border: "1px solid #60a5fa", padding: "1px 8px", borderRadius: 3, fontSize: 11 }}>
-            Click canvas to place <b>{placingModel.model}</b> (Esc / Click to place)
-          </span>
-        ) : placingCable ? (
-          <span style={{ marginLeft: 8, background: "#fef3c7", border: "1px solid #f59e0b", padding: "1px 8px", borderRadius: 3, fontSize: 11 }}>
-            {cableStart
-              ? `Connecting from ${cableStart.device.name} (${cableStart.port}) — click target device`
-              : `Cable mode (${placingCable}) — click source device`}
-            <button
-              type="button"
-              onClick={() => {
-                setPlacingCable(null);
-                setCableStart(null);
-              }}
-              style={{ marginLeft: 6, fontSize: 10 }}
-            >
-              Cancel
-            </button>
-          </span>
-        ) : pduSourcePick ? (
-          <span style={{ marginLeft: 8, background: "#dcfce7", border: "1px solid #22c55e", padding: "1px 8px", borderRadius: 3, fontSize: 11 }}>
-            PDU source: <b>{pduSourcePick}</b> — click destination device
-          </span>
-        ) : null}
       </div>
 
       {/* Logical / Physical Workspace Bar */}
@@ -880,11 +852,11 @@ export function PacketTracerStudio() {
           </button>
         </div>
 
-        {!recorded.current ? (
+        {!recorded.current && experiments.length ? (
           <div className={styles.labControls}>
             <label style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              <span>Experiment</span>
-              <select aria-label="Experiment" value={experiment} onChange={(event) => setExperiment(event.target.value)}>
+              <span>Topology</span>
+              <select aria-label="Topology" value={experiment} onChange={(event) => setExperiment(event.target.value)}>
                 {experiments.map((item) => (
                   <option key={item.id} value={item.id}>
                     {item.title}
@@ -892,20 +864,7 @@ export function PacketTracerStudio() {
                 ))}
               </select>
             </label>
-            <button type="button" className={mode === "guided" ? styles.ctrlActive : ""} onClick={() => setMode("guided")}>
-              Guided steps
-            </button>
-            <button
-              type="button"
-              className={mode === "free" ? styles.ctrlActive : ""}
-              onClick={() => {
-                setMode("free");
-                void runActions(actions);
-              }}
-            >
-              Free practice
-            </button>
-            {mode === "guided" ? (
+            {frames.length > 1 && (
               <>
                 <button
                   type="button"
@@ -915,10 +874,10 @@ export function PacketTracerStudio() {
                     setFrame(frames[index - 1]);
                   }}
                 >
-                  ◀ Previous
+                  ◀
                 </button>
                 <span style={{ fontSize: 11.5 }}>
-                  Step {frames.length ? index + 1 : 0} of {frames.length}
+                  Frame {index + 1} / {frames.length}
                 </span>
                 <button
                   type="button"
@@ -928,40 +887,7 @@ export function PacketTracerStudio() {
                     setFrame(frames[index + 1]);
                   }}
                 >
-                  Next ▶
-                </button>
-              </>
-            ) : (
-              <>
-                <select aria-label="From" value={from} onChange={(event) => setFrom(event.target.value)}>
-                  {pcs.map((p) => (
-                    <option key={p.name}>{p.name}</option>
-                  ))}
-                </select>
-                <span>→</span>
-                <select aria-label="To" value={to} onChange={(event) => setTo(event.target.value)}>
-                  {pcs.map((p) => (
-                    <option key={p.name}>{p.name}</option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const target = pcs.find((p) => p.name === to)?.ip || pcs.find((p) => p.name === to)?.name;
-                    if (target) void runActions([...actions, { type: "ping", from, to: target }]);
-                  }}
-                >
-                  Send PDU
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLocalEvents([]);
-                    setLocalPdus([]);
-                    void runActions([]);
-                  }}
-                >
-                  Reset
+                  ▶
                 </button>
               </>
             )}
@@ -1996,11 +1922,6 @@ export function PacketTracerStudio() {
       {selectedEventModal && spec && (
         <PtPduModal spec={spec} event={selectedEventModal} onClose={() => setSelectedEventModal(null)} />
       )}
-
-      {!recorded.current && view?.explain ? <div className={styles.explainBar}>{view.explain}</div> : null}
-      {!recorded.current && mode === "guided" && observations.length && index === frames.length - 1 ? (
-        <div className={styles.explainBar}>{observations.join(" ")}</div>
-      ) : null}
     </div>
   );
 }

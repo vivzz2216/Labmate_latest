@@ -140,13 +140,13 @@ def embed_theory_block(document, question_text: str, answer_text: str, question_
     return p_q
 
 
-def embed_conclusion(document, text: str):
+def embed_conclusion(document, text: str, title: str = "Conclusion"):
     """The experiment's Conclusion, after every part, in the same typography as the answers."""
     heading = document.add_paragraph()
     heading.paragraph_format.keep_with_next = True
     heading.paragraph_format.space_before = Pt(14)
     heading.paragraph_format.space_after = Pt(4)
-    run = heading.add_run("Conclusion")
+    run = heading.add_run(title)
     run.bold = True
     run.font.size = Pt(12)
     run.font.color.rgb = RGBColor(0x0F, 0x17, 0x2A)
@@ -160,6 +160,51 @@ def embed_conclusion(document, text: str):
         body = paragraph.add_run(line)
         body.font.size = Pt(10.5)
         body.font.color.rgb = RGBColor(0x33, 0x41, 0x55)
+    return heading
+
+
+def embed_viva_section(document, viva_items):
+    """Render a dedicated Viva Questions section in the Word document text."""
+    items = [item for item in (viva_items or []) if item]
+    if not items:
+        return None
+    heading = document.add_paragraph()
+    heading.paragraph_format.keep_with_next = True
+    heading.paragraph_format.space_before = Pt(14)
+    heading.paragraph_format.space_after = Pt(6)
+    run = heading.add_run("Viva Questions")
+    run.bold = True
+    run.font.size = Pt(12)
+    run.font.color.rgb = RGBColor(0x0F, 0x17, 0x2A)
+    for index, item in enumerate(items, 1):
+        q_text = item.get("question", "") if isinstance(item, dict) else str(item)
+        a_text = item.get("answer", "") if isinstance(item, dict) else ""
+        q_text = str(q_text or "").strip()
+        if not q_text:
+            continue
+        p_q = document.add_paragraph()
+        p_q.paragraph_format.space_before = Pt(4)
+        p_q.paragraph_format.space_after = Pt(2)
+        p_q.paragraph_format.keep_with_next = bool(a_text)
+        num_run = p_q.add_run(f"{index}. ")
+        num_run.bold = True
+        num_run.font.size = Pt(10.5)
+        num_run.font.color.rgb = RGBColor(0x0F, 0x17, 0x2A)
+        text_run = p_q.add_run(q_text)
+        text_run.font.size = Pt(10.5)
+        text_run.font.color.rgb = RGBColor(0x1E, 0x29, 0x3B)
+        if str(a_text or "").strip():
+            p_a = document.add_paragraph()
+            p_a.paragraph_format.left_indent = Inches(0.2)
+            p_a.paragraph_format.space_after = Pt(4)
+            p_a.paragraph_format.line_spacing = 1.15
+            lbl = p_a.add_run("Answer: ")
+            lbl.bold = True
+            lbl.font.size = Pt(10)
+            lbl.font.color.rgb = RGBColor(0x33, 0x41, 0x55)
+            ans_run = p_a.add_run(str(a_text).strip())
+            ans_run.font.size = Pt(10)
+            ans_run.font.color.rgb = RGBColor(0x33, 0x41, 0x55)
     return heading
 
 
@@ -258,7 +303,7 @@ def embed_evidence_block(document, title: str, procedure_text: str, number: int 
 from PIL import Image
 
 
-def create_report_document(upload, landscape=False):
+def create_report_document(upload, landscape=False, append_section=True, include_pdf_pages=True):
     """Start a report with the complete uploaded manual, then a separate results section."""
     file_type = str(getattr(upload, "file_type", "")).lower()
     file_path = str(getattr(upload, "file_path", "") or "")
@@ -266,7 +311,7 @@ def create_report_document(upload, landscape=False):
 
     if source_is_docx:
         document = Document(file_path)
-        report_section = document.add_section(WD_SECTION.NEW_PAGE)
+        report_section = document.add_section(WD_SECTION.NEW_PAGE) if append_section else document.sections[-1]
     else:
         document = Document()
         source_section = document.sections[0]
@@ -276,7 +321,7 @@ def create_report_document(upload, landscape=False):
         source_section.left_margin = source_section.right_margin = Inches(.55)
         source_section.top_margin = source_section.bottom_margin = Inches(.5)
 
-        if file_type == "pdf" and os.path.isfile(file_path):
+        if include_pdf_pages and file_type == "pdf" and os.path.isfile(file_path):
             import pdfplumber
 
             document.add_paragraph(f"Uploaded input: {getattr(upload, 'original_filename', '')}")
@@ -297,7 +342,7 @@ def create_report_document(upload, landscape=False):
                         width=int(image.width * scale),
                         height=int(image.height * scale),
                     )
-            report_section = document.add_section(WD_SECTION.NEW_PAGE)
+            report_section = document.add_section(WD_SECTION.NEW_PAGE) if append_section else source_section
         else:
             report_section = source_section
 
@@ -314,7 +359,62 @@ def create_report_document(upload, landscape=False):
     return document, source_is_docx
 
 
-def embed_screenshot(document, image_path, caption=None, reserved_height=0.8, max_width=None):
+def _norm_question_text(text: str) -> str:
+    import re
+    cleaned = " ".join(str(text or "").split()).lower()
+    cleaned = re.sub(r"^(?:(?:exp(?:eriment)?|program|question|q|task|part)\s*(?:no\.?|#)?\s*\d+[A-Za-z]?\s*[:.)\-–—]\s*|\d+[.)]\s*)", "", cleaned)
+    return cleaned.strip()
+
+
+def find_question_anchor(document, question_text: str, start_index: int = 0):
+    """Locate the paragraph (or table cell) in an uploaded .docx that asks `question_text`."""
+    import re
+    raw_first = next((line.strip() for line in str(question_text or "").splitlines() if line.strip()), "")
+    if not raw_first:
+        return None
+    full_norm = " ".join(raw_first.split()).lower()
+    core_norm = _norm_question_text(raw_first)
+    core_words = {w for w in re.findall(r"[a-z0-9]+", core_norm) if len(w) > 2}
+
+    best = None
+    for idx in range(max(0, start_index), len(document.paragraphs)):
+        para = document.paragraphs[idx]
+        if para._p.xpath('.//w:drawing'):
+            continue
+        p_raw = " ".join((para.text or "").split()).lower()
+        if not p_raw:
+            continue
+        p_core = _norm_question_text(p_raw)
+        if full_norm == p_raw or (core_norm and core_norm == p_core):
+            return ("paragraph", idx, para)
+        if len(core_norm) >= 12 and (core_norm in p_raw or (len(p_core) >= 12 and p_core in full_norm)):
+            return ("paragraph", idx, para)
+        if len(core_words) >= 3:
+            p_words = {w for w in re.findall(r"[a-z0-9]+", p_core) if len(w) > 2}
+            overlap = len(core_words & p_words) / len(core_words)
+            if overlap >= 0.75:
+                best = ("paragraph", idx, para)
+                break
+    if best:
+        return best
+
+    for table in document.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                c_raw = " ".join((cell.text or "").split()).lower()
+                c_core = _norm_question_text(c_raw)
+                if not c_raw:
+                    continue
+                if full_norm in c_raw or (len(core_norm) >= 12 and core_norm in c_core):
+                    return ("cell", None, cell)
+                if len(core_words) >= 3:
+                    c_words = {w for w in re.findall(r"[a-z0-9]+", c_core) if len(w) > 2}
+                    if len(core_words & c_words) / len(core_words) >= 0.75:
+                        return ("cell", None, cell)
+    return None
+
+
+def embed_screenshot(document, image_path, caption=None, reserved_height=0.8, max_width=None, insert_after=None, container=None):
     with Image.open(image_path) as image:
         pixels_w, pixels_h = image.size
         dpi = image.info.get("dpi", (96, 96))
@@ -370,9 +470,13 @@ def embed_screenshot(document, image_path, caption=None, reserved_height=0.8, ma
 
         total_slices = len(slices)
         first_shape = None
+        cursor = insert_after
 
         for slice_idx, (s_top, s_bottom) in enumerate(slices):
-            paragraph = document.add_paragraph()
+            paragraph = container.add_paragraph() if container is not None else document.add_paragraph()
+            if cursor is not None and container is None:
+                cursor._p.addnext(paragraph._p)
+                cursor = paragraph
             if slice_idx > 0:
                 paragraph.paragraph_format.page_break_before = True
             paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -391,8 +495,9 @@ def embed_screenshot(document, image_path, caption=None, reserved_height=0.8, ma
                 image.crop((0, s_top, pixels_w, s_bottom)).save(source, format="PNG")
                 source.seek(0)
 
-            slice_h = int(display_w * (s_bottom - s_top) / pixels_w)
-            shape = paragraph.add_run().add_picture(source, width=int(display_w), height=slice_h)
+            eff_w = min(display_w, Inches(4.5)) if container is not None else display_w
+            slice_h = int(eff_w * (s_bottom - s_top) / pixels_w)
+            shape = paragraph.add_run().add_picture(source, width=int(eff_w), height=slice_h)
             if first_shape is None:
                 first_shape = shape
 
@@ -404,7 +509,10 @@ def embed_screenshot(document, image_path, caption=None, reserved_height=0.8, ma
                 else:
                     slice_cap = f"{caption} (Part {slice_idx + 1} of {total_slices} — continued)"
 
-                cap_para = document.add_paragraph()
+                cap_para = container.add_paragraph() if container is not None else document.add_paragraph()
+                if cursor is not None and container is None:
+                    cursor._p.addnext(cap_para._p)
+                    cursor = cap_para
                 cap_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 cap_para.paragraph_format.keep_together = True
                 cap_para.paragraph_format.space_before = Pt(0)
@@ -415,6 +523,30 @@ def embed_screenshot(document, image_path, caption=None, reserved_height=0.8, ma
                 run.italic = True
 
     return first_shape
+
+
+def embed_screenshots_after(document, anchor, paths, captions=(), max_width=None):
+    """Insert one or more screenshots sequentially right under a matched .docx question anchor."""
+    kind, _, target = anchor
+    cursor = target if kind == "paragraph" else None
+    cell = target if kind == "cell" else None
+    for idx, path in enumerate(paths):
+        cap = captions[idx] if idx < len(captions) else None
+        embed_screenshot(
+            document,
+            path,
+            caption=cap,
+            max_width=max_width,
+            insert_after=cursor,
+            container=cell,
+        )
+        if cursor is not None:
+            next_el = cursor._p.getnext()
+            while next_el is not None and (next_el.xpath('.//w:drawing') or (cap and ''.join(next_el.itertext()).strip() == cap)):
+                from docx.text.paragraph import Paragraph
+                cursor = Paragraph(next_el, cursor._parent)
+                next_el = cursor._p.getnext()
+    return cursor
 
 
 def save_document_atomic(document, destination):

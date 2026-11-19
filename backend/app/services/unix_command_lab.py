@@ -5,6 +5,17 @@ import shlex
 
 def command_lab_plan(objective,student_name='Student',experiment_number=None,**details):
     from scripts.ubuntu_curriculum import student_profile,build_curriculum,profile_text
+    from .instruction_policy import clean_instructions, parse_instruction_preferences
+
+    extra = clean_instructions(details.pop('instructions', '') or '')
+    if extra:
+        prefs = parse_instruction_preferences(extra)
+        # If the user supplied custom task/command instructions beyond pure report-layout hints,
+        # let the AI bash pipeline generate a script that obeys them instead of a fixed template.
+        if not (prefs.output_only_screenshots or prefs.paste_under_question or prefs.no_extra_questions or prefs.no_conclusion or prefs.font_name or prefs.font_size):
+            return None
+        if re.search(r'\b(?:use|write|create|run|command|script|file|chmod|grep|awk|sed|cut|sort|find|loop|function)\b', extra, re.I):
+            return None
     # The fixed demonstrations are for manuals that leave fixtures unspecified.
     # A manual naming its own files or input literals must use normal generation
     # so those requirements are retained rather than replaced by sample data.

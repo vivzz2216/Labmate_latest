@@ -106,17 +106,15 @@ export default function EvidenceSlots({ question, uploadId, ensureUpload, onRepo
   };
 
   const hasDataset = (question.evidence_slots || []).some((slot) => slot.id === DATASET_SLOT);
-  const studioName = question.studio === "wireshark" ? "packet analyser" : question.studio === "packettracer" ? "network simulator" : "";
+  const studioName = question.studio === "wireshark" ? "Wireshark" : question.studio === "packettracer" ? "Cisco Packet Tracer" : "";
 
   return (
     <div style={{ margin: "10px 0 14px", display: "grid", gap: 10 }}>
       {studioName ? (
         <p style={{ fontSize: 13, opacity: 0.8, margin: 0 }}>
-          <strong>Built automatically.</strong> LabMate builds this part in its practice {studioName} and takes the screenshots for you; the
-          explanations and tables are computed from the packets or devices shown. The screenshots carry a visible &ldquo;LabMate practice
-          environment&rdquo; label.
+          <strong>Built automatically.</strong> LabMate generates this part directly in {studioName} and captures the execution screenshots for you.
           {question.studio === "wireshark"
-            ? " If you already saved a capture from the real Wireshark, attach it below and the analysis uses your packets; otherwise a practice capture is used."
+            ? " If you have your own packet capture (.pcap / .pcapng), attach it below to use your capture data."
             : ""}
         </p>
       ) : hasDataset ? (

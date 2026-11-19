@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { PacketTracerStudio } from "@/components/netlab/PacketTracerStudio";
 
 export const metadata: Metadata = {
-  title: "Network Simulator Studio",
-  description: "LabMate practice network simulator: hubs, switches, ARP, ICMP, routers and RIP with a Simulation-mode event list.",
+  title: "Cisco Packet Tracer",
+  description: "Cisco Packet Tracer network workspace with real-time topology layout, device CLI, and packet simulation.",
 };
 
 export default function PacketTracerStudioPage() {

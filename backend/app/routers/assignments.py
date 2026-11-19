@@ -16,6 +16,7 @@ class AssignmentResponse(BaseModel):
     filename: str
     original_filename: str
     language: Optional[str]
+    lab_environment: Optional[str] = None
     uploaded_at: str
     file_type: str
     file_size: int
@@ -29,7 +30,18 @@ class AssignmentResponse(BaseModel):
 
 
 def _build_assignment_response(upload, workflow=None, jobs=None, report=None):
+    lab_environment = None
     if workflow is not None:
+        questions = workflow.questions or []
+        studios = {str(q.get("studio", "")).lower() for q in questions if isinstance(q, dict)}
+        if len(studios) == 1 and studios <= {"wireshark", "packettracer"}:
+            lab_environment = next(iter(studios))
+        elif workflow.language == "colab" or (
+            questions and all(isinstance(q, dict) and q.get("language") == "colab" for q in questions)
+        ):
+            lab_environment = "colab"
+        elif workflow.language == "ubuntu":
+            lab_environment = "ubuntu"
         total = len(workflow.questions or [])
         completed = sum(result.get("status") == "completed" for result in (workflow.results or []))
         failed = sum(result.get("status") == "failed" for result in (workflow.results or []))
@@ -43,6 +55,7 @@ def _build_assignment_response(upload, workflow=None, jobs=None, report=None):
     return AssignmentResponse(
         id=upload.id, filename=upload.filename, original_filename=upload.original_filename,
         language=upload.language, uploaded_at=upload.uploaded_at.isoformat(),
+        lab_environment=lab_environment,
         file_type=upload.file_type, file_size=upload.file_size,
         total_tasks=total, completed_tasks=completed, failed_tasks=failed, in_progress_tasks=running,
         report_download_url=f"/api/download/{report.id}" if report else None,
