@@ -1,7 +1,7 @@
 """Railway-only runtime transport. No local host-execution fallback."""
 import asyncio
 import base64
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 from contextvars import ContextVar
 from datetime import datetime, timezone
 from functools import lru_cache
@@ -160,6 +160,16 @@ class SandboxSession:
             pass
         finally:
             await self._stop()
+
+
+@contextmanager
+def use_session(session):
+    """Run the block's sandbox jobs on an existing session (the IDE keeps one per student)."""
+    token = _session.set(session)
+    try:
+        yield session
+    finally:
+        _session.reset(token)
 
 
 @asynccontextmanager
