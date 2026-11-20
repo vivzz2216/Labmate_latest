@@ -108,3 +108,23 @@ def test_hard_coded_sample_output_is_detected_by_changing_the_input():
     # Programs that read no input are not judged by this check.
     assert not output_ignores_input('c', 'int main(){printf("hi");}', '5', 'hi', 'hi', '6')
     assert output_ignores_input('c', 'int main(){int a; scanf("%d",&a); printf("25");}', '5', '25', '25', '6')
+
+
+def test_pickle_and_named_relative_file_variables_allowed_while_unsafe_paths_stay_blocked():
+    safe_pickle_prog = (
+        "import pickle\n"
+        "fname = 'students.dat'\n"
+        "with open(fname, 'wb') as f:\n"
+        "    pickle.dump({'id': 1, 'name': 'Asha'}, f)\n"
+        "with open('students.dat', 'rb') as f:\n"
+        "    print(pickle.load(f)['name'])\n"
+    )
+    validate_generated_code(safe_pickle_prog, "python")
+    for blocked in (
+        "import pathlib\nprint(pathlib.Path('.'))\n",
+        "fname = '../secret.txt'\nopen(fname, 'r').read()\n",
+        "open('/etc/passwd', 'r')\n",
+    ):
+        with pytest.raises(ValueError):
+            validate_generated_code(blocked, "python")
+

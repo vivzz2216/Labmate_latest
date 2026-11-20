@@ -20,10 +20,16 @@ def validate_generated_code(code: str, language: str, capability=None, local_mod
             # Python compiles the whole file before running any of it, so a file with a syntax error executes nothing. Let the
             # interpreter report the SyntaxError itself (with its real message and line) instead of a policy violation.
             return
-        safe_modules = {"math", "random", "statistics", "decimal", "fractions", "collections", "itertools", "functools", "operator", "string", "re", "json", "csv", "datetime", "copy", "heapq", "bisect", "array", "typing", "dataclasses", "enum", "abc", "tkinter", "time", "textwrap", "calendar", "numbers"}
+        safe_modules = {"math", "random", "statistics", "decimal", "fractions", "collections", "itertools", "functools", "operator", "string", "re", "json", "csv", "datetime", "copy", "heapq", "bisect", "array", "typing", "dataclasses", "enum", "abc", "tkinter", "time", "textwrap", "calendar", "numbers", "pickle"}
         if capability=='flask':safe_modules.update({'flask','markupsafe',*local_modules})
         if capability=='spark':safe_modules.add('pyspark')
         if capability=='notebook':safe_modules.update({'numpy','pandas','sklearn','scipy','matplotlib','seaborn','nltk','skfuzzy','pgmpy','torch','tensorflow','keras','time','warnings','io','pprint','networkx','bs4','PIL'})
+        assigned_strings = {}
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+                for target in node.targets:
+                    if isinstance(target, ast.Name):
+                        assigned_strings[target.id] = node.value.value
         for node in ast.walk(tree):
             if capability=='flask':
                 if isinstance(node,ast.Call) and isinstance(node.func,ast.Attribute) and node.func.attr in {'send_file','send_from_directory','open_resource','open_instance_resource','from_pyfile'}:
@@ -53,12 +59,16 @@ def validate_generated_code(code: str, language: str, capability=None, local_mod
                 if node.func.id in {"eval", "exec", "compile", "__import__", "getattr", "setattr", "globals", "locals", "vars", "breakpoint"}:
                     raise ValueError("This program uses an unsupported runtime operation.")
                 if node.func.id == "open":
-                    if not node.args or not isinstance(node.args[0], ast.Constant) or not isinstance(node.args[0].value, str):
+                    arg0 = node.args[0] if node.args else None
+                    if isinstance(arg0, ast.Constant) and isinstance(arg0.value, str):
+                        name = arg0.value
+                    elif isinstance(arg0, ast.Name) and arg0.id in assigned_strings:
+                        name = assigned_strings[arg0.id]
+                    else:
                         raise ValueError("File exercises must use a named file in the lab working directory.")
-                    name = node.args[0].value
                     if name in {".", ".."} or any(char in name for char in "/\\:"):
                         raise ValueError("File access must stay inside the lab working directory.")
-    elif language in {"java", "c", "cpp", "node", "distributed"}:
+    elif language in {"java", "c", "cpp", "node", "distributed", "android"}:
         stripped = re.sub(r'//[^\n]*|/\*.*?\*/|"(?:\\.|[^"\\])*"', '', code, flags=re.S)
         guarded_code = re.sub(r"process\.env\.PORT\b", "runtime_port", stripped)
         forbidden_pattern = (

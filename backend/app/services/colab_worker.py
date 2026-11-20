@@ -614,7 +614,12 @@ def validate_cell(code):
                          and isinstance(node.value, ast.Call) and isinstance(node.value.func, ast.Name)
                          and node.value.func.id == 'super' and not node.value.keywords
                          and (not node.value.args or (len(node.value.args) == 2 and all(isinstance(a, ast.Name) for a in node.value.args))))
-        if isinstance(node, ast.Attribute) and node.attr.startswith('_') and node.attr != '__version__' and not is_super_init:
+        private_self = (isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name)
+                        and node.value.id == 'self' and node.attr.startswith('__')
+                        and not node.attr.endswith('__'))
+        if (isinstance(node, ast.Attribute) and node.attr.startswith('_')
+                and node.attr not in {'__version__', '__name__', '__qualname__', '__doc__'}
+                and not is_super_init and not private_self):
             raise PermissionError('Private runtime introspection is unavailable in notebook cells.')
         if isinstance(node, ast.Name) and node.id.startswith('__') and node.id != '__name__':
             raise PermissionError('Runtime introspection is unavailable in notebook cells.')

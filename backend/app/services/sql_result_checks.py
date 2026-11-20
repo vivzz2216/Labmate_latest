@@ -148,13 +148,17 @@ def independent_checks(statements):
         db = snap.get(step.get('active_schema', 'lab')) or next(iter(snap.values()), {})
         tables = db.get('tables', {})
         if step.get('success') and step.get('columns') and re.search(r'\bJOIN\b', sql, re.I):
-            full = bool(re.search(r'\bUNION\s+ALL\b', sql, re.I))
-            expected = join_expected(sql, tables, 'FULL' if full else None)
+            union_all = bool(re.search(r'\bUNION\s+ALL\b', sql, re.I))
+            union_distinct = (not union_all) and bool(re.search(r'\bUNION\b', sql, re.I))
+            full_union = (union_all or union_distinct) and bool(re.search(r'\bLEFT\s+(?:OUTER\s+)?JOIN\b', sql, re.I)) and bool(re.search(r'\bRIGHT\s+(?:OUTER\s+)?JOIN\b', sql, re.I))
+            expected = join_expected(sql, tables, 'FULL' if full_union else None)
             if expected is not None:
+                if union_distinct and full_union:
+                    expected = list(dict.fromkeys(expected))
                 actual = [tuple(row.get(column) for column in step['columns']) for row in rows]
                 ok = Counter(actual) == Counter(expected)
                 detail = f'{len(actual)} observed rows; {len(expected)} independently derived rows. Complete projected rows compared, including NULLs and duplicates.'
-                if not ok and full:detail += ' Correct the FULL OUTER emulation: Customers LEFT JOIN Orders UNION ALL Customers RIGHT JOIN Orders WHERE Customers.CustomerID IS NULL. Do not repeat unmatched Customers in the second branch; include unmatched Orders.'
+                if not ok and full_union:detail += ' Correct the FULL OUTER emulation: Customers LEFT JOIN Orders UNION ALL Customers RIGHT JOIN Orders WHERE Customers.CustomerID IS NULL (or distinct UNION).'
                 checks.append({'name': f"Query {step['index']} join values and multiplicities", 'passed': ok, 'detail':detail})
         if re.search(r'\bHAVING\s+COUNT\([^)]*\)\s*>\s*5\b', sql, re.I):
             checks.append({'name':'HAVING demonstration dataset', 'passed':bool(rows),

@@ -32,6 +32,7 @@ def test_windows_tensorflow_gpu_warning_is_not_shown_in_notebook_output():
 
 def test_torch_style_super_initialization_is_allowed_but_introspection_is_not():
     validate_cell('class Model:\n def __init__(self):\n  super().__init__()')
+    validate_cell('print(type(ValueError("x")).__name__, Model.__qualname__, Model.__doc__)')
     with pytest.raises(PermissionError):validate_cell('print(object.__subclasses__())')
     with pytest.raises(PermissionError):validate_cell('print(x.__class__)')
 

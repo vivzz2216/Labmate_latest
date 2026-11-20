@@ -828,8 +828,9 @@ class ScreenshotService:
         return html_content
 
     def _idle_session_segments(self, code: str, output: str, stdin_data: str = None, error: str = "") -> list:
-        """Echo real input values beside matching literal prompts, preserving stdout."""
+        """Echo real input values beside matching literal prompts, preserving stdout without double-echoing."""
         segments = []
+        norm_output = (output or "").replace("\r\n", "\n").replace("\r", "\n")
         try:
             from .runtime_engine import python_stdin
             tree = ast.parse(code)
@@ -846,23 +847,45 @@ class ScreenshotService:
                    and isinstance(call.args[0].value, str) and call.args[0].value]
         position = 0
         for value in values:
-            matches = [(output.find(prompt, position), prompt) for prompt in prompts]
-            matches = [(found, prompt) for found, prompt in matches if found >= 0]
-            if not matches:
+            candidates = []
+            for prompt in prompts:
+                start = position
+                while True:
+                    found = norm_output.find(prompt, start)
+                    if found < 0:
+                        break
+                    prev_ch = norm_output[found - 1] if found > 0 else "\n"
+                    after_raw = norm_output[found + len(prompt):]
+                    already_echoed = after_raw.startswith(value) and (
+                        len(after_raw) == len(value) or after_raw[len(value)] == "\n"
+                    )
+                    at_line_or_chain_start = (
+                        found == position
+                        or prev_ch == "\n"
+                        or any(norm_output[:found].endswith(p) for p in prompts)
+                    )
+                    if already_echoed or at_line_or_chain_start:
+                        candidates.append((found, prompt, already_echoed))
+                        break
+                    start = found + 1
+            if not candidates:
                 break
-            found, prompt = min(matches, key=lambda item: item[0])
-            if found < 0:
-                continue
+            found, prompt, already_echoed = min(candidates, key=lambda item: item[0])
             if found > position:
-                segments.append({"kind": "stdout", "text": output[position:found]})
+                segments.append({"kind": "stdout", "text": norm_output[position:found]})
             segments.append({"kind": "input", "text": prompt + value + "\n"})
             position = found + len(prompt)
-        if position < len(output):
-            segments.append({"kind": "stdout", "text": output[position:]})
+            if already_echoed:
+                position += len(value)
+                if position < len(norm_output) and norm_output[position] == "\n":
+                    position += 1
+        if position < len(norm_output):
+            segments.append({"kind": "stdout", "text": norm_output[position:]})
         if error:
+            norm_error = str(error).replace("\r\n", "\n")
             if segments and not segments[-1]["text"].endswith("\n"):
                 segments.append({"kind": "stderr", "text": "\n"})
-            segments.append({"kind": "stderr", "text": error})
+            segments.append({"kind": "stderr", "text": norm_error})
         return segments
     
     def _extract_java_class_name(self, code: str) -> str:

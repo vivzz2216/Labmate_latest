@@ -69,3 +69,32 @@ class IdleScreenshotTests(unittest.IsolatedAsyncioTestCase):
             with Image.open(path).convert("RGB") as image:
                 self.assertEqual(image.getpixel((0, 0)), (255, 255, 255))
                 self.assertEqual(image.getpixel((500, 200)), (255, 255, 255))
+
+    async def test_idle_echoed_output_does_not_double_interleave_or_match_inside_stdout(self):
+        code = (
+            'choice = input("Choice: ")\n'
+            'eid = input("EmpID: ")\n'
+            'print(f"Added Manager: EmpID: {eid} | salary: 85000.00")\n'
+            'exit_c = input("Choice: ")\n'
+            'print("Exiting.")\n'
+        )
+        echoed_output = (
+            "Choice: 1\n"
+            "EmpID: E101\n"
+            "Added Manager: EmpID: E101 | salary: 85000.00\n"
+            "Choice: 5\n"
+            "Exiting.\n"
+        )
+        rendered = await screenshot_service._render_template(
+            screenshot_service._highlight_code(code, "idle"),
+            echoed_output,
+            "idle",
+            filename="emp.py",
+            source_code=code,
+            stdin_data="1\nE101\n5\n",
+            view_mode="shell",
+        )
+        self.assertIn("Added Manager: EmpID: E101 | salary: 85000.00", rendered)
+        self.assertNotIn("Added Manager: EmpID: 5", rendered)
+        self.assertEqual(rendered.count("E101"), 2)
+
