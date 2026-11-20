@@ -300,7 +300,6 @@ export default function HomePage() {
               <li><Link href="/labs/distributed-computing" className={styles.footerLink}>Distributed Computing (Java)</Link></li>
               <li><Link href="/labs" className={styles.footerLink}>Python, Java &amp; C/C++</Link></li>
               <li><Link href="/labs" className={styles.footerLink}>Web, SQL &amp; Colab</Link></li>
-              <li><Link href="/networks/wireshark" className={styles.footerLink}>Wireshark practice studio</Link></li>
             </ul>
           </div>
         </div>

@@ -124,10 +124,17 @@ def build_compact_report(upload,workflow):
         and str(getattr(upload, 'file_type', '')).lower() == 'docx'
         and Path(str(getattr(upload, 'file_path', '') or '')).is_file()
     )
+    # A PDF can't take screenshots inside its own paragraphs; when asked, its pages are cut below each experiment's output.
+    pdf_inline = (
+        prefs.paste_under_question
+        and not prefs.no_extra_manual_pages
+        and str(getattr(upload, 'file_type', '')).lower() == 'pdf'
+        and Path(str(getattr(upload, 'file_path', '') or '')).is_file()
+    )
     document,source_is_docx=create_report_document(
         upload,
         append_section=not can_paste_inline,
-        include_pdf_pages=not prefs.no_extra_manual_pages,
+        include_pdf_pages=not prefs.no_extra_manual_pages and not pdf_inline,
     )
     ensure_heading_style(document)
     section=document.sections[-1]
@@ -143,10 +150,8 @@ def build_compact_report(upload,workflow):
             for border in style._element.xpath('.//w:pBdr'):border.getparent().remove(border)
         document.styles['Normal'].font.size=Pt(prefs.font_size or 11)
         document.styles['Heading 2'].font.size=Pt((prefs.font_size + 2) if prefs.font_size else 13)
-    anchor_cursor = 0
-    appended_started = False
-    for index,result in enumerate(workflow.results):
-        question=next((line.strip() for line in result.get('question','').splitlines() if line.strip()),'')
+    def prepare(result):
+        """The result's screenshots in report order, with their captions."""
         paths=result.get('screenshot_paths') or []
         captions=result.get('screenshot_captions') or []
         if result.get('language') == 'sql':
@@ -183,6 +188,48 @@ def build_compact_report(upload,workflow):
                 # redundant per-slice labels and fit two readable frames per page.
                 caption = None
             resolved_captions.append(caption)
+        return paths, resolved_captions
+
+    placed = set()
+    if pdf_inline:
+        import pdfplumber
+        from .pdf_inline import locate_anchors, pdf_lines, render_pdf_with_inserts
+        candidates = [i for i, r in enumerate(workflow.results) if not (r.get('is_theory') or r.get('language') == 'theory')]
+        with pdfplumber.open(upload.file_path) as pdf:
+            lines = pdf_lines(pdf)
+        found = locate_anchors(lines, [workflow.results[i] for i in candidates])
+        anchors = {candidates[k]: line for k, line in found.items()}
+
+        def insert(index):
+            result = workflow.results[index]
+            paths, resolved = prepare(result)
+            if not paths and result.get('status') == 'completed':
+                raise ValueError('Cannot export a completed exercise without its required screenshots.')
+            title = next((line.strip() for line in result.get('question','').splitlines() if line.strip()), '')
+            label = document.add_paragraph()
+            label.add_run('Screenshots: ' + short_text(title or f"Program {result['id']}", 160)).bold = True
+            label.paragraph_format.keep_with_next = True
+            if result.get('status') != 'completed':
+                document.add_paragraph(diagnostic_text(result))
+            if result.get('substitutions'):
+                from .substitutions import report_note
+                document.add_paragraph().add_run(report_note(result['substitutions'])).bold = True
+            for image_index, path in enumerate(paths):
+                embed_screenshot(document, path,
+                                 caption=None if (prefs.output_only_screenshots and prefs.no_extra_questions) else resolved[image_index],
+                                 reserved_height=.8, max_width=6.25 if result.get('language') == 'colab' else None)
+
+        document.add_paragraph(f"Uploaded input: {getattr(upload, 'original_filename', '')}")
+        render_pdf_with_inserts(document, upload.file_path, anchors, lines, insert, section)
+        placed = set(anchors)
+
+    anchor_cursor = 0
+    appended_started = False
+    for index,result in enumerate(workflow.results):
+        if index in placed:
+            continue
+        question=next((line.strip() for line in result.get('question','').splitlines() if line.strip()),'')
+        paths, resolved_captions = prepare(result)
 
         if can_paste_inline and not (result.get('is_theory') or result.get('language') == 'theory'):
             anchor = find_question_anchor(document, result.get('question', ''), start_index=anchor_cursor)
@@ -220,7 +267,7 @@ def build_compact_report(upload,workflow):
 
         heading=document.add_paragraph(short_text(question or f"Program {result['id']}",240),style='Heading 2')
         heading.paragraph_format.keep_with_next=True
-        heading.paragraph_format.page_break_before=index>0
+        heading.paragraph_format.page_break_before=index>0 or bool(placed)
         aim='' if prefs.no_extra_questions else question_aim(result.get('question'))
         if aim:
             aim_paragraph=document.add_paragraph(aim)

@@ -35,6 +35,9 @@ os.environ['REDIS_URL'] = 'redis://127.0.0.1:6399/15'
 os.environ['REDIS_REQUIRED'] = 'false'
 os.environ['STORAGE_BACKEND'] = 'local'
 os.environ.pop('RAILWAY_ENVIRONMENT_ID', None)
+# The Ubuntu/Networks/Power BI/Android tracks are switched off on the live site, but their code is kept and tested with the
+# tracks on; tests of the switch itself set UNAVAILABLE_LAB_TRACKS explicitly (test_lab_availability_and_pdf_inline.py).
+os.environ['UNAVAILABLE_LAB_TRACKS'] = ''
 
 
 # Every provider credential/flag that can enable an outbound generation route, plus deployment gates.

@@ -11,14 +11,22 @@ import time
 from collections import OrderedDict
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 
 from ..netlab import pkttracer, pt_lab, wireshark_lab
 from ..netlab.dfilter import FilterError, apply_filter
 from ..netlab.pcap import CaptureError
 
-router = APIRouter(prefix="/netlab", tags=["netlab"])
+
+def networks_available():
+    """The studios are switched off while Computer Networks labs are unavailable (settings.UNAVAILABLE_LAB_TRACKS)."""
+    from ..services.lab_availability import TRACK_LABELS, track_unavailable
+    if track_unavailable("networks"):
+        raise HTTPException(404, TRACK_LABELS["networks"] + " are not available yet.")
+
+
+router = APIRouter(prefix="/netlab", tags=["netlab"], dependencies=[Depends(networks_available)])
 
 MAX_CAPTURE_BYTES = 8 * 1024 * 1024
 SESSION_TTL_SECONDS = 1800

@@ -14,7 +14,6 @@ import {
   SiR,
   SiReact,
   SiTensorflow,
-  SiWireshark,
 } from "react-icons/si";
 import styles from "./RuntimeLogos.module.css";
 
@@ -54,9 +53,6 @@ const RUNTIMES: Runtime[] = [
   ] },
   { name: "R programming", detail: "RStudio", href: "/labs/r", marks: [
     { icon: SiR, color: "#276DC3", label: "R" },
-  ] },
-  { name: "Networks", detail: "Wireshark studio", href: "/networks/wireshark", marks: [
-    { icon: SiWireshark, color: "#1679A7", label: "Wireshark" },
   ] },
   { name: "Word report", detail: ".docx output", href: "/samples", marks: [
     { icon: BsFileEarmarkWordFill, color: "#2B579A", label: "Microsoft Word" },

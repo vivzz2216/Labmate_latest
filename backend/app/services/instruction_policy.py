@@ -52,11 +52,17 @@ def parse_instruction_preferences(raw: str | None) -> InstructionPreferences:
         )
     )
 
-    paste_under = bool(
-        re.search(
-            r"\b(?:paste(?:d)?|put|place|insert|attach|add|include|show|screenshots?)\b.{0,55}\b(?:under|below|beneath|after)\s+(?:the\s+|each\s+)?questions?\b",
-            lower,
-        )
+    # "Place the generated screenshot immediately below its corresponding experiment output" (2026-11-20 audit wording) and
+    # "paste screenshots under each question" both ask for in-manual placement; "do not place ... under unrelated experiments"
+    # does not.
+    placement = re.compile(
+        r"\b(?:paste(?:d)?|put|place|insert|attach|add|include|show|screenshots?)\b.{0,60}?\b(?:under|below|beneath|after|next\s+to)\s+"
+        r"(?:the\s+|each\s+|its\s+|their\s+|every\s+)?(?:own\s+|corresponding\s+|respective\s+|relevant\s+|matching\s+)?"
+        r"(?:questions?|experiments?|programs?|practicals?|exercises?|outputs?|tasks?)\b"
+    )
+    paste_under = any(
+        not re.search(r"\b(?:not|never|don'?t|avoid)\b[^.]{0,40}$", lower[: match.start()])
+        for match in placement.finditer(lower)
     )
 
     no_extra_questions = bool(

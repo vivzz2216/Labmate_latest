@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     WORKER_HEALTH_TTL: float = 15.0
     TRUSTED_PROXY_KEY: str = ''
     NODE_RUNTIME_CACHE: str = ''
+    # Lab tracks switched off on the live site (services/lab_availability.py): ubuntu, networks, powerbi, android.
+    # Set to an empty string to turn them all back on.
+    UNAVAILABLE_LAB_TRACKS: str = 'ubuntu,networks,powerbi,android'
     UBUNTU_SSH_HOST: str = ''
     UBUNTU_SSH_PORT: int = 22
     UBUNTU_SSH_USER: str = 'labmate'

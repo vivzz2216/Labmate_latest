@@ -503,6 +503,10 @@ async def process(upload_id: int, data: ProcessInput, request: Request, backgrou
                   **({'browser_theme':q.browser_theme} if q.browser_theme == 'chrome' or q.language in {'html','react','node'} or data.language in {'html','react','node'} else {})} for q in data.questions]
     if sum(sum(len(name)+len(content) for name,content in q.datasets.items()) for q in data.questions)>8*1024*1024:
         raise HTTPException(400,'Dataset upload exceeds 8 MiB.')
+    from ..services.lab_availability import blocked_message
+    blocked = blocked_message([{**q, 'language': data.language} if data.language not in {'auto', 'python'} else q for q in questions])
+    if blocked:
+        raise HTTPException(422, blocked)
     # Parts the lab itself declared (kind) keep that decision; only undeclared questions go through the heuristics.
     undeclared = [question for question in questions if not question.get("kind")]
     filtered = filter_lab_tasks(undeclared, mode=data.mode)

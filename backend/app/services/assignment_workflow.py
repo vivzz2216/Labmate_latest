@@ -555,7 +555,9 @@ async def _extract_assignment(workflow_id: int):
             from .network_labs import detect_network_lab, experiment_heading_count, network_parts_for
             # Only a single-experiment networks manual is recognised as a whole; in a manual with several experiments each
             # experiment is checked on its own after extraction, so the others are never dropped.
-            network_parts = detect_network_lab(original_text) if experiment_heading_count(original_text) <= 1 else None
+            from .lab_availability import left_out_message, split_available, track_unavailable
+            network_parts = (detect_network_lab(original_text)
+                             if experiment_heading_count(original_text) <= 1 and not track_unavailable("networks") else None)
             if network_parts:
                 validate_manual(network_parts)
                 workflow.questions = network_parts
@@ -574,6 +576,10 @@ async def _extract_assignment(workflow_id: int):
             sections = unix_sections or ((numbered_experiments(original_text) or numbered_questions(original_text)) if mode == 'code_only' else [])
             if sections:
                 sections, studio_count = network_parts_for(sections)
+                # Experiments of a lab track that is switched off (Ubuntu, Computer Networks, Power BI, Android) are left out.
+                sections, left_out = split_available(sections)
+                if left_out:
+                    studio_count = sum(1 for item in sections if item.get("studio"))
                 validate_manual(sections)
                 workflow.questions = sections
                 workflow.error = None
@@ -581,7 +587,8 @@ async def _extract_assignment(workflow_id: int):
                 workflow.status = "queued" if workflow.batch_id else "ready"
                 record(workflow, db, "generate" if workflow.batch_id else "review", 20,
                        f"Preserved all {len(sections)} numbered experiments and their original requirements without model rewriting."
-                       + (f" {studio_count} networks experiment(s) will be built in LabMate's practice environment." if studio_count else ""))
+                       + (f" {studio_count} networks experiment(s) will be built in LabMate's practice environment." if studio_count else "")
+                       + left_out_message(left_out))
                 return
             text = "\n".join(programming_lines(original_text.splitlines(), mode=mode))
             record(workflow, db, "extract", 10, f"Document read. Identifying assignment questions with {generation_service.provider_name}.")
@@ -655,14 +662,15 @@ async def _extract_assignment(workflow_id: int):
             if not clean:
                 raise ValueError("No programming tasks could be identified. Check that the document includes the lab exercise or program statement, then retry extraction.")
             clean, _studio_count = network_parts_for(clean)
+            clean, left_out = split_available(clean)
             workflow.questions = clean
             upload.language = next((item["language"] for item in clean if item["language"] != "theory"), "theory")
             if workflow.batch_id:
                 workflow.status = "queued"
-                record(workflow, db, "generate", 20, f"Extracted {len(clean)} questions. Batch processing queued.")
+                record(workflow, db, "generate", 20, f"Extracted {len(clean)} questions. Batch processing queued." + left_out_message(left_out))
             else:
                 workflow.status = "ready"
-                record(workflow, db, "review", 20, f"Extracted {len(clean)} questions. Ready for review and processing.")
+                record(workflow, db, "review", 20, f"Extracted {len(clean)} questions. Ready for review and processing." + left_out_message(left_out))
         except (ManualStructureError, ManualLimitError, NotLabManualError) as error:
             workflow.questions = []
             workflow.status, workflow.error = 'failed', str(error)
@@ -685,6 +693,8 @@ async def _extract_assignment(workflow_id: int):
                         if language not in LANGUAGES:
                             language = "python"
                         clean.append({"id": index + 1, "text": question_text, "language": language})
+                    from .lab_availability import split_available as _split_available
+                    clean, _left_out = _split_available(clean)
                     validate_manual(clean)
                     workflow.questions = clean
                     workflow.error = None
@@ -1820,11 +1830,49 @@ def build_word_report(upload, workflow):
         and upload.file_type == "docx"
         and os.path.isfile(str(getattr(upload, "file_path", "") or ""))
     )
+    pdf_placed = set()
     if upload.file_type == "docx":
         document = Document(upload.file_path)
     else:
         document = Document()
-        if not prefs.no_extra_manual_pages:
+        pdf_inline = (prefs.paste_under_question and upload.file_type == "pdf"
+                      and os.path.isfile(str(getattr(upload, "file_path", "") or "")))
+        if not prefs.no_extra_manual_pages and pdf_inline:
+            # Screenshots asked for under each experiment: cut the PDF's pages below each experiment's output section.
+            from .pdf_inline import locate_anchors, pdf_lines, render_pdf_with_inserts
+            document.add_heading("Laboratory Manual & Problem Statements", 0)
+            document.add_paragraph(upload.original_filename)
+            candidates = [i for i, r in enumerate(workflow.results or [])
+                          if not (r.get("is_theory") or r.get("language") == "theory" or r.get("kind") == "evidence")]
+            with pdfplumber.open(upload.file_path) as pdf:
+                pdf_text_lines = pdf_lines(pdf)
+            found = locate_anchors(pdf_text_lines, [workflow.results[i] for i in candidates])
+            pdf_anchors = {candidates[k]: line for k, line in found.items()}
+
+            def insert_pdf_result(index):
+                result = workflow.results[index]
+                paths = [p for p in (result.get("screenshot_paths") or []) if os.path.isfile(p)]
+                captions = result.get("screenshot_captions") or []
+                if prefs.output_only_screenshots and paths:
+                    paths, captions = _filter_output_only_paths(paths, captions, result)
+                title = next((line.strip() for line in str(result.get("question") or "").splitlines() if line.strip()), "")
+                label = document.add_paragraph()
+                label.add_run("Screenshots: " + title[:160]).bold = True
+                label.paragraph_format.keep_with_next = True
+                if result.get("status") != "completed":
+                    document.add_paragraph(student_failure_message(result))
+                if result.get("substitutions"):
+                    from .substitutions import report_note
+                    document.add_paragraph().add_run(report_note(result["substitutions"])).bold = True
+                for position, path in enumerate(paths):
+                    embed_screenshot(document, path, caption=None if (prefs.output_only_screenshots and prefs.no_extra_questions)
+                                     else (captions[position] if position < len(captions) else None))
+
+            render_pdf_with_inserts(document, upload.file_path, pdf_anchors, pdf_text_lines, insert_pdf_result, document.sections[-1])
+            pdf_placed = set(pdf_anchors)
+            if len(pdf_placed) < len(workflow.results or []):
+                document.add_page_break()
+        elif not prefs.no_extra_manual_pages:
             document.add_heading("Laboratory Manual & Problem Statements", 0)
             document.add_paragraph(upload.original_filename)
             with pdfplumber.open(upload.file_path) as pdf:
@@ -1856,6 +1904,8 @@ def build_word_report(upload, workflow):
     appended_started = False
     viva_results = []
     for idx, result in enumerate(workflow.results):
+        if idx in pdf_placed:
+            continue
         if result.get("section") == "viva":
             viva_results.append({"question": result.get("question", ""), "answer": result.get("answer", "")})
             continue
