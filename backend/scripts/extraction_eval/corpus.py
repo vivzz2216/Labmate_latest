@@ -128,7 +128,7 @@ Post Lab Questions:
 Conclusion:
 Write the conclusion of the experiment.
 """, expect=[("inter-process communication", "theory"), ("tcp and udp", "theory"), ("port numbers", "theory"),
-             ("uppercase", "java"), ("socket classes", "theory")])
+             ("uppercase", "distributed"), ("socket classes", "theory")])  # Java TCP client/server runs in the multi-process distributed runtime (c5c3af1)
 
 M["11_program_headings_c"] = dict(mode="code_only", text="""C Programming Laboratory
 Program 1
@@ -219,7 +219,7 @@ Implementation:
 Write a Java RMI program where the client calls a remote add(int a, int b) method on the server and prints the result.
 Conclusion:
 Write the summary, importance, and application of the experiment.
-""", expect=[("architecture of rmi", "theory"), ("stub", "theory"), ("remote add", "java")])
+""", expect=[("architecture of rmi", "theory"), ("stub", "theory"), ("remote add", "distributed")])  # Java RMI: separate server and client in the distributed runtime
 
 M["18_react_node_multiline_experiments"] = dict(mode="code_only", text="""Web Programming Lab
 Experiment 8: React components

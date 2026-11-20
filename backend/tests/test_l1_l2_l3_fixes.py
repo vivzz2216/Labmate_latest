@@ -170,3 +170,10 @@ def test_l2_theory_and_code_renders_separate_viva_section_with_answers(tmp_path,
     assert "worst-case time complexity" in viva_block
     assert "O(n)" in viva_block
     assert "Experiment verified all linear search test cases." in texts[concl_idx + 1]
+
+
+def test_l3_every_experiments_conclusion_is_kept_in_order():
+    text = ("Experiment 1: A\n10. Result and Conclusion: Loops were verified.\n11. Viva Questions:\nWhy?\n"
+            "Experiment 2: B\n10. Result and Conclusion: Classes were verified.\n11. Viva Questions:\nHow?\n")
+    conclusion = extract_manual_conclusion(text)
+    assert conclusion.index("Loops were verified") < conclusion.index("Classes were verified")

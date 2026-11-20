@@ -332,5 +332,8 @@ def extract_manual_conclusion(text: str) -> str:
     flush()
     if not candidates:
         return ""
-    candidates.sort(key=lambda pair: -pair[0])
-    return candidates[0][1][:3000]
+    # A manual with several experiments has one Result/Conclusion each; keep all of them in order, not just the first
+    # (2026-11-20 live check: a 4-experiment manual's report showed only Experiment 1's conclusion).
+    best = max(priority for priority, _ in candidates)
+    parts = list(dict.fromkeys(text for priority, text in candidates if priority == best))
+    return "\n\n".join(parts)[:3000]

@@ -139,3 +139,24 @@ def test_the_image_ships_the_ubuntu_curriculum_next_to_the_sandbox_files(dockerf
         assert f"backend/scripts/{name}" in line
     # the modules the Ubuntu labs import must exist where the image copies them from
     assert (Path(__file__).resolve().parents[1] / "scripts" / "ubuntu_curriculum.py").is_file()
+
+
+def test_footer_with_a_changing_page_number_is_stripped():
+    from app.services.pdf_ocr import strip_running_page_text
+    pages = [f"Experiment {n}: Task {n}\nWrite a program number {n}.\nprint({n})\nLABMATE • Engineering Lab Manual Collection Page {n}"
+             for n in range(1, 5)]
+    cleaned = strip_running_page_text(pages)
+    assert all("Lab Manual Collection" not in page for page in cleaned)
+    assert all(f"print({n})" in page for n, page in enumerate(cleaned, 1))
+    # a body line that only resembles a footer on one page stays
+    single = strip_running_page_text(["Experiment 1: A\nx = 1\ny = 2\nTotal marks 10", "Experiment 2: B\nz = 3\nw = 4\nEnd"])
+    assert "Total marks 10" in single[0]
+
+
+def test_a_table_index_manual_is_a_lab_manual_but_papers_are_not():
+    import pytest as _pytest
+    from app.services.pdf_ocr import NotLabManualError, validate_lab_pdf
+    validate_lab_pdf("Department of IT\nObject Oriented Programming in C++ - List of Experiments\n"
+                     "Sr. No. Name of the Experiment Date Sign\n1 Write a C++ program to implement a class Complex.")
+    with _pytest.raises(NotLabManualError):
+        validate_lab_pdf("Abstract\nThis paper studies routing.\n1 Introduction\nWe study networks.\nReferences\n[1] A. B.")

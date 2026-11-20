@@ -74,9 +74,12 @@ class NotLabManualError(ValueError):
 _LAB_HEADING = re.compile(
     r"^\s*(?:\d+[.)]\s*)?(?:(?:[\w /&-]+\s+)?lab(?:oratory)?\s+manual\b|"
     r"(?:pre[- ]?|post[- ]?)?lab(?:oratory)?\s+(?:exercise|assignment|questions?)\b|"
-    r"(?:experiment|practical|exercise)\s*(?:no\.?\s*)?[-–—:#]?\s*\d+\b)", re.I | re.M)
+    r"(?:experiment|practical|exercise)\s*(?:no\.?\s*)?[-–—:#]?\s*\d+\b|"
+    # "Object Oriented Programming in C++ - List of Experiments" heads a manual whose tasks sit in an index table.
+    r"[^\n]{0,80}\blist\s+of\s+(?:experiments|practicals|programs|assignments)\b)", re.I | re.M)
 _TASK_START = re.compile(
-    r"^\s*(?:(?:q(?:uestion)?\s*)?\d+\s*[.):–-]\s*|[a-z][.)]\s*|(?:aim|task|objective)\s*:\s*)?"
+    # A table row reads "1 Write a C++ program ...": the number is followed by a space, not "." or ")".
+    r"^\s*(?:(?:q(?:uestion)?\s*)?\d+(?:\s*[.):–-]\s*|\s+)|[a-z][.)]\s*|(?:aim|task|objective)\s*:\s*)?"
     r"(?:to\s+)?(?:write|wap|implement|create|develop|design|build|execute|run|compile|"
     r"demonstrate|perform|simulate|configure|train|calculate|find|display|define|explain|"
     r"list|describe|compare|identify|count|plot|insert|select|use|solve|construct)\b", re.I | re.M)
@@ -109,7 +112,12 @@ def strip_running_page_text(pages, edge_candidates=None):
                                if ' '.join(lines[i].split()).casefold() in keys})
         edges.append(page_edges)
 
-    counts = [Counter(key for pair in edges for key in set(pair[side].values())) for side in (0, 1)]
+    # "LABMATE • Lab Manual Collection Page 6" changes on every page only by its number; compare margins without a trailing
+    # page label so such footers count as recurring (2026-11-20 audit: they ended up inside every extracted question).
+    def running_key(key):
+        return re.sub(r'\s*(?:page\s*)?\d{1,3}(?:\s*(?:of|/)\s*\d{1,3})?\s*$', '', key).strip()
+
+    counts = [Counter(running_key(key) for pair in edges for key in set(pair[side].values())) for side in (0, 1)]
     page_labels = [re.fullmatch(r'(?:page\s+)?(\d{1,3})(?:\s*(?:of|/)\s*\d{1,3})?', key)
                    for pair in edges for key in pair[1].values()]
     numbers = {int(match[1]) for match in page_labels if match}
@@ -126,7 +134,7 @@ def strip_running_page_text(pages, edge_candidates=None):
                     continue
                 if re.fullmatch(r'page\s+\d+(?:\s*(?:of|/)\s*\d+)?', key) or (
                     side == 1 and sequential_numbers and re.fullmatch(r'\d{1,3}', key)
-                ) or counts[side][key] >= max(2, (2 * len(pages) + 2) // 3):
+                ) or (len(running_key(key)) >= 3 and counts[side][running_key(key)] >= max(2, (2 * len(pages) + 2) // 3)):
                     remove.add(i)
         cleaned.append('\n'.join(line for i, line in enumerate(lines) if i not in remove))
     return cleaned
