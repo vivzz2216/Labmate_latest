@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..database import get_db
-from ..models import User, Subscription, StudentFeedback
+from ..models import User, Subscription, StudentFeedback, LabRequest
 from ..middleware.auth import get_current_user
 from ..middleware.csrf import require_csrf_token
 from ..security.operator_access import is_admin_user
@@ -70,6 +70,33 @@ def admin_feedback(db: Session = Depends(get_db), _ok: User = Depends(require_ad
             }
         )
     return {"feedback": out}
+
+
+@router.get("/admin/lab-requests")
+def admin_lab_requests(db: Session = Depends(get_db), _ok: User = Depends(require_admin)):
+    rows = (
+        db.query(LabRequest, User)
+        .outerjoin(User, User.id == LabRequest.user_id)
+        .order_by(LabRequest.created_at.desc())
+        .limit(200)
+        .all()
+    )
+    return {
+        "lab_requests": [
+            {
+                "id": req.id,
+                "user_id": req.user_id,
+                "user_email": user.email if user else None,
+                "user_name": user.name if user else None,
+                "question": req.question,
+                "lab_name": req.lab_name,
+                "details": req.details,
+                "status": req.status,
+                "created_at": req.created_at.isoformat() if req.created_at else None,
+            }
+            for req, user in rows
+        ]
+    }
 
 
 @router.post("/admin/subscription/{user_id}")

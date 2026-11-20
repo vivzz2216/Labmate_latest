@@ -101,11 +101,12 @@ def _checked_image(image):
 
 def _pdf_first_page(data):
     import pdfplumber
+    from .pdf_render import render_page_image
     try:
         with pdfplumber.open(io.BytesIO(data)) as pdf:
             if not pdf.pages:
                 raise ValueError("The PDF has no pages.")
-            return pdf.pages[0].to_image(resolution=130).original.convert("RGB")
+            return render_page_image(pdf.pages[0]).convert("RGB")
     except ValueError:
         raise
     except Exception:

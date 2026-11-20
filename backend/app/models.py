@@ -24,6 +24,7 @@ class User(Base):
     profile = relationship("UserProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
     subscriptions = relationship("Subscription", back_populates="user", cascade="all, delete-orphan")
     feedback = relationship("StudentFeedback", back_populates="user", cascade="all, delete-orphan")
+    lab_requests = relationship("LabRequest", back_populates="user", cascade="all, delete-orphan")
 
 
 class Upload(Base):
@@ -310,3 +311,18 @@ class StudentFeedback(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     user = relationship("User", back_populates="feedback")
+
+
+class LabRequest(Base):
+    """Student Q&A responses requesting new lab environments, tools, and practical manuals."""
+    __tablename__ = "lab_requests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    question = Column(String(255), nullable=False, default="What lab do you need?")
+    lab_name = Column(String(255), nullable=False)
+    details = Column(Text, nullable=True)
+    status = Column(String(32), nullable=False, default="received")  # received, under_review, planned, completed
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    user = relationship("User", back_populates="lab_requests")

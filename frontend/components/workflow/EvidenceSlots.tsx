@@ -106,7 +106,12 @@ export default function EvidenceSlots({ question, uploadId, ensureUpload, onRepo
   };
 
   const hasDataset = (question.evidence_slots || []).some((slot) => slot.id === DATASET_SLOT);
-  const studioName = question.studio === "wireshark" ? "Wireshark" : question.studio === "packettracer" ? "Cisco Packet Tracer" : "";
+  const studioName = question.studio && {
+    wireshark: "the LabMate packet analyzer",
+    packettracer: "the LabMate network simulator",
+    powerbi: "the LabMate Power BI practice workspace",
+    android: "the LabMate interactive Android runtime",
+  }[question.studio];
 
   return (
     <div style={{ margin: "10px 0 14px", display: "grid", gap: 10 }}>

@@ -38,6 +38,15 @@ export function UndoIcon({ size = 14 }: IconProps) {
   );
 }
 
+export function RedoIcon({ size = 14 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M10.5 4.5 13.5 7l-3 2.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M13 7H6.8a3.3 3.3 0 1 0 0 6.5H9.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 /** Clipboard group */
 export function PasteIcon({ size = 24 }: IconProps) {
   return (
@@ -442,6 +451,30 @@ export function SemanticModelBadge({ size = 38 }: IconProps) {
       <ellipse cx="26" cy="18.5" rx="6" ry="2.2" fill="#ffe1b5" stroke="#ca6b14" strokeWidth="1.3" />
       <path d="M20 18.5v9.5c0 1.2 2.7 2.2 6 2.2s6-1 6-2.2v-9.5" fill="#fff2de" stroke="#ca6b14" strokeWidth="1.3" />
       <path d="M20 23.2c0 1.2 2.7 2.2 6 2.2s6-1 6-2.2" stroke="#ca6b14" strokeWidth="1.1" />
+    </svg>
+  );
+}
+
+export function NewColumnRibbonIcon({ size = 24 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="4" y="4.5" width="15" height="15" rx="1.2" fill="#ffffff" stroke="#484644" strokeWidth="1.2" />
+      <rect x="10" y="4.5" width="4.5" height="15" fill="#e6f2ef" stroke="#117865" strokeWidth="1.1" />
+      <text x="12.2" y="13.5" textAnchor="middle" fontSize="6.5" fontStyle="italic" fontWeight="700" fill="#117865" fontFamily="Georgia, serif">
+        fx
+      </text>
+    </svg>
+  );
+}
+
+export function RelationshipRibbonIcon({ size = 24 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="3.5" y="4.5" width="7" height="6" rx="1" fill="#ffffff" stroke="#484644" strokeWidth="1.2" />
+      <rect x="13.5" y="13.5" width="7" height="6" rx="1" fill="#e6f2ef" stroke="#117865" strokeWidth="1.2" />
+      <path d="M10.5 7.5H17v6" stroke="#117865" strokeWidth="1.5" />
+      <circle cx="10.5" cy="7.5" r="1.4" fill="#117865" />
+      <circle cx="17" cy="13.5" r="1.4" fill="#117865" />
     </svg>
   );
 }

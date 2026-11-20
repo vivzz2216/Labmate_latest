@@ -40,6 +40,15 @@ Demonstrate the project in class.
 
 
 class AcademicManualTests(unittest.TestCase):
+    def test_manual_heading_supplies_language_only_when_exercise_does_not(self):
+        manual = (
+            'Subject: Java Programming Lab\n'
+            'Experiment 1: Student marks\nWrite a program to calculate the average.\n'
+            'Experiment 2: Student records\nWrite a Python program to print each name.\n'
+            'Experiment 3: Customer totals\nUse SQL to query the Customers table.\n'
+        )
+        self.assertEqual([task['language'] for task in numbered_experiments(manual)], ['java', 'python', 'sql'])
+
     def test_numbered_question_manual_keeps_all_exercises_without_model(self):
         source = ('C | MANUAL 01 | 3 EXERCISES\nSupplied data and constraints\n'
                   'Marks: 78, 92, 65, 88, 77.\nLaboratory exercises\n'

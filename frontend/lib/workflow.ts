@@ -27,10 +27,11 @@ export interface LabQuestion {
   builtin_datasets?: string[];
   evidence_slots?: { id: string; label: string }[];
   // A part LabMate builds itself in a practice studio (Computer Networks labs): Wireshark analyser or Packet Tracer simulator.
-  studio?: "wireshark" | "packettracer";
+  studio?: "wireshark" | "packettracer" | "powerbi" | "android";
   studio_args?: Record<string, string>;
   datasets?: Record<string, string>;
-  source_ide?: "codeblocks" | "vscode" | "notepad" | "workbench";
+  source_ide?: "codeblocks" | "vscode" | "notepad" | "workbench" | "mysql-cli";
+  notebook_template?: "colab" | "jupyter";
   python_template?: "idle" | "jupyter";
   jupyter_theme?: "light" | "dark";
   colab_theme?: "light" | "dark";
@@ -102,6 +103,8 @@ export interface LabWorkflow {
   language: LabLanguage;
   instructions: string;
   output_name: string;
+  mode?: ManualMode;
+  screenshot_style?: string;
   report: {
     id: number;
     filename: string;
@@ -144,8 +147,8 @@ export const workflowApi = {
   ): Promise<{ upload: UploadResponse; workflow: LabWorkflow }> {
     return (await api.post("/api/workflows/from-prompt", { questions, title })).data;
   },
-  async extract(uploadId: number): Promise<LabWorkflow> {
-    return (await api.post(`/api/workflows/${uploadId}/extract`)).data;
+  async extract(uploadId: number, mode?: ManualMode): Promise<LabWorkflow> {
+    return (await api.post(`/api/workflows/${uploadId}/extract`, undefined, { params: { mode } })).data;
   },
   async status(uploadId: number): Promise<LabWorkflow> {
     return (await api.get(`/api/workflows/${uploadId}`)).data;

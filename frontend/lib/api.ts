@@ -757,6 +757,53 @@ export const apiService = {
     });
     return response.data;
   },
+
+  // Submit lab request (Q&A: What lab do you need?)
+  async submitLabRequest(payload: {
+    lab_name: string;
+    details?: string;
+    question?: string;
+  }): Promise<{ ok: boolean; id: number; lab_name: string; status: string }> {
+    const response = await api.post("/api/lab-requests", payload);
+    return response.data;
+  },
+
+  // Get current user's submitted lab requests
+  async getMyLabRequests(): Promise<{
+    requests: Array<{
+      id: number;
+      question: string;
+      lab_name: string;
+      details: string | null;
+      status: string;
+      created_at: string | null;
+    }>;
+  }> {
+    const response = await api.get("/api/lab-requests/my");
+    return response.data;
+  },
+
+  // Submit student feedback (ratings 1-5 appear on homepage)
+  async submitFeedback(payload: {
+    rating?: number | null;
+    message: string;
+  }): Promise<{ ok: boolean; id: number }> {
+    const response = await api.post("/api/feedback", payload);
+    return response.data;
+  },
+
+  // Get current user's submitted feedback
+  async getMyFeedback(): Promise<{
+    feedback: Array<{
+      id: number;
+      rating: number | null;
+      message: string;
+      created_at: string | null;
+    }>;
+  }> {
+    const response = await api.get("/api/feedback/my");
+    return response.data;
+  },
 };
 
 export default api;

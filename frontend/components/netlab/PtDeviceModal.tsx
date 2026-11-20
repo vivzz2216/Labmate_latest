@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   defaultServerServices,
   executeIosCommand,
@@ -12,40 +12,65 @@ import {
   type IosSessionState,
 } from "@/lib/netlab/ptEngine";
 import type { PtDevice, PtSpec } from "@/lib/netlab/ptTypes";
+import {
+  PtAppBrowserIcon,
+  PtAppCmdIcon,
+  PtAppIpConfigIcon,
+  PtAppTerminalIcon,
+  PtAppWirelessIcon,
+} from "./PacketTracerIcons";
+import styles from "./packetTracer.module.css";
+
+export type ModalTab = "Physical" | "Config" | "CLI" | "Desktop" | "Services" | "Attributes";
+type DesktopApp = "grid" | "ipconfig" | "cmd" | "terminal" | "browser" | "wireless";
 
 interface PtDeviceModalProps {
   spec: PtSpec;
   device: PtDevice;
+  initialTab?: ModalTab;
+  initialConfigSection?: string;
   onUpdateDevice: (updated: PtDevice) => void;
+  onUpdatePeerDevice?: (updated: PtDevice) => void;
   onClose: () => void;
 }
 
-type ModalTab = "Physical" | "Config" | "CLI" | "Desktop" | "Services" | "Attributes";
-type DesktopApp = "grid" | "ipconfig" | "cmd" | "browser";
-
-const PHYSICAL_MODULES: Record<string, { desc: string; ports: string }> = {
+const PHYSICAL_MODULES: Record<string, { desc: string; ports: string; addedPorts: string[] }> = {
   "HWIC-2T": {
     desc: "The HWIC-2T provides two high-speed serial ports with Smart Serial connectors for WAN connectivity.",
     ports: "2x Serial",
+    addedPorts: ["Serial0/1/0", "Serial0/1/1"],
   },
   "NM-1FE-TX": {
     desc: "Single-port 10/100BASE-TX FastEthernet network module for IEEE 802.3u copper LAN links.",
     ports: "1x FastEthernet",
+    addedPorts: ["FastEthernet1/0"],
   },
   "PT-COVER": {
     desc: "Blank EMI shield cover plate installed in unused WIC/HWIC chassis expansion slots.",
     ports: "Blank Plate",
+    addedPorts: [],
   },
   "WIC-1ENET": {
     desc: "Single-port 10Mbps Ethernet WAN interface card for legacy RJ-45 LAN/WAN uplinks.",
     ports: "1x Ethernet",
+    addedPorts: ["Ethernet0/1/0"],
   },
 };
 
-export function PtDeviceModal({ spec, device, onUpdateDevice, onClose }: PtDeviceModalProps) {
+export function PtDeviceModal({
+  spec,
+  device,
+  initialTab,
+  initialConfigSection,
+  onUpdateDevice,
+  onUpdatePeerDevice,
+  onClose,
+}: PtDeviceModalProps) {
   const isNetworkCli = ["router", "switch", "security"].includes(device.type);
   const isEnd = ["pc", "laptop", "server", "tablet", "smartphone", "printer"].includes(device.type);
   const isServer = device.type === "server";
+  const isWirelessClient = ["laptop", "tablet", "smartphone"].includes(device.type);
+  const tabId = useId();
 
   const tabs: ModalTab[] = useMemo(() => {
     if (isServer) return ["Physical", "Config", "Services", "Desktop", "Attributes"];
@@ -54,22 +79,61 @@ export function PtDeviceModal({ spec, device, onUpdateDevice, onClose }: PtDevic
     return ["Physical", "Config", "Attributes"];
   }, [isServer, isEnd, isNetworkCli]);
 
-  const [tab, setTab] = useState<ModalTab>(isNetworkCli ? "Config" : isEnd ? "Desktop" : "Config");
-  const [configSection, setConfigSection] = useState<string>("Settings");
+  const fallbackTab: ModalTab = isNetworkCli ? "Config" : isEnd ? "Desktop" : "Config";
+  const resolvedInitialTab = initialTab && tabs.includes(initialTab) ? initialTab : fallbackTab;
+
+  const [tab, setTab] = useState<ModalTab>(resolvedInitialTab);
+  const [configSection, setConfigSection] = useState<string>(initialConfigSection || "Settings");
   const [selectedModule, setSelectedModule] = useState<string>("HWIC-2T");
   const [physicalZoom, setPhysicalZoom] = useState<number>(1);
+  const [moduleWarning, setModuleWarning] = useState<string>("");
 
-  // Desktop app state
+  // Draggable window offset + Always on Top state
+  const [pinnedTop, setPinnedTop] = useState<boolean>(false);
+  const [winOffset, setWinOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const dragWinRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
+
+  useEffect(() => {
+    const onMove = (ev: MouseEvent) => {
+      if (!dragWinRef.current) return;
+      const d = dragWinRef.current;
+      setWinOffset({
+        x: Math.max(-420, Math.min(420, d.origX + (ev.clientX - d.startX))),
+        y: Math.max(-240, Math.min(240, d.origY + (ev.clientY - d.startY))),
+      });
+    };
+    const onUp = () => {
+      dragWinRef.current = null;
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, []);
+
+  // Desktop apps state
   const [desktopApp, setDesktopApp] = useState<DesktopApp>("grid");
-  const [cmdLines, setCmdLines] = useState<string[]>([
-    "Cisco Packet Tracer PC Command Line 1.0",
-    "",
-  ]);
+  const [cmdLines, setCmdLines] = useState<string[]>(["Cisco Packet Tracer PC Command Line 1.0", ""]);
   const [cmdInput, setCmdInput] = useState("");
+  const [cmdHistory, setCmdHistory] = useState<string[]>([]);
+  const [cmdHistIdx, setCmdHistIdx] = useState<number>(-1);
   const [browserUrl, setBrowserUrl] = useState("http://192.168.1.100");
   const [browserHtml, setBrowserHtml] = useState<string>("");
 
-  // CLI state
+  // RS232 Terminal over Console cable
+  const [termConnected, setTermConnected] = useState(false);
+  const [termSession, setTermSession] = useState<IosSessionState>({
+    priv: false,
+    configMode: false,
+    iface: null,
+    ripMode: false,
+  });
+  const [termLines, setTermLines] = useState<string[]>([]);
+  const [termInput, setTermInput] = useState("");
+
+  // CLI state (with Up/Down command history)
   const [iosSession, setIosSession] = useState<IosSessionState>({
     priv: false,
     configMode: false,
@@ -85,6 +149,8 @@ export function PtDeviceModal({ spec, device, onUpdateDevice, onClose }: PtDevic
     "",
   ]);
   const [cliInput, setCliInput] = useState("");
+  const [cliHistory, setCliHistory] = useState<string[]>([]);
+  const [cliHistIdx, setCliHistIdx] = useState<number>(-1);
   const [iosEcho, setIosEcho] = useState<string[]>([]);
 
   // Config subform inputs
@@ -92,14 +158,33 @@ export function PtDeviceModal({ spec, device, onUpdateDevice, onClose }: PtDevic
   const [staticNet, setStaticNet] = useState("");
   const [staticMask, setStaticMask] = useState("255.255.255.0");
   const [staticHop, setStaticHop] = useState("");
+  const [vlanIdInput, setVlanIdInput] = useState("");
+  const [vlanNameInput, setVlanNameInput] = useState("");
   const [dnsNameInput, setDnsNameInput] = useState("");
   const [dnsIpInput, setDnsIpInput] = useState("");
 
   const cliInputRef = useRef<HTMLInputElement>(null);
   const cmdInputRef = useRef<HTMLInputElement>(null);
+  const termInputRef = useRef<HTMLInputElement>(null);
 
   const ports = useMemo(() => getDevicePorts(device).filter((p) => p !== "Console" && p !== "RS 232"), [device]);
   const services = device.services ?? defaultServerServices();
+
+  const consoleTarget = useMemo(() => {
+    const link = spec.links.find(
+      (l) =>
+        (l.cable === "console" || l.ap === "Console" || l.bp === "Console") &&
+        (l.a === device.name || l.b === device.name),
+    );
+    if (!link) return null;
+    const peerName = link.a === device.name ? link.b : link.a;
+    return spec.devices.find((d) => d.name === peerName) ?? null;
+  }, [spec, device.name]);
+
+  const wirelessAps = useMemo(
+    () => spec.devices.filter((d) => d.type === "wireless" && d.power !== false),
+    [spec.devices],
+  );
 
   const handleRunIos = () => {
     const line = cliInput;
@@ -108,11 +193,19 @@ export function PtDeviceModal({ spec, device, onUpdateDevice, onClose }: PtDevic
     setCliLines((prev) => [...prev, `${promptStr}${line}`, ...res.output]);
     setIosSession(res.nextSession);
     if (res.updatedDevice) onUpdateDevice(res.updatedDevice);
+    if (line.trim()) {
+      setCliHistory((prev) => [...prev, line]);
+      setCliHistIdx(-1);
+    }
     setCliInput("");
   };
 
   const handleRunCmd = () => {
     const line = cmdInput;
+    if (line.trim()) {
+      setCmdHistory((prev) => [...prev, line]);
+      setCmdHistIdx(-1);
+    }
     if (line.trim().toLowerCase() === "cls") {
       setCmdLines([]);
       setCmdInput("");
@@ -123,6 +216,39 @@ export function PtDeviceModal({ spec, device, onUpdateDevice, onClose }: PtDevic
     setCmdInput("");
   };
 
+  const handleOpenTerminal = () => {
+    setTermConnected(false);
+    setDesktopApp("terminal");
+  };
+
+  const handleConnectTerminal = () => {
+    if (!consoleTarget || consoleTarget.power === false) {
+      setTermConnected(false);
+      return;
+    }
+    setTermConnected(true);
+    setTermSession({ priv: false, configMode: false, iface: null, ripMode: false });
+    setTermLines([
+      `Serial Console connected (9600-8-N-1) -> ${consoleTarget.name}`,
+      `Cisco IOS Software, ${consoleTarget.model || "1941"} Software`,
+      "Type 'enable' or '?' for available commands.",
+      "",
+    ]);
+  };
+
+  const handleRunTermIos = () => {
+    if (!consoleTarget) return;
+    const line = termInput;
+    const promptStr = iosPrompt(consoleTarget, termSession);
+    const res = executeIosCommand(spec, consoleTarget.name, line, termSession);
+    setTermLines((prev) => [...prev, `${promptStr}${line}`, ...res.output]);
+    setTermSession(res.nextSession);
+    if (res.updatedDevice && onUpdatePeerDevice) {
+      onUpdatePeerDevice(res.updatedDevice);
+    }
+    setTermInput("");
+  };
+
   const handleBrowserGo = () => {
     const cleanHost = browserUrl.replace(/^https?:\/\//i, "").split("/")[0].trim();
     const resolvedIp = resolveDnsName(spec, device, cleanHost) ?? cleanHost;
@@ -130,7 +256,7 @@ export function PtDeviceModal({ spec, device, onUpdateDevice, onClose }: PtDevic
       (d) =>
         d.type === "server" &&
         d.power !== false &&
-        (d.ip === resolvedIp || Object.values(d.interfaces ?? {}).some((c) => c.ip === resolvedIp))
+        (d.ip === resolvedIp || Object.values(d.interfaces ?? {}).some((c) => c.ip === resolvedIp)),
     );
     if (!srv) {
       setBrowserHtml(`<p style="color:#b91c1c"><b>Host Name Unresolved / Request Timeout:</b> Could not reach <code>${cleanHost}</code>.</p>`);
@@ -144,8 +270,29 @@ export function PtDeviceModal({ spec, device, onUpdateDevice, onClose }: PtDevic
     setBrowserHtml(srvSvc.httpHtml);
   };
 
-  const updateIface = (port: string, patch: Partial<{ ip: string; mask: string; shutdown: boolean }>) => {
-    const cur = device.interfaces?.[port] ?? { ip: "", mask: "", shutdown: false };
+  const handleInsertModule = () => {
+    if (device.power !== false) {
+      setModuleWarning("Cannot add a module when the power is on.");
+      return;
+    }
+    const meta = PHYSICAL_MODULES[selectedModule];
+    if (!meta) return;
+    setModuleWarning("");
+    const nextIfaces = { ...(device.interfaces ?? {}) };
+    meta.addedPorts.forEach((p) => {
+      if (!nextIfaces[p]) {
+        nextIfaces[p] = { ip: "", mask: "255.255.255.0", shutdown: device.type === "router" };
+      }
+    });
+    onUpdateDevice({
+      ...device,
+      installedModules: [...(device.installedModules ?? []), selectedModule],
+      interfaces: nextIfaces,
+    });
+  };
+
+  const updateIface = (port: string, patch: Partial<{ ip: string; mask: string; shutdown: boolean; vlan: number }>) => {
+    const cur = device.interfaces?.[port] ?? { ip: "", mask: "255.255.255.0", shutdown: false };
     const nextIf = { ...cur, ...patch };
     const updated: PtDevice = {
       ...device,
@@ -159,95 +306,109 @@ export function PtDeviceModal({ spec, device, onUpdateDevice, onClose }: PtDevic
     if (patch.shutdown !== undefined) {
       echo.push(`${device.hostname || device.name}(config-if)#${patch.shutdown ? "shutdown" : "no shutdown"}`);
     }
+    if (patch.vlan !== undefined) {
+      echo.push(`${device.hostname || device.name}(config-if)#switchport access vlan ${patch.vlan}`);
+    }
     setIosEcho((prev) => [...prev.slice(-4), ...echo]);
   };
 
   const selectedPort = configSection.startsWith("iface:") ? configSection.slice(6) : "";
-  const ifaceCfg = selectedPort ? device.interfaces?.[selectedPort] ?? { ip: "", mask: "", shutdown: false } : null;
+  const ifaceCfg = selectedPort ? device.interfaces?.[selectedPort] ?? { ip: "", mask: "255.255.255.0", shutdown: false, vlan: 1 } : null;
+
+  const vlanOptions = useMemo(() => {
+    const map = new Map<number, string>();
+    map.set(1, "default");
+    (device.vlans ?? []).forEach((v) => map.set(v.id, v.name));
+    Object.values(device.interfaces ?? {}).forEach((cfg) => {
+      if (cfg.vlan && !map.has(cfg.vlan)) map.set(cfg.vlan, `VLAN${String(cfg.vlan).padStart(4, "0")}`);
+    });
+    return Array.from(map.entries()).sort((a, b) => a[0] - b[0]);
+  }, [device.vlans, device.interfaces]);
 
   return (
     <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(15, 23, 42, 0.32)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 70,
-      }}
+      className={styles.ptDialogBackdrop}
+      style={{ zIndex: pinnedTop ? 95 : 75 }}
       onClick={onClose}
     >
       <div
         role="dialog"
         aria-label={`${device.name} Configuration`}
+        aria-modal="true"
+        onKeyDown={(event) => {
+          if (event.key === "Escape") onClose();
+        }}
         onClick={(e) => e.stopPropagation()}
+        className={styles.ptDialog}
         style={{
           width: 780,
           maxWidth: "95vw",
           height: 560,
           maxHeight: "90vh",
-          background: "#f0f2f5",
-          border: "1px solid #495d75",
-          boxShadow: "0 12px 36px rgba(0, 0, 0, 0.35)",
-          display: "flex",
-          flexDirection: "column",
-          fontFamily: '"Segoe UI", system-ui, sans-serif',
-          fontSize: 12,
+          transform: `translate(${winOffset.x}px, ${winOffset.y}px)`,
         }}
       >
-        {/* Title Bar (Light Qt Chrome) */}
+        {/* Title Bar (Draggable Light Qt Chrome) */}
         <div
-          style={{
-            height: 28,
-            background: "linear-gradient(180deg, #eff2f5 0%, #e1e6ec 100%)",
-            color: "#1e293b",
-            borderBottom: "1px solid #bcc4cf",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "0 10px",
-            fontWeight: 600,
+          className={styles.ptDialogHeader}
+          onMouseDown={(e) => {
+            dragWinRef.current = {
+              startX: e.clientX,
+              startY: e.clientY,
+              origX: winOffset.x,
+              origY: winOffset.y,
+            };
           }}
         >
           <span>
             {device.name} {device.model ? `(${device.model})` : ""}
           </span>
-          <button
-            type="button"
-            onClick={onClose}
-            style={{ background: "none", border: "none", color: "#334155", cursor: "pointer", fontSize: 14, fontWeight: 700 }}
-            aria-label="Close device window"
-          >
-            ✕
-          </button>
+          <div className={styles.ptDialogHeaderControls} onMouseDown={(e) => e.stopPropagation()}>
+            <label style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 400, cursor: "pointer" }}>
+              <input type="checkbox" checked={pinnedTop} onChange={(e) => setPinnedTop(e.target.checked)} />
+              <span>Top</span>
+            </label>
+            <button
+              type="button"
+              onClick={onClose}
+              className={styles.ptDialogCloseBtn}
+              aria-label="Close device window"
+            >
+              ✕
+            </button>
+          </div>
         </div>
 
         {/* Packet Tracer Tabs Row */}
         <div
-          style={{
-            display: "flex",
-            background: "#e1e5ec",
-            borderBottom: "1px solid #aeb7c4",
-            padding: "5px 8px 0",
-            gap: 3,
+          role="tablist"
+          aria-label="Device configuration views"
+          onKeyDown={(event) => {
+            const offset = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+            if (!offset && event.key !== "Home" && event.key !== "End") return;
+            event.preventDefault();
+            const index =
+              event.key === "Home"
+                ? 0
+                : event.key === "End"
+                  ? tabs.length - 1
+                  : (tabs.indexOf(tab) + offset + tabs.length) % tabs.length;
+            setTab(tabs[index]);
+            event.currentTarget.querySelectorAll<HTMLButtonElement>("[role=tab]")[index]?.focus();
           }}
+          className={styles.ptDialogTabs}
         >
           {tabs.map((t) => (
             <button
               key={t}
               type="button"
+              role="tab"
+              id={tabId + "-" + t}
+              aria-selected={tab === t}
+              aria-controls={tabId + "-panel"}
+              tabIndex={tab === t ? 0 : -1}
               onClick={() => setTab(t)}
-              style={{
-                padding: "4px 14px",
-                border: "1px solid #9da7b4",
-                borderBottom: tab === t ? "1px solid #f5f7fa" : "1px solid #9da7b4",
-                background: tab === t ? "#f5f7fa" : "#d9dfe8",
-                fontWeight: tab === t ? 600 : 400,
-                borderRadius: "3px 3px 0 0",
-                cursor: "pointer",
-                marginBottom: -1,
-              }}
+              className={`${styles.ptDialogTab} ${tab === t ? styles.ptDialogTabActive : ""}`}
             >
               {t}
             </button>
@@ -255,29 +416,39 @@ export function PtDeviceModal({ spec, device, onUpdateDevice, onClose }: PtDevic
         </div>
 
         {/* Body */}
-        <div style={{ flex: 1, minHeight: 0, background: "#f5f7fa", padding: 10, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <div
+          role="tabpanel"
+          id={tabId + "-panel"}
+          aria-labelledby={tabId + "-" + tab}
+          style={{ flex: 1, minHeight: 0, background: "#f5f7fa", padding: 10, display: "flex", flexDirection: "column", overflow: "hidden" }}
+        >
           {/* ==============================================================
-           * TAB 1: PHYSICAL DEVICE VIEW (Brushed Metal + Zoom + Modules)
+           * TAB 1: PHYSICAL DEVICE VIEW (Brushed Metal + Power Guard + Modules)
            * ============================================================== */}
           {tab === "Physical" && (
             <div style={{ flex: 1, display: "flex", gap: 10, minHeight: 0 }}>
-              <div style={{ width: 190, display: "flex", flexDirection: "column", gap: 6, minHeight: 0 }}>
+              <div style={{ width: 195, display: "flex", flexDirection: "column", gap: 6, minHeight: 0 }}>
                 <div style={{ flex: 1, background: "#ffffff", border: "1px solid #c5cbd3", padding: 6, overflow: "auto" }}>
-                  <div style={{ fontWeight: 700, fontSize: 11, marginBottom: 6, color: "#1e293b", borderBottom: "1px solid #e2e8f0", paddingBottom: 3 }}>MODULES</div>
+                  <div style={{ fontWeight: 700, fontSize: 11, marginBottom: 6, color: "#1e293b", borderBottom: "1px solid #e2e8f0", paddingBottom: 3 }}>
+                    MODULES
+                  </div>
                   {Object.keys(PHYSICAL_MODULES).map((mod) => {
                     const active = selectedModule === mod;
                     return (
                       <button
                         key={mod}
                         type="button"
-                        onClick={() => setSelectedModule(mod)}
+                        onClick={() => {
+                          setSelectedModule(mod);
+                          setModuleWarning("");
+                        }}
                         style={{
                           display: "flex",
                           justifyContent: "space-between",
                           width: "100%",
                           textAlign: "left",
                           padding: "4px 6px",
-                          border: active ? "1px solid #3b82f6" : "1px solid #e2e8f0",
+                          border: active ? "1px solid #0078d4" : "1px solid #e2e8f0",
                           marginBottom: 4,
                           background: active ? "#dbeafe" : "#f8fafc",
                           fontSize: 11,
@@ -291,40 +462,69 @@ export function PtDeviceModal({ spec, device, onUpdateDevice, onClose }: PtDevic
                     );
                   })}
                 </div>
-                <div style={{ height: 110, background: "#ffffff", border: "1px solid #c5cbd3", padding: 8, fontSize: 10.5, color: "#334155", overflow: "auto" }}>
-                  <div style={{ fontWeight: 700, marginBottom: 4, color: "#0f172a" }}>{selectedModule}</div>
-                  <div>{PHYSICAL_MODULES[selectedModule]?.desc}</div>
+                <div style={{ height: 120, background: "#ffffff", border: "1px solid #c5cbd3", padding: 8, fontSize: 10.5, color: "#334155", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+                  <div style={{ overflow: "auto" }}>
+                    <div style={{ fontWeight: 700, marginBottom: 3, color: "#0f172a" }}>{selectedModule}</div>
+                    <div>{PHYSICAL_MODULES[selectedModule]?.desc}</div>
+                  </div>
+                  <button type="button" className={styles.ptQtBtn} onClick={handleInsertModule}>
+                    Insert Module
+                  </button>
                 </div>
               </div>
 
               <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
-                {/* Zoom Controls Bar */}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#e8ecf1", border: "1px solid #c5cbd3", padding: "4px 8px" }}>
                   <span style={{ fontWeight: 600, color: "#1e293b", fontSize: 11.5 }}>Physical Device View</span>
                   <div style={{ display: "flex", gap: 4 }}>
                     <button
                       type="button"
+                      className={styles.ptQtBtn}
+                      style={{ height: 21, padding: "0 8px", fontSize: 11 }}
                       onClick={() => setPhysicalZoom((z) => Math.min(1.25, Number((z + 0.1).toFixed(2))))}
-                      style={{ fontSize: 11, padding: "2px 8px", background: "#ffffff", border: "1px solid #9da7b4", borderRadius: 2, cursor: "pointer" }}
                     >
                       Zoom In
                     </button>
                     <button
                       type="button"
+                      className={styles.ptQtBtn}
+                      style={{ height: 21, padding: "0 8px", fontSize: 11 }}
                       onClick={() => setPhysicalZoom(1)}
-                      style={{ fontSize: 11, padding: "2px 8px", background: "#ffffff", border: "1px solid #9da7b4", borderRadius: 2, cursor: "pointer" }}
                     >
                       Original Size
                     </button>
                     <button
                       type="button"
+                      className={styles.ptQtBtn}
+                      style={{ height: 21, padding: "0 8px", fontSize: 11 }}
                       onClick={() => setPhysicalZoom((z) => Math.max(0.8, Number((z - 0.1).toFixed(2))))}
-                      style={{ fontSize: 11, padding: "2px 8px", background: "#ffffff", border: "1px solid #9da7b4", borderRadius: 2, cursor: "pointer" }}
                     >
                       Zoom Out
                     </button>
                   </div>
                 </div>
+
+                {moduleWarning && (
+                  <div
+                    role="alert"
+                    style={{
+                      background: "#fef2f2",
+                      border: "1px solid #ef4444",
+                      color: "#991b1b",
+                      padding: "5px 9px",
+                      fontSize: 11.5,
+                      fontWeight: 600,
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    <span>{moduleWarning}</span>
+                    <button type="button" onClick={() => setModuleWarning("")} style={{ background: "none", border: "none", color: "#991b1b", cursor: "pointer" }}>
+                      ✕
+                    </button>
+                  </div>
+                )}
 
                 {/* Brushed-Metal Faceplate */}
                 <div style={{ flex: 1, background: "#dde3ea", border: "1px solid #c5cbd3", padding: 14, overflow: "auto", display: "flex", flexDirection: "column", justifyContent: "center" }}>
@@ -343,7 +543,6 @@ export function PtDeviceModal({ spec, device, onUpdateDevice, onClose }: PtDevic
                       gap: 12,
                     }}
                   >
-                    {/* Top Cisco Emblem + Model Strip */}
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #6b7280", paddingBottom: 6 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <span style={{ background: "#005073", color: "#fff", fontSize: 10, fontWeight: 800, padding: "2px 6px", letterSpacing: 0.8, borderRadius: 2 }}>
@@ -368,14 +567,14 @@ export function PtDeviceModal({ spec, device, onUpdateDevice, onClose }: PtDevic
                       </div>
                     </div>
 
-                    {/* Expansion Slots, Ports, Console/Aux & Rocker Switch */}
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-                      {/* HWIC Slotted Bay */}
                       {device.type === "router" && (
                         <div style={{ background: "#4b5563", border: "1px solid #1f2937", padding: "6px 8px", borderRadius: 2, display: "flex", alignItems: "center", gap: 6 }}>
                           <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#d1d5db", border: "1px solid #111827" }} />
                           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                            <span style={{ fontSize: 9, color: "#f9fafb", fontWeight: 700 }}>{selectedModule} BAY</span>
+                            <span style={{ fontSize: 9, color: "#f9fafb", fontWeight: 700 }}>
+                              {device.installedModules?.length ? device.installedModules[device.installedModules.length - 1] : selectedModule} BAY
+                            </span>
                             <div style={{ display: "flex", gap: 4 }}>
                               <div style={{ width: 28, height: 11, background: "#0f172a", border: "1px solid #9ca3af", fontSize: 8, color: "#93c5fd", textAlign: "center", lineHeight: "10px" }}>S0/0/0</div>
                               <div style={{ width: 28, height: 11, background: "#0f172a", border: "1px solid #9ca3af", fontSize: 8, color: "#93c5fd", textAlign: "center", lineHeight: "10px" }}>S0/0/1</div>
@@ -385,7 +584,6 @@ export function PtDeviceModal({ spec, device, onUpdateDevice, onClose }: PtDevic
                         </div>
                       )}
 
-                      {/* Console / Aux + LAN RJ-45 Ports */}
                       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "flex-end" }}>
                         {isNetworkCli && (
                           <>
@@ -428,12 +626,15 @@ export function PtDeviceModal({ spec, device, onUpdateDevice, onClose }: PtDevic
                         ))}
                       </div>
 
-                      {/* Black I/O Rocker Switch */}
                       <div style={{ textAlign: "center", background: "#374151", border: "1px solid #111827", padding: "5px 8px", borderRadius: 2, color: "#f9fafb" }}>
                         <div style={{ fontSize: 8.5, marginBottom: 4, letterSpacing: 0.5, fontWeight: 700 }}>POWER</div>
                         <button
                           type="button"
-                          onClick={() => onUpdateDevice({ ...device, power: device.power === false ? true : false })}
+                          aria-label="Power switch"
+                          onClick={() => {
+                            setModuleWarning("");
+                            onUpdateDevice({ ...device, power: device.power === false ? true : false });
+                          }}
                           style={{
                             width: 34,
                             height: 28,
@@ -465,16 +666,18 @@ export function PtDeviceModal({ spec, device, onUpdateDevice, onClose }: PtDevic
                     <strong style={{ color: device.power === false ? "#b91c1c" : "#15803d" }}>
                       {device.power === false ? "OFF (ports inactive)" : "ON"}
                     </strong>{" "}
-                    — Toggle the I/O rocker switch to power cycle device.
+                    — Turn power OFF before inserting expansion modules.
                   </span>
-                  <span style={{ color: "#64748b", fontSize: 10.5 }}>Slot Module: {selectedModule}</span>
+                  <span style={{ color: "#64748b", fontSize: 10.5 }}>
+                    Installed: {device.installedModules?.length ? device.installedModules.join(", ") : "Stock chassis"}
+                  </span>
                 </div>
               </div>
             </div>
           )}
 
           {/* ==============================================================
-           * TAB 2: CONFIG (Settings, Routing Static/RIP, Interfaces)
+           * TAB 2: CONFIG (Settings, VLAN Database, Routing Static/RIP, Interfaces)
            * ============================================================== */}
           {tab === "Config" && (
             <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8, minHeight: 0 }}>
@@ -496,6 +699,27 @@ export function PtDeviceModal({ spec, device, onUpdateDevice, onClose }: PtDevic
                   >
                     Settings
                   </button>
+
+                  {device.type === "switch" && (
+                    <>
+                      <div style={{ fontWeight: 700, fontSize: 11, color: "#475569", padding: "6px 6px 3px" }}>SWITCHING</div>
+                      <button
+                        type="button"
+                        onClick={() => setConfigSection("VLAN")}
+                        style={{
+                          display: "block",
+                          width: "100%",
+                          textAlign: "left",
+                          padding: "4px 10px",
+                          border: "none",
+                          background: configSection === "VLAN" ? "#dbeafe" : "transparent",
+                          cursor: "pointer",
+                        }}
+                      >
+                        VLAN Database
+                      </button>
+                    </>
+                  )}
 
                   {device.type === "router" && (
                     <>
@@ -544,7 +768,7 @@ export function PtDeviceModal({ spec, device, onUpdateDevice, onClose }: PtDevic
 
                 <div style={{ flex: 1, background: "#ffffff", border: "1px solid #cbd5e1", padding: 12, overflow: "auto" }}>
                   {configSection === "Settings" && (
-                    <div style={{ display: "grid", gap: 10, maxWidth: 420 }}>
+                    <div style={{ display: "grid", gap: 10, maxWidth: 430 }}>
                       <h4 style={{ margin: 0 }}>Global Settings</h4>
                       <label style={{ display: "grid", gridTemplateColumns: "130px 1fr", alignItems: "center", gap: 8 }}>
                         <span>Display Name</span>
@@ -560,6 +784,16 @@ export function PtDeviceModal({ spec, device, onUpdateDevice, onClose }: PtDevic
                           <input
                             value={device.hostname || device.name}
                             onChange={(e) => onUpdateDevice({ ...device, hostname: e.target.value })}
+                            style={{ height: 24, border: "1px solid #94a3b8", padding: "0 6px" }}
+                          />
+                        </label>
+                      )}
+                      {device.type === "wireless" && (
+                        <label style={{ display: "grid", gridTemplateColumns: "130px 1fr", alignItems: "center", gap: 8 }}>
+                          <span>Wireless SSID</span>
+                          <input
+                            value={device.ssid || "LabMate Wi-Fi"}
+                            onChange={(e) => onUpdateDevice({ ...device, ssid: e.target.value })}
                             style={{ height: 24, border: "1px solid #94a3b8", padding: "0 6px" }}
                           />
                         </label>
@@ -589,6 +823,69 @@ export function PtDeviceModal({ spec, device, onUpdateDevice, onClose }: PtDevic
                     </div>
                   )}
 
+                  {configSection === "VLAN" && device.type === "switch" && (
+                    <div style={{ display: "grid", gap: 8 }}>
+                      <h4 style={{ margin: 0 }}>VLAN Database</h4>
+                      <div style={{ display: "grid", gridTemplateColumns: "110px 1fr auto", gap: 6 }}>
+                        <input
+                          placeholder="VLAN Number"
+                          value={vlanIdInput}
+                          onChange={(e) => setVlanIdInput(e.target.value)}
+                          style={{ height: 24, border: "1px solid #94a3b8", padding: "0 6px" }}
+                        />
+                        <input
+                          placeholder="VLAN Name (e.g. Sales)"
+                          value={vlanNameInput}
+                          onChange={(e) => setVlanNameInput(e.target.value)}
+                          style={{ height: 24, border: "1px solid #94a3b8", padding: "0 6px" }}
+                        />
+                        <button
+                          type="button"
+                          className={styles.ptQtBtn}
+                          onClick={() => {
+                            const vid = Number(vlanIdInput);
+                            if (!Number.isInteger(vid) || vid < 2 || vid > 4094) return;
+                            const vname = vlanNameInput.trim() || `VLAN${String(vid).padStart(4, "0")}`;
+                            const existing = device.vlans ?? [];
+                            const nextVlans = existing.some((v) => v.id === vid)
+                              ? existing.map((v) => (v.id === vid ? { id: vid, name: vname } : v))
+                              : [...existing, { id: vid, name: vname }];
+                            onUpdateDevice({ ...device, vlans: nextVlans });
+                            setIosEcho((prev) => [...prev.slice(-3), `${device.hostname || device.name}(config)#vlan ${vid}`, `${device.hostname || device.name}(config-vlan)#name ${vname}`]);
+                            setVlanIdInput("");
+                            setVlanNameInput("");
+                          }}
+                        >
+                          Add
+                        </button>
+                      </div>
+                      <div style={{ border: "1px solid #cbd5e1", minHeight: 120, padding: 6 }}>
+                        {vlanOptions.map(([vid, vname]) => (
+                          <div key={vid} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "3px 6px", borderBottom: "1px solid #f1f5f9" }}>
+                            <span>
+                              <b>{vid}</b> : {vname}
+                            </span>
+                            {vid !== 1 && (
+                              <button
+                                type="button"
+                                className={styles.ptQtBtn}
+                                style={{ height: 20, padding: "0 8px", fontSize: 10.5 }}
+                                onClick={() =>
+                                  onUpdateDevice({
+                                    ...device,
+                                    vlans: (device.vlans ?? []).filter((v) => v.id !== vid),
+                                  })
+                                }
+                              >
+                                Remove
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {configSection === "RIP" && (
                     <div style={{ display: "grid", gap: 8 }}>
                       <h4 style={{ margin: 0 }}>RIP Routing</h4>
@@ -601,13 +898,13 @@ export function PtDeviceModal({ spec, device, onUpdateDevice, onClose }: PtDevic
                         />
                         <button
                           type="button"
+                          className={styles.ptQtBtn}
                           onClick={() => {
                             if (!ripInput.trim()) return;
                             onUpdateDevice({ ...device, rip: Array.from(new Set([...(device.rip ?? []), ripInput.trim()])) });
                             setIosEcho((prev) => [...prev.slice(-3), `${device.hostname || device.name}(config-router)#network ${ripInput.trim()}`]);
                             setRipInput("");
                           }}
-                          style={{ height: 24, padding: "0 12px" }}
                         >
                           Add
                         </button>
@@ -618,8 +915,9 @@ export function PtDeviceModal({ spec, device, onUpdateDevice, onClose }: PtDevic
                             <span>{n}</span>
                             <button
                               type="button"
+                              className={styles.ptQtBtn}
+                              style={{ height: 20, padding: "0 8px", fontSize: 10.5 }}
                               onClick={() => onUpdateDevice({ ...device, rip: (device.rip ?? []).filter((x) => x !== n) })}
-                              style={{ fontSize: 11 }}
                             >
                               Remove
                             </button>
@@ -638,6 +936,7 @@ export function PtDeviceModal({ spec, device, onUpdateDevice, onClose }: PtDevic
                         <input placeholder="Next Hop" value={staticHop} onChange={(e) => setStaticHop(e.target.value)} style={{ height: 24, border: "1px solid #94a3b8", padding: "0 6px" }} />
                         <button
                           type="button"
+                          className={styles.ptQtBtn}
                           onClick={() => {
                             if (!staticNet.trim() || !staticHop.trim()) return;
                             onUpdateDevice({
@@ -653,8 +952,23 @@ export function PtDeviceModal({ spec, device, onUpdateDevice, onClose }: PtDevic
                       </div>
                       <div style={{ border: "1px solid #cbd5e1", minHeight: 100, padding: 6 }}>
                         {(device.staticRoutes ?? []).map((sr, i) => (
-                          <div key={i} style={{ padding: "2px 4px" }}>
-                            {sr.network} / {sr.mask} via {sr.nextHop}
+                          <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "2px 4px" }}>
+                            <span>
+                              {sr.network} / {sr.mask} via {sr.nextHop}
+                            </span>
+                            <button
+                              type="button"
+                              className={styles.ptQtBtn}
+                              style={{ height: 20, padding: "0 8px", fontSize: 10.5 }}
+                              onClick={() =>
+                                onUpdateDevice({
+                                  ...device,
+                                  staticRoutes: (device.staticRoutes ?? []).filter((_, idx) => idx !== i),
+                                })
+                              }
+                            >
+                              Remove
+                            </button>
                           </div>
                         ))}
                       </div>
@@ -675,28 +989,47 @@ export function PtDeviceModal({ spec, device, onUpdateDevice, onClose }: PtDevic
                       <div style={{ fontSize: 11.5, color: "#475569" }}>
                         MAC Address: <code>{ifaceCfg.mac || syntheticMac(device.name, selectedPort)}</code>
                       </div>
-                      <label style={{ display: "grid", gridTemplateColumns: "110px 1fr", alignItems: "center", gap: 8 }}>
-                        <span>IPv4 Address</span>
-                        <input
-                          value={isEnd ? device.ip || "" : ifaceCfg.ip || ""}
-                          onChange={(e) => {
-                            if (isEnd) onUpdateDevice({ ...device, ip: e.target.value });
-                            else updateIface(selectedPort, { ip: e.target.value });
-                          }}
-                          style={{ height: 24, border: "1px solid #94a3b8", padding: "0 6px" }}
-                        />
-                      </label>
-                      <label style={{ display: "grid", gridTemplateColumns: "110px 1fr", alignItems: "center", gap: 8 }}>
-                        <span>Subnet Mask</span>
-                        <input
-                          value={isEnd ? device.mask || "" : ifaceCfg.mask || ""}
-                          onChange={(e) => {
-                            if (isEnd) onUpdateDevice({ ...device, mask: e.target.value });
-                            else updateIface(selectedPort, { mask: e.target.value });
-                          }}
-                          style={{ height: 24, border: "1px solid #94a3b8", padding: "0 6px" }}
-                        />
-                      </label>
+                      {device.type === "switch" ? (
+                        <label style={{ display: "grid", gridTemplateColumns: "110px 1fr", alignItems: "center", gap: 8 }}>
+                          <span>VLAN (Access)</span>
+                          <select
+                            value={String(ifaceCfg.vlan ?? 1)}
+                            onChange={(e) => updateIface(selectedPort, { vlan: Number(e.target.value) })}
+                            style={{ height: 24, border: "1px solid #94a3b8", background: "#ffffff", padding: "0 6px" }}
+                          >
+                            {vlanOptions.map(([vid, vname]) => (
+                              <option key={vid} value={String(vid)}>
+                                {vid}: {vname}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : (
+                        <>
+                          <label style={{ display: "grid", gridTemplateColumns: "110px 1fr", alignItems: "center", gap: 8 }}>
+                            <span>IPv4 Address</span>
+                            <input
+                              value={isEnd ? device.ip || ifaceCfg.ip || "" : ifaceCfg.ip || ""}
+                              onChange={(e) => {
+                                if (isEnd) onUpdateDevice({ ...device, ip: e.target.value });
+                                updateIface(selectedPort, { ip: e.target.value });
+                              }}
+                              style={{ height: 24, border: "1px solid #94a3b8", padding: "0 6px" }}
+                            />
+                          </label>
+                          <label style={{ display: "grid", gridTemplateColumns: "110px 1fr", alignItems: "center", gap: 8 }}>
+                            <span>Subnet Mask</span>
+                            <input
+                              value={isEnd ? device.mask || ifaceCfg.mask || "" : ifaceCfg.mask || ""}
+                              onChange={(e) => {
+                                if (isEnd) onUpdateDevice({ ...device, mask: e.target.value });
+                                updateIface(selectedPort, { mask: e.target.value });
+                              }}
+                              style={{ height: 24, border: "1px solid #94a3b8", padding: "0 6px" }}
+                            />
+                          </label>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
@@ -725,7 +1058,7 @@ export function PtDeviceModal({ spec, device, onUpdateDevice, onClose }: PtDevic
           )}
 
           {/* ==============================================================
-           * TAB 3: CISCO IOS CLI
+           * TAB 3: CISCO IOS CLI (with Up/Down command history)
            * ============================================================== */}
           {tab === "CLI" && (
             <div
@@ -752,10 +1085,28 @@ export function PtDeviceModal({ spec, device, onUpdateDevice, onClose }: PtDevic
                 <span>{iosPrompt(device, iosSession)}</span>
                 <input
                   ref={cliInputRef}
+                  aria-label="Device CLI command"
                   value={cliInput}
                   onChange={(e) => setCliInput(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") handleRunIos();
+                    else if (e.key === "ArrowUp" && cliHistory.length) {
+                      e.preventDefault();
+                      const nextIdx = cliHistIdx === -1 ? cliHistory.length - 1 : Math.max(0, cliHistIdx - 1);
+                      setCliHistIdx(nextIdx);
+                      setCliInput(cliHistory[nextIdx]);
+                    } else if (e.key === "ArrowDown" && cliHistory.length) {
+                      e.preventDefault();
+                      if (cliHistIdx === -1) return;
+                      if (cliHistIdx >= cliHistory.length - 1) {
+                        setCliHistIdx(-1);
+                        setCliInput("");
+                      } else {
+                        const nextIdx = cliHistIdx + 1;
+                        setCliHistIdx(nextIdx);
+                        setCliInput(cliHistory[nextIdx]);
+                      }
+                    }
                   }}
                   style={{
                     flex: 1,
@@ -773,48 +1124,27 @@ export function PtDeviceModal({ spec, device, onUpdateDevice, onClose }: PtDevic
           )}
 
           {/* ==============================================================
-           * TAB 4: DESKTOP (IP Config, Command Prompt, Web Browser)
+           * TAB 4: DESKTOP (Colorful PT SVG App Icons + Terminal + Wireless)
            * ============================================================== */}
           {tab === "Desktop" && (
             <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
               {desktopApp === "grid" && (
-                <div
-                  style={{
-                    flex: 1,
-                    background: "linear-gradient(180deg, #dce9f9 0%, #bfd6f2 100%)",
-                    border: "1px solid #93b4d8",
-                    padding: 20,
-                    display: "grid",
-                    gridTemplateColumns: "repeat(4, 130px)",
-                    gap: 18,
-                    alignContent: "start",
-                  }}
-                >
+                <div className={styles.ptDesktopGrid}>
                   {[
-                    { id: "ipconfig" as const, title: "IP Configuration", icon: "🌐" },
-                    { id: "cmd" as const, title: "Command Prompt", icon: "C:\\>" },
-                    { id: "browser" as const, title: "Web Browser", icon: "🌍" },
+                    { id: "ipconfig" as const, title: "IP Configuration", icon: <PtAppIpConfigIcon /> },
+                    { id: "cmd" as const, title: "Command Prompt", icon: <PtAppCmdIcon /> },
+                    { id: "terminal" as const, title: "Terminal", icon: <PtAppTerminalIcon /> },
+                    { id: "browser" as const, title: "Web Browser", icon: <PtAppBrowserIcon /> },
+                    ...(isWirelessClient ? [{ id: "wireless" as const, title: "PC Wireless", icon: <PtAppWirelessIcon /> }] : []),
                   ].map((app) => (
                     <button
                       key={app.id}
                       type="button"
-                      onClick={() => setDesktopApp(app.id)}
-                      style={{
-                        height: 98,
-                        background: "#ffffff",
-                        border: "1px solid #6b95c9",
-                        borderRadius: 4,
-                        display: "flex",
-                        flexDirection: "column",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: 8,
-                        cursor: "pointer",
-                        boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
-                      }}
+                      onClick={() => (app.id === "terminal" ? handleOpenTerminal() : setDesktopApp(app.id))}
+                      className={styles.ptDesktopAppTile}
                     >
-                      <span style={{ fontSize: app.id === "cmd" ? 18 : 24, fontWeight: 700, color: "#1d4ed8" }}>{app.icon}</span>
-                      <span style={{ fontWeight: 600, fontSize: 11.5 }}>{app.title}</span>
+                      <span aria-hidden="true">{app.icon}</span>
+                      <span style={{ fontWeight: 600, fontSize: 11 }}>{app.title}</span>
                     </button>
                   ))}
                 </div>
@@ -824,9 +1154,17 @@ export function PtDeviceModal({ spec, device, onUpdateDevice, onClose }: PtDevic
                 <div style={{ flex: 1, display: "flex", flexDirection: "column", border: "1px solid #94a3b8", background: "#ffffff", minHeight: 0 }}>
                   <div style={{ background: "#dce4ee", borderBottom: "1px solid #aeb7c4", padding: "4px 8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <strong>
-                      {desktopApp === "ipconfig" ? "IP Configuration" : desktopApp === "cmd" ? "Command Prompt" : "Web Browser"}
+                      {desktopApp === "ipconfig"
+                        ? "IP Configuration"
+                        : desktopApp === "cmd"
+                          ? "Command Prompt"
+                          : desktopApp === "terminal"
+                            ? "Terminal (RS 232 Console)"
+                            : desktopApp === "wireless"
+                              ? "PC Wireless"
+                              : "Web Browser"}
                     </strong>
-                    <button type="button" onClick={() => setDesktopApp("grid")} style={{ padding: "1px 8px" }}>
+                    <button type="button" className={styles.ptQtBtn} style={{ height: 20, padding: "0 8px", fontSize: 11 }} onClick={() => setDesktopApp("grid")}>
                       ✕ Back to Desktop
                     </button>
                   </div>
@@ -835,20 +1173,10 @@ export function PtDeviceModal({ spec, device, onUpdateDevice, onClose }: PtDevic
                     <div style={{ padding: 16, display: "grid", gap: 10, maxWidth: 420 }}>
                       <div style={{ display: "flex", gap: 16 }}>
                         <label>
-                          <input
-                            type="radio"
-                            checked={!device.dhcp}
-                            onChange={() => onUpdateDevice({ ...device, dhcp: false })}
-                          />{" "}
-                          Static
+                          <input type="radio" checked={!device.dhcp} onChange={() => onUpdateDevice({ ...device, dhcp: false })} /> Static
                         </label>
                         <label>
-                          <input
-                            type="radio"
-                            checked={Boolean(device.dhcp)}
-                            onChange={() => onUpdateDevice({ ...device, dhcp: true })}
-                          />{" "}
-                          DHCP
+                          <input type="radio" checked={Boolean(device.dhcp)} onChange={() => onUpdateDevice({ ...device, dhcp: true })} /> DHCP
                         </label>
                       </div>
                       <label style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 8, alignItems: "center" }}>
@@ -892,10 +1220,28 @@ export function PtDeviceModal({ spec, device, onUpdateDevice, onClose }: PtDevic
                         <span>C:\&gt;</span>
                         <input
                           ref={cmdInputRef}
+                          aria-label="PC command"
                           value={cmdInput}
                           onChange={(e) => setCmdInput(e.target.value)}
                           onKeyDown={(e) => {
                             if (e.key === "Enter") handleRunCmd();
+                            else if (e.key === "ArrowUp" && cmdHistory.length) {
+                              e.preventDefault();
+                              const nextIdx = cmdHistIdx === -1 ? cmdHistory.length - 1 : Math.max(0, cmdHistIdx - 1);
+                              setCmdHistIdx(nextIdx);
+                              setCmdInput(cmdHistory[nextIdx]);
+                            } else if (e.key === "ArrowDown" && cmdHistory.length) {
+                              e.preventDefault();
+                              if (cmdHistIdx === -1) return;
+                              if (cmdHistIdx >= cmdHistory.length - 1) {
+                                setCmdHistIdx(-1);
+                                setCmdInput("");
+                              } else {
+                                const nextIdx = cmdHistIdx + 1;
+                                setCmdHistIdx(nextIdx);
+                                setCmdInput(cmdHistory[nextIdx]);
+                              }
+                            }
                           }}
                           style={{
                             flex: 1,
@@ -912,6 +1258,123 @@ export function PtDeviceModal({ spec, device, onUpdateDevice, onClose }: PtDevic
                     </div>
                   )}
 
+                  {desktopApp === "terminal" && !termConnected && (
+                    <div style={{ padding: 16, display: "grid", gap: 10, maxWidth: 420 }}>
+                      <div style={{ fontWeight: 700 }}>Terminal Configuration</div>
+                      <div style={{ border: "1px solid #cbd5e1", background: "#f8fafc", padding: 10, display: "grid", gridTemplateColumns: "140px 1fr", gap: 6, fontSize: 11.5 }}>
+                        <span>Bits Per Second:</span>
+                        <span>9600</span>
+                        <span>Data Bits:</span>
+                        <span>8</span>
+                        <span>Parity:</span>
+                        <span>None</span>
+                        <span>Stop Bits:</span>
+                        <span>1</span>
+                        <span>Flow Control:</span>
+                        <span>None</span>
+                      </div>
+                      {consoleTarget ? (
+                        <div style={{ fontSize: 11.5, color: "#15803d" }}>
+                          Console link detected to <b>{consoleTarget.name}</b> ({consoleTarget.power === false ? "Powered OFF" : "Ready"}).
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: 11.5, color: "#b91c1c" }}>
+                          No active console cable connected to RS 232. Connect a blue Console cable to a Router or Switch Console port.
+                        </div>
+                      )}
+                      <div>
+                        <button
+                          type="button"
+                          className={styles.ptQtBtn}
+                          disabled={!consoleTarget || consoleTarget.power === false}
+                          onClick={handleConnectTerminal}
+                        >
+                          Ok (Open Console)
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {desktopApp === "terminal" && termConnected && consoleTarget && (
+                    <div
+                      onClick={() => termInputRef.current?.focus()}
+                      style={{
+                        flex: 1,
+                        background: "#000000",
+                        color: "#e2e8f0",
+                        padding: 10,
+                        fontFamily: 'Consolas, "Courier New", monospace',
+                        fontSize: 12,
+                        overflow: "auto",
+                      }}
+                    >
+                      {termLines.map((ln, idx) => (
+                        <div key={idx} style={{ whiteSpace: "pre-wrap", minHeight: 16 }}>
+                          {ln}
+                        </div>
+                      ))}
+                      <div style={{ display: "flex", alignItems: "center" }}>
+                        <span>{iosPrompt(consoleTarget, termSession)}</span>
+                        <input
+                          ref={termInputRef}
+                          aria-label="Console terminal command"
+                          value={termInput}
+                          onChange={(e) => setTermInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleRunTermIos();
+                          }}
+                          style={{
+                            flex: 1,
+                            background: "transparent",
+                            border: "none",
+                            outline: "none",
+                            color: "#ffffff",
+                            font: "inherit",
+                            marginLeft: 4,
+                          }}
+                          autoFocus
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {desktopApp === "wireless" && (
+                    <div style={{ padding: 16, display: "grid", gap: 10, maxWidth: 420 }}>
+                      <div style={{ fontWeight: 700 }}>PC Wireless Adapter</div>
+                      <label style={{ display: "grid", gridTemplateColumns: "120px 1fr", gap: 8, alignItems: "center" }}>
+                        <span>Target SSID</span>
+                        <input
+                          value={device.ssid || ""}
+                          onChange={(e) => onUpdateDevice({ ...device, ssid: e.target.value })}
+                          placeholder="LabMate Wi-Fi"
+                          style={{ height: 24, border: "1px solid #94a3b8", padding: "0 6px" }}
+                        />
+                      </label>
+                      <div style={{ fontSize: 11.5, color: "#334155" }}>
+                        Available Access Points:{" "}
+                        {wirelessAps.length
+                          ? wirelessAps.map((ap) => (
+                            <button
+                              key={ap.name}
+                              type="button"
+                              className={styles.ptQtBtn}
+                              style={{ height: 20, padding: "0 8px", fontSize: 11, marginLeft: 4 }}
+                              onClick={() => onUpdateDevice({ ...device, ssid: ap.ssid || "LabMate Wi-Fi" })}
+                            >
+                              {ap.name} ({ap.ssid || "LabMate Wi-Fi"})
+                            </button>
+                          ))
+                          : "None active"}
+                      </div>
+                      <div style={{ fontSize: 11.5, color: wirelessAps.some((ap) => (ap.ssid || "LabMate Wi-Fi") === device.ssid) ? "#15803d" : "#b91c1c" }}>
+                        Status:{" "}
+                        {wirelessAps.some((ap) => (ap.ssid || "LabMate Wi-Fi") === device.ssid)
+                          ? `Associated with ${device.ssid}`
+                          : "Not associated (SSID mismatch or no AP)"}
+                      </div>
+                    </div>
+                  )}
+
                   {desktopApp === "browser" && (
                     <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
                       <div style={{ display: "flex", gap: 6, padding: 8, borderBottom: "1px solid #cbd5e1", background: "#f8fafc" }}>
@@ -924,15 +1387,15 @@ export function PtDeviceModal({ spec, device, onUpdateDevice, onClose }: PtDevic
                           }}
                           style={{ flex: 1, height: 24, border: "1px solid #94a3b8", padding: "0 6px" }}
                         />
-                        <button type="button" onClick={handleBrowserGo} style={{ padding: "0 12px" }}>
+                        <button type="button" className={styles.ptQtBtn} onClick={handleBrowserGo}>
                           Go
                         </button>
                       </div>
-                      <div
-                        style={{ flex: 1, padding: 16, overflow: "auto" }}
-                        dangerouslySetInnerHTML={{
-                          __html: browserHtml || "<p>Enter a Server IP or DNS name above and click <b>Go</b>.</p>",
-                        }}
+                      <iframe
+                        title="Simulated web page"
+                        sandbox=""
+                        style={{ flex: 1, width: "100%", border: 0, background: "#ffffff" }}
+                        srcDoc={browserHtml || "<p>Enter a Server IP or DNS name above and click <b>Go</b>.</p>"}
                       />
                     </div>
                   )}
@@ -1001,6 +1464,7 @@ export function PtDeviceModal({ spec, device, onUpdateDevice, onClose }: PtDevic
                   <input placeholder="IP Address" value={dnsIpInput} onChange={(e) => setDnsIpInput(e.target.value)} style={{ width: 110 }} />
                   <button
                     type="button"
+                    className={styles.ptQtBtn}
                     onClick={() => {
                       if (!dnsNameInput.trim() || !dnsIpInput.trim()) return;
                       onUpdateDevice({

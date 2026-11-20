@@ -417,7 +417,7 @@ class RuntimeEngine:
                              prepare_files=None, collect_files=None, browser_tests=None, interaction_is_required=False,
                              objective="", api_tests=None, project_config=None):
         language = {"c++": "cpp", "javascript": "node", "webdev": "html", "mysql":"sql", "ipynb":"colab", "bash":"ubuntu", "shell":"ubuntu", "unix":"ubuntu", "rstudio":"r", "rlang":"r"}.get(language.lower(), language.lower())
-        if language not in {"python", "java", "c", "cpp", "html", "react", "node", "sql", "colab", "ubuntu", "distributed", "r"}:
+        if language not in {"python", "java", "c", "cpp", "html", "react", "node", "sql", "colab", "ubuntu", "distributed", "r", "android"}:
             return RuntimeResult(False, error="Unsupported execution language.", exit_code=2)
         if language == 'ubuntu':
             from .ubuntu_runtime import capture_ubuntu
@@ -429,7 +429,8 @@ class RuntimeEngine:
         capability = plan_experiment(objective, language, code)
         if capability['category']=='database':
             from .lab_capture import capture_sql
-            return await capture_sql(code, filename=filename, objective=objective)
+            sql_template = (project_config or {}).get('sql_template', 'workbench')
+            return await capture_sql(code, filename=filename, objective=objective, template=sql_template)
         if capability['category']=='notebook':
             # Native process restrictions are defense in depth, not an OS sandbox.
             from ..security.operator_access import execution_opted_in
@@ -453,6 +454,7 @@ class RuntimeEngine:
             validate_generated_code(code, language,capability='flask' if is_flask else None,local_modules=modules)
             for name, content in (project_files or {}).items():
                 if is_flask and name.endswith('.py'):validate_generated_code(content,'python',capability='flask',local_modules=modules)
+                if language == 'android' and name.endswith(('.java', '.kt')):validate_generated_code(content, 'android')
                 if name.endswith(('.js', '.jsx', '.cjs', '.mjs', '.html')):
                     backend_entry = (project_config or {}).get('server_entrypoint') or ((project_config or {}).get('entrypoint') if (project_config or {}).get('project_type') == 'node' else None)
                     validate_generated_code(content, 'node' if name == backend_entry or name.endswith(('.cjs', '.mjs')) else 'html' if name.endswith('.html') else 'react')
@@ -463,6 +465,9 @@ class RuntimeEngine:
         root.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(prefix="labmate_", dir=root) as folder:
             directory = Path(folder)
+            if language == "android":
+                from .android_runtime import build_android_project
+                return await build_android_project(directory, project_files or {}, project_config or {})
             if capability['category'] in {'java_awt','java_swing'}:
                 from .java_gui_runtime import capture_java_gui
                 config=dict(project_config or {'project_files':{(java_class_name(code) or 'Main')+'.java':code},'entrypoint':(java_class_name(code) or 'Main')+'.java','gui_tests':browser_tests or []})

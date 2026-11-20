@@ -1,3 +1,5 @@
+import type { PowerBiTheme, PowerBiVisualType } from "./types.ts";
+
 export const POWERBI_TOKENS = {
   tealAccent: "#117865",
   tealHover: "#0d5e4f",
@@ -26,24 +28,53 @@ export const POWERBI_SERIES_PALETTE = [
   "#D64550",
 ] as const;
 
+export const POWERBI_THEMES: ReadonlyArray<PowerBiTheme> = [
+  {
+    id: "default",
+    name: "Default",
+    palette: POWERBI_SERIES_PALETTE,
+    canvasBg: "#ffffff",
+    visualBg: "#ffffff",
+  },
+  {
+    id: "executive",
+    name: "Executive",
+    palette: ["#117865", "#252423", "#D9B300", "#01B8AA", "#FD625E", "#8AD4EB", "#A66999", "#374649"],
+    canvasBg: "#faf9f8",
+    visualBg: "#ffffff",
+  },
+  {
+    id: "frontier",
+    name: "Frontier",
+    palette: ["#41A4FF", "#0066C2", "#31C48D", "#E05A47", "#7D4CDB", "#F59E0B", "#0E9F6E", "#6B7280"],
+    canvasBg: "#ffffff",
+    visualBg: "#ffffff",
+  },
+  {
+    id: "innovate",
+    name: "Innovate",
+    palette: ["#6B007B", "#E044A7", "#118DFF", "#E66C37", "#00B294", "#F2C80F", "#374649", "#5F6B6D"],
+    canvasBg: "#fcfbfd",
+    visualBg: "#ffffff",
+  },
+  {
+    id: "highContrast",
+    name: "High Contrast",
+    palette: ["#0078D4", "#D83B01", "#107C10", "#5C2D91", "#B4009E", "#FFB900", "#008272", "#323130"],
+    canvasBg: "#ffffff",
+    visualBg: "#ffffff",
+  },
+  {
+    id: "solar",
+    name: "Solar",
+    palette: ["#D97706", "#0D9488", "#2563EB", "#DC2626", "#7C3AED", "#059669", "#DB2777", "#4B5563"],
+    canvasBg: "#fffdf9",
+    visualBg: "#ffffff",
+  },
+];
+
 export const VISUAL_GALLERY_ITEMS: ReadonlyArray<{
-  type:
-    | "stackedBar"
-    | "stackedColumn"
-    | "clusteredBar"
-    | "clusteredColumn"
-    | "line"
-    | "area"
-    | "pie"
-    | "donut"
-    | "treemap"
-    | "funnel"
-    | "scatter"
-    | "gauge"
-    | "card"
-    | "slicer"
-    | "table"
-    | "matrix";
+  type: PowerBiVisualType;
   label: string;
 }> = [
   { type: "stackedBar", label: "Stacked bar chart" },
@@ -62,4 +93,5 @@ export const VISUAL_GALLERY_ITEMS: ReadonlyArray<{
   { type: "slicer", label: "Slicer" },
   { type: "table", label: "Table" },
   { type: "matrix", label: "Matrix" },
+  { type: "textbox", label: "Text box" },
 ];

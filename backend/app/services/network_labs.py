@@ -25,6 +25,27 @@ PT7_SCENARIOS = {1: ("exp7-1", "Scenario 1: Star topology using a hub"), 2: ("ex
                  3: ("exp7-3", "Scenario 3: Bus topology using a hub")}
 PT7_MESH = ("exp7-mesh", "Post-experimental exercise: Mesh topology using a hub and switches")
 PT9 = ("exp9", "Three routers with RIP dynamic routing")
+PRACTICALS = {
+    "switched ipv4 lan": "switched-lan",
+    "static routing": "static-routing",
+    "vlan isolation": "vlan-isolation",
+    "dhcp address assignment": "dhcp-lan",
+    "wireless access point": "wireless-ssid",
+}
+POWERBI_PRACTICALS = {
+    "sales dashboard": "sales-dashboard",
+    "data cleaning": "clean-sales",
+    "table relationships": "relationships",
+    "dax measures": "dax-measures",
+    "interactive report": "region-slicer",
+}
+ANDROID_PRACTICALS = {
+    "greeting application": "greeting",
+    "two activity navigation": "navigation",
+    "simple calculator": "calculator",
+    "student registration form": "registration",
+    "persistent counter": "counter",
+}
 
 
 def _part(number, title, studio, args, text, slots=()):
@@ -43,6 +64,22 @@ def detect_network_lab(manual_text, strict=False):
     """
     text = str(manual_text or "")
     low = text.lower()
+    heading = next((line for line in text.splitlines() if re.match(r"^\s*experiment\s+\d+\s*:", line, re.I)), "")
+    title = heading.partition(":")[2].strip()
+    if re.search(r"^\s*laboratory\s*:\s*(?:cisco\s+)?packet tracer\s*$", low, re.M) and title.lower() in PRACTICALS:
+        return [_part(1, title, "packettracer", {"experiment": PRACTICALS[title.lower()]}, text)]
+    if re.search(r"^\s*laboratory\s*:\s*power\s+bi\s*$", low, re.M) and title.lower() in POWERBI_PRACTICALS:
+        return [_part(1, title, "powerbi", {"experiment": POWERBI_PRACTICALS[title.lower()]}, text)]
+    if re.search(r"^\s*laboratory\s*:\s*android\s+studio\s*$", low, re.M) and title.lower() in ANDROID_PRACTICALS:
+        return [_part(1, title, "android", {"experiment": ANDROID_PRACTICALS[title.lower()]}, text)]
+    focused = re.search(r"^\s*laboratory\s*:\s*wireshark\s*$", low, re.M)
+    if focused:
+        for pattern, topic in [
+            (r"\barp\s+and\s+icmp\b", "arp-icmp"), (r"\btcp handshake\b", "tcp-handshake"),
+            (r"\bdns query\b", "dns"), (r"\bhttp request\b", "http"), (r"\budp\b.*\btcp\b", "tcp-udp"),
+        ]:
+            if re.search(pattern, title, re.I):
+                return [_part(1, title, "wireshark", {"experiment": topic}, text, [(CAPTURE_SLOT, CAPTURE_LABEL)])]
     if low.count("wireshark") >= 3 and re.search(r"\bpackets?\b", low) and not re.search(r"packet\s+tracer", low):
         return [_part(1, "Introduction to Wireshark and traffic analysis", "wireshark", {},
                       "Capture and analyse ARP, ICMP, DNS, TCP and HTTP traffic with Wireshark, attach each screenshot the manual lists with a brief "
@@ -195,27 +232,55 @@ async def run_studio_part(workflow, db, question):
     out_dir = os.path.join(settings.SCREENSHOT_DIR, f"studio_{workflow.id}_{question['id']}_{uuid.uuid4().hex[:6]}")
     base = {"id": question["id"], "question": question["text"], "language": "theory", "is_theory": True, "code": "", "output": "", "error": "",
             "status": "completed", "screenshot_paths": [], "kind": "evidence", "part_title": question.get("part_title", "")}
+    experiment = question.get("studio_args", {}).get("experiment", "")
+    if (studio == "packettracer" and experiment in PRACTICALS.values()
+            or studio == "powerbi" and experiment in POWERBI_PRACTICALS.values()
+            or studio == "android" and experiment in ANDROID_PRACTICALS.values()):
+        from .storage_service import storage_service
+        from .studio_capture import StudioCaptureUnavailable, capture_studio
+        try:
+            taken = await capture_studio(studio, {}, [], out_dir, practical=experiment)
+            if not taken:
+                raise StudioCaptureUnavailable("The studio returned no evidence.")
+        except StudioCaptureUnavailable as error:
+            return {**base, "status": "failed", "error": str(error)}
+        shots = []
+        for shot in taken:
+            await asyncio.to_thread(storage_service.sync_file, shot["path"])
+            shots.append({"slot": None, "path": shot["path"], "caption": shot["title"], "explain": shot["explain"]})
+        answer = "Executed in the LabMate practice environment."
+        if studio == "powerbi":
+            answer += " This practical uses a sample dataset."
+        if studio == "android":
+            answer += " The screenshots show the interactive browser Android runtime."
+        return {**base, "answer": answer, "auto_evidence": shots}
     if studio == "wireshark":
         capture = await _stored_capture(workflow, db, question)
         try:
             session, source, _facts = await asyncio.to_thread(wireshark_lab.load, capture)
         except CaptureError:
             session, source, _facts = await asyncio.to_thread(wireshark_lab.load, None)
-        steps, missing = await asyncio.to_thread(wireshark_lab.plan, session)
+        topic = question.get("studio_args", {}).get("experiment")
+        focused = topic in wireshark_lab.FOCUSED_TRACES
+        steps, missing = (await asyncio.to_thread(wireshark_lab.focused_plan, session, topic) if focused
+                          else await asyncio.to_thread(wireshark_lab.plan, session))
         state = await asyncio.to_thread(wireshark_lab.studio_state, session, source, steps)
         shots, failure = await _shots("wireshark", state, steps, out_dir)
-        answer = "" if (prefs.output_only_screenshots and prefs.no_extra_questions) else wireshark_lab.procedure(session, source, steps)
-        note = "" if (prefs.output_only_screenshots and prefs.no_extra_questions) else _wireshark_note(source)
+        answer = "" if (prefs.output_only_screenshots and prefs.no_extra_questions) else (
+            "\n".join(step["explain"] for step in steps) if focused else wireshark_lab.procedure(session, source, steps))
+        note = "" if (prefs.output_only_screenshots and prefs.no_extra_questions) else (
+            "LabMate analysed its generated practice capture." if focused and source == "scenario" else "" if focused else _wireshark_note(source))
         if note:
             answer += "\n" + note
-        tables = [] if prefs.no_extra_questions else await asyncio.to_thread(wireshark_lab.tables, session)
+        tables = [] if focused or prefs.no_extra_questions else await asyncio.to_thread(wireshark_lab.tables, session)
         result = {**base, "answer": answer, "auto_evidence": shots, "tables_after": tables,
                   "notes": [] if (prefs.output_only_screenshots and prefs.no_extra_questions) else missing}
         if failure:
             result["studio_error"] = "The Wireshark screenshots could not be captured automatically (%s). Generate the report again." % failure
+        if focused and (failure or missing or len(shots) != len(steps)):
+            result.update(status="failed", error=failure or " ".join(missing) or "One or more packet screenshots are missing.")
         return result
     if studio == "packettracer":
-        experiment = (question.get("studio_args") or {}).get("experiment", "")
         if experiment == PT9[0]:
             run = await asyncio.to_thread(pt_lab.run_exp9)
             procedure, before = _pt9_procedure(), [{"title": "End devices", **run["config"]["hosts"]}, {"title": "Router configuration", **run["config"]["routers"]}]

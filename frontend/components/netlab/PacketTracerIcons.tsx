@@ -418,29 +418,29 @@ export function PtCanvasDeviceArtwork({
         <ellipse cx="1" cy="14" rx="26" ry="10.5" fill="rgba(15, 23, 42, 0.16)" />
         <defs>
           <linearGradient id={uid + "_cyl"} x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#174970" />
-            <stop offset="38%" stopColor="#2E86C1" />
-            <stop offset="72%" stopColor="#1F6294" />
-            <stop offset="100%" stopColor="#123C5C" />
+            <stop offset="0%" stopColor="#12476B" />
+            <stop offset="36%" stopColor="#2680B5" />
+            <stop offset="72%" stopColor="#185D8A" />
+            <stop offset="100%" stopColor="#0E3854" />
           </linearGradient>
           <linearGradient id={uid + "_top"} x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#52A5D8" />
-            <stop offset="100%" stopColor="#2678B2" />
+            <stop offset="0%" stopColor="#5EB1DF" />
+            <stop offset="100%" stopColor="#1D6FA3" />
           </linearGradient>
         </defs>
-        {/* Flatter authentic PT 8.2 Router cylinder puck (~48x30) */}
+        {/* Classic Cisco PT Blue-Teal Router cylinder puck (~48x30) */}
         <path
-          d="M-24 -3 L-24 7 A24 10 0 0 0 24 7 L24 -3 Z"
+          d="M-24 -3.5 L-24 7.5 A24 10 0 0 0 24 7.5 L24 -3.5 Z"
           fill={`url(#${uid}_cyl)`}
-          stroke="#0E304D"
+          stroke="#0C2E47"
           strokeWidth="1.15"
         />
-        <ellipse cx="0" cy="-3" rx="24" ry="10" fill={`url(#${uid}_top)`} stroke="#0E304D" strokeWidth="1.15" />
-        {/* 4 Crisp white Cisco routing arrows (2 inward, 2 outward) */}
-        <path d="M-11 -7 L-3.5 -4.2 M-6.5 -3.3 L-3.2 -4.1 L-4.8 -6.6" fill="none" stroke="#FFFFFF" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M11 1 L3.5 -1.8 M6.5 -2.7 L3.2 -1.9 L4.8 0.6" fill="none" stroke="#FFFFFF" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M-3 -1.6 L-10.8 1.2 M-8 2 L-11.2 1.3 L-9.6 -1.2" fill="none" stroke="#FFFFFF" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M3 -4.4 L10.8 -7.2 M8 -8 L11.2 -7.3 L9.6 -4.8" fill="none" stroke="#FFFFFF" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        <ellipse cx="0" cy="-3.5" rx="24" ry="10" fill={`url(#${uid}_top)`} stroke="#0C2E47" strokeWidth="1.15" />
+        {/* 4 Crisp white Cisco routing arrows (2 pointing inward, 2 pointing outward) */}
+        <path d="M-12 -7.2 L-3.8 -4.4 M-6.8 -3.5 L-3.5 -4.3 L-5.1 -6.8" fill="none" stroke="#FFFFFF" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M12 0.8 L3.8 -2.0 M6.8 -2.9 L3.5 -2.1 L5.1 0.4" fill="none" stroke="#FFFFFF" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M-3 -1.8 L-11.2 1.0 M-8.2 1.8 L-11.6 1.1 L-10.0 -1.4" fill="none" stroke="#FFFFFF" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M3 -4.6 L11.2 -7.4 M8.2 -8.2 L11.6 -7.5 L10.0 -5.0" fill="none" stroke="#FFFFFF" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
       </g>
     );
   }
@@ -449,15 +449,20 @@ export function PtCanvasDeviceArtwork({
     return (
       <g transform={`scale(${scale})`}>
         <polygon points="-29,10 8,17 32,5 -6,-2" fill="rgba(15, 23, 42, 0.14)" />
-        <polygon points="-29,-2 5,-11 30,-2 -4,8" fill="#2E86C1" stroke="#123C5C" strokeWidth="1.1" strokeLinejoin="round" />
-        <polygon points="-29,-2 -4,8 -4,17 -29,7" fill="#1F6294" stroke="#123C5C" strokeWidth="1.1" strokeLinejoin="round" />
-        <polygon points="-4,8 30,-2 30,7 -4,17" fill="#174970" stroke="#123C5C" strokeWidth="1.1" strokeLinejoin="round" />
-        <rect x="-25" y="3.5" width="14" height="3.2" transform="skewY(21)" fill="#0D2336" />
-        <circle cx="-24" cy="4.8" r="0.9" fill="#22C55E" />
-        <circle cx="-20.5" cy="6.2" r="0.9" fill="#22C55E" />
-        <path d="M-10 -2 L2 -5 M-1 -6.2 L2.5 -5.1 L0.4 -2.9" fill="none" stroke="#FFFFFF" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M11 -2 L-1 1 M2 2.2 L-1.5 1.1 L0.6 -1.1" fill="none" stroke="#FFFFFF" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M-4 2 L8 -1 M5 -2.2 L8.5 -1.1 L6.4 1.1" fill="none" stroke="#FFFFFF" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+        <polygon points="-29,-2 5,-11 30,-2 -4,8" fill="#2b7fb8" stroke="#103652" strokeWidth="1.1" strokeLinejoin="round" />
+        <polygon points="-29,-2 -4,8 -4,17 -29,7" fill="#1d5f91" stroke="#103652" strokeWidth="1.1" strokeLinejoin="round" />
+        <polygon points="-4,8 30,-2 30,7 -4,17" fill="#164970" stroke="#103652" strokeWidth="1.1" strokeLinejoin="round" />
+        {/* Dark front port strip with green LEDs */}
+        <polygon points="-26,2.5 -7,10 -7,14.2 -26,6.7" fill="#0B1F30" />
+        <circle cx="-23.5" cy="5.2" r="0.95" fill="#22C55E" />
+        <circle cx="-20.2" cy="6.6" r="0.95" fill="#22C55E" />
+        <circle cx="-16.9" cy="8.0" r="0.95" fill="#22C55E" />
+        <circle cx="-13.6" cy="9.4" r="0.95" fill="#22C55E" />
+        {/* 4 Opposing crossing white Cisco switch arrows on top */}
+        <path d="M-11 -4.5 L2 -7.5 M-0.8 -8.5 L2.5 -7.5 L0.4 -5.3" fill="none" stroke="#FFFFFF" strokeWidth="1.45" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M12 -4.8 L-1 -1.8 M1.8 -0.8 L-1.5 -1.8 L0.6 -4.0" fill="none" stroke="#FFFFFF" strokeWidth="1.45" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M-6 0.2 L7 -2.8 M4.2 -3.8 L7.5 -2.8 L5.4 -0.6" fill="none" stroke="#FFFFFF" strokeWidth="1.45" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M15 -0.2 L2 2.8 M4.8 3.8 L1.5 2.8 L3.6 0.6" fill="none" stroke="#FFFFFF" strokeWidth="1.45" strokeLinecap="round" strokeLinejoin="round" />
       </g>
     );
   }
@@ -581,31 +586,31 @@ export function PtCanvasDeviceArtwork({
     );
   }
 
-  // Default: PC-PT Cisco Desktop Workstation (Monitor + Desktop Unit + Keyboard)
+  // Default: Classic Cisco PT Beige/Light-Grey Monitor + Desktop Chassis + Keyboard
   return (
     <g transform={`scale(${scale})`}>
       <defs>
         <linearGradient id={uid + "_scr"} x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#7CC2F2" />
-          <stop offset="100%" stopColor="#2B6CB0" />
+          <stop offset="0%" stopColor="#85C7F2" />
+          <stop offset="100%" stopColor="#2A6BAC" />
         </linearGradient>
       </defs>
       <ellipse cx="0" cy="21" rx="26" ry="7" fill="rgba(15, 23, 42, 0.14)" />
-      {/* Desktop CPU base */}
-      <polygon points="-22,6 22,6 26,14 -26,14" fill="#C4CED8" stroke="#475569" strokeWidth="1.1" strokeLinejoin="round" />
-      <rect x="-24" y="10" width="48" height="6" fill="#9AA9B8" stroke="#475569" strokeWidth="1" />
-      <rect x="6" y="11.5" width="13" height="2" fill="#475569" />
+      {/* Desktop CPU base (warm light beige-grey) */}
+      <polygon points="-22,6 22,6 26,13 -26,13" fill="#DDDCD5" stroke="#475569" strokeWidth="1.1" strokeLinejoin="round" />
+      <rect x="-24" y="10" width="48" height="6" fill="#C4C3BC" stroke="#475569" strokeWidth="1" />
+      <rect x="6" y="11.5" width="13" height="2" fill="#52525B" />
       <circle cx="-18" cy="13" r="1.2" fill="#22C55E" />
       {/* Monitor neck */}
-      <rect x="-5" y="2" width="10" height="5" fill="#7D8C9C" stroke="#475569" strokeWidth="0.9" />
+      <rect x="-5" y="2" width="10" height="5" fill="#9E9E97" stroke="#475569" strokeWidth="0.9" />
       {/* Monitor bezel */}
-      <rect x="-21" y="-23" width="42" height="26" rx="2" fill="#DFE6EE" stroke="#475569" strokeWidth="1.2" />
+      <rect x="-21" y="-23" width="42" height="26" rx="2" fill="#EAE9E4" stroke="#475569" strokeWidth="1.2" />
       {/* Blue display screen */}
       <rect x="-17.5" y="-19.5" width="35" height="19" rx="1" fill={`url(#${uid}_scr)`} stroke="#234E78" strokeWidth="0.9" />
       {/* Subtle screen glare */}
       <polygon points="-16,-18 -4,-18 -14,-5 -16,-5" fill="#FFFFFF" fillOpacity="0.22" />
       {/* Angled Keyboard */}
-      <polygon points="-19,17 19,17 23,22 -23,22" fill="#E5EBF1" stroke="#475569" strokeWidth="1" strokeLinejoin="round" />
+      <polygon points="-19,17 19,17 23,22 -23,22" fill="#E6E6DF" stroke="#475569" strokeWidth="1" strokeLinejoin="round" />
     </g>
   );
 }
@@ -695,4 +700,148 @@ export function PtCableShelfIcon({
       <line x1="3" y1="16" x2="23" y2="4" stroke="#1E293B" strokeWidth="2.4" strokeLinecap="round" />
     </svg>
   );
+}
+
+/* =========================================================================
+ * Secondary Common Tools Bar & Simulation Icons (PT 8.2.2)
+ * ========================================================================= */
+
+export function PtDrawLineIcon({ size = 16 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 18 18" aria-hidden="true">
+      <line x1="3" y1="14.5" x2="15" y2="3.5" stroke="#1E293B" strokeWidth="1.8" strokeLinecap="round" />
+      <rect x="2" y="13.5" width="2.5" height="2.5" fill="#2563EB" />
+      <rect x="13.5" y="2" width="2.5" height="2.5" fill="#2563EB" />
+    </svg>
+  );
+}
+
+export function PtDrawRectIcon({ size = 16 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 18 18" aria-hidden="true">
+      <rect x="2.5" y="4" width="13" height="10" rx="1" fill="#DBEAFE" stroke="#1D4ED8" strokeWidth="1.4" />
+    </svg>
+  );
+}
+
+export function PtDrawEllipseIcon({ size = 16 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 18 18" aria-hidden="true">
+      <ellipse cx="9" cy="9" rx="6.5" ry="4.8" fill="#FEF3C7" stroke="#D97706" strokeWidth="1.4" />
+    </svg>
+  );
+}
+
+export function PtCustomDeviceIcon({ size = 16 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 18 18" aria-hidden="true">
+      <rect x="3" y="4" width="12" height="10" rx="1.5" fill="#E2E8F0" stroke="#475569" strokeWidth="1.2" />
+      <path d="M6 9h6M9 6v6" stroke="#16A34A" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+export function PtViewportIcon({ size = 16 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 18 18" aria-hidden="true">
+      <rect x="2.5" y="3" width="13" height="12" rx="1" fill="#FFFFFF" stroke="#475569" strokeWidth="1.1" />
+      <rect x="4.5" y="5" width="6" height="5" fill="#BAE6FD" stroke="#0284C7" strokeWidth="0.9" />
+      <circle cx="12.5" cy="11.5" r="2.2" fill="#E2E8F0" stroke="#475569" strokeWidth="0.9" />
+    </svg>
+  );
+}
+
+export function PtEyeIcon({ size = 14 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden="true">
+      <path
+        d="M1.5 8s2.5-4 6.5-4 6.5 4 6.5 4-2.5 4-6.5 4-6.5-4-6.5-4z"
+        fill="#EFF6FF"
+        stroke="#1E40AF"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+      />
+      <circle cx="8" cy="8" r="2.1" fill="#2563EB" />
+      <circle cx="8.6" cy="7.4" r="0.6" fill="#FFFFFF" />
+    </svg>
+  );
+}
+
+/* =========================================================================
+ * Authentic Colorful Desktop Tab App Icons (34x34 SVG)
+ * ========================================================================= */
+
+export function PtAppIpConfigIcon({ size = 34 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 36 36" aria-hidden="true">
+      <rect x="4" y="5" width="28" height="24" rx="3" fill="#E0F2FE" stroke="#0284C7" strokeWidth="1.5" />
+      <rect x="4" y="5" width="28" height="6" rx="2" fill="#0284C7" />
+      <text x="18" y="21" textAnchor="middle" fontSize="11" fontWeight="800" fill="#0369A1">IP</text>
+      <circle cx="10" cy="25" r="1.4" fill="#16A34A" />
+      <rect x="14" y="24" width="14" height="2" rx="1" fill="#38BDF8" />
+    </svg>
+  );
+}
+
+export function PtAppCmdIcon({ size = 34 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 36 36" aria-hidden="true">
+      <rect x="4" y="6" width="28" height="24" rx="2.5" fill="#0F172A" stroke="#334155" strokeWidth="1.5" />
+      <rect x="4" y="6" width="28" height="5" rx="1.5" fill="#CBD5E1" />
+      <text x="10" y="22" fontSize="10" fontFamily="Consolas, monospace" fontWeight="700" fill="#22C55E">C:\&gt;_</text>
+    </svg>
+  );
+}
+
+export function PtAppTerminalIcon({ size = 34 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 36 36" aria-hidden="true">
+      <rect x="4" y="6" width="28" height="24" rx="2.5" fill="#1E293B" stroke="#475569" strokeWidth="1.5" />
+      <rect x="4" y="6" width="28" height="5" rx="1.5" fill="#38BDF8" />
+      <text x="9" y="21" fontSize="9.5" fontFamily="Consolas, monospace" fontWeight="700" fill="#F8FAFC">RS232</text>
+      <line x1="9" y1="25" x2="22" y2="25" stroke="#0EA5E9" strokeWidth="1.6" />
+    </svg>
+  );
+}
+
+export function PtAppBrowserIcon({ size = 34 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 36 36" aria-hidden="true">
+      <circle cx="18" cy="18" r="13" fill="#38BDF8" stroke="#0369A1" strokeWidth="1.5" />
+      <ellipse cx="18" cy="18" rx="6.5" ry="13" fill="none" stroke="#FFFFFF" strokeWidth="1.3" />
+      <line x1="5" y1="18" x2="31" y2="18" stroke="#FFFFFF" strokeWidth="1.3" />
+      <path d="M7.5 11.5h21M7.5 24.5h21" stroke="#FFFFFF" strokeWidth="1.1" />
+    </svg>
+  );
+}
+
+export function PtAppWirelessIcon({ size = 34 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 36 36" aria-hidden="true">
+      <rect x="4" y="6" width="28" height="24" rx="3" fill="#FEF3C7" stroke="#D97706" strokeWidth="1.4" />
+      <path d="M10 17a11.3 11.3 0 0 1 16 0" fill="none" stroke="#0284C7" strokeWidth="2" strokeLinecap="round" />
+      <path d="M13.5 20.5a6.4 6.4 0 0 1 9 0" fill="none" stroke="#0284C7" strokeWidth="2" strokeLinecap="round" />
+      <circle cx="18" cy="24.5" r="2" fill="#16A34A" />
+    </svg>
+  );
+}
+
+/** Authentic Cisco red lightning-bolt zigzag path for Serial WAN cables. */
+export function serialZigzagPath(x1: number, y1: number, x2: number, y2: number): string {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const len = Math.hypot(dx, dy) || 1;
+  const ux = dx / len;
+  const uy = dy / len;
+  const px = -uy;
+  const py = ux;
+  const mx = (x1 + x2) / 2;
+  const my = (y1 + y2) / 2;
+  const step = Math.min(14, Math.max(8, len * 0.08));
+  const amp = 7;
+  const p1x = mx - ux * step + px * amp;
+  const p1y = my - uy * step + py * amp;
+  const p2x = mx + ux * step - px * amp;
+  const p2y = my + uy * step - py * amp;
+  return `M ${x1} ${y1} L ${mx - ux * step * 1.4} ${my - uy * step * 1.4} L ${p1x} ${p1y} L ${p2x} ${p2y} L ${mx + ux * step * 1.4} ${my + uy * step * 1.4} L ${x2} ${y2}`;
 }

@@ -44,7 +44,6 @@ function buildAppMenu() {
       submenu: [
         { label: "Dashboard", accelerator: "CmdOrCtrl+D", click: () => navigatePath("/dashboard") },
         { label: "Code Studio", accelerator: "CmdOrCtrl+N", click: () => navigatePath("/code-execution") },
-        { label: "Sample Reports", click: () => navigatePath("/samples") },
         { type: "separator" },
         {
           label: "Server Settings...",

@@ -3,60 +3,59 @@
 import React from "react";
 import Link from "next/link";
 import {
+  ArrowDown,
+  ArrowUp,
   ChevronDown,
   ChevronUp,
   Database,
+  Download,
+  Eraser,
   Eye,
   Filter,
+  FolderOpen,
   Grid,
   LayoutGrid,
+  Magnet,
+  Maximize2,
   Minus,
   PlusSquare,
-  RotateCcw,
   Search,
-  Settings,
-  Share2,
   SlidersHorizontal,
-  Sparkles,
   Square,
-  Sun,
-  UserCircle2,
+  Trash2,
   X,
 } from "lucide-react";
-import { POWERBI_SERIES_PALETTE } from "@/lib/powerbi/palette";
+import { POWERBI_THEMES } from "@/lib/powerbi/palette";
 import type {
   AggregationFn,
+  ColumnMeta,
+  ColumnType,
   PowerBiVisual,
   PowerBiVisualType,
   RibbonTab,
 } from "@/lib/powerbi/types";
 import {
   CalculatorRibbonIcon,
-  CopilotRibbonIcon,
   CopyIcon,
   CutIcon,
-  DataverseRibbonIcon,
   EnterDataRibbonIcon,
   ExcelWorkbookIcon,
   FormatPainterIcon,
   GetDataRibbonIcon,
   MoreVisualsRibbonIcon,
+  NewColumnRibbonIcon,
   NewVisualRibbonIcon,
-  OneLakeCatalogIcon,
   PasteIcon,
   PowerBiLogoMark,
-  PrepAiRibbonIcon,
-  PublishRibbonIcon,
-  RecentSourcesRibbonIcon,
+  RedoIcon,
   RefreshRibbonIcon,
+  RelationshipRibbonIcon,
   SaveIcon,
-  SensitivityRibbonIcon,
-  SqlServerRibbonIcon,
   TextBoxRibbonIcon,
   TransformDataRibbonIcon,
   UndoIcon,
-  VisualCalcRibbonIcon,
 } from "./PowerBiDesktopIcons";
+import { DesktopVizTileGlyph } from "./VisualIcons";
 import styles from "./powerbi.module.css";
 
 interface ApplicationHeaderProps {
@@ -69,46 +68,80 @@ interface ApplicationHeaderProps {
   onSearchChange: (q: string) => void;
   hasDataset: boolean;
   selectedVisual: PowerBiVisual | null;
+  selectedColumn: ColumnMeta | null;
+  activeThemeId: string;
   readingView: boolean;
+  canUndo: boolean;
+  canRedo: boolean;
+  hasCopiedVisual: boolean;
+  formatPainterActive: boolean;
+  activeFilterCount: number;
+  onUndo: () => void;
+  onRedo: () => void;
+  onSaveProject: () => void;
+  onLoadProjectClick: () => void;
+  onExportCsv: () => void;
   onToggleReadingView: () => void;
-  onUploadCsvClick: () => void;
+  onUploadFileClick: () => void;
   onLoadSocialSample: () => void;
   onLoadRetailSample: () => void;
+  onLoadStudentSample: () => void;
+  onLoadRelationalSample: () => void;
   onOpenGetDataModal: () => void;
   onOpenEnterData: () => void;
   onOpenTransformModal: () => void;
+  onRefreshData: () => void;
+  onResetReport: () => void;
   onAddVisual: (type: PowerBiVisualType) => void;
+  onAddPage: () => void;
+  onDuplicatePage: () => void;
+  onCutSelected: () => void;
+  onCopySelected: () => void;
+  onPasteVisual: () => void;
+  onToggleFormatPainter: () => void;
   onDuplicateSelected: () => void;
   onDeleteSelected: () => void;
-  onResetReport: () => void;
+  onBringForward: () => void;
+  onSendBackward: () => void;
   onClearAllFilters: () => void;
   showFiltersPane: boolean;
   showVizPane: boolean;
   showDataPane: boolean;
   showGridlines: boolean;
+  snapToGrid: boolean;
   onTogglePane: (pane: "filters" | "viz" | "data") => void;
   onToggleGridlines: () => void;
+  onToggleSnapToGrid: () => void;
+  onResetZoom: () => void;
+  onActualZoom: () => void;
+  onSelectTheme: (themeId: string) => void;
   onChangeAggregation: (agg: AggregationFn) => void;
+  onChangeSort: (dir: "asc" | "desc") => void;
   onUpdateSelectedFormat: (patch: Partial<PowerBiVisual["format"]>, newTitle?: string) => void;
-  onOpenExportHelp: () => void;
-  onOpenDaxView: () => void;
-  onOpenModelView: () => void;
-  onOpenCopilotModal: () => void;
-  onSwitchToService: (mode: "home" | "create") => void;
+  onOpenNewMeasure: () => void;
+  onOpenNewColumn: () => void;
+  onOpenRelationships: () => void;
+  onChangeSelectedColumnType: (type: ColumnType) => void;
 }
 
-const RIBBON_TABS: RibbonTab[] = [
-  "File",
-  "Home",
-  "Insert",
-  "Modeling",
-  "Design",
-  "View",
-  "Optimize",
-  "Help",
+const RIBBON_TABS: RibbonTab[] = ["File", "Home", "Insert", "Modeling", "View"];
+
+const INSERT_GALLERY: Array<[PowerBiVisualType, string]> = [
+  ["clusteredColumn", "Column"],
+  ["stackedColumn", "Stacked col"],
+  ["clusteredBar", "Bar"],
+  ["stackedBar", "Stacked bar"],
+  ["line", "Line"],
+  ["area", "Area"],
+  ["pie", "Pie"],
+  ["donut", "Donut"],
+  ["card", "Card"],
+  ["slicer", "Slicer"],
+  ["table", "Table"],
+  ["matrix", "Matrix"],
 ];
 
-/** Authentic Microsoft Power BI Desktop title bar, QAT, Search, Ribbon tabs & Home icons. */
+/** Authentic Microsoft Power BI Desktop title bar, QAT, Search, Ribbon tabs & functional toolbars. */
 export function ApplicationHeader({
   documentName,
   activeTab,
@@ -119,66 +152,107 @@ export function ApplicationHeader({
   onSearchChange,
   hasDataset,
   selectedVisual,
+  selectedColumn,
+  activeThemeId,
   readingView,
+  canUndo,
+  canRedo,
+  hasCopiedVisual,
+  formatPainterActive,
+  activeFilterCount,
+  onUndo,
+  onRedo,
+  onSaveProject,
+  onLoadProjectClick,
+  onExportCsv,
   onToggleReadingView,
-  onUploadCsvClick,
+  onUploadFileClick,
   onLoadSocialSample,
   onLoadRetailSample,
+  onLoadStudentSample,
+  onLoadRelationalSample,
   onOpenGetDataModal,
   onOpenEnterData,
   onOpenTransformModal,
+  onRefreshData,
+  onResetReport,
   onAddVisual,
+  onAddPage,
+  onDuplicatePage,
+  onCutSelected,
+  onCopySelected,
+  onPasteVisual,
+  onToggleFormatPainter,
   onDuplicateSelected,
   onDeleteSelected,
-  onResetReport,
+  onBringForward,
+  onSendBackward,
   onClearAllFilters,
   showFiltersPane,
   showVizPane,
   showDataPane,
   showGridlines,
+  snapToGrid,
   onTogglePane,
   onToggleGridlines,
+  onToggleSnapToGrid,
+  onResetZoom,
+  onActualZoom,
+  onSelectTheme,
   onChangeAggregation,
+  onChangeSort,
   onUpdateSelectedFormat,
-  onOpenExportHelp,
-  onOpenDaxView,
-  onOpenModelView,
-  onOpenCopilotModal,
-  onSwitchToService,
+  onOpenNewMeasure,
+  onOpenNewColumn,
+  onOpenRelationships,
+  onChangeSelectedColumnType,
 }: ApplicationHeaderProps) {
+  const activeTheme =
+    POWERBI_THEMES.find((t) => t.id === activeThemeId) || POWERBI_THEMES[0];
+
   return (
     <header aria-label="Power BI Desktop Header">
       {/* Row 1: Windows Desktop Title Bar */}
       <div className={styles.titleBar}>
         <div className={styles.titleLeft}>
-          <button
-            type="button"
+          <span
             className={styles.qatBtn}
-            title="Switch to Power BI Service Home"
-            aria-label="Power BI Desktop logo / Service Home"
-            onClick={() => onSwitchToService("home")}
+            style={{ cursor: "default" }}
+            aria-hidden="true"
+            title="Power BI Desktop"
           >
             <PowerBiLogoMark size={18} />
-          </button>
+          </span>
 
           <button
             type="button"
             className={styles.qatBtn}
-            title="Save project snapshot"
-            aria-label="Save report"
-            onClick={onOpenExportHelp}
+            title="Save report project (.json)"
+            aria-label="Save report project"
+            disabled={!hasDataset}
+            onClick={onSaveProject}
           >
             <SaveIcon size={14} />
           </button>
           <button
             type="button"
             className={styles.qatBtn}
-            title="Reset default report layout"
-            aria-label="Reset report"
-            disabled={!hasDataset}
-            onClick={onResetReport}
+            title="Undo (Ctrl+Z)"
+            aria-label="Undo"
+            disabled={!canUndo}
+            onClick={onUndo}
           >
             <UndoIcon size={14} />
+          </button>
+          <button
+            type="button"
+            className={styles.qatBtn}
+            title="Redo (Ctrl+Y)"
+            aria-label="Redo"
+            disabled={!canRedo}
+            onClick={onRedo}
+          >
+            <RedoIcon size={14} />
           </button>
 
           <span className={styles.docTitle}>
@@ -191,7 +265,7 @@ export function ApplicationHeader({
           <input
             type="text"
             aria-label="Search report visuals and fields"
-            placeholder="Search"
+            placeholder="Search visuals & fields"
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
             className={styles.topSearchInput}
@@ -220,39 +294,11 @@ export function ApplicationHeader({
           <button
             type="button"
             className={styles.qatBtn}
-            title="Open Power BI Service (Home & Create)"
-            aria-label="Power BI Service"
-            onClick={() => onSwitchToService("home")}
-          >
-            <LayoutGrid size={14} />
-          </button>
-          <button
-            type="button"
-            className={styles.qatBtn}
-            title="Options & settings"
-            aria-label="Options"
-            onClick={onOpenExportHelp}
-          >
-            <Settings size={14} />
-          </button>
-          <button
-            type="button"
-            className={styles.qatBtn}
-            title="Preview Reading / Screenshot view"
+            title={readingView ? "Exit clean view" : "Clean screenshot view"}
             aria-label="Toggle reading mode"
             onClick={onToggleReadingView}
           >
-            <Sun size={14} />
-          </button>
-
-          <button
-            type="button"
-            className={styles.signInPill}
-            onClick={onToggleReadingView}
-            title="Toggle clean Reading / Screenshot mode"
-          >
-            <span>{readingView ? "Exit view" : hasDataset ? "Student" : "Sign in"}</span>
-            <UserCircle2 size={16} color="#605e5c" />
+            <Eye size={14} color={readingView ? "#117865" : undefined} />
           </button>
 
           <div className={styles.winCtrlGroup} aria-label="Window controls">
@@ -260,6 +306,7 @@ export function ApplicationHeader({
               type="button"
               className={styles.winBtn}
               title={ribbonCollapsed ? "Expand ribbon" : "Minimize ribbon"}
+              aria-label={ribbonCollapsed ? "Expand ribbon" : "Minimize ribbon"}
               onClick={onToggleRibbon}
             >
               <Minus size={12} />
@@ -267,15 +314,16 @@ export function ApplicationHeader({
             <button
               type="button"
               className={styles.winBtn}
-              title="Toggle fullscreen reading view"
+              title="Toggle fullscreen canvas view"
+              aria-label="Toggle fullscreen canvas view"
               onClick={onToggleReadingView}
             >
               <Square size={10.5} />
             </button>
             <Link
-              href="/labs/social-media-analytics"
+              href="/labs"
               className={styles.winBtn}
-              title="Return to LabMate SMA Labs"
+              title="Exit Power BI Studio to LabMate"
               aria-label="Close and return to LabMate"
             >
               <X size={13} />
@@ -311,6 +359,18 @@ export function ApplicationHeader({
             </nav>
 
             <div className={styles.ribbonRightActions}>
+              {readingView ? null : (
+                <button
+                  type="button"
+                  className={styles.ribbonSmBtn}
+                  onClick={onToggleReadingView}
+                  title="Hide toolbars & panes for clean manual screenshot"
+                  style={{ border: "1px solid #d2d0ce", background: "#ffffff" }}
+                >
+                  <Eye size={12} color="#117865" />
+                  <span>Clean view</span>
+                </button>
+              )}
               <button
                 type="button"
                 className={styles.collapseChevronBtn}
@@ -319,15 +379,6 @@ export function ApplicationHeader({
                 aria-label="Toggle ribbon"
               >
                 {ribbonCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-              </button>
-              <button
-                type="button"
-                className={styles.shareBtn}
-                onClick={onOpenExportHelp}
-              >
-                <Share2 size={12.5} />
-                <span>Share</span>
-                <ChevronDown size={11} />
               </button>
             </div>
           </div>
@@ -338,47 +389,86 @@ export function ApplicationHeader({
                 <>
                   <div className={styles.ribbonGroup}>
                     <div className={styles.ribbonGroupItems}>
-                      <button type="button" className={styles.ribbonLgBtn} onClick={onUploadCsvClick}>
+                      <button type="button" className={styles.ribbonLgBtn} onClick={onUploadFileClick}>
                         <ExcelWorkbookIcon size={22} />
-                        <span>Upload CSV</span>
+                        <span>Import<br />CSV / Excel</span>
                       </button>
+                      <button type="button" className={styles.ribbonLgBtn} onClick={onOpenGetDataModal}>
+                        <GetDataRibbonIcon size={22} />
+                        <span>Sample<br />datasets</span>
+                      </button>
+                    </div>
+                    <span className={styles.ribbonGroupLabel}>Data Import</span>
+                  </div>
+
+                  <div className={styles.ribbonGroup}>
+                    <div className={styles.ribbonGroupItems}>
                       <button type="button" className={styles.ribbonLgBtn} onClick={onLoadSocialSample}>
-                        <OneLakeCatalogIcon size={22} />
+                        <Database size={18} color="#118DFF" />
                         <span>Social KPI</span>
                       </button>
                       <button type="button" className={styles.ribbonLgBtn} onClick={onLoadRetailSample}>
-                        <SqlServerRibbonIcon size={22} />
-                        <span>Retail SQL</span>
+                        <Database size={18} color="#117865" />
+                        <span>Retail Sales</span>
+                      </button>
+                      <button type="button" className={styles.ribbonLgBtn} onClick={onLoadStudentSample}>
+                        <Database size={18} color="#744EC2" />
+                        <span>Students</span>
+                      </button>
+                      <button type="button" className={styles.ribbonLgBtn} onClick={onLoadRelationalSample}>
+                        <RelationshipRibbonIcon size={20} />
+                        <span>Orders +<br />Products</span>
                       </button>
                     </div>
-                    <span className={styles.ribbonGroupLabel}>Import</span>
+                    <span className={styles.ribbonGroupLabel}>Sample Workbooks</span>
                   </div>
+
                   <div className={styles.ribbonGroup}>
                     <div className={styles.ribbonGroupItems}>
-                      <button type="button" className={styles.ribbonLgBtn} onClick={() => onSwitchToService("home")}>
-                        <PowerBiLogoMark size={20} />
-                        <span>Service Home</span>
+                      <button
+                        type="button"
+                        className={styles.ribbonLgBtn}
+                        disabled={!hasDataset}
+                        onClick={onSaveProject}
+                      >
+                        <SaveIcon size={20} />
+                        <span>Save<br />Project</span>
                       </button>
-                      <button type="button" className={styles.ribbonLgBtn} onClick={() => onSwitchToService("create")}>
-                        <PlusSquare size={20} color="#117865" />
-                        <span>Service Create</span>
+                      <button type="button" className={styles.ribbonLgBtn} onClick={onLoadProjectClick}>
+                        <FolderOpen size={20} color="#117865" />
+                        <span>Open<br />Project</span>
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.ribbonLgBtn}
+                        disabled={!hasDataset}
+                        onClick={onExportCsv}
+                      >
+                        <Download size={20} color="#107c41" />
+                        <span>Export<br />CSV</span>
                       </button>
                     </div>
-                    <span className={styles.ribbonGroupLabel}>Power BI Web</span>
+                    <span className={styles.ribbonGroupLabel}>Project &amp; Export</span>
                   </div>
+
                   <div className={styles.ribbonGroup}>
                     <div className={styles.ribbonGroupItems}>
-                      <button type="button" className={styles.ribbonLgBtn} onClick={onOpenExportHelp}>
-                        <Eye size={20} color="#117865" />
-                        <span>Manual Guide</span>
+                      <button
+                        type="button"
+                        className={styles.ribbonLgBtn}
+                        disabled={!hasDataset}
+                        onClick={onResetReport}
+                      >
+                        <RefreshRibbonIcon size={20} />
+                        <span>Reset<br />Layout</span>
                       </button>
                     </div>
-                    <span className={styles.ribbonGroupLabel}>Export</span>
+                    <span className={styles.ribbonGroupLabel}>Report</span>
                   </div>
                 </>
               ) : null}
 
-              {activeTab === "Home" || activeTab === "Help" ? (
+              {activeTab === "Home" ? (
                 <>
                   {/* 1. Clipboard */}
                   <div className={styles.ribbonGroup}>
@@ -386,18 +476,19 @@ export function ApplicationHeader({
                       <button
                         type="button"
                         className={styles.ribbonLgBtn}
-                        onClick={selectedVisual ? onDuplicateSelected : onOpenEnterData}
-                        title={selectedVisual ? "Duplicate selected visual" : "Paste CSV table"}
+                        disabled={!hasCopiedVisual}
+                        onClick={onPasteVisual}
+                        title="Paste copied visual (Ctrl+V)"
                       >
                         <PasteIcon size={22} />
-                        <span>Paste ▾</span>
+                        <span>Paste</span>
                       </button>
                       <div className={styles.ribbonColStack}>
                         <button
                           type="button"
                           className={styles.ribbonSmBtn}
                           disabled={!selectedVisual}
-                          onClick={onDeleteSelected}
+                          onClick={onCutSelected}
                         >
                           <CutIcon size={12} />
                           <span>Cut</span>
@@ -406,16 +497,17 @@ export function ApplicationHeader({
                           type="button"
                           className={styles.ribbonSmBtn}
                           disabled={!selectedVisual}
-                          onClick={onDuplicateSelected}
+                          onClick={onCopySelected}
                         >
                           <CopyIcon size={12} />
                           <span>Copy</span>
                         </button>
                         <button
                           type="button"
-                          className={styles.ribbonSmBtn}
+                          className={`${styles.ribbonSmBtn} ${formatPainterActive ? styles.ribbonLgBtnActive : ""}`}
                           disabled={!selectedVisual}
-                          onClick={() => onSelectTab("Format")}
+                          onClick={onToggleFormatPainter}
+                          title="Copy styling from selected visual to another visual"
                         >
                           <FormatPainterIcon size={12} />
                           <span>Format painter</span>
@@ -432,29 +524,17 @@ export function ApplicationHeader({
                         <GetDataRibbonIcon size={22} />
                         <span>Get<br />data ▾</span>
                       </button>
-                      <button type="button" className={styles.ribbonLgBtn} onClick={onUploadCsvClick}>
+                      <button type="button" className={styles.ribbonLgBtn} onClick={onUploadFileClick}>
                         <ExcelWorkbookIcon size={22} />
                         <span>Excel<br />workbook</span>
                       </button>
-                      <button type="button" className={styles.ribbonLgBtn} onClick={onLoadSocialSample}>
-                        <OneLakeCatalogIcon size={22} />
-                        <span>OneLake<br />catalog ▾</span>
-                      </button>
-                      <button type="button" className={styles.ribbonLgBtn} onClick={onLoadRetailSample}>
-                        <SqlServerRibbonIcon size={22} />
-                        <span>SQL<br />Server</span>
+                      <button type="button" className={styles.ribbonLgBtn} onClick={onUploadFileClick}>
+                        <Database size={20} color="#117865" />
+                        <span>Text /<br />CSV</span>
                       </button>
                       <button type="button" className={styles.ribbonLgBtn} onClick={onOpenEnterData}>
                         <EnterDataRibbonIcon size={22} />
                         <span>Enter<br />data</span>
-                      </button>
-                      <button type="button" className={styles.ribbonLgBtn} onClick={onOpenGetDataModal}>
-                        <DataverseRibbonIcon size={22} />
-                        <span>Dataverse</span>
-                      </button>
-                      <button type="button" className={styles.ribbonLgBtn} onClick={onOpenGetDataModal}>
-                        <RecentSourcesRibbonIcon size={22} />
-                        <span>Recent<br />sources ▾</span>
                       </button>
                     </div>
                     <span className={styles.ribbonGroupLabel}>Data</span>
@@ -470,13 +550,13 @@ export function ApplicationHeader({
                         onClick={onOpenTransformModal}
                       >
                         <TransformDataRibbonIcon size={22} />
-                        <span>Transform<br />data ▾</span>
+                        <span>Transform<br />data</span>
                       </button>
                       <button
                         type="button"
                         className={styles.ribbonLgBtn}
                         disabled={!hasDataset}
-                        onClick={onResetReport}
+                        onClick={onRefreshData}
                       >
                         <RefreshRibbonIcon size={22} />
                         <span>Refresh</span>
@@ -499,7 +579,7 @@ export function ApplicationHeader({
                       <button
                         type="button"
                         className={styles.ribbonLgBtn}
-                        onClick={() => (hasDataset ? onAddVisual("card") : onOpenGetDataModal())}
+                        onClick={() => (hasDataset ? onAddVisual("textbox") : onOpenGetDataModal())}
                       >
                         <TextBoxRibbonIcon size={22} />
                         <span>Text<br />box</span>
@@ -512,7 +592,7 @@ export function ApplicationHeader({
                         }}
                       >
                         <MoreVisualsRibbonIcon size={22} />
-                        <span>More<br />visuals ▾</span>
+                        <span>Visuals<br />pane</span>
                       </button>
                     </div>
                     <span className={styles.ribbonGroupLabel}>Insert</span>
@@ -525,16 +605,7 @@ export function ApplicationHeader({
                         type="button"
                         className={styles.ribbonLgBtn}
                         disabled={!hasDataset}
-                        onClick={onOpenDaxView}
-                      >
-                        <VisualCalcRibbonIcon size={22} />
-                        <span>New visual<br />calculation ▾</span>
-                      </button>
-                      <button
-                        type="button"
-                        className={styles.ribbonLgBtn}
-                        disabled={!hasDataset}
-                        onClick={onOpenDaxView}
+                        onClick={onOpenNewMeasure}
                       >
                         <CalculatorRibbonIcon size={22} />
                         <span>New<br />measure</span>
@@ -543,157 +614,260 @@ export function ApplicationHeader({
                         type="button"
                         className={styles.ribbonLgBtn}
                         disabled={!hasDataset}
-                        onClick={onOpenDaxView}
+                        onClick={onOpenNewColumn}
                       >
-                        <CalculatorRibbonIcon size={22} lightning />
-                        <span>Quick<br />measure</span>
+                        <NewColumnRibbonIcon size={22} />
+                        <span>New<br />column</span>
                       </button>
                     </div>
                     <span className={styles.ribbonGroupLabel}>Calculations</span>
                   </div>
 
-                  {/* 6. Sensitivity */}
+                  {/* 6. Filters */}
                   <div className={styles.ribbonGroup}>
                     <div className={styles.ribbonGroupItems}>
                       <button
                         type="button"
                         className={styles.ribbonLgBtn}
-                        disabled={!hasDataset}
+                        disabled={!hasDataset || activeFilterCount === 0}
                         onClick={onClearAllFilters}
-                        title="Clear active filters / sensitivity status"
+                        title="Clear all active slicers, page, report, and visual filters"
                       >
-                        <SensitivityRibbonIcon size={22} />
-                        <span>Sensitivity</span>
+                        <Eraser size={20} color={activeFilterCount > 0 ? "#117865" : "#605e5c"} />
+                        <span>Clear filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}</span>
                       </button>
                     </div>
-                    <span className={styles.ribbonGroupLabel}>Sensitivity</span>
-                  </div>
-
-                  {/* 7. Share */}
-                  <div className={styles.ribbonGroup}>
-                    <div className={styles.ribbonGroupItems}>
-                      <button
-                        type="button"
-                        className={styles.ribbonLgBtn}
-                        disabled={!hasDataset}
-                        onClick={() => onSwitchToService("home")}
-                        title="Publish to Power BI Service"
-                      >
-                        <PublishRibbonIcon size={22} />
-                        <span>Publish</span>
-                      </button>
-                    </div>
-                    <span className={styles.ribbonGroupLabel}>Share</span>
-                  </div>
-
-                  {/* 8. Copilot */}
-                  <div className={styles.ribbonGroup}>
-                    <div className={styles.ribbonGroupItems}>
-                      <button
-                        type="button"
-                        className={styles.ribbonLgBtn}
-                        disabled={!hasDataset}
-                        onClick={onOpenModelView}
-                      >
-                        <PrepAiRibbonIcon size={22} />
-                        <span>Prep data for<br />AI</span>
-                      </button>
-                      <button
-                        type="button"
-                        className={styles.ribbonLgBtn}
-                        onClick={onOpenCopilotModal}
-                      >
-                        <CopilotRibbonIcon size={22} />
-                        <span>Copilot</span>
-                      </button>
-                    </div>
-                    <span className={styles.ribbonGroupLabel}>Copilot</span>
+                    <span className={styles.ribbonGroupLabel}>Filters</span>
                   </div>
                 </>
               ) : null}
 
               {activeTab === "Insert" ? (
-                <div className={styles.ribbonGroup}>
-                  <div className={styles.ribbonGroupItems}>
-                    {(
-                      [
-                        ["clusteredColumn", "Column"],
-                        ["clusteredBar", "Bar"],
-                        ["line", "Line"],
-                        ["area", "Area"],
-                        ["donut", "Donut"],
-                        ["funnel", "Funnel"],
-                        ["card", "Card"],
-                        ["slicer", "Slicer"],
-                        ["table", "Table"],
-                      ] as Array<[PowerBiVisualType, string]>
-                    ).map(([vType, label]) => (
+                <>
+                  <div className={styles.ribbonGroup}>
+                    <div className={styles.ribbonGroupItems}>
+                      <button type="button" className={styles.ribbonLgBtn} onClick={onAddPage}>
+                        <PlusSquare size={20} color="#117865" />
+                        <span>New<br />page</span>
+                      </button>
                       <button
-                        key={vType}
+                        type="button"
+                        className={styles.ribbonLgBtn}
+                        onClick={onDuplicatePage}
+                      >
+                        <CopyIcon size={18} />
+                        <span>Duplicate<br />page</span>
+                      </button>
+                    </div>
+                    <span className={styles.ribbonGroupLabel}>Pages</span>
+                  </div>
+
+                  <div className={styles.ribbonGroup}>
+                    <div className={styles.ribbonGroupItems} style={{ gap: 4 }}>
+                      {INSERT_GALLERY.map(([vType, label]) => (
+                        <button
+                          key={vType}
+                          type="button"
+                          className={styles.ribbonLgBtn}
+                          disabled={!hasDataset}
+                          onClick={() => onAddVisual(vType)}
+                          title={`Insert ${label} visual`}
+                        >
+                          <DesktopVizTileGlyph tileId={vType} />
+                          <span>{label}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <span className={styles.ribbonGroupLabel}>Visuals</span>
+                  </div>
+
+                  <div className={styles.ribbonGroup}>
+                    <div className={styles.ribbonGroupItems}>
+                      <button
                         type="button"
                         className={styles.ribbonLgBtn}
                         disabled={!hasDataset}
-                        onClick={() => onAddVisual(vType)}
+                        onClick={() => onAddVisual("textbox")}
                       >
-                        <NewVisualRibbonIcon size={19} />
-                        <span>{label}</span>
+                        <TextBoxRibbonIcon size={22} />
+                        <span>Text<br />box</span>
                       </button>
-                    ))}
+                    </div>
+                    <span className={styles.ribbonGroupLabel}>Elements</span>
                   </div>
-                  <span className={styles.ribbonGroupLabel}>Visuals</span>
-                </div>
+                </>
               ) : null}
 
-              {activeTab === "Modeling" || activeTab === "Optimize" ? (
-                <div className={styles.ribbonGroup}>
-                  <div className={styles.ribbonGroupItems}>
-                    {(["sum", "average", "count", "min", "max"] as AggregationFn[]).map((fn) => (
+              {activeTab === "Modeling" ? (
+                <>
+                  <div className={styles.ribbonGroup}>
+                    <div className={styles.ribbonGroupItems}>
                       <button
-                        key={fn}
                         type="button"
-                        disabled={!selectedVisual}
-                        onClick={() => onChangeAggregation(fn)}
-                        className={`${styles.ribbonLgBtn} ${selectedVisual?.aggregation === fn ? styles.ribbonLgBtnActive : ""}`}
-                      >
-                        <SlidersHorizontal size={17} color="#117865" />
-                        <span style={{ textTransform: "capitalize" }}>{fn}</span>
-                      </button>
-                    ))}
-                  </div>
-                  <span className={styles.ribbonGroupLabel}>Active Visual Summarization</span>
-                </div>
-              ) : null}
-
-              {activeTab === "Design" ? (
-                <div className={styles.ribbonGroup}>
-                  <div className={styles.ribbonGroupItems} style={{ gap: 8 }}>
-                    {POWERBI_SERIES_PALETTE.slice(0, 6).map((hex, i) => (
-                      <button
-                        key={hex}
-                        type="button"
-                        disabled={!selectedVisual}
-                        onClick={() => onUpdateSelectedFormat({ accentColor: hex })}
                         className={styles.ribbonLgBtn}
+                        disabled={!hasDataset}
+                        onClick={onOpenNewMeasure}
                       >
-                        <span
-                          style={{
-                            width: 18,
-                            height: 18,
-                            borderRadius: 3,
-                            background: hex,
-                            border: "1px solid #c8c6c4",
-                          }}
-                        />
-                        <span>Theme {i + 1}</span>
+                        <CalculatorRibbonIcon size={22} />
+                        <span>New<br />measure</span>
                       </button>
-                    ))}
+                      <button
+                        type="button"
+                        className={styles.ribbonLgBtn}
+                        disabled={!hasDataset}
+                        onClick={onOpenNewColumn}
+                      >
+                        <NewColumnRibbonIcon size={22} />
+                        <span>New<br />column</span>
+                      </button>
+                    </div>
+                    <span className={styles.ribbonGroupLabel}>Calculations</span>
                   </div>
-                  <span className={styles.ribbonGroupLabel}>Themes</span>
-                </div>
+
+                  <div className={styles.ribbonGroup}>
+                    <div className={styles.ribbonGroupItems}>
+                      <button
+                        type="button"
+                        className={styles.ribbonLgBtn}
+                        disabled={!hasDataset}
+                        onClick={onOpenRelationships}
+                      >
+                        <RelationshipRibbonIcon size={22} />
+                        <span>Manage<br />relationships</span>
+                      </button>
+                    </div>
+                    <span className={styles.ribbonGroupLabel}>Relationships</span>
+                  </div>
+
+                  <div className={styles.ribbonGroup}>
+                    <div className={styles.ribbonGroupItems} style={{ gap: 8 }}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                        <span style={{ fontSize: 10.5, color: "#605e5c" }}>
+                          {selectedColumn ? `Column: ${selectedColumn.label}` : "Select column in Data"}
+                        </span>
+                        <select
+                          aria-label="Selected column data type"
+                          disabled={!selectedColumn}
+                          value={selectedColumn?.type || "text"}
+                          onChange={(e) => onChangeSelectedColumnType(e.target.value as ColumnType)}
+                          className={styles.chipSelect}
+                          style={{ height: 24, fontSize: 11 }}
+                        >
+                          <option value="text">Data type: Text</option>
+                          <option value="number">Data type: Whole / Decimal</option>
+                          <option value="date">Data type: Date</option>
+                        </select>
+                      </div>
+                    </div>
+                    <span className={styles.ribbonGroupLabel}>Formatting</span>
+                  </div>
+
+                  <div className={styles.ribbonGroup}>
+                    <div className={styles.ribbonGroupItems}>
+                      {(["sum", "average", "count", "min", "max"] as AggregationFn[]).map((fn) => (
+                        <button
+                          key={fn}
+                          type="button"
+                          disabled={!selectedVisual}
+                          onClick={() => onChangeAggregation(fn)}
+                          className={`${styles.ribbonLgBtn} ${selectedVisual?.aggregation === fn ? styles.ribbonLgBtnActive : ""}`}
+                        >
+                          <SlidersHorizontal size={16} color="#117865" />
+                          <span style={{ textTransform: "capitalize" }}>{fn}</span>
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        disabled={!selectedVisual}
+                        onClick={() => onChangeSort("asc")}
+                        className={`${styles.ribbonLgBtn} ${selectedVisual?.sortDir === "asc" ? styles.ribbonLgBtnActive : ""}`}
+                      >
+                        <ArrowUp size={16} />
+                        <span>Sort Asc</span>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!selectedVisual}
+                        onClick={() => onChangeSort("desc")}
+                        className={`${styles.ribbonLgBtn} ${selectedVisual?.sortDir === "desc" ? styles.ribbonLgBtnActive : ""}`}
+                      >
+                        <ArrowDown size={16} />
+                        <span>Sort Desc</span>
+                      </button>
+                    </div>
+                    <span className={styles.ribbonGroupLabel}>Active Visual Summarization</span>
+                  </div>
+                </>
               ) : null}
 
               {activeTab === "View" ? (
                 <>
+                  <div className={styles.ribbonGroup}>
+                    <div className={styles.ribbonGroupItems} style={{ gap: 4 }}>
+                      {POWERBI_THEMES.map((theme) => (
+                        <button
+                          key={theme.id}
+                          type="button"
+                          onClick={() => onSelectTheme(theme.id)}
+                          className={`${styles.ribbonLgBtn} ${activeTheme.id === theme.id ? styles.ribbonLgBtnActive : ""}`}
+                          title={`Apply ${theme.name} theme`}
+                        >
+                          <span style={{ display: "inline-flex", gap: 2 }}>
+                            {theme.palette.slice(0, 3).map((hex) => (
+                              <span
+                                key={hex}
+                                style={{
+                                  width: 8,
+                                  height: 16,
+                                  borderRadius: 1,
+                                  background: hex,
+                                }}
+                              />
+                            ))}
+                          </span>
+                          <span>{theme.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <span className={styles.ribbonGroupLabel}>Themes</span>
+                  </div>
+
+                  <div className={styles.ribbonGroup}>
+                    <div className={styles.ribbonGroupItems}>
+                      <button type="button" className={styles.ribbonLgBtn} onClick={onResetZoom}>
+                        <Maximize2 size={17} />
+                        <span>Fit to<br />page</span>
+                      </button>
+                      <button type="button" className={styles.ribbonLgBtn} onClick={onActualZoom}>
+                        <Square size={17} />
+                        <span>Actual<br />size</span>
+                      </button>
+                    </div>
+                    <span className={styles.ribbonGroupLabel}>Page View</span>
+                  </div>
+
+                  <div className={styles.ribbonGroup}>
+                    <div className={styles.ribbonGroupItems}>
+                      <button
+                        type="button"
+                        onClick={onToggleGridlines}
+                        className={`${styles.ribbonLgBtn} ${showGridlines ? styles.ribbonLgBtnActive : ""}`}
+                      >
+                        <Grid size={17} />
+                        <span>Gridlines</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={onToggleSnapToGrid}
+                        className={`${styles.ribbonLgBtn} ${snapToGrid ? styles.ribbonLgBtnActive : ""}`}
+                      >
+                        <Magnet size={17} />
+                        <span>Snap to<br />grid</span>
+                      </button>
+                    </div>
+                    <span className={styles.ribbonGroupLabel}>Page Options</span>
+                  </div>
+
                   <div className={styles.ribbonGroup}>
                     <div className={styles.ribbonGroupItems}>
                       <button
@@ -710,7 +884,7 @@ export function ApplicationHeader({
                         className={`${styles.ribbonLgBtn} ${showVizPane ? styles.ribbonLgBtnActive : ""}`}
                       >
                         <LayoutGrid size={17} />
-                        <span>Visualizations</span>
+                        <span>Visuals</span>
                       </button>
                       <button
                         type="button"
@@ -721,89 +895,107 @@ export function ApplicationHeader({
                         <span>Data</span>
                       </button>
                     </div>
-                    <span className={styles.ribbonGroupLabel}>Show panes</span>
-                  </div>
-                  <div className={styles.ribbonGroup}>
-                    <div className={styles.ribbonGroupItems}>
-                      <button
-                        type="button"
-                        onClick={onToggleGridlines}
-                        className={`${styles.ribbonLgBtn} ${showGridlines ? styles.ribbonLgBtnActive : ""}`}
-                      >
-                        <Grid size={17} />
-                        <span>Gridlines</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={onToggleReadingView}
-                        className={`${styles.ribbonLgBtn} ${readingView ? styles.ribbonLgBtnActive : ""}`}
-                      >
-                        <Sparkles size={17} color="#117865" />
-                        <span>Reading view</span>
-                      </button>
-                    </div>
-                    <span className={styles.ribbonGroupLabel}>Page view</span>
+                    <span className={styles.ribbonGroupLabel}>Show Panes</span>
                   </div>
                 </>
               ) : null}
 
               {activeTab === "Format" && selectedVisual ? (
-                <div className={styles.ribbonGroup}>
-                  <div className={styles.ribbonGroupItems} style={{ gap: 10 }}>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        onUpdateSelectedFormat({ showDataLabels: !selectedVisual.format.showDataLabels })
-                      }
-                      className={`${styles.ribbonLgBtn} ${selectedVisual.format.showDataLabels ? styles.ribbonLgBtnActive : ""}`}
-                    >
-                      <SlidersHorizontal size={16} />
-                      <span>Data labels</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        onUpdateSelectedFormat({ showLegend: !selectedVisual.format.showLegend })
-                      }
-                      className={`${styles.ribbonLgBtn} ${selectedVisual.format.showLegend ? styles.ribbonLgBtnActive : ""}`}
-                    >
-                      <LayoutGrid size={16} />
-                      <span>Legend</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        onUpdateSelectedFormat({ showBorder: !selectedVisual.format.showBorder })
-                      }
-                      className={`${styles.ribbonLgBtn} ${selectedVisual.format.showBorder ? styles.ribbonLgBtnActive : ""}`}
-                    >
-                      <Square size={16} />
-                      <span>Border</span>
-                    </button>
-                    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                      {POWERBI_SERIES_PALETTE.slice(0, 6).map((hex) => (
-                        <button
-                          key={hex}
-                          type="button"
-                          aria-label={`Set color ${hex}`}
-                          onClick={() => onUpdateSelectedFormat({ accentColor: hex })}
-                          style={{
-                            width: 18,
-                            height: 18,
-                            borderRadius: 3,
-                            background: hex,
-                            border:
-                              selectedVisual.format.accentColor === hex
-                                ? "2px solid #252423"
-                                : "1px solid #c8c6c4",
-                            cursor: "pointer",
-                          }}
-                        />
-                      ))}
+                <>
+                  <div className={styles.ribbonGroup}>
+                    <div className={styles.ribbonGroupItems} style={{ gap: 6 }}>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onUpdateSelectedFormat({ showTitle: !selectedVisual.format.showTitle })
+                        }
+                        className={`${styles.ribbonLgBtn} ${selectedVisual.format.showTitle ? styles.ribbonLgBtnActive : ""}`}
+                      >
+                        <TextBoxRibbonIcon size={18} />
+                        <span>Title</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onUpdateSelectedFormat({ showDataLabels: !selectedVisual.format.showDataLabels })
+                        }
+                        className={`${styles.ribbonLgBtn} ${selectedVisual.format.showDataLabels ? styles.ribbonLgBtnActive : ""}`}
+                      >
+                        <SlidersHorizontal size={16} />
+                        <span>Data labels</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onUpdateSelectedFormat({ showLegend: !selectedVisual.format.showLegend })
+                        }
+                        className={`${styles.ribbonLgBtn} ${selectedVisual.format.showLegend ? styles.ribbonLgBtnActive : ""}`}
+                      >
+                        <LayoutGrid size={16} />
+                        <span>Legend</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onUpdateSelectedFormat({ showBorder: !selectedVisual.format.showBorder })
+                        }
+                        className={`${styles.ribbonLgBtn} ${selectedVisual.format.showBorder ? styles.ribbonLgBtnActive : ""}`}
+                      >
+                        <Square size={16} />
+                        <span>Border</span>
+                      </button>
+                      <div style={{ display: "flex", alignItems: "center", gap: 4, paddingLeft: 4 }}>
+                        {activeTheme.palette.slice(0, 6).map((hex) => (
+                          <button
+                            key={hex}
+                            type="button"
+                            aria-label={`Set color ${hex}`}
+                            onClick={() => onUpdateSelectedFormat({ accentColor: hex })}
+                            style={{
+                              width: 18,
+                              height: 18,
+                              borderRadius: 3,
+                              background: hex,
+                              border:
+                                selectedVisual.format.accentColor === hex
+                                  ? "2px solid #252423"
+                                  : "1px solid #c8c6c4",
+                              cursor: "pointer",
+                            }}
+                          />
+                        ))}
+                      </div>
                     </div>
+                    <span className={styles.ribbonGroupLabel}>Visual Style</span>
                   </div>
-                  <span className={styles.ribbonGroupLabel}>Visual Style</span>
-                </div>
+
+                  <div className={styles.ribbonGroup}>
+                    <div className={styles.ribbonGroupItems}>
+                      <button type="button" className={styles.ribbonLgBtn} onClick={onBringForward}>
+                        <ArrowUp size={16} />
+                        <span>Bring<br />forward</span>
+                      </button>
+                      <button type="button" className={styles.ribbonLgBtn} onClick={onSendBackward}>
+                        <ArrowDown size={16} />
+                        <span>Send<br />backward</span>
+                      </button>
+                      <button type="button" className={styles.ribbonLgBtn} onClick={onDuplicateSelected}>
+                        <CopyIcon size={16} />
+                        <span>Duplicate</span>
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.ribbonLgBtn}
+                        onClick={onDeleteSelected}
+                        style={{ color: "#a4262c" }}
+                      >
+                        <Trash2 size={16} />
+                        <span>Delete</span>
+                      </button>
+                    </div>
+                    <span className={styles.ribbonGroupLabel}>Arrange</span>
+                  </div>
+                </>
               ) : null}
             </div>
           ) : null}

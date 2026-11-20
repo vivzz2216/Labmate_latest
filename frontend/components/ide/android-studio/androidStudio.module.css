@@ -1,13 +1,22 @@
 .studioRoot {
   --as-bg-canvas: #1e1f22;
   --as-bg-chrome: #2b2d30;
+  --as-bg-elevated: #26282b;
+  --as-bg-card: #232528;
   --as-bg-hover: #393b40;
   --as-bg-active-pill: #43454a;
   --as-bg-selected-focused: #2e436e;
   --as-bg-selected-unfocused: #43454a;
+  --as-bg-selected-text: #ffffff;
   --as-bg-current-line: #26282e;
   --as-bg-test-tint: #273828;
+  --as-bg-test-tint-hover: #2e4230;
+  --as-bg-tab-hover: #25272a;
+  --as-bg-tab-active: #25272b;
+  --as-bg-input: #1e1f22;
+  --as-bg-btn: #333539;
   --as-border: #1e1f22;
+  --as-border-panel: #35373b;
   --as-border-subtle: #43454a;
   --as-border-comp: #4e5157;
   --as-accent: #3574f0;
@@ -21,6 +30,7 @@
   --as-text-hint: #6f737a;
   --as-icon-primary: #ced0d6;
   --as-gutter-num: #4b5059;
+  --as-gutter-num-active: #a1a3ab;
   --as-green: #57965c;
   --as-green-bg: #253627;
   --as-red: #db5c5c;
@@ -28,6 +38,18 @@
   --as-yellow: #e0a82e;
   --as-purple: #a571e6;
   --as-orange: #c77d55;
+
+  /* Syntax tokens (Dark - New UI Darcula/Islands) */
+  --as-syn-kw: #cf8e6d;
+  --as-syn-str: #6aab73;
+  --as-syn-num: #2aacb8;
+  --as-syn-comment: #7a7e85;
+  --as-syn-anno: #b3ae60;
+  --as-syn-call: #56a8f5;
+  --as-syn-prop: #c77dbb;
+  --as-syn-tag: #d5b778;
+  --as-syn-attr: #bcbec4;
+  --as-syn-ns: #6f94c6;
 
   /* Pinned to the viewport: 100vw plus the page's default body margin made the window scroll sideways. */
   position: fixed;
@@ -41,6 +63,60 @@
   font-size: 13px;
   line-height: 18px;
   user-select: none;
+}
+
+.studioRoot[data-theme="light"] {
+  --as-bg-canvas: #ffffff;
+  --as-bg-chrome: #f7f8fa;
+  --as-bg-elevated: #f0f1f4;
+  --as-bg-card: #ffffff;
+  --as-bg-hover: #ebecf0;
+  --as-bg-active-pill: #dfe1e5;
+  --as-bg-selected-focused: #d4e2ff;
+  --as-bg-selected-unfocused: #e4e6eb;
+  --as-bg-selected-text: #080808;
+  --as-bg-current-line: #f5f8fe;
+  --as-bg-test-tint: #eef7ef;
+  --as-bg-test-tint-hover: #e1efe3;
+  --as-bg-tab-hover: #f2f4f8;
+  --as-bg-tab-active: #ffffff;
+  --as-bg-input: #ffffff;
+  --as-bg-btn: #ffffff;
+  --as-border: #ebecf0;
+  --as-border-panel: #dfe1e5;
+  --as-border-subtle: #d3d5db;
+  --as-border-comp: #c9ccd6;
+  --as-accent: #3574f0;
+  --as-accent-soft: #e8effe;
+  --as-android-green: #1e9e57;
+  --as-android-green-bg: #e7f6ed;
+  --as-text-primary: #080808;
+  --as-text-code: #080808;
+  --as-text-secondary: #4a4d59;
+  --as-text-muted: #5e6270;
+  --as-text-hint: #6c707e;
+  --as-icon-primary: #494c56;
+  --as-gutter-num: #aeb3c2;
+  --as-gutter-num-active: #494c56;
+  --as-green: #1d7e42;
+  --as-green-bg: #e8f5ec;
+  --as-red: #c93b3b;
+  --as-red-bg: #fdeaea;
+  --as-yellow: #b26b00;
+  --as-purple: #7c3aed;
+  --as-orange: #b45309;
+
+  /* Syntax tokens (IntelliJ Light Classic) */
+  --as-syn-kw: #0033b3;
+  --as-syn-str: #067d17;
+  --as-syn-num: #1750eb;
+  --as-syn-comment: #8c8c8c;
+  --as-syn-anno: #9e880d;
+  --as-syn-call: #00627a;
+  --as-syn-prop: #871094;
+  --as-syn-tag: #0033b3;
+  --as-syn-attr: #174ad4;
+  --as-syn-ns: #871094;
 }
 
 .studioRoot *,
@@ -67,10 +143,93 @@
   background: rgba(169, 173, 180, 0.56);
 }
 
+/* ---------- Desktop Main Menu Bar (26px) ---------- */
+.menuBar {
+  height: 26px;
+  min-height: 26px;
+  background: var(--as-bg-chrome);
+  border-bottom: 1px solid var(--as-border);
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  gap: 2px;
+  z-index: 50;
+  font-size: 12px;
+}
+
+.menuBarItemWrap {
+  position: relative;
+}
+
+.menuBarBtn {
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: var(--as-text-primary);
+  font-size: 12px;
+  font-weight: 400;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+}
+
+.menuBarBtn:hover,
+.menuBarBtnOpen {
+  background: var(--as-bg-hover);
+}
+
+.menuBarDropdown {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  min-width: 235px;
+  background: var(--as-bg-chrome);
+  border: 1px solid var(--as-border-comp);
+  border-radius: 7px;
+  padding: 4px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.36);
+  z-index: 160;
+}
+
+.menuDropdownItem {
+  width: 100%;
+  height: 26px;
+  padding: 0 10px;
+  border: none;
+  background: transparent;
+  color: var(--as-text-primary);
+  font-size: 12px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.menuDropdownItem:hover:not(:disabled) {
+  background: var(--as-bg-selected-focused);
+  color: var(--as-bg-selected-text);
+}
+
+.menuDropdownItem:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.menuShortcut {
+  font-size: 11px;
+  color: var(--as-text-muted);
+  font-family: var(--font-mono), "JetBrains Mono", monospace;
+}
+
 /* ---------- Main Window Header / Top Toolbar (40px) ---------- */
 .mainHeader {
-  height: 40px;
-  min-height: 40px;
+  height: 38px;
+  min-height: 38px;
   background: var(--as-bg-chrome);
   border-bottom: 1px solid var(--as-border);
   display: flex;
@@ -308,11 +467,11 @@
   top: calc(100% + 4px);
   left: 0;
   min-width: 245px;
-  background: #2b2d30;
-  border: 1px solid var(--as-border-subtle);
+  background: var(--as-bg-chrome);
+  border: 1px solid var(--as-border-comp);
   border-radius: 8px;
   padding: 5px;
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.56);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.38);
   z-index: 120;
 }
 
@@ -432,7 +591,7 @@
 
 .stripeBtn:hover {
   background: var(--as-bg-hover);
-  color: #ffffff;
+  color: var(--as-text-primary);
 }
 
 .stripeBtnActive {
@@ -494,7 +653,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid #35373b;
+  border-bottom: 1px solid var(--as-border-panel);
 }
 
 .sideViewDropdownBtn {
@@ -568,7 +727,7 @@
 }
 
 .treeRow:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--as-bg-hover);
 }
 
 .treeRowTestTint {
@@ -576,12 +735,12 @@
 }
 
 .treeRowTestTint:hover {
-  background: #2e4230;
+  background: var(--as-bg-test-tint-hover);
 }
 
 .treeRowSelected {
   background: var(--as-bg-selected-focused) !important;
-  color: #ffffff;
+  color: var(--as-bg-selected-text);
 }
 
 .treeChevron {
@@ -637,7 +796,7 @@
   height: 4px;
   cursor: row-resize;
   background: var(--as-bg-canvas);
-  border-top: 1px solid #161719;
+  border-top: 1px solid var(--as-border);
   flex-shrink: 0;
   transition: background 120ms ease;
 }
@@ -683,7 +842,7 @@
   height: 40px;
   padding: 0 10px 0 12px;
   border: none;
-  border-right: 1px solid rgba(67, 69, 74, 0.32);
+  border-right: 1px solid var(--as-border);
   background: var(--as-bg-canvas);
   color: var(--as-text-secondary);
   font-size: 12.5px;
@@ -695,12 +854,12 @@
 }
 
 .editorTab:hover {
-  background: #25272a;
+  background: var(--as-bg-tab-hover);
   color: var(--as-text-primary);
 }
 
 .editorTabActive {
-  background: #25272b;
+  background: var(--as-bg-tab-active);
   color: var(--as-text-primary);
   font-weight: 500;
 }
@@ -740,8 +899,8 @@
 }
 
 .tabCloseBtn:hover {
-  background: rgba(255, 255, 255, 0.12);
-  color: #ffffff;
+  background: var(--as-bg-hover);
+  color: var(--as-text-primary);
 }
 
 .editorTabRightControls {
@@ -757,7 +916,7 @@
   display: inline-flex;
   align-items: center;
   background: var(--as-bg-chrome);
-  border: 1px solid #3c3e43;
+  border: 1px solid var(--as-border-subtle);
   border-radius: 6px;
   padding: 2px;
   gap: 1px;
@@ -784,7 +943,7 @@
 
 .segmentedBtnActive {
   background: var(--as-bg-hover);
-  color: #ffffff;
+  color: var(--as-text-primary);
   font-weight: 500;
 }
 
@@ -815,8 +974,8 @@
   height: 22px;
   padding: 0 7px;
   border-radius: 5px;
-  background: rgba(43, 45, 48, 0.9);
-  border: 1px solid rgba(78, 81, 87, 0.7);
+  background: var(--as-bg-chrome);
+  border: 1px solid var(--as-border-subtle);
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -833,7 +992,7 @@
   width: 62px;
   min-width: 62px;
   background: var(--as-bg-canvas);
-  border-right: 1px solid #2b2d30;
+  border-right: 1px solid var(--as-border-panel);
   padding: 8px 6px 24px 0;
   overflow: hidden;
   flex-shrink: 0;
@@ -860,7 +1019,100 @@
 }
 
 .gutterLineNumActive {
-  color: #a1a3ab;
+  color: var(--as-gutter-num-active);
+}
+
+.gutterErrorDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--as-red);
+  display: inline-block;
+}
+
+.gutterWarnDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--as-yellow);
+  display: inline-block;
+}
+
+.editorLineError {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 21px;
+  background: rgba(219, 92, 92, 0.14);
+  border-bottom: 1.5px wavy rgba(219, 92, 92, 0.72);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.findReplaceBar {
+  background: var(--as-bg-chrome);
+  border-bottom: 1px solid var(--as-border-panel);
+  padding: 5px 10px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.findInput {
+  height: 24px;
+  min-width: 170px;
+  padding: 0 7px;
+  border-radius: 4px;
+  border: 1px solid var(--as-border-comp);
+  background: var(--as-bg-input);
+  color: var(--as-text-primary);
+  font-size: 12px;
+  outline: none;
+}
+
+.findInput:focus {
+  border-color: var(--as-accent);
+}
+
+.autocompletePopup {
+  position: absolute;
+  z-index: 60;
+  width: 270px;
+  max-height: 190px;
+  overflow-y: auto;
+  background: var(--as-bg-chrome);
+  border: 1px solid var(--as-border-comp);
+  border-radius: 6px;
+  padding: 3px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+  font-family: var(--font-mono), "JetBrains Mono", monospace;
+  font-size: 12px;
+}
+
+.autocompleteItem {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--as-text-primary);
+  padding: 4px 8px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.autocompleteItemActive,
+.autocompleteItem:hover {
+  background: var(--as-bg-selected-focused);
+  color: var(--as-bg-selected-text);
 }
 
 .gutterIconSlot {
@@ -947,7 +1199,7 @@
   background: transparent !important;
   color: transparent !important;
   -webkit-text-fill-color: transparent !important;
-  caret-color: #ced0d6;
+  caret-color: var(--as-text-primary);
   font-family: var(--font-mono), "JetBrains Mono", "Consolas", monospace;
   font-size: 13px;
   line-height: 21px;
@@ -958,44 +1210,44 @@
 }
 
 .studioRoot textarea.editorTextarea::selection {
-  background: rgba(46, 67, 110, 0.78);
+  background: var(--as-bg-selected-focused);
   color: transparent !important;
   -webkit-text-fill-color: transparent !important;
 }
 
-/* Kotlin / XML / Gradle Syntax Tokens (ExpUI Dark) */
+/* Java / Kotlin / XML / Gradle Syntax Tokens */
 .tokKeyword {
-  color: #cf8e6d;
+  color: var(--as-syn-kw);
 }
 .tokString {
-  color: #6aab73;
+  color: var(--as-syn-str);
 }
 .tokNumber {
-  color: #2aacb8;
+  color: var(--as-syn-num);
 }
 .tokComment {
-  color: #7a7e85;
+  color: var(--as-syn-comment);
 }
 .tokAnnotation {
-  color: #b3ae60;
+  color: var(--as-syn-anno);
 }
 .tokCall {
-  color: #56a8f5;
+  color: var(--as-syn-call);
 }
 .tokProperty {
-  color: #c77dbb;
+  color: var(--as-syn-prop);
 }
 .tokTag {
-  color: #d5b778;
+  color: var(--as-syn-tag);
 }
 .tokXmlAttr {
-  color: #bcbec4;
+  color: var(--as-syn-attr);
 }
 .tokXmlNs {
-  color: #6f94c6;
+  color: var(--as-syn-ns);
 }
 .tokNormal {
-  color: #bcbec4;
+  color: var(--as-text-code);
 }
 
 /* ---------- Compose @Preview & XML Layout Designer Surface ---------- */
@@ -1005,8 +1257,8 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: #1e1f22;
-  border-left: 1px solid #2f3136;
+  background: var(--as-bg-canvas);
+  border-left: 1px solid var(--as-border-panel);
   overflow: hidden;
 }
 
@@ -1014,7 +1266,7 @@
   height: 32px;
   min-height: 32px;
   background: var(--as-bg-chrome);
-  border-bottom: 1px solid #35373b;
+  border-bottom: 1px solid var(--as-border-panel);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1035,8 +1287,8 @@
   height: 22px;
   padding: 0 7px;
   border-radius: 5px;
-  background: #253627;
-  color: #87c78c;
+  background: var(--as-green-bg);
+  color: var(--as-green);
   font-size: 11.5px;
   font-weight: 500;
 }
@@ -1061,7 +1313,7 @@
 
 .previewToolBtnActive {
   background: var(--as-bg-selected-focused);
-  color: #ffffff;
+  color: var(--as-bg-selected-text);
 }
 
 .composeCanvasArea {
@@ -1069,7 +1321,7 @@
   min-height: 0;
   overflow: auto;
   padding: 20px;
-  background-color: #1e1f22;
+  background-color: var(--as-bg-canvas);
   background-image: radial-gradient(rgba(134, 138, 145, 0.16) 1px, transparent 1px);
   background-size: 16px 16px;
   display: flex;
@@ -1080,11 +1332,11 @@
 }
 
 .previewCardFrame {
-  background: #25262a;
-  border: 1px solid #3a3d42;
+  background: var(--as-bg-card);
+  border: 1px solid var(--as-border-subtle);
   border-radius: 10px;
   padding: 10px;
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.42);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.25);
 }
 
 .previewCardTitle {
@@ -1101,14 +1353,14 @@
   flex: 1;
   min-height: 0;
   display: flex;
-  overflow: hidden;
+  overflow: auto;
 }
 
 .xmlLeftDock {
-  width: 148px;
-  min-width: 132px;
+  width: 132px;
+  min-width: 118px;
   background: var(--as-bg-chrome);
-  border-right: 1px solid #35373b;
+  border-right: 1px solid var(--as-border-panel);
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -1117,8 +1369,8 @@
 .xmlSectionBar {
   height: 26px;
   padding: 0 8px;
-  background: #26282b;
-  border-bottom: 1px solid #35373b;
+  background: var(--as-bg-elevated);
+  border-bottom: 1px solid var(--as-border-panel);
   font-size: 11.5px;
   font-weight: 600;
   color: var(--as-text-primary);
@@ -1129,13 +1381,15 @@
 
 .xmlPaletteCols {
   display: grid;
-  grid-template-columns: 58px 1fr;
-  height: 155px;
-  border-bottom: 1px solid #35373b;
+  grid-template-columns: 1fr;
+  max-height: 175px;
+  overflow: auto;
+  border-bottom: 1px solid var(--as-border-panel);
+  padding: 4px;
 }
 
 .xmlCategoryList {
-  border-right: 1px solid #35373b;
+  border-right: 1px solid var(--as-border-panel);
   overflow: auto;
   padding: 4px;
 }
@@ -1145,7 +1399,7 @@
   border: none;
   background: transparent;
   color: var(--as-text-secondary);
-  font-size: 11px;
+  font-size: 11.5px;
   text-align: left;
   padding: 4px 6px;
   border-radius: 4px;
@@ -1153,30 +1407,32 @@
 }
 
 .xmlPaletteItem:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--as-bg-hover);
   color: var(--as-text-primary);
 }
 
 .xmlPaletteItemActive {
   background: var(--as-bg-selected-focused);
-  color: #ffffff;
+  color: var(--as-bg-selected-text);
 }
 
 .xmlCenterStage {
   flex: 1;
-  min-width: 0;
+  min-width: 180px;
   overflow: auto;
-  padding: 16px;
+  padding: 12px;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 18px;
-  background: #1e1f22;
+  justify-content: safe center;
+  gap: 14px;
+  background: var(--as-bg-canvas);
 }
 
 .xmlSurfacePhone {
-  width: 226px;
-  min-height: 390px;
+  width: 212px;
+  min-width: 196px;
+  min-height: 360px;
+  flex-shrink: 0;
   border-radius: 14px;
   overflow: hidden;
   border: 2px solid #43454a;
@@ -1198,10 +1454,10 @@
 }
 
 .xmlRightAttrs {
-  width: 158px;
-  min-width: 142px;
+  width: 162px;
+  min-width: 146px;
   background: var(--as-bg-chrome);
-  border-left: 1px solid #35373b;
+  border-left: 1px solid var(--as-border-panel);
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -1209,7 +1465,7 @@
 }
 
 .attrGroup {
-  border-bottom: 1px solid #35373b;
+  border-bottom: 1px solid var(--as-border-panel);
   padding: 8px 10px;
 }
 
@@ -1236,7 +1492,7 @@
 .attrInput {
   width: 108px;
   height: 22px;
-  background: var(--as-bg-canvas);
+  background: var(--as-bg-input);
   border: 1px solid var(--as-border-comp);
   border-radius: 4px;
   padding: 0 6px;
@@ -1258,7 +1514,7 @@
   height: 34px;
   min-height: 34px;
   background: var(--as-bg-chrome);
-  border-bottom: 1px solid #35373b;
+  border-bottom: 1px solid var(--as-border-panel);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1301,8 +1557,8 @@
 }
 
 .bottomTabBtnActive {
-  color: #ffffff;
-  font-weight: 500;
+  color: var(--as-text-primary);
+  font-weight: 600;
 }
 
 .bottomTabBtnActive::after {
@@ -1320,7 +1576,7 @@
 .logcatFilterToolbar {
   min-height: 36px;
   background: var(--as-bg-chrome);
-  border-bottom: 1px solid #35373b;
+  border-bottom: 1px solid var(--as-border-panel);
   padding: 4px 10px;
   display: flex;
   align-items: center;
@@ -1331,8 +1587,8 @@
   height: 26px;
   padding: 0 8px;
   border-radius: 6px;
-  border: 1px solid #43454a;
-  background: #232528;
+  border: 1px solid var(--as-border-subtle);
+  background: var(--as-bg-card);
   color: var(--as-text-primary);
   font-size: 12px;
   display: inline-flex;
@@ -1343,7 +1599,7 @@
 }
 
 .logcatDeviceSelect:hover {
-  border-color: #5b5f66;
+  border-color: var(--as-border-comp);
 }
 
 .logcatQueryBox {
@@ -1351,8 +1607,8 @@
   min-width: 0;
   height: 26px;
   border-radius: 6px;
-  border: 1px solid #43454a;
-  background: var(--as-bg-canvas);
+  border: 1px solid var(--as-border-subtle);
+  background: var(--as-bg-input);
   padding: 0 6px;
   display: flex;
   align-items: center;
@@ -1404,7 +1660,7 @@
   width: 34px;
   min-width: 34px;
   background: var(--as-bg-chrome);
-  border-right: 1px solid #35373b;
+  border-right: 1px solid var(--as-border-panel);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1440,16 +1696,16 @@
 }
 
 .logcatRow:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--as-bg-hover);
 }
 
 .logcatTimestamp {
-  color: #868a91;
+  color: var(--as-text-muted);
   flex-shrink: 0;
 }
 
 .logcatPid {
-  color: #868a91;
+  color: var(--as-text-muted);
   min-width: 86px;
   flex-shrink: 0;
 }
@@ -1463,7 +1719,7 @@
 }
 
 .logcatPkg {
-  color: #a9b7c6;
+  color: var(--as-text-secondary);
   min-width: 195px;
   max-width: 195px;
   overflow: hidden;
@@ -1482,7 +1738,7 @@
   flex-shrink: 0;
 }
 
-/* ---------- Right Tool Panel (Running Devices Emulator, Gradle, Device Manager, Gemini) ---------- */
+/* ---------- Right Tool Panel (Running Devices Emulator, Gradle, Device Manager) ---------- */
 .rightToolPanel {
   background: var(--as-bg-chrome);
   display: flex;
@@ -1494,8 +1750,8 @@
 
 .emulatorToolbar {
   min-height: 32px;
-  background: #26282b;
-  border-bottom: 1px solid #35373b;
+  background: var(--as-bg-elevated);
+  border-bottom: 1px solid var(--as-border-panel);
   padding: 3px 6px;
   display: flex;
   align-items: center;
@@ -1674,10 +1930,11 @@
   width: 680px;
   max-width: 92vw;
   max-height: 82vh;
-  background: #2b2d30;
-  border: 1px solid #4e5157;
+  background: var(--as-bg-chrome);
+  border: 1px solid var(--as-border-comp);
   border-radius: 10px;
-  box-shadow: 0 24px 56px rgba(0, 0, 0, 0.72);
+  box-shadow: 0 24px 56px rgba(0, 0, 0, 0.52);
+  color: var(--as-text-primary);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1686,7 +1943,7 @@
 .modalHeader {
   height: 40px;
   padding: 0 14px;
-  border-bottom: 1px solid #393b40;
+  border-bottom: 1px solid var(--as-border-subtle);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1703,7 +1960,7 @@
 .modalFooter {
   height: 44px;
   padding: 0 14px;
-  border-top: 1px solid #393b40;
+  border-top: 1px solid var(--as-border-subtle);
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -1730,8 +1987,8 @@
   height: 28px;
   padding: 0 12px;
   border-radius: 6px;
-  border: 1px solid #4e5157;
-  background: #333539;
+  border: 1px solid var(--as-border-comp);
+  background: var(--as-bg-btn);
   color: var(--as-text-primary);
   font-size: 12.5px;
   cursor: pointer;
@@ -1745,18 +2002,63 @@
   position: fixed;
   right: 52px;
   bottom: 36px;
-  background: #2b2d30;
-  border: 1px solid #4e5157;
+  background: var(--as-bg-chrome);
+  border: 1px solid var(--as-border-comp);
   border-left: 3px solid var(--as-android-green);
   border-radius: 8px;
   padding: 9px 14px;
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.52);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.36);
   font-size: 12.5px;
   color: var(--as-text-primary);
   z-index: 220;
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.contextMenu {
+  position: fixed;
+  z-index: 240;
+  min-width: 195px;
+  background: var(--as-bg-chrome);
+  border: 1px solid var(--as-border-comp);
+  border-radius: 7px;
+  padding: 4px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.42);
+}
+
+.emulatorToastOverlay {
+  position: absolute;
+  bottom: 34px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 90%;
+  background: rgba(28, 27, 31, 0.92);
+  color: #ffffff;
+  font-size: 10.5px;
+  line-height: 14px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  z-index: 15;
+  text-align: center;
+  pointer-events: none;
+}
+
+.emulatorInputField {
+  width: 100%;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid #bdb7c4;
+  background: #ffffff;
+  color: #1c1b1f;
+  font-size: 11.5px;
+  outline: none;
+}
+
+.emulatorInputField:focus {
+  border-color: #3574f0;
+  box-shadow: 0 0 0 2px rgba(53, 116, 240, 0.2);
 }
 
 /* ---------- Workspace, Right Dock, Emulator, Device Manager, Gradle & Modal Classes ---------- */
@@ -1795,7 +2097,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid #35373b;
+  border-bottom: 1px solid var(--as-border-panel);
   background: var(--as-bg-chrome);
 }
 
@@ -1953,13 +2255,13 @@
   gap: 10px;
   padding: 8px 10px;
   border-radius: 6px;
-  background: #232528;
-  border: 1px solid #393b40;
+  background: var(--as-bg-card);
+  border: 1px solid var(--as-border-subtle);
   cursor: pointer;
 }
 
 .deviceCard:hover {
-  background: #2e3136;
+  background: var(--as-bg-hover);
 }
 
 .deviceMeta {
@@ -2001,7 +2303,7 @@
 }
 
 .gradleTaskRow:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--as-bg-hover);
   color: var(--as-text-primary);
 }
 
@@ -2033,21 +2335,21 @@
 .sdkTable td {
   text-align: left;
   padding: 6px 8px;
-  border-bottom: 1px solid #35373b;
+  border-bottom: 1px solid var(--as-border-panel);
 }
 
 .sdkTable th {
   color: var(--as-text-secondary);
   font-weight: 600;
-  background: #232528;
+  background: var(--as-bg-card);
 }
 
 .modalBtn {
   height: 28px;
   padding: 0 12px;
   border-radius: 6px;
-  border: 1px solid #4e5157;
-  background: #333539;
+  border: 1px solid var(--as-border-comp);
+  background: var(--as-bg-btn);
   color: var(--as-text-primary);
   font-size: 12px;
   cursor: pointer;

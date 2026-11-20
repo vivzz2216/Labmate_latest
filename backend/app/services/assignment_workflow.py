@@ -37,7 +37,8 @@ from .analysis_service import normalize_generated_code, repair_generated_code
 from .profile_service import UserProfileService
 from .evidence_planner import plan_experiment, select_evidence, verification_summary
 from .manual_sections import (distributed_java_requested, extract_manual_conclusion, extract_viva_questions,
-                              numbered_experiments, numbered_questions, ManualStructureError)
+                              manual_language_hint, numbered_experiments, numbered_questions, section_language,
+                              ManualStructureError)
 from .pdf_ocr import NotLabManualError
 from .manual_limits import validate_manual, ManualLimitError
 from .worker_health import WorkerUnavailableError, worker_health
@@ -583,7 +584,9 @@ async def _extract_assignment(workflow_id: int):
                        f"Preserved all {len(sections)} numbered experiments and their original requirements without model rewriting."
                        + (f" {studio_count} networks experiment(s) will be built in LabMate's practice environment." if studio_count else ""))
                 return
-            text = "\n".join(programming_lines(original_text.splitlines(), mode=mode))
+            document_lines = original_text.splitlines()
+            manual_language = manual_language_hint(document_lines)
+            text = "\n".join(programming_lines(document_lines, mode=mode))
             record(workflow, db, "extract", 10, f"Document read. Identifying assignment questions with {generation_service.provider_name}.")
             async def retry_status(attempt, delay, status):
                 record(workflow, db, workflow.stage, workflow.progress, f"{generation_service.provider_name} is busy. Retry {attempt} in {delay:.1f}s; progress is saved.")
@@ -625,10 +628,7 @@ async def _extract_assignment(workflow_id: int):
                 if not question_text or len(question_text) > 15000 or language not in [*LANGUAGES, "theory"]:
                     raise ValueError("A question could not be extracted correctly. Please retry extraction.")
                 if language == "python":
-                    # PySpark, TensorFlow or a Colab notebook needs the notebook runtime; the model sometimes says python.
-                    from .manual_sections import section_language
-                    if section_language("", question_text) == "colab":
-                        language = "colab"
+                    language = section_language("", question_text, default=manual_language or "python")
                 item = {"id": index + 1, "text": question_text, "language": language}
                 if question.get("is_theory") or language == "theory":
                     item["is_theory"] = True
@@ -676,10 +676,13 @@ async def _extract_assignment(workflow_id: int):
                     await asyncio.to_thread(local_upload_path, upload.file_path), upload.file_type)
                 local_tasks = filter_lab_tasks(local_tasks or [], mode="code_only")
                 if local_tasks:
+                    fallback_language = manual_language_hint(original_text.splitlines()) or "python"
                     clean = []
                     for index, task in enumerate(local_tasks):
                         question_text = str(task.get("question_text") or task.get("text") or "").strip()
                         language = task.get("detected_language") or task.get("language") or "python"
+                        if language == "python":
+                            language = section_language("", question_text, default=fallback_language)
                         if language == "java" and distributed_java_requested(question_text):
                             language = "distributed"
                         if language not in LANGUAGES:
@@ -1367,15 +1370,16 @@ async def _process_assignment(workflow_id: int):
                         exp_no = f"{int(question['experiment_no']):02d}"
                     is_dl = bool(re.search(r'\b(torch|pytorch|tensorflow|keras|deep\s+learning|neural\s+network|perceptron|autoencoder|backpropagation|cnn|rnn|lstm|mlp)\b', question['text'] + '\n' + (code or ''), re.I))
                     nb_subject = 'DLLab' if is_dl else 'DSLab'
-                    nb_template = 'jupyter' if question.get('python_template') == 'jupyter' else 'colab'
+                    nb_template = (question.get('notebook_template', 'colab') if language == 'colab'
+                                   else 'jupyter' if question.get('python_template') == 'jupyter' else 'colab')
                     notebook_config = {'colab_theme': question.get('colab_theme','dark'), 'notebook_template': nb_template,
                                        'jupyter_theme': question.get('jupyter_theme', 'light'), 'datasets': question_datasets(question) or None,
                                        'exp_no': exp_no, 'student_name': student_name, 'subject': nb_subject,
-                                       'notebook_template': 'jupyter' if language == 'python' and question.get('python_template') == 'jupyter' else 'colab',
-                                       'jupyter_theme': question.get('jupyter_theme', 'light'),
                                        'notebook_title': f"{nb_subject}_{student_name.split()[0]}_Exp{exp_no}.ipynb"}
                 elif evidence_plan['category'] == 'rstudio':
                     notebook_config = {'rstudio_theme': question.get('rstudio_theme', 'light')}
+                elif actual_language == 'sql':
+                    notebook_config = {'sql_template': question.get('source_ide') or 'workbench'}
                 if code:
                     record(workflow, db, "execute", progress, f"Running question {index + 1} ({actual_language}).")
                     try:
@@ -1579,7 +1583,8 @@ async def _process_assignment(workflow_id: int):
                         evidence_plan['required_source_files']=[src_filename] if actual_language in {'ubuntu','r'} else [name for name,_ in source_plan['files']]
                         if source_policy == 'complete':
                             evidence_plan['complete_source_lines']={name:len(text.splitlines()) for name,text in source_plan['files']}
-                        evidence_plan['source_selection']=({'policy': 'complete', 'renderer': 'mysql_workbench', 'captured_files': [src_filename]} if actual_language == 'sql' else {k:v for k,v in source_plan.items() if k!='files'})
+                        sql_renderer = 'mysql_cli' if question.get('source_ide') == 'mysql-cli' else 'mysql_workbench'
+                        evidence_plan['source_selection']=({'policy': 'complete', 'renderer': sql_renderer, 'captured_files': [src_filename]} if actual_language == 'sql' else {k:v for k,v in source_plan.items() if k!='files'})
                         if category == 'rstudio':
                             evidence_plan['complete_source_lines']={src_filename:(verification or {}).get('source_lines',len(code.splitlines()))}
                             evidence_plan['source_selection']={'policy':'complete','renderer':'rstudio','theme':question.get('rstudio_theme','light'),'captured_files':[src_filename]}
@@ -1787,6 +1792,7 @@ def build_word_report(upload, workflow):
     from .compact_report import _filter_output_only_paths
     from .docx_layout import embed_screenshots_after, find_question_anchor
     from .instruction_policy import parse_instruction_preferences
+    from .pdf_render import render_page_image
     from .student_diagnostics import execution_was_not_attempted, student_failure_message
 
     upload = SimpleNamespace(**{**vars(upload), 'file_path': local_upload_path(upload.file_path)})
@@ -1822,7 +1828,7 @@ def build_word_report(upload, workflow):
             document.add_paragraph(upload.original_filename)
             with pdfplumber.open(upload.file_path) as pdf:
                 for page in pdf.pages:
-                    image = page.to_image(resolution=130).original
+                    image = render_page_image(page)
                     buffer = io.BytesIO()
                     image.save(buffer, format="PNG")
                     buffer.seek(0)

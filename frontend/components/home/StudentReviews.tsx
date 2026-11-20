@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { MessageSquare, Star } from "lucide-react";
 import styles from "./HomepageSections.module.css";
 
-type Review = { id: number; rating: number; message: string; created_at: string | null };
+type Review = { id: number; rating: number; message: string; created_at: string | null; student_name?: string };
 type ReviewPage = { reviews: Review[]; total: number; average_rating: number | null };
 
 export default function StudentReviews() {
@@ -15,24 +15,24 @@ export default function StudentReviews() {
   const load = useCallback(async (offset = 0) => {
     setBusy(true); setError(false);
     try {
-      const response = await fetch(`/api/feedback/reviews?limit=6&offset=${offset}`, { signal: AbortSignal.timeout(8000), credentials: "omit" });
+      const response = await fetch(`/api/feedback/reviews?limit=6&offset=${offset}`, {
+        signal: AbortSignal.timeout(8000),
+        cache: "no-store",
+      });
       if (!response.ok) throw new Error("Reviews unavailable");
       const page: ReviewPage = await response.json();
       if (!Array.isArray(page.reviews) || !Number.isFinite(page.total)) throw new Error("Invalid review response");
       setData(previous => ({ ...page, reviews: offset ? [...(previous?.reviews || []), ...page.reviews] : page.reviews }));
     } catch { setError(true); } finally { setBusy(false); }
   }, []);
+
   useEffect(() => {
-    const observer = new IntersectionObserver(entries => {
-      if (entries.some(entry => entry.isIntersecting)) { void load(); observer.disconnect(); }
-    }, { rootMargin: "300px" });
-    if (section.current) observer.observe(section.current);
-    return () => observer.disconnect();
+    void load();
   }, [load]);
 
   // Until students have shared ratings, show nothing: an empty "be the first" box tells visitors nobody uses
-  // LabMate yet. The invisible marker still triggers the first load when the visitor scrolls near it.
-  if (!data || data.total === 0) return <div ref={section} aria-hidden="true" />;
+  // LabMate yet. The invisible marker preserves the anchor for direct navigation.
+  if (!data || data.total === 0) return <div id="reviews" ref={section} style={{ minHeight: "1px" }} aria-hidden="true" />;
 
   return <section id="reviews" ref={section} className={styles.section} aria-labelledby="reviews-heading">
     <div className={styles.sectionHeader}>
@@ -45,7 +45,7 @@ export default function StudentReviews() {
     {data?.reviews.length ? <div className={styles.reviewGrid}>{data.reviews.map(review => <article key={review.id} className={styles.review}>
       <div className={styles.stars} aria-label={`${review.rating} out of 5 stars`}>{[1, 2, 3, 4, 5].map(n => <Star key={n} size={15} aria-hidden="true" fill={n <= review.rating ? "currentColor" : "none"} />)}</div>
       <blockquote>{review.message}</blockquote>
-      <footer><span>Student</span>{review.created_at && <time dateTime={review.created_at}>{new Date(review.created_at).toLocaleDateString("en-IN", { month: "short", year: "numeric" })}</time>}</footer>
+      <footer><span>{review.student_name || "Student"}</span>{review.created_at && <time dateTime={review.created_at}>{new Date(review.created_at).toLocaleDateString("en-IN", { month: "short", year: "numeric" })}</time>}</footer>
     </article>)}</div> : <div className={styles.reviewEmpty}>
       <MessageSquare size={28} aria-hidden="true" />
       <div><h3>{error ? "Reviews are temporarily unavailable." : data ? "Your experience could be the first." : "Student voices belong here."}</h3>

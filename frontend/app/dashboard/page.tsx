@@ -28,6 +28,8 @@ import DashboardShell, {
 } from "@/components/dashboard/DashboardShell";
 import { useAuth } from "@/contexts/BasicAuthContext";
 import CreditStatus from "@/components/billing/CreditStatus";
+import LabRequestCard from "@/components/dashboard/LabRequestCard";
+import StudentFeedbackCard from "@/components/dashboard/StudentFeedbackCard";
 import { apiService } from "@/lib/api";
 import { errorMessage, saveReport } from "@/lib/workflow";
 import styles from "./dashboard.module.css";
@@ -149,7 +151,7 @@ export default function DashboardPage() {
         searchValue={search}
         onSearchChange={setSearch}
         searchPlaceholder="Search labs, languages, reports..."
-        lockViewport={true}
+        lockViewport={false}
       >
         {/* Overview Header Bar */}
         <section className={styles.welcomeCard}>
@@ -428,6 +430,12 @@ export default function DashboardPage() {
             </section>
           </aside>
         </div>
+
+        {/* Student Voice & Requests: "What lab do you need?" Q&A and Homepage Feedback */}
+        <section className={styles.communityGrid} aria-label="Student voice and lab requests">
+          <LabRequestCard />
+          <StudentFeedbackCard />
+        </section>
       </DashboardShell>
     </>
   );

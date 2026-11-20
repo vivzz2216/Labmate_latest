@@ -5,79 +5,125 @@ import { Check, Eraser, Search } from "lucide-react";
 import {
   aggregateByDimension,
   aggregateKpi,
-  applyDatasetFilters,
+  buildPivotMatrix,
+  resolveTableRows,
 } from "@/lib/powerbi/csvEngine";
+import { POWERBI_SERIES_PALETTE } from "@/lib/powerbi/palette";
 import type {
   ColumnMeta,
   CrossFilterSelection,
   DataRow,
+  DatasetModel,
   DateRangeFilter,
+  MeasureDef,
+  NumericRangeFilter,
   PowerBiVisual,
+  TableRelationship,
 } from "@/lib/powerbi/types";
 import { DataTable } from "./DataTable";
 import { DateRangePicker } from "./DateRangePicker";
+import { MatrixVisual } from "./MatrixVisual";
 import { MetricCard } from "./MetricCard";
 import { PowerBiSvgCharts } from "./PowerBiSvgCharts";
 import styles from "./powerbi.module.css";
 
 interface ChartContainerProps {
   visual: PowerBiVisual;
-  columns: ColumnMeta[];
-  allRows: DataRow[];
+  tables: DatasetModel[];
+  measures: MeasureDef[];
+  relationships: TableRelationship[];
   reportFilters: Record<string, string[]>;
   pageFilters: Record<string, string[]>;
+  numericFilters?: Record<string, NumericRangeFilter>;
   slicerFilters: Record<string, string[]>;
   dateRange: DateRangeFilter | null;
   crossFilter: CrossFilterSelection | null;
+  themePalette?: readonly string[];
   onCrossFilter: (next: CrossFilterSelection | null) => void;
   onToggleSlicerValue: (column: string, value: string) => void;
+  onSelectAllSlicerValues: (column: string, allValues: string[]) => void;
   onClearSlicerColumn: (column: string) => void;
   onDateRangeChange: (next: DateRangeFilter | null) => void;
+  onUpdateTextBox?: (visualId: string, textContent: string) => void;
 }
 
-/** Dispatches each PowerBiVisual with real live aggregation, slicing, and cross-filtering. */
+/** Dispatches each PowerBiVisual with live aggregation, relationships, measures, matrix pivot, slicing & cross-filtering. */
 export function ChartContainer({
   visual,
-  columns,
-  allRows,
+  tables,
+  measures,
+  relationships,
   reportFilters,
   pageFilters,
+  numericFilters,
   slicerFilters,
   dateRange,
   crossFilter,
+  themePalette = POWERBI_SERIES_PALETTE,
   onCrossFilter,
   onToggleSlicerValue,
+  onSelectAllSlicerValues,
   onClearSlicerColumn,
   onDateRangeChange,
+  onUpdateTextBox,
 }: ChartContainerProps) {
   const [slicerSearch, setSlicerSearch] = useState("");
 
-  // A visual ignores its own emitted cross-filter so bars stay visible for deselection
+  const activeTable = useMemo(() => {
+    if (visual.tableId) {
+      const exact = tables.find((t) => (t.id || t.name) === visual.tableId);
+      if (exact) return exact;
+    }
+    return tables[0];
+  }, [tables, visual.tableId]);
+
+  const columns: ColumnMeta[] = useMemo(
+    () => activeTable?.columns || [],
+    [activeTable],
+  );
+  const tableId = activeTable ? activeTable.id || activeTable.name : "";
+  const tableMeasures = useMemo(
+    () => measures.filter((m) => m.tableId === tableId || !m.tableId),
+    [measures, tableId],
+  );
+
+  // A visual ignores its own emitted cross-filter so items stay visible for deselection
   const effectiveCross =
     crossFilter && crossFilter.sourceVisualId !== visual.id ? crossFilter : null;
 
   const scopedRows = useMemo(
     () =>
-      applyDatasetFilters(allRows, {
+      resolveTableRows(tableId, tables, relationships, {
         reportFilters,
         pageFilters,
         slicerFilters: visual.type === "slicer" ? {} : slicerFilters,
         visualFilters: visual.visualFilters,
+        numericFilters: { ...(numericFilters || {}), ...(visual.numericFilters || {}) },
         crossFilter: effectiveCross,
         dateRange: visual.type === "slicer" ? null : dateRange,
       }),
-    [allRows, reportFilters, pageFilters, slicerFilters, visual, effectiveCross, dateRange],
+    [tableId, tables, relationships, reportFilters, pageFilters, slicerFilters, numericFilters, visual, effectiveCross, dateRange],
   );
 
   const sliceColName = visual.xAxis || columns[0]?.name || "";
+  const allRowsForTable = useMemo(
+    () => activeTable?.rows || [],
+    [activeTable],
+  );
+
   const uniqueSlicerValues = useMemo(() => {
     if (visual.type !== "slicer") return [];
-    const vals = Array.from(
-      new Set(allRows.map((r) => String(r[sliceColName] ?? "")).filter(Boolean)),
-    ).sort();
+    const seen = new Set<string>();
+    for (let i = 0; i < allRowsForTable.length; i++) {
+      const v = allRowsForTable[i][sliceColName];
+      if (v !== null && v !== undefined && String(v) !== "") {
+        seen.add(String(v));
+      }
+    }
+    const vals = Array.from(seen).sort();
     const q = slicerSearch.trim().toLowerCase();
     return q ? vals.filter((v) => v.toLowerCase().includes(q)) : vals;
-  }, [visual.type, allRows, sliceColName, slicerSearch]);
+  }, [visual.type, allRowsForTable, sliceColName, slicerSearch]);
 
   const grouped = useMemo(
     () =>
@@ -87,9 +133,46 @@ export function ChartContainer({
         visual.yAxis,
         visual.aggregation,
         visual.format.accentColor,
+        {
+          legendCol: visual.type !== "matrix" ? visual.legend : undefined,
+          sortBy: visual.sortBy,
+          sortDir: visual.sortDir,
+          perFieldAggregations: visual.perFieldAggregations,
+          measures: tableMeasures,
+          columns,
+          palette: themePalette,
+        },
       ),
-    [scopedRows, visual.xAxis, visual.yAxis, visual.aggregation, visual.format.accentColor],
+    [scopedRows, visual, tableMeasures, columns, themePalette],
   );
+
+  // ---------- TEXT BOX VISUAL ----------
+  if (visual.type === "textbox") {
+    return (
+      <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+        <textarea
+          aria-label={visual.title || "Report text box"}
+          value={visual.textContent ?? "Double-click or type report notes here..."}
+          onChange={(e) => onUpdateTextBox?.(visual.id, e.target.value)}
+          onClick={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+          style={{
+            flex: 1,
+            width: "100%",
+            border: "1px solid transparent",
+            background: "transparent",
+            resize: "none",
+            outline: "none",
+            fontFamily: '"Segoe UI", sans-serif',
+            fontSize: visual.fontSize || 14,
+            lineHeight: 1.45,
+            color: "#252423",
+            padding: 4,
+          }}
+        />
+      </div>
+    );
+  }
 
   // ---------- SLICER VISUAL ----------
   if (visual.type === "slicer") {
@@ -104,21 +187,48 @@ export function ChartContainer({
           <span style={{ fontSize: 11, color: "#605e5c" }}>
             {activeSelections.length > 0 ? `${activeSelections.length} selected` : "All"}
           </span>
-          {(activeSelections.length > 0 || (colMeta?.type === "date" && dateRange)) ? (
-            <button
-              type="button"
-              className={styles.visualIconBtn}
-              title="Clear selections"
-              aria-label="Clear slicer selections"
-              onClick={(e) => {
-                e.stopPropagation();
-                onClearSlicerColumn(sliceColName);
-                if (colMeta?.type === "date") onDateRangeChange(null);
-              }}
-            >
-              <Eraser size={12} />
-            </button>
-          ) : null}
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+            {uniqueSlicerValues.length > 0 && activeSelections.length > 0 ? (
+              <button
+                type="button"
+                className={styles.ribbonSmBtn}
+                style={{ fontSize: 10, height: 18, padding: "0 4px" }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClearSlicerColumn(sliceColName);
+                }}
+              >
+                All
+              </button>
+            ) : uniqueSlicerValues.length > 1 ? (
+              <button
+                type="button"
+                className={styles.ribbonSmBtn}
+                style={{ fontSize: 10, height: 18, padding: "0 4px" }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelectAllSlicerValues(sliceColName, uniqueSlicerValues.slice(0, 80));
+                }}
+              >
+                Select all
+              </button>
+            ) : null}
+            {(activeSelections.length > 0 || (colMeta?.type === "date" && dateRange)) ? (
+              <button
+                type="button"
+                className={styles.visualIconBtn}
+                title="Clear selections"
+                aria-label="Clear slicer selections"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClearSlicerColumn(sliceColName);
+                  if (colMeta?.type === "date") onDateRangeChange(null);
+                }}
+              >
+                <Eraser size={12} />
+              </button>
+            ) : null}
+          </div>
         </div>
 
         {colMeta?.type === "date" ? (
@@ -184,24 +294,88 @@ export function ChartContainer({
   if (visual.type === "card") {
     const field = visual.yAxis[0] || visual.xAxis || "";
     const meta = columns.find((c) => c.name === field);
-    const val = aggregateKpi(scopedRows, field, visual.aggregation);
+    const measureMeta = tableMeasures.find((m) => m.name === field);
+    const agg = visual.perFieldAggregations?.[field] || visual.aggregation;
+    const val = aggregateKpi(scopedRows, field, agg, tableMeasures, columns);
     return (
       <MetricCard
         value={val}
         field={field}
-        label={meta?.label || field || "Metric"}
-        aggregation={visual.aggregation}
+        label={meta?.label || measureMeta?.name || field || "Metric"}
+        aggregation={measureMeta ? "sum" : agg}
+        isMeasure={Boolean(measureMeta)}
         showDataLabels={visual.format.showDataLabels}
       />
     );
   }
 
-  // ---------- TABLE / MATRIX ----------
-  if (visual.type === "table" || visual.type === "matrix") {
+  // ---------- MATRIX PIVOT VISUAL ----------
+  if (visual.type === "matrix") {
+    const valField = visual.yAxis[0];
+    const pivot = buildPivotMatrix(
+      scopedRows,
+      visual.xAxis,
+      visual.legend,
+      valField,
+      visual.aggregation,
+      tableMeasures,
+      columns,
+    );
+    return (
+      <MatrixVisual
+        matrix={pivot}
+        rowField={visual.xAxis}
+        colField={visual.legend}
+        valueField={valField}
+        accentColor={visual.format.accentColor}
+        activeRowValue={
+          crossFilter && crossFilter.column === visual.xAxis ? crossFilter.value : undefined
+        }
+        onSelectRow={
+          visual.xAxis
+            ? (rowVal) => {
+              if (
+                crossFilter &&
+                crossFilter.column === visual.xAxis &&
+                crossFilter.value === rowVal
+              ) {
+                onCrossFilter(null);
+              } else {
+                onCrossFilter({
+                  tableId,
+                  column: visual.xAxis!,
+                  value: rowVal,
+                  sourceVisualId: visual.id,
+                });
+              }
+            }
+            : undefined
+        }
+      />
+    );
+  }
+
+  // ---------- TABLE VISUAL ----------
+  if (visual.type === "table") {
     const axisCol = visual.xAxis;
     const xMeta = columns.find((c) => c.name === axisCol);
-    const yMetas = visual.yAxis
-      .map((name) => columns.find((c) => c.name === name))
+    const yMetas: ColumnMeta[] = visual.yAxis
+      .map((name) => {
+        const col = columns.find((c) => c.name === name);
+        if (col) return col;
+        const m = tableMeasures.find((ms) => ms.name === name);
+        if (m) {
+          return {
+            name: m.name,
+            label: m.name,
+            type: "number" as const,
+            isNumeric: true,
+            uniqueCount: 0,
+            sampleValues: [],
+          };
+        }
+        return null;
+      })
       .filter(Boolean) as ColumnMeta[];
 
     const tableColumns: ColumnMeta[] = [
@@ -212,31 +386,39 @@ export function ChartContainer({
     const tableRows: DataRow[] =
       axisCol && yMetas.length > 0
         ? grouped.rows.map((gr) => ({
-            [axisCol]: gr.category,
-            ...gr.values,
-          }))
+          [axisCol]: gr.category,
+          ...gr.values,
+        }))
         : scopedRows.slice(0, 60);
 
     return (
-      <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }} onClick={(e) => e.stopPropagation()}>
+      <div
+        style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <DataTable
           columns={tableColumns.length > 0 ? tableColumns : columns.slice(0, 4)}
           rows={tableRows}
           compact
-          pageSize={12}
+          pageSize={15}
           activeColumn={axisCol}
           activeValue={crossFilter && crossFilter.column === axisCol ? crossFilter.value : undefined}
           onRowClick={
             axisCol
               ? (row) => {
-                  const val = String(row[axisCol] ?? "");
-                  if (!val) return;
-                  if (crossFilter && crossFilter.column === axisCol && crossFilter.value === val) {
-                    onCrossFilter(null);
-                  } else {
-                    onCrossFilter({ column: axisCol, value: val, sourceVisualId: visual.id });
-                  }
+                const val = String(row[axisCol] ?? "");
+                if (!val) return;
+                if (crossFilter && crossFilter.column === axisCol && crossFilter.value === val) {
+                  onCrossFilter(null);
+                } else {
+                  onCrossFilter({
+                    tableId,
+                    column: axisCol,
+                    value: val,
+                    sourceVisualId: visual.id,
+                  });
                 }
+              }
               : undefined
           }
         />
@@ -251,12 +433,14 @@ export function ChartContainer({
       grouped={grouped}
       rawRows={scopedRows}
       crossFilter={crossFilter}
+      themePalette={themePalette}
       onSelectCategory={(cat) => {
         if (!visual.xAxis) return;
         if (crossFilter?.column === visual.xAxis && crossFilter.value === cat) {
           onCrossFilter(null);
         } else {
           onCrossFilter({
+            tableId,
             column: visual.xAxis,
             value: cat,
             sourceVisualId: visual.id,

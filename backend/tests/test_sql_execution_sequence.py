@@ -3,7 +3,8 @@ from app.services.lab_capture import capture_sql
 
 
 @pytest.mark.asyncio
-async def test_sql_grids_follow_executed_select_not_future_table_data():
+@pytest.mark.parametrize("template", ["workbench", "mysql-cli"])
+async def test_sql_grids_follow_executed_select_not_future_table_data(template):
     code='''CREATE DATABASE grouped_queries_lab;
 USE grouped_queries_lab;
 DROP TABLE IF EXISTS customers;
@@ -16,8 +17,9 @@ INSERT INTO products VALUES (1,'Notebook');
 SELECT * FROM products;
 SELECT * FROM customers;
 SELECT * FROM products WHERE id=99;'''
-    result=await capture_sql(code,filename='sequence.sql',objective='Complex queries using GROUP BY on a chosen system')
+    result=await capture_sql(code,filename='sequence.sql',objective='Complex queries using GROUP BY on a chosen system',template=template)
     assert result.success,result.error
+    assert result.verification['interface'].startswith('MySQL CLI' if template == 'mysql-cli' else 'MySQL Workbench')
     frames=[f for f in result.verification['evidence_frames'] if f['kind']=='database']
     by_index={f['statement_index']: f for f in frames}
     assert set(by_index)=={6,10,11,12}

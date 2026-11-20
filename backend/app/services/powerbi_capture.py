@@ -15,7 +15,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from ..config import settings
-from .browser_capture import launch_capture_browser
+from .browser_capture import launch_capture_browser, run_capture_job
 
 logger = logging.getLogger(__name__)
 
@@ -155,7 +155,7 @@ async def capture_powerbi(csv_path, out_dir, label="dashboard built from your da
     Raises PowerBiCaptureUnavailable when the studio cannot produce it.
     """
     try:
-        return await asyncio.wait_for(_capture(csv_path, out_dir, label, display_name), OVERALL_TIMEOUT_SECONDS)
+        return await run_capture_job(lambda: _capture(csv_path, out_dir, label, display_name), OVERALL_TIMEOUT_SECONDS)
     except asyncio.TimeoutError as error:
         raise PowerBiCaptureUnavailable("The Power BI studio took too long to render.") from error
     except PowerBiCaptureUnavailable:

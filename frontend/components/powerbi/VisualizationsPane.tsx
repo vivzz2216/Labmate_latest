@@ -1,9 +1,20 @@
 "use client";
 
-import React, { useState } from "react";
-import { BarChart3, ChevronsRight, Paintbrush, Plus, Search, X } from "lucide-react";
+import React, { useMemo, useState } from "react";
+import { BarChart3, ChevronsRight, LineChart, Paintbrush, Plus, X } from "lucide-react";
+import { aggregateByDimension, formatPowerBiNumber } from "@/lib/powerbi/csvEngine";
 import { POWERBI_SERIES_PALETTE } from "@/lib/powerbi/palette";
-import type { AggregationFn, ColumnMeta, PowerBiVisual, PowerBiVisualType } from "@/lib/powerbi/types";
+import type {
+  AggregationFn,
+  ColumnMeta,
+  DataRow,
+  MeasureDef,
+  PowerBiVisual,
+  PowerBiVisualType,
+  VisualAnalytics,
+  VisualLayout,
+} from "@/lib/powerbi/types";
+import type { DraggedFieldPayload } from "./DashboardCard";
 import { Dropdown } from "./Dropdown";
 import { DESKTOP_VIZ_GRID_TILES, DesktopVizTileGlyph } from "./VisualIcons";
 import styles from "./powerbi.module.css";
@@ -12,31 +23,81 @@ interface VisualizationsPaneProps {
   expanded: boolean;
   onToggleExpand: () => void;
   columns: ColumnMeta[];
+  measures: MeasureDef[];
+  scopedRows: DataRow[];
   selectedVisual: PowerBiVisual | null;
   onSelectVisualType: (type: PowerBiVisualType) => void;
   onUpdateFields: (patch: {
     xAxis?: string;
     yAxis?: string[];
+    legend?: string;
     aggregation?: AggregationFn;
+    perFieldAggregations?: Record<string, AggregationFn>;
+    sortBy?: "value" | "category";
+    sortDir?: "asc" | "desc";
   }) => void;
-  onUpdateFormat: (patch: Partial<PowerBiVisual["format"]>, nextTitle?: string) => void;
+  onUpdateFormat: (
+    patch: Partial<PowerBiVisual["format"]>,
+    nextTitle?: string,
+    extraPatch?: Partial<PowerBiVisual>,
+  ) => void;
+  onUpdateLayout: (nextLayout: VisualLayout) => void;
+  onUpdateAnalytics: (next: VisualAnalytics) => void;
+  onDropFieldToWell: (
+    well: "xAxis" | "yAxis" | "legend",
+    payload: DraggedFieldPayload,
+  ) => void;
 }
 
-/** Right docked Visualizations pane matching Power BI Desktop: Build/Format/Analytics, 6-col gallery, field wells & Drill through. */
+const CANVAS_BG_SWATCHES = ["#ffffff", "#faf9f8", "#f3f2f1", "#eef5f3", "#eef6fc"];
+
+/** Right docked Visualizations pane matching Power BI Desktop: Build, Format, Analytics, drag-drop field wells & real stats. */
 export function VisualizationsPane({
   expanded,
   onToggleExpand,
   columns,
+  measures,
+  scopedRows,
   selectedVisual,
   onSelectVisualType,
   onUpdateFields,
   onUpdateFormat,
+  onUpdateLayout,
+  onUpdateAnalytics,
+  onDropFieldToWell,
 }: VisualizationsPaneProps) {
   const [subTab, setSubTab] = useState<"build" | "format" | "analytics">("build");
   const [addYField, setAddYField] = useState("");
-  const [activeTileId, setActiveTileId] = useState<string | null>(null);
-  const [crossReport, setCrossReport] = useState(false);
-  const [keepAllFilters, setKeepAllFilters] = useState(true);
+  const [dragTargetWell, setDragTargetWell] = useState<"xAxis" | "yAxis" | "legend" | null>(null);
+
+  const analyticsStats = useMemo(() => {
+    if (!selectedVisual || selectedVisual.yAxis.length === 0 || scopedRows.length === 0) {
+      return null;
+    }
+    const grouped = aggregateByDimension(
+      scopedRows,
+      selectedVisual.xAxis,
+      selectedVisual.yAxis,
+      selectedVisual.aggregation,
+      selectedVisual.format.accentColor,
+      {
+        measures,
+        columns,
+        perFieldAggregations: selectedVisual.perFieldAggregations,
+      },
+    );
+    const key = grouped.series[0]?.key || selectedVisual.yAxis[0];
+    const vals = grouped.rows.map((r) => r.values[key] ?? 0);
+    if (vals.length === 0) return null;
+    const sum = vals.reduce((a, b) => a + b, 0);
+    return {
+      field: selectedVisual.yAxis[0],
+      count: vals.length,
+      min: Math.min(...vals),
+      max: Math.max(...vals),
+      avg: sum / vals.length,
+    };
+  }, [selectedVisual, scopedRows, measures, columns]);
 
   if (!expanded) {
     return (
@@ -57,19 +118,79 @@ export function VisualizationsPane({
     );
   }
 
-  const numericCols = columns.filter((c) => c.isNumeric);
   const allColsOptions = columns.map((c) => ({ value: c.name, label: c.label }));
-  const yColsOptions = (numericCols.length > 0 ? numericCols : columns).map((c) => ({
-    value: c.name,
-    label: c.label,
-  }));
+  const numericAndMeasureOptions = [
+    ...measures.map((m) => ({ value: m.name, label: `${m.name} (fx)` })),
+    ...columns.map((c) => ({
+      value: c.name,
+      label: c.isNumeric ? `${c.label} (Σ)` : c.label,
+    })),
+  ];
+
+  const handleWellDragOver = (
+    e: React.DragEvent,
+    well: "xAxis" | "yAxis" | "legend",
+  ) => {
+    if (e.dataTransfer.types.indexOf("application/x-powerbi-field") !== -1) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
+      if (dragTargetWell !== well) setDragTargetWell(well);
+    }
+  };
+
+  const handleWellDrop = (e: React.DragEvent, well: "xAxis" | "yAxis" | "legend") => {
+    setDragTargetWell(null);
+    const raw = e.dataTransfer.getData("application/x-powerbi-field");
+    if (!raw) return;
+    e.preventDefault();
+    try {
+      const payload = JSON.parse(raw) as DraggedFieldPayload;
+      if (payload?.columnName) onDropFieldToWell(well, payload);
+    } catch {
+      // ignore
+    }
+  };
+
+  const vType = selectedVisual?.type;
+  const showsXAxis =
+    selectedVisual && vType !== "card" && vType !== "gauge" && vType !== "textbox";
+  const showsLegendWell =
+    selectedVisual &&
+    (vType === "clusteredColumn" ||
+      vType === "stackedColumn" ||
+      vType === "clusteredBar" ||
+      vType === "stackedBar" ||
+      vType === "line" ||
+      vType === "area" ||
+      vType === "scatter" ||
+      vType === "matrix");
+  const showsYAxis = selectedVisual && vType !== "slicer" && vType !== "textbox";
+
+  const xAxisLabel =
+    vType === "slicer"
+      ? "Field"
+      : vType === "matrix"
+        ? "Rows"
+        : vType === "pie" || vType === "donut" || vType === "treemap" || vType === "funnel"
+          ? "Legend"
+          : vType === "table"
+            ? "Primary Column"
+            : "X-axis / Category";
+
+  const legendLabel = vType === "matrix" ? "Columns" : "Legend";
+  const yAxisLabel =
+    vType === "card" || vType === "gauge"
+      ? "Fields"
+      : vType === "table"
+        ? "Additional Columns"
+        : "Y-axis / Values";
 
   const subHeading =
     subTab === "build"
       ? "Build visual"
       : subTab === "format"
         ? "Format your visual"
-        : "Add further analyses";
+        : "Analytics";
 
   return (
     <aside className={styles.paneExpanded} aria-label="Visualizations pane">
@@ -87,11 +208,10 @@ export function VisualizationsPane({
 
       <div className={styles.vizSubHeader}>{subHeading}</div>
 
-      <div className={styles.vizModeTabsIconRow} role="tablist" aria-label="Visualization pane sections">
+      <div className={styles.vizModeTabsIconRow} role="group" aria-label="Visualization pane sections">
         <button
           type="button"
-          role="tab"
-          aria-selected={subTab === "build"}
+          aria-pressed={subTab === "build"}
           aria-label="Build visual"
           title="Build visual"
           onClick={() => setSubTab("build")}
@@ -104,8 +224,7 @@ export function VisualizationsPane({
 
         <button
           type="button"
-          role="tab"
-          aria-selected={subTab === "format"}
+          aria-pressed={subTab === "format"}
           aria-label="Format visual"
           title="Format your visual"
           onClick={() => setSubTab("format")}
@@ -118,15 +237,14 @@ export function VisualizationsPane({
 
         <button
           type="button"
-          role="tab"
-          aria-selected={subTab === "analytics"}
-          aria-label="Add further analyses"
-          title="Add further analyses to your visual"
+          aria-pressed={subTab === "analytics"}
+          aria-label="Analytics"
+          title="Add reference & average lines"
           onClick={() => setSubTab("analytics")}
           className={`${styles.vizModeIconBtn} ${subTab === "analytics" ? styles.vizModeIconBtnActive : ""}`}
         >
           <span className={styles.vizModeIconBox}>
-            <Search size={15} color={subTab === "analytics" ? "#117865" : "#484644"} />
+            <LineChart size={15} color={subTab === "analytics" ? "#117865" : "#484644"} />
           </span>
         </button>
       </div>
@@ -136,48 +254,62 @@ export function VisualizationsPane({
           <>
             <div className={styles.vizIconGrid} role="group" aria-label="Visualization types">
               {DESKTOP_VIZ_GRID_TILES.map((tile) => {
-                const isSelected =
-                  activeTileId === tile.id ||
-                  (tile.isPrimaryForType && selectedVisual?.type === tile.targetType);
+                const isSelected = selectedVisual?.type === tile.id;
                 return (
                   <button
                     key={tile.id}
                     type="button"
                     title={tile.label}
                     aria-label={tile.label}
-                    onClick={() => {
-                      setActiveTileId(tile.id);
-                      onSelectVisualType(tile.targetType);
-                    }}
+                    onClick={() => onSelectVisualType(tile.id)}
                     className={`${styles.vizTileBtn} ${isSelected ? styles.vizTileActive : ""}`}
                   >
                     <DesktopVizTileGlyph tileId={tile.id} />
                   </button>
                 );
               })}
-              <button
-                type="button"
-                title="Get more visuals"
-                aria-label="Get more visuals"
-                onClick={() => onSelectVisualType("clusteredColumn")}
-                className={styles.vizTileBtn}
-                style={{ fontSize: 12, fontWeight: 700, color: "#605e5c" }}
-              >
-                ···
-              </button>
             </div>
 
             {selectedVisual ? (
               <>
-                {selectedVisual.type !== "card" ? (
+                {vType === "textbox" ? (
                   <div className={styles.fieldWellSection}>
                     <div className={styles.fieldWellLabel}>
-                      <span>{selectedVisual.type === "slicer" ? "Field" : "X-axis / Category"}</span>
+                      <span>Text box content</span>
                     </div>
-                    <div className={styles.fieldWellDropBox}>
+                    <div style={{ fontSize: 11, color: "#605e5c", lineHeight: 1.45 }}>
+                      Click inside the text box on the canvas to edit your report commentary or heading.
+                    </div>
+                  </div>
+                ) : null}
+
+                {showsXAxis ? (
+                  <div className={styles.fieldWellSection}>
+                    <div className={styles.fieldWellLabel}>
+                      <span>{xAxisLabel}</span>
+                    </div>
+                    <div
+                      className={`${styles.fieldWellDropBox} ${dragTargetWell === "xAxis" ? styles.fieldWellDropActive : ""}`}
+                      onDragOver={(e) => handleWellDragOver(e, "xAxis")}
+                      onDragLeave={() => setDragTargetWell(null)}
+                      onDrop={(e) => handleWellDrop(e, "xAxis")}
+                    >
+                      {selectedVisual.xAxis ? (
+                        <div className={styles.fieldChip}>
+                          <span className={styles.fieldChipName}>{selectedVisual.xAxis}</span>
+                          <button
+                            type="button"
+                            aria-label={`Remove ${selectedVisual.xAxis} from X-axis`}
+                            onClick={() => onUpdateFields({ xAxis: undefined })}
+                            className={styles.chipRemoveBtn}
+                          >
+                            <X size={11} />
+                          </button>
+                        </div>
+                      ) : null}
                       <Dropdown
                         ariaLabel="X-axis field"
-                        placeholder="Add data fields here"
+                        placeholder="Drag or select field"
                         value={selectedVisual.xAxis || ""}
                         options={allColsOptions}
                         onChange={(val) => onUpdateFields({ xAxis: val || undefined })}
@@ -186,48 +318,118 @@ export function VisualizationsPane({
                   </div>
                 ) : null}
 
-                {selectedVisual.type !== "slicer" ? (
+                {showsLegendWell ? (
                   <div className={styles.fieldWellSection}>
                     <div className={styles.fieldWellLabel}>
-                      <span>{selectedVisual.type === "card" ? "Fields" : "Y-axis / Values"}</span>
+                      <span>{legendLabel}</span>
                     </div>
-                    <div className={styles.fieldWellDropBox}>
-                      {selectedVisual.yAxis.map((field) => (
-                        <div key={field} className={styles.fieldChip}>
-                          <span className={styles.fieldChipName}>{field}</span>
+                    <div
+                      className={`${styles.fieldWellDropBox} ${dragTargetWell === "legend" ? styles.fieldWellDropActive : ""}`}
+                      onDragOver={(e) => handleWellDragOver(e, "legend")}
+                      onDragLeave={() => setDragTargetWell(null)}
+                      onDrop={(e) => handleWellDrop(e, "legend")}
+                    >
+                      {selectedVisual.legend ? (
+                        <div className={styles.fieldChip}>
+                          <span className={styles.fieldChipName}>{selectedVisual.legend}</span>
                           <button
                             type="button"
-                            aria-label={`Remove ${field} from Y-axis`}
-                            onClick={() =>
-                              onUpdateFields({
-                                yAxis: selectedVisual.yAxis.filter((f) => f !== field),
-                              })
-                            }
-                            style={{
-                              border: 0,
-                              background: "transparent",
-                              color: "#605e5c",
-                              cursor: "pointer",
-                              padding: 0,
-                              display: "inline-flex",
-                            }}
+                            aria-label={`Remove ${selectedVisual.legend} from Legend`}
+                            onClick={() => onUpdateFields({ legend: undefined })}
+                            className={styles.chipRemoveBtn}
                           >
                             <X size={11} />
                           </button>
                         </div>
-                      ))}
+                      ) : null}
+                      <Dropdown
+                        ariaLabel="Legend field"
+                        placeholder="Optional legend column"
+                        value={selectedVisual.legend || ""}
+                        options={allColsOptions.filter((o) => o.value !== selectedVisual.xAxis)}
+                        onChange={(val) => onUpdateFields({ legend: val || undefined })}
+                      />
+                    </div>
+                  </div>
+                ) : null}
+
+                {showsYAxis ? (
+                  <div className={styles.fieldWellSection}>
+                    <div className={styles.fieldWellLabel}>
+                      <span>{yAxisLabel}</span>
+                    </div>
+                    <div
+                      className={`${styles.fieldWellDropBox} ${dragTargetWell === "yAxis" ? styles.fieldWellDropActive : ""}`}
+                      onDragOver={(e) => handleWellDragOver(e, "yAxis")}
+                      onDragLeave={() => setDragTargetWell(null)}
+                      onDrop={(e) => handleWellDrop(e, "yAxis")}
+                    >
+                      {selectedVisual.yAxis.map((field) => {
+                        const isMeasure = measures.some((m) => m.name === field);
+                        const fieldAgg =
+                          selectedVisual.perFieldAggregations?.[field] ||
+                          selectedVisual.aggregation;
+                        return (
+                          <div key={field} className={styles.fieldChip}>
+                            <span className={styles.fieldChipName} title={field}>
+                              {field}
+                            </span>
+                            <div style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
+                              {!isMeasure && vType !== "table" ? (
+                                <select
+                                  aria-label={`Aggregation for ${field}`}
+                                  value={fieldAgg}
+                                  onChange={(e) =>
+                                    onUpdateFields({
+                                      perFieldAggregations: {
+                                        ...(selectedVisual.perFieldAggregations || {}),
+                                        [field]: e.target.value as AggregationFn,
+                                      },
+                                    })
+                                  }
+                                  className={styles.chipAggSelect}
+                                >
+                                  <option value="sum">Sum</option>
+                                  <option value="average">Avg</option>
+                                  <option value="count">Count</option>
+                                  <option value="min">Min</option>
+                                  <option value="max">Max</option>
+                                </select>
+                              ) : isMeasure ? (
+                                <span style={{ fontSize: 9.5, color: "#117865", fontWeight: 700 }}>
+                                  fx
+                                </span>
+                              ) : null}
+                              <button
+                                type="button"
+                                aria-label={`Remove ${field} from Y-axis`}
+                                onClick={() =>
+                                  onUpdateFields({
+                                    yAxis: selectedVisual.yAxis.filter((f) => f !== field),
+                                  })
+                                }
+                                className={styles.chipRemoveBtn}
+                              >
+                                <X size={11} />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
 
                       <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                         <Plus size={11} color="#605e5c" />
                         <Dropdown
                           ariaLabel="Add value field"
-                          placeholder="Add data fields here"
+                          placeholder="Drag or add value"
                           value={addYField}
-                          options={yColsOptions.filter((o) => !selectedVisual.yAxis.includes(o.value))}
+                          options={numericAndMeasureOptions.filter(
+                            (o) => selectedVisual.yAxis.indexOf(o.value) === -1,
+                          )}
                           onChange={(val) => {
                             if (!val) return;
                             const next =
-                              selectedVisual.type === "card"
+                              vType === "card" || vType === "gauge"
                                 ? [val]
                                 : [...selectedVisual.yAxis, val];
                             onUpdateFields({ yAxis: next });
@@ -239,73 +441,45 @@ export function VisualizationsPane({
                   </div>
                 ) : null}
 
-                <div className={styles.fieldWellSection}>
-                  <div className={styles.fieldWellLabel}>
-                    <span>Summarization</span>
+                {vType !== "textbox" && vType !== "slicer" ? (
+                  <div className={styles.fieldWellSection}>
+                    <div className={styles.fieldWellLabel}>
+                      <span>Sort &amp; Summarization</span>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4 }}>
+                      <Dropdown
+                        ariaLabel="Sort axis"
+                        value={selectedVisual.sortBy || "value"}
+                        options={[
+                          { value: "value", label: "By Value" },
+                          { value: "category", label: "By Category" },
+                        ]}
+                        onChange={(val) =>
+                          onUpdateFields({ sortBy: (val || "value") as "value" | "category" })
+                        }
+                      />
+                      <Dropdown
+                        ariaLabel="Sort direction"
+                        value={selectedVisual.sortDir || "desc"}
+                        options={[
+                          { value: "desc", label: "Descending" },
+                          { value: "asc", label: "Ascending" },
+                        ]}
+                        onChange={(val) =>
+                          onUpdateFields({ sortDir: (val || "desc") as "asc" | "desc" })
+                        }
+                      />
+                    </div>
                   </div>
-                  <Dropdown
-                    ariaLabel="Aggregation function"
-                    value={selectedVisual.aggregation}
-                    options={[
-                      { value: "sum", label: "Sum" },
-                      { value: "average", label: "Average" },
-                      { value: "count", label: "Count" },
-                      { value: "min", label: "Minimum" },
-                      { value: "max", label: "Maximum" },
-                    ]}
-                    onChange={(val) =>
-                      onUpdateFields({ aggregation: (val || "sum") as AggregationFn })
-                    }
-                  />
-                </div>
+                ) : null}
               </>
             ) : (
               <div className={styles.fieldWellSection}>
-                <div className={styles.fieldWellLabel}>
-                  <span>Values</span>
+                <div className={styles.emptyFieldWellPlaceholder}>
+                  Click a chart icon above or drag fields onto the canvas to create a visual.
                 </div>
-                <div className={styles.emptyFieldWellPlaceholder}>Add data fields here</div>
               </div>
             )}
-
-            {/* Authentic Power BI Drill through section */}
-            <div className={styles.drillThroughBox}>
-              <div className={styles.fieldWellLabel} style={{ marginBottom: 6 }}>
-                <span>Drill through</span>
-              </div>
-
-              <div className={styles.toggleRow}>
-                <span>Cross-report</span>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={crossReport}
-                  onClick={() => setCrossReport((v) => !v)}
-                  className={`${styles.pbiSwitch} ${crossReport ? styles.pbiSwitchOn : ""}`}
-                >
-                  <span>{crossReport ? "On" : "Off"}</span>
-                  <span className={styles.pbiSwitchKnob} />
-                </button>
-              </div>
-
-              <div className={styles.toggleRow}>
-                <span>Keep all filters</span>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={keepAllFilters}
-                  onClick={() => setKeepAllFilters((v) => !v)}
-                  className={`${styles.pbiSwitch} ${keepAllFilters ? styles.pbiSwitchOn : ""}`}
-                >
-                  <span>{keepAllFilters ? "On" : "Off"}</span>
-                  <span className={styles.pbiSwitchKnob} />
-                </button>
-              </div>
-
-              <div className={styles.emptyFieldWellPlaceholder} style={{ marginTop: 6 }}>
-                Add drill-through fields here
-              </div>
-            </div>
           </>
         ) : subTab === "format" ? (
           selectedVisual ? (
@@ -329,6 +503,33 @@ export function VisualizationsPane({
                   }}
                 />
               </div>
+
+              {selectedVisual.type === "textbox" ? (
+                <div>
+                  <label style={{ display: "block", fontSize: 11, fontWeight: 600, marginBottom: 4 }}>
+                    Text font size (px)
+                  </label>
+                  <input
+                    type="number"
+                    min={10}
+                    max={48}
+                    value={selectedVisual.fontSize || 14}
+                    onChange={(e) =>
+                      onUpdateFormat({}, undefined, {
+                        fontSize: Math.max(10, Math.min(48, Number(e.target.value) || 14)),
+                      })
+                    }
+                    style={{
+                      width: "100%",
+                      height: 26,
+                      padding: "0 7px",
+                      border: "1px solid #c8c6c4",
+                      borderRadius: 2,
+                      fontSize: 11.5,
+                    }}
+                  />
+                </div>
+              ) : null}
 
               <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 11.5, cursor: "pointer" }}>
                 <span>Show title</span>
@@ -377,7 +578,7 @@ export function VisualizationsPane({
                     <button
                       key={hex}
                       type="button"
-                      aria-label={`Color ${hex}`}
+                      aria-label={`Accent color ${hex}`}
                       onClick={() => onUpdateFormat({ accentColor: hex })}
                       style={{
                         width: 22,
@@ -394,22 +595,178 @@ export function VisualizationsPane({
                   ))}
                 </div>
               </div>
+
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 6 }}>Card background</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {CANVAS_BG_SWATCHES.map((hex) => (
+                    <button
+                      key={hex}
+                      type="button"
+                      aria-label={`Background color ${hex}`}
+                      onClick={() => onUpdateFormat({ backgroundColor: hex })}
+                      style={{
+                        width: 22,
+                        height: 22,
+                        borderRadius: 3,
+                        background: hex,
+                        border:
+                          selectedVisual.format.backgroundColor === hex
+                            ? "2px solid #117865"
+                            : "1px solid #c8c6c4",
+                        cursor: "pointer",
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ borderTop: "1px solid #e1dfdd", paddingTop: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 6 }}>Size &amp; Position (px)</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+                  {(
+                    [
+                      ["X", "x"],
+                      ["Y", "y"],
+                      ["Width", "w"],
+                      ["Height", "h"],
+                    ] as Array<[string, keyof VisualLayout]>
+                  ).map(([lbl, key]) => (
+                    <label key={key} style={{ fontSize: 10.5, color: "#605e5c" }}>
+                      {lbl}
+                      <input
+                        type="number"
+                        value={Math.round(selectedVisual.layout[key])}
+                        onChange={(e) => {
+                          const v = Number(e.target.value);
+                          if (!Number.isFinite(v)) return;
+                          onUpdateLayout({
+                            ...selectedVisual.layout,
+                            [key]:
+                              key === "w"
+                                ? Math.max(140, Math.min(1280, v))
+                                : key === "h"
+                                  ? Math.max(72, Math.min(720, v))
+                                  : Math.max(0, v),
+                          });
+                        }}
+                        style={{
+                          width: "100%",
+                          height: 24,
+                          marginTop: 2,
+                          padding: "0 6px",
+                          border: "1px solid #c8c6c4",
+                          borderRadius: 2,
+                          fontSize: 11,
+                        }}
+                      />
+                    </label>
+                  ))}
+                </div>
+              </div>
             </div>
           ) : (
             <div style={{ fontSize: 11.5, color: "#605e5c", lineHeight: 1.45 }}>
-              Select a visual on the canvas to format its title, data labels, legend, or colors.
+              Select a visual on the canvas to format its title, colors, size, or borders.
             </div>
           )
+        ) : selectedVisual ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, fontSize: 11.5 }}>
+            <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer" }}>
+              <span style={{ fontWeight: 600 }}>Average line</span>
+              <input
+                type="checkbox"
+                checked={Boolean(selectedVisual.analytics?.showAverageLine)}
+                onChange={(e) =>
+                  onUpdateAnalytics({
+                    ...(selectedVisual.analytics || {}),
+                    showAverageLine: e.target.checked,
+                  })
+                }
+                style={{ accentColor: "#117865" }}
+              />
+            </label>
+
+            <div style={{ borderTop: "1px solid #e1dfdd", paddingTop: 8 }}>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 600, marginBottom: 4 }}>
+                Constant target line
+              </label>
+              <input
+                type="number"
+                placeholder="Enter target value (blank = off)"
+                value={selectedVisual.analytics?.constantLineValue ?? ""}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  onUpdateAnalytics({
+                    ...(selectedVisual.analytics || {}),
+                    constantLineValue: raw === "" ? undefined : Number(raw),
+                  });
+                }}
+                style={{
+                  width: "100%",
+                  height: 26,
+                  padding: "0 7px",
+                  border: "1px solid #c8c6c4",
+                  borderRadius: 2,
+                  fontSize: 11.5,
+                  marginBottom: 6,
+                }}
+              />
+              <input
+                type="text"
+                placeholder="Line label (e.g. Goal)"
+                value={selectedVisual.analytics?.constantLineLabel ?? ""}
+                onChange={(e) =>
+                  onUpdateAnalytics({
+                    ...(selectedVisual.analytics || {}),
+                    constantLineLabel: e.target.value || undefined,
+                  })
+                }
+                style={{
+                  width: "100%",
+                  height: 24,
+                  padding: "0 7px",
+                  border: "1px solid #c8c6c4",
+                  borderRadius: 2,
+                  fontSize: 11,
+                }}
+              />
+            </div>
+
+            {analyticsStats ? (
+              <div
+                style={{
+                  padding: 8,
+                  background: "#faf9f8",
+                  border: "1px solid #e1dfdd",
+                  borderRadius: 3,
+                  display: "grid",
+                  gap: 4,
+                }}
+              >
+                <strong style={{ color: "#252423", fontSize: 11 }}>Summary ({analyticsStats.field})</strong>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#605e5c" }}>
+                  <span>Groups</span>
+                  <span>{analyticsStats.count}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#605e5c" }}>
+                  <span>Minimum</span>
+                  <span>{formatPowerBiNumber(analyticsStats.min, analyticsStats.field)}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#605e5c" }}>
+                  <span>Average</span>
+                  <span>{formatPowerBiNumber(analyticsStats.avg, analyticsStats.field)}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#605e5c" }}>
+                  <span>Maximum</span>
+                  <span>{formatPowerBiNumber(analyticsStats.max, analyticsStats.field)}</span>
+                </div>
+              </div>
+            ) : null}
+          </div>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 11.5, color: "#605e5c" }}>
-            <div style={{ padding: 8, background: "#fafafa", border: "1px solid #e1dfdd", borderRadius: 3 }}>
-              <strong style={{ color: "#252423", display: "block", marginBottom: 3 }}>Trend & Constant Lines</strong>
-              Select any line, area, or bar chart to inspect min/max bounds and category breakdown.
-            </div>
-            <div style={{ padding: 8, background: "#fafafa", border: "1px solid #e1dfdd", borderRadius: 3 }}>
-              <strong style={{ color: "#252423", display: "block", marginBottom: 3 }}>Forecasting</strong>
-              Use time-series columns (`Date`) on the X-axis to compare daily progression.
-            </div>
+          <div style={{ fontSize: 11.5, color: "#605e5c", lineHeight: 1.45 }}>
+            Select a chart visual to add Average or Constant target reference lines.
           </div>
         )}
       </div>

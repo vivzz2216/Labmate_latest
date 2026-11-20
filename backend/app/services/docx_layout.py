@@ -323,11 +323,12 @@ def create_report_document(upload, landscape=False, append_section=True, include
 
         if include_pdf_pages and file_type == "pdf" and os.path.isfile(file_path):
             import pdfplumber
+            from .pdf_render import render_page_image
 
             document.add_paragraph(f"Uploaded input: {getattr(upload, 'original_filename', '')}")
             with pdfplumber.open(file_path) as pdf:
                 for index, page in enumerate(pdf.pages):
-                    image = page.to_image(resolution=130).original
+                    image = render_page_image(page)
                     buffer = io.BytesIO()
                     image.save(buffer, format="PNG")
                     buffer.seek(0)

@@ -630,26 +630,45 @@
   z-index: 6;
 }
 
+.visualCardDropTarget {
+  border: 2px dashed var(--pbi-teal) !important;
+  box-shadow: 0 0 0 3px rgba(17, 120, 101, 0.16);
+}
+
+.formatPainterCursor {
+  cursor: crosshair !important;
+}
+
 .visualHandles {
   pointer-events: none;
 }
 
 .handleDot {
   position: absolute;
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   background: #ffffff;
-  border: 1px solid #605e5c;
+  border: 1.5px solid #117865;
 }
 
-.handleTL { top: -3px; left: -3px; }
-.handleTC { top: -3px; left: calc(50% - 3px); }
-.handleTR { top: -3px; right: -3px; }
-.handleML { top: calc(50% - 3px); left: -3px; }
-.handleMR { top: calc(50% - 3px); right: -3px; }
-.handleBL { bottom: -3px; left: -3px; }
-.handleBC { bottom: -3px; left: calc(50% - 3px); }
-.handleBR { bottom: -3px; right: -3px; }
+.handleDotInteractive {
+  pointer-events: auto;
+  z-index: 20;
+}
+
+.handleDotInteractive:hover {
+  background: #117865;
+  transform: scale(1.2);
+}
+
+.handleTL { top: -4px; left: -4px; }
+.handleTC { top: -4px; left: calc(50% - 3.5px); }
+.handleTR { top: -4px; right: -4px; }
+.handleML { top: calc(50% - 3.5px); left: -4px; }
+.handleMR { top: calc(50% - 3.5px); right: -4px; }
+.handleBL { bottom: -4px; left: -4px; }
+.handleBC { bottom: -4px; left: calc(50% - 3.5px); }
+.handleBR { bottom: -4px; right: -4px; }
 
 .visualHeader {
   display: flex;
@@ -1781,15 +1800,190 @@
   color: #252423;
 }
 
-@media (max-width: 960px) {
-  .recommendedGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .createSixCardGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .createHeroCard {
-    flex-direction: column;
-    align-items: flex-start;
-  }
+/* ---------- Desktop Interactive Extensions (Wells, Table View, Model View, Matrix) ---------- */
+.fieldWellDropActive {
+  border-color: var(--pbi-teal) !important;
+  background: #edf7f4 !important;
+}
+
+.chipRemoveBtn {
+  border: 0;
+  background: transparent;
+  color: #605e5c;
+  cursor: pointer;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+}
+
+.chipRemoveBtn:hover {
+  color: #a4262c;
+}
+
+.chipAggSelect {
+  height: 16px;
+  font-size: 9.5px;
+  border: 1px solid #c8c6c4;
+  border-radius: 2px;
+  background: #ffffff;
+  color: #252423;
+  padding: 0 2px;
+  cursor: pointer;
+}
+
+.chipSelect {
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid #c8c6c4;
+  border-radius: 2px;
+  background: #ffffff;
+  color: #252423;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.dataColumnRowSelected {
+  background: #e6f2ef !important;
+  font-weight: 600;
+}
+
+.columnToolsBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 6px 14px;
+  background: #faf9f8;
+  border-bottom: 1px solid var(--pbi-border);
+}
+
+.formulaBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 14px;
+  background: #ffffff;
+  border-bottom: 1px solid var(--pbi-border);
+}
+
+.formulaFx {
+  font-family: Georgia, serif;
+  font-style: italic;
+  font-weight: 700;
+  color: var(--pbi-teal);
+  font-size: 13px;
+}
+
+.formulaInput {
+  flex: 1;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid #c8c6c4;
+  border-radius: 2px;
+  font-family: Consolas, monospace;
+  font-size: 11.5px;
+  color: #252423;
+}
+
+.colHeaderPopover {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 30;
+  width: 210px;
+  padding: 6px;
+  background: #ffffff;
+  border: 1px solid #c8c6c4;
+  border-radius: 3px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
+  cursor: default;
+}
+
+.popoverActionBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 4px 6px;
+  border: 0;
+  background: transparent;
+  color: #252423;
+  font-size: 11px;
+  text-align: left;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.popoverActionBtn:hover {
+  background: var(--pbi-hover);
+}
+
+.matrixTable th,
+.matrixTable td {
+  padding: 4px 8px;
+  font-size: 11px;
+}
+
+.modelToolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  background: #faf9f8;
+  border-bottom: 1px solid var(--pbi-border);
+  flex-shrink: 0;
+}
+
+.modelCanvas {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: #eaeaea;
+  background-image: radial-gradient(#c8c6c4 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+
+.modelPropertiesPane {
+  width: 210px;
+  border-left: 1px solid var(--pbi-border);
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.pageTabActionBtn {
+  display: inline-flex;
+  align-items: center;
+  border: 0;
+  background: transparent;
+  color: #797775;
+  padding: 2px;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.pageTabActionBtn:hover {
+  background: var(--pbi-hover);
+  color: var(--pbi-text);
+}
+
+.getDataOptionBtn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid #e1dfdd;
+  border-radius: 3px;
+  background: #faf9f8;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.getDataOptionBtn:hover {
+  border-color: var(--pbi-teal);
+  background: #f0f7f5;
 }

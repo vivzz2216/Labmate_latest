@@ -23,6 +23,22 @@ RESULT_ROWS_PER_PAGE = 12
 RESULT_EDITOR_WINDOW_LINES = 10
 
 
+def format_mysql_cli_rows(columns, rows):
+    def display(value):
+        return "NULL" if value is None else str(value).replace("\r", "\\r").replace("\n", "\\n").replace("\t", "\\t")
+
+    records = [[display(column) for column in columns]]
+    records.extend([display(row.get(column) if isinstance(row, dict) else row[i])
+                    for i, column in enumerate(columns)] for row in rows)
+    widths = [max(map(len, cells)) for cells in zip(*records)]
+    border = "+" + "+".join("-" * (width + 2) for width in widths) + "+"
+
+    def line(cells):
+        return "| " + " | ".join(cell.ljust(width) for cell, width in zip(cells, widths)) + " |"
+
+    return "\n".join([border, line(records[0]), border, *(line(row) for row in records[1:]), border])
+
+
 async def capture_sql_frame(page, path):
     height = int(await page.evaluate('''() => {
         const pane = document.getElementById('result-pane');
@@ -164,6 +180,7 @@ async def capture_sql(
     output_path: str | Path | None = None,
     filename: str | None = None,
     objective: str = "",
+    template: str = "workbench",
 ):
     """
     Execute SQL once against an isolated real MySQL session, verify results semantically,
@@ -191,6 +208,8 @@ async def capture_sql(
         select_results: list[dict[str, Any]] = receipt.get("select_results") or []
         server_version = receipt.get("server_version") or session.server_version or "8.0"
         engine_label = f"MySQL {server_version}"
+        cli = template == "mysql-cli"
+        interface = "MySQL CLI" if cli else "MySQL Workbench"
         conn_title = f"MySQL {server_version} — Localhost (Isolated Lab)"
         time_str = datetime.now().strftime("%H:%M:%S")
 
@@ -253,8 +272,38 @@ async def capture_sql(
 
             await context.route("**/*", guard)
             page = await context.new_page()
-            await page.goto(html.as_uri(), wait_until="domcontentloaded", timeout=15000)
-            await page.wait_for_function("!!window.MySQLWorkbench && typeof window.MySQLWorkbench.renderFrame === 'function'", timeout=5000)
+            if cli:
+                await page.set_content("""<!doctype html><html lang="en"><meta charset="utf-8">
+                    <title>MySQL Command Line Client</title><style>
+                    body{margin:0;background:#101010;color:#e4e4e4;font:17px/1.4 Consolas,monospace}
+                    header{background:#292929;padding:10px 18px;color:#fff;font:600 15px system-ui}
+                    pre{margin:0;padding:18px;white-space:pre-wrap;overflow-wrap:anywhere;font:inherit}
+                    </style><header>MySQL Command Line Client</header><main><pre></pre></main></html>""")
+            else:
+                await page.goto(html.as_uri(), wait_until="domcontentloaded", timeout=15000)
+                await page.wait_for_function("!!window.MySQLWorkbench && typeof window.MySQLWorkbench.renderFrame === 'function'", timeout=5000)
+
+            async def render_frame(config, path):
+                if not cli:
+                    await page.evaluate("(cfg) => window.MySQLWorkbench.renderFrame(cfg)", config)
+                    await capture_sql_frame(page, path)
+                    return
+                lines = [engine_label, "", config["tabTitle"], ""]
+                sql_lines = config["editorSql"].splitlines()
+                lines.extend(("mysql> " if i == 0 else "    -> ") + line for i, line in enumerate(sql_lines))
+                tabs = config["resultSets"]
+                active = tabs[config["activeResultIndex"]] if tabs and config["activeResultIndex"] >= 0 else None
+                if active:
+                    lines.extend(["", active["title"], format_mysql_cli_rows(active["columns"], active["rows"])])
+                if config["actionLogs"]:
+                    lines.extend(["", config["actionLogs"][-1]["message"]])
+                await page.locator("pre").evaluate("(el, content) => { el.textContent = content; }", "\n".join(lines))
+                await page.set_viewport_size({"width": 1200, "height": 420})
+                height = await page.locator("body").evaluate("(el) => Math.ceil(el.getBoundingClientRect().height)")
+                if height > 1600:
+                    raise ValueError("MySQL CLI evidence exceeds readable capture bounds.")
+                await page.set_viewport_size({"width": 1200, "height": max(420, height)})
+                await page.screenshot(path=str(path))
 
             # 1. Render paginated Workbench SQL Script frames (covering lines 1..total_lines without gaps/duplicates)
             # End a code section at every SELECT, so each example is visibly
@@ -331,8 +380,7 @@ async def capture_sql(
                     "activeResultIndex": max(0, len(visible_page_tabs) - 1) if visible_page_tabs else -1,
                     "actionLogs": page_logs,
                 }
-                await page.evaluate("(cfg) => window.MySQLWorkbench.renderFrame(cfg)", frame_cfg)
-                await capture_sql_frame(page, frame_path)
+                await render_frame(frame_cfg, frame_path)
                 key = f"source_page_{page_idx + 1}"
                 screenshots_map[key] = str(frame_path)
                 evidence_frames.append(
@@ -349,7 +397,7 @@ async def capture_sql(
                         "active_result_rows": active_page_tab["rows"] if active_page_tab else [],
                         "caption": (
                             f"{sql_result_label(page_target_st['statement']) if page_target_st and page_target_st.get('type')=='SELECT' else 'SQL setup'} — {src_filename} (Lines {shown_start}–{end_line}, {part_label}) "
-                            f"[{engine_label} Workbench-style rendered interface]"
+                            f"[{interface} evidence from {engine_label}]"
                         ),
                     }
                 )
@@ -378,7 +426,7 @@ async def capture_sql(
                         first = part * CODE_LINES_PER_PAGE
                         command_path = screenshot_dir / f"sql_command_{uuid.uuid4().hex[:12]}_s{st['index']}_p{part + 1}.png"
                         previous = statements[st['index'] - 2] if st['index'] > 1 else None
-                        await page.evaluate('(cfg) => window.MySQLWorkbench.renderFrame(cfg)', {
+                        await render_frame({
                             'layoutMode': 'code', 'connectionTitle': conn_title, 'serverVersion': server_version,
                             'tabTitle': f"{src_filename} — Step {st['index']} command, part {part + 1}",
                             'editorSql': '\n'.join(command_lines[first:first + CODE_LINES_PER_PAGE]),
@@ -386,8 +434,7 @@ async def capture_sql(
                             'schemas': previous.get('schemas_snapshot', {}) if previous else {},
                             'activeSchema': previous.get('active_schema', 'lab') if previous else 'lab',
                             'resultSets': [], 'activeResultIndex': -1, 'actionLogs': build_action_logs(st['index'] - 1),
-                        })
-                        await capture_sql_frame(page, command_path)
+                        }, command_path)
                         screenshots_map[f"database_command_{st['index']}_{part + 1}"] = str(command_path)
                         evidence_frames.append({'path': str(command_path), 'kind': 'database', 'phase': 'command',
                             'statement_index': st['index'], 'statement': st['statement'],
@@ -424,8 +471,7 @@ async def capture_sql(
                             "activeResultIndex": max(0, len(visible_tabs) - 1),
                             "actionLogs": step_logs,
                         }
-                        await page.evaluate("(cfg) => window.MySQLWorkbench.renderFrame(cfg)", frame_cfg)
-                        await capture_sql_frame(page, frame_path)
+                        await render_frame(frame_cfg, frame_path)
                         last_rendered_path = frame_path
                         q_key = f"database_q{query_counter}_p{r_page + 1}"
                         screenshots_map[q_key] = str(frame_path)
@@ -453,8 +499,8 @@ async def capture_sql(
                                 "active_result_columns": active_tab["columns"] if active_tab else [],
                                 "active_result_rows": active_tab["rows"] if active_tab else [],
                                 "caption": (
-                                    f"MySQL Workbench {stage}Query {query_counter}: {stmt_summary} ({row_desc}) "
-                                    f"[{engine_label} Workbench-style rendered interface]"
+                                    f"{interface} {stage}Query {query_counter}: {stmt_summary} ({row_desc}) "
+                                    f"[{interface} evidence from {engine_label}]"
                                 ),
                             }
                         )
@@ -480,8 +526,7 @@ async def capture_sql(
                         "activeResultIndex": max(0, len(visible_tabs) - 1) if visible_tabs else -1,
                         "actionLogs": step_logs,
                     }
-                    await page.evaluate("(cfg) => window.MySQLWorkbench.renderFrame(cfg)", frame_cfg)
-                    await capture_sql_frame(page, frame_path)
+                    await render_frame(frame_cfg, frame_path)
                     last_rendered_path = frame_path
                     s_key = f"database_step_{st['index']}"
                     screenshots_map[s_key] = str(frame_path)
@@ -499,8 +544,8 @@ async def capture_sql(
                             "active_result_columns": active_tab["columns"] if active_tab else [],
                             "active_result_rows": active_tab["rows"] if active_tab else [],
                             "caption": (
-                                f"MySQL Workbench {'UPDATE' if is_update else 'Execution Step'} {st['index']}: {stmt_summary} ({status_desc}) "
-                                f"[{engine_label} Workbench-style rendered interface]"
+                                f"{interface} {'UPDATE' if is_update else 'Execution Step'} {st['index']}: {stmt_summary} ({status_desc}) "
+                                f"[{interface} evidence from {engine_label}]"
                             ),
                         }
                     )
@@ -535,7 +580,7 @@ async def capture_sql(
             "engine": engine_label,
             "server_version": server_version,
             "isolated_schema": receipt.get("isolated_schema", ""),
-            "interface": "MySQL Workbench-style rendered interface connected to real MySQL",
+            "interface": f"{interface}-style rendered interface connected to real MySQL",
             "status": "passed" if overall_ok else "failed",
             "verified": overall_ok,
             "statements": statements,

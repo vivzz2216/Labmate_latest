@@ -51,13 +51,14 @@ class QuestionInput(BaseModel):
     evidence_slots: list[EvidenceSlot] = Field(default_factory=list, max_length=6)
     datasets: dict[str,str] = Field(default_factory=dict,max_length=20)
     # A part that LabMate's own practice studio builds (Computer Networks labs): which studio and its experiment.
-    studio: Optional[Literal["wireshark", "packettracer"]] = None
+    studio: Optional[Literal["wireshark", "packettracer", "powerbi", "android"]] = None
     studio_args: dict[str, str] = Field(default_factory=dict, max_length=4)
     colab_theme: Literal["light", "dark"] = "dark"
     rstudio_theme: Literal["light", "dark"] = "light"
     browser_theme: Literal["edge", "chrome"] = "edge"
     python_template: Literal["idle", "jupyter"] = "idle"
-    source_ide: Optional[Literal["codeblocks", "vscode", "notepad", "workbench"]] = None
+    source_ide: Optional[Literal["codeblocks", "vscode", "notepad", "workbench", "mysql-cli"]] = None
+    notebook_template: Literal["colab", "jupyter"] = "colab"
     jupyter_theme: Literal["light", "dark"] = "light"
 
 
@@ -116,11 +117,15 @@ def multi_part_fields(question, data):
     if question.evidence_slots:
         fields["evidence_slots"] = [slot.model_dump() for slot in question.evidence_slots]
     if question.studio:
-        from ..services.network_labs import PT7_MESH, PT7_SCENARIOS, PT9
-        known = {PT9[0], PT7_MESH[0], *(key for key, _ in PT7_SCENARIOS.values())}
+        from ..services.network_labs import ANDROID_PRACTICALS, POWERBI_PRACTICALS, PRACTICALS, PT7_MESH, PT7_SCENARIOS, PT9
+        known = {PT9[0], PT7_MESH[0], *PRACTICALS.values(), *(key for key, _ in PT7_SCENARIOS.values())}
         experiment = question.studio_args.get("experiment", "")
         if question.studio == "packettracer" and experiment not in known:
             raise HTTPException(400, "Unknown Packet Tracer experiment.")
+        if question.studio == "powerbi" and experiment not in POWERBI_PRACTICALS.values():
+            raise HTTPException(400, "Unknown Power BI experiment.")
+        if question.studio == "android" and experiment not in ANDROID_PRACTICALS.values():
+            raise HTTPException(400, "Unknown Android Studio experiment.")
         fields["studio"] = question.studio
         fields["studio_args"] = {"experiment": experiment} if experiment else {}
     return fields
@@ -156,7 +161,7 @@ def workflow_elapsed_seconds(workflow):
 
 def same_questions(previous, current):
     """Old saved jobs omit presentation defaults now supplied by the client."""
-    defaults = {'python_template':'idle', 'jupyter_theme':'light',
+    defaults = {'python_template':'idle', 'jupyter_theme':'light', 'notebook_template':'colab',
                 'colab_theme':'dark', 'rstudio_theme':'light', 'browser_theme':'edge',
                 'datasets':{}, 'track':None}
     def canonical(items):
@@ -498,7 +503,8 @@ async def process(upload_id: int, data: ProcessInput, request: Request, backgrou
                   **({'datasets':q.datasets} if q.datasets else {}),
                   **({'source_ide':q.source_ide} if q.source_ide else {}),
                   **({'python_template':q.python_template, 'jupyter_theme':q.jupyter_theme} if q.language in {'python','auto'} or data.language in {'python','auto'} else {}),
-                  **({'colab_theme':q.colab_theme} if q.language=='colab' or data.language=='colab' else {}),
+                  **({'colab_theme':q.colab_theme, 'notebook_template':q.notebook_template, 'jupyter_theme':q.jupyter_theme}
+                     if (q.language if data.language == 'auto' else data.language) == 'colab' else {}),
                   **({'rstudio_theme':q.rstudio_theme} if q.language=='r' or data.language=='r' else {}),
                   **({'browser_theme':q.browser_theme} if q.browser_theme == 'chrome' or q.language in {'html','react','node'} or data.language in {'html','react','node'} else {})} for q in data.questions]
     if sum(sum(len(name)+len(content) for name,content in q.datasets.items()) for q in data.questions)>8*1024*1024:

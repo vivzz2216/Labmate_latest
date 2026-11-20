@@ -32,7 +32,8 @@ def _render_without_poppler(filename, pages, root):
     except ImportError:
         pdfium = None
     if pdfium:
-        with pdfium.PdfDocument(str(filename)) as document:
+        from .pdf_render import pdfium_lock
+        with pdfium_lock, pdfium.PdfDocument(str(filename)) as document:
             for number in pages:
                 if number > len(document): raise ValueError('OCR page is outside the PDF.')
                 page = document[number - 1]
