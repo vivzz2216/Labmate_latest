@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useReportCapture, type JavaReportFrame } from "@/lib/ide/reportCapture";
 import {
   analyzeJavaDiagnostics,
   executeTerminalCommand,
@@ -112,7 +113,7 @@ function cloneTreeWithUpdatedContent(
   }));
 }
 
-export function IntellijWorkspace() {
+export function IntellijWorkspace({ reportCapture = false }: { reportCapture?: boolean } = {}) {
   const initialPreset = INTELLIJ_PRESETS[0];
 
   const [presetId, setPresetId] = useState<IntellijProjectPreset["id"]>(initialPreset.id);
@@ -207,10 +208,32 @@ export function IntellijWorkspace() {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const lastShiftTimeRef = useRef<number>(0);
 
-  const activePreset = useMemo(
-    () => INTELLIJ_PRESETS.find((p) => p.id === presetId) || INTELLIJ_PRESETS[0],
-    [presetId],
-  );
+  useReportCapture<JavaReportFrame>(reportCapture, ({ filename, code, output, showOutput }) => {
+    const id = "report-source";
+    const className = filename.replace(/\.java$/i, "");
+    const config = { id, name: className, mainClass: className, fileId: id };
+    setCustomTrees(prev => ({ ...prev, HelloWorld: [{ id, name: filename, path: filename, kind: "java", content: code }] }));
+    setFileContents({ [id]: code });
+    setOpenTabIds([id]);
+    setActiveFileId(id);
+    setCursor({ line: 1, col: 1 });
+    setLeftTool(null);
+    setBottomTool(showOutput ? "run" : null);
+    setBottomHeight(380);
+    setSoftWrap(true);
+    setJdkCheck({ fileId: id, code, diagnostics: [] });
+    setRunConfigsByPreset(prev => ({ ...prev, HelloWorld: [config] }));
+    setActiveRunConfigId(id);
+    setLastRunResult(showOutput ? {
+      success: true, exitCode: 0, className, commandLine: "", stdout: output, stderr: "",
+      outputLines: output.split("\n"), diagnostics: [], durationMs: 0,
+    } : null);
+  });
+
+  const activePreset = useMemo(() => {
+    const preset = INTELLIJ_PRESETS.find((item) => item.id === presetId) || INTELLIJ_PRESETS[0];
+    return reportCapture ? { ...preset, name: "Lab", badgeText: "L", moduleName: "Lab", rootPath: "Lab" } : preset;
+  }, [presetId, reportCapture]);
 
   const activeTree = useMemo(
     () => cloneTreeWithUpdatedContent(customTrees[presetId] || activePreset.tree, fileContents),

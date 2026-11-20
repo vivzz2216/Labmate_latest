@@ -57,7 +57,7 @@ class QuestionInput(BaseModel):
     rstudio_theme: Literal["light", "dark"] = "light"
     browser_theme: Literal["edge", "chrome"] = "edge"
     python_template: Literal["idle", "jupyter"] = "idle"
-    source_ide: Optional[Literal["codeblocks", "vscode", "notepad", "workbench", "mysql-cli"]] = None
+    source_ide: Optional[Literal["codeblocks", "vscode", "notepad", "eclipse", "intellij", "workbench", "mysql-cli", "sqlite"]] = None
     notebook_template: Literal["colab", "jupyter"] = "colab"
     jupyter_theme: Literal["light", "dark"] = "light"
 

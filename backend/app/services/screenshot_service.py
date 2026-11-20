@@ -123,6 +123,22 @@ class ScreenshotService:
             # Ensure screenshot directory exists
             screenshot_dir = os.path.join(settings.SCREENSHOT_DIR, str(job_id) if job_id else "temp")
             os.makedirs(screenshot_dir, exist_ok=True)
+            if raw_theme in {"eclipse", "intellij"}:
+                from .ide_report_capture import capture_java_report
+                from .storage_service import storage_service
+                path = os.path.join(screenshot_dir, f"{raw_theme}_{uuid.uuid4().hex}.png")
+                ranges = kwargs.get("source_ranges")
+                visible_code = code
+                if ranges:
+                    start, end = ranges[0]
+                    visible_code = "\n".join(code.splitlines()[start - 1:end])
+                show_output = view_mode == "output"
+                if show_output:
+                    visible_code = "\n".join(code.splitlines()[:16])
+                width, height = await capture_java_report(
+                    raw_theme, visible_code, output, filename, show_output, path)
+                storage_service.sync_file(path)
+                return True, path, width, height
             
             if theme == 'workbench':
                 screenshot_path = os.path.join(

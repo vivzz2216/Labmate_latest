@@ -127,6 +127,8 @@ def section_language(title, content, default="python"):
     if re.search(r'\b(?:Subject\s*:\s*UNIX\s+LAB|ITL\s*402)\b|^\s*#!\s*/(?:usr/)?bin/(?:ba)?sh\b',text,re.I|re.M):return 'ubuntu'
     if re.search(r'\b(?:UNIX|Ubuntu|Bash|shell script(?:s|ing)?|(?:sed|awk|grep|egrep|perl)\s+(?:script|program)(?:s|ming)?|system administrati(?:on|ve tasks))\b',title,re.I):return 'ubuntu'
     if re.search(r'\bR\s?Studio\b|\bRscript\b|\bR\s+(?:programming|language|lab|script)\b|\b(?:in|using|with|via)\s+(?-i:R)(?![\w.+#-])',title,re.I):return 'r'
+    if re.search(r'\blanguage\s*:\s*R\s*(?:$|[;|])', content, re.M):
+        return 'r'
     if re.search(r'\b(?:SQL|MySQL|SQLite|DBMS|Structured Query Lab|Database Management Systems?)\b',title,re.I) and not re.search(r'\b(?:react|node|html|css|javascript|python|java|web|webpage|website|portfolio)\b',title,re.I):return 'sql'
     if re.search(r'\b(?:Colab|Jupyter|PySpark|SparkSession|SparkContext|PyTorch|TensorFlow|Keras|Data Science|Deep Learning|Neural Network|Machine Learning|Perceptron|Autoencoder|Backpropagation|MLP|ANN|LSTM|CNN|RNN|AdaBoost|Random Forest|Bayesian Network|Fuzzy Controller|Fuzzy Sets?|Classification Algorithms?)\b|\.ipynb\b', text, re.I): return 'colab'
     if re.search(r"\b(?:node(?:\.js)?|express)\b", title, re.I): return "node"

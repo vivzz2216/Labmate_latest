@@ -636,6 +636,8 @@ async def _extract_assignment(workflow_id: int):
                     raise ValueError("A question could not be extracted correctly. Please retry extraction.")
                 if language == "python":
                     language = section_language("", question_text, default=manual_language or "python")
+                elif language == "colab" and section_language("", question_text, default=manual_language) == "r":
+                    language = "r"
                 item = {"id": index + 1, "text": question_text, "language": language}
                 if question.get("is_theory") or language == "theory":
                     item["is_theory"] = True
@@ -1070,6 +1072,8 @@ async def _process_assignment(workflow_id: int):
                 language = planned.get('language') or (question["language"] if workflow.language == "auto" else workflow.language)
                 if language == 'java' and distributed_java_requested(question['text']):
                     language = 'distributed'
+                sql_dialect = "sqlite" if language == "sql" and question.get("source_ide") == "sqlite" else "mysql"
+                repair_options = {"sql_dialect": "sqlite"} if sql_dialect == "sqlite" else {}
                 progress = 20 + int(65 * index / len(questions))
                 record(workflow, db, "generate", progress, f"Generating answer {index + 1} of {len(questions)}.")
                 if question.get("studio"):
@@ -1257,7 +1261,7 @@ async def _process_assignment(workflow_id: int):
                             code_instruction += '\nPYTHON RUNTIME: Read standard input using input(), collecting lines or tokens as needed. Do not import sys, os, subprocess or pathlib; these modules are unavailable in the restricted runner. Algorithm helpers such as heapq, collections, itertools, functools, bisect and math are supported. Preserve the required input/output format.'
                         elif language=='sql':
                             from .sql_instructions import sql_instructions
-                            code_instruction += sql_instructions(question['text'])
+                            code_instruction += sql_instructions(question['text'], dialect=sql_dialect)
                             from .sql_report import report_number
                             display_number = report_number(upload.original_filename if len(questions)==1 else '', question['text'])
                             code_instruction += (f' Label SQL comments Experiment {display_number}; ' if display_number is not None
@@ -1436,7 +1440,7 @@ async def _process_assignment(workflow_id: int):
                                     from .sql_result_checks import repair_input_table_displays
                                     repaired = repair_input_table_displays(code, verification or {})
                                 if repaired == code:
-                                    repaired = await repair_generated_code(repair_question, actual_language, code, error or output, workflow.instructions or '')
+                                    repaired = await repair_generated_code(repair_question, actual_language, code, error or output, workflow.instructions or '', **repair_options)
                                 code = repaired
                                 if actual_language == 'colab' or plan_experiment(question['text'], actual_language, code).get('category') == 'notebook':
                                     from .notebook_magics import neutralize_magics
@@ -1487,7 +1491,7 @@ async def _process_assignment(workflow_id: int):
                             try:
                                 repair_question = (identity_repair_question(identity_question, student_name)
                                                    if actual_language in {'python', 'c', 'cpp', 'java'} else question["text"])
-                                code = await repair_generated_code(repair_question, actual_language, code, problem, workflow.instructions or '')
+                                code = await repair_generated_code(repair_question, actual_language, code, problem, workflow.instructions or '', **repair_options)
                                 execution = await execute_solution(
                                     code, actual_language, question["text"], group, username, stdin_data, filename=src_filename,
                                     browser_tests=browser_tests, interaction_is_required=requires_interaction, project_config=notebook_config)
@@ -1539,6 +1543,8 @@ async def _process_assignment(workflow_id: int):
                         "react": "vscode",
                         "sql":"vscode", "colab":"vscode"
                     }.get(actual_language, "idle")
+                    if actual_language == "java" and question.get("source_ide") in {"eclipse", "intellij"}:
+                        theme = question["source_ide"]
                     
                     # Determine screenshot style (default to style_1, support user preference)
                     screenshot_style = getattr(workflow, "screenshot_style", None) or "style_1"
@@ -1595,7 +1601,7 @@ async def _process_assignment(workflow_id: int):
                         evidence_plan['required_source_files']=[src_filename] if actual_language in {'ubuntu','r'} else [name for name,_ in source_plan['files']]
                         if source_policy == 'complete':
                             evidence_plan['complete_source_lines']={name:len(text.splitlines()) for name,text in source_plan['files']}
-                        sql_renderer = 'mysql_cli' if question.get('source_ide') == 'mysql-cli' else 'mysql_workbench'
+                        sql_renderer = {"mysql-cli": "mysql_cli", "sqlite": "sqlite_db_browser"}.get(question.get("source_ide"), "mysql_workbench")
                         evidence_plan['source_selection']=({'policy': 'complete', 'renderer': sql_renderer, 'captured_files': [src_filename]} if actual_language == 'sql' else {k:v for k,v in source_plan.items() if k!='files'})
                         if category == 'rstudio':
                             evidence_plan['complete_source_lines']={src_filename:(verification or {}).get('source_lines',len(code.splitlines()))}
@@ -2004,12 +2010,14 @@ def build_word_report(upload, workflow):
                 document.add_paragraph("Note: " + note)
             if verification and verification.get("status") == "failed":
                 status = str(verification.get("status", "unknown")).replace("_", " ").upper()
-                label = f"MySQL execution & semantic verification ({verification.get('engine') or 'MySQL'})" if verification.get('kind')=='database' else "R / RStudio execution verification" if verification.get('kind')=='rstudio' else "Python notebook execution verification" if verification.get('kind')=='notebook' else "Java UI interaction verification" if verification.get('kind')=='gui' else "HTTP request verification" if verification.get("kind") == "http" else "Render verification" if verification.get('kind')=='render' else "Browser interaction verification"
+                db_engine = "SQLite" if verification.get("dialect") == "sqlite" else "MySQL"
+                label = f"{db_engine} execution & semantic verification ({verification.get('engine') or db_engine})" if verification.get('kind')=='database' else "R / RStudio execution verification" if verification.get('kind')=='rstudio' else "Python notebook execution verification" if verification.get('kind')=='notebook' else "Java UI interaction verification" if verification.get('kind')=='gui' else "HTTP request verification" if verification.get("kind") == "http" else "Render verification" if verification.get('kind')=='render' else "Browser interaction verification"
                 if verification.get('capture_method'):document.add_paragraph(verification['capture_method'])
                 document.add_paragraph(f"{label}: {status}")
                 if verification.get("kind") == "database":
                     document.add_paragraph("Evidence interface: " + (verification.get("interface") or f"MySQL Workbench-style rendered interface connected to real {verification.get('engine') or 'MySQL'} (not a native desktop capture)"))
-                    document.add_paragraph("Runtime adaptation note: SQL Server examples and bracketed identifiers in the uploaded manual (such as [Brazil Customers], FULL OUTER JOIN, and uncreated example view references) were adapted to valid MySQL 8.0 syntax and executed on real MySQL.")
+                    if db_engine == "MySQL":
+                        document.add_paragraph("Runtime adaptation note: SQL Server examples and bracketed identifiers in the uploaded manual (such as [Brazil Customers], FULL OUTER JOIN, and uncreated example view references) were adapted to valid MySQL 8.0 syntax and executed on real MySQL.")
                     if result.get("answer"):
                         document.add_paragraph(result["answer"])
                     for chk in verification.get("checks", []):
@@ -2039,7 +2047,7 @@ def build_word_report(upload, workflow):
                         document.add_paragraph(str(test.get('status','unknown')).upper()+': '+test.get('name','API request'))
                         document.add_paragraph(test.get('observed_text','')[:2000])
                 if verification.get("status") == "failed":
-                    document.add_paragraph("Diagnostic report — this SQL solution has not passed MySQL execution or result verification." if verification.get("kind") == "database" else "Diagnostic report — this solution has not passed " + {"rstudio": "R execution and RStudio evidence", "notebook": "notebook execution", "gui": "Java UI interaction", "http": "HTTP request", "ubuntu": "Ubuntu execution"}.get(verification.get("kind"), "browser") + " verification.")
+                    document.add_paragraph(f"Diagnostic report — this SQL solution has not passed {db_engine} execution or result verification." if verification.get("kind") == "database" else "Diagnostic report — this solution has not passed " + {"rstudio": "R execution and RStudio evidence", "notebook": "notebook execution", "gui": "Java UI interaction", "http": "HTTP request", "ubuntu": "Ubuntu execution"}.get(verification.get("kind"), "browser") + " verification.")
                     if result.get('language') != 'sql':
                         document.add_paragraph("Source code:")
                         document.add_paragraph(result.get("code", "")[:20000])

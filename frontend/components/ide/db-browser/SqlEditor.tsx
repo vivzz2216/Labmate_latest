@@ -11,6 +11,7 @@ interface SqlEditorProps {
   onToggleFind: () => void;
   onCursorChange: (line: number, col: number, offset: number) => void;
   activeLine: number;
+  lineNumberStart?: number;
   heightStyle: React.CSSProperties;
 }
 
@@ -209,6 +210,7 @@ export function SqlEditor({
   onToggleFind,
   onCursorChange,
   activeLine,
+  lineNumberStart = 1,
   heightStyle,
 }: SqlEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -286,7 +288,7 @@ export function SqlEditor({
     <div className={styles.sqlEditorFrame} style={heightStyle}>
       <div className={styles.sqlGutter} ref={gutterRef} aria-hidden="true">
         {lines.map((_, idx) => (
-          <div key={idx}>{idx + 1}</div>
+          <div key={idx}>{lineNumberStart + idx}</div>
         ))}
       </div>
       <div className={styles.sqlCodeSurface}>

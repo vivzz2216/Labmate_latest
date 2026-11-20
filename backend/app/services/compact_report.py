@@ -72,7 +72,8 @@ def diagnostic_text(result):
     verification=result.get('verification') or {}
     kind=verification.get('kind') or ('browser' if result.get('language') in {'html','react'} else 'console')
     if verification.get('status')=='failed':
-        label={'rstudio':'R / RStudio verification','notebook':'Python notebook verification','database':'MySQL verification',
+        database_label = 'SQLite verification' if verification.get('dialect') == 'sqlite' else 'MySQL verification'
+        label={'rstudio':'R / RStudio verification','notebook':'Python notebook verification','database':database_label,
             'gui':'Java UI interaction verification','http':'HTTP request verification'}.get(kind,'Browser interaction verification')
         lines.append(label+': FAILED')
         for test in verification.get('tests',[]):

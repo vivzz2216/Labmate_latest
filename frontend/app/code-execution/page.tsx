@@ -347,11 +347,12 @@ function AssignmentContent() {
   const sourceIde = resolveLabIde(muLabId,ideParam);
   useEffect(()=>{
     const href=labIdeHref(muLabId,sourceIde);
-    if(href && !href.startsWith('/code-execution')){router.replace(href);return;}
+    if(href && !href.startsWith('/code-execution') && !assignmentParam){router.replace(href);return;}
     if(muAssociation){
       setLanguage(muAssociation.language);
       if(muAssociation.language === "python" && (sourceIde === "jupyter" || sourceIde === "vscode" || sourceIde === "idle")) setPythonTemplate(sourceIde);
-      if(muAssociation.language === "java" && (sourceIde === "notepad" || sourceIde === "vscode")) setJavaTemplate(sourceIde);
+      if(muAssociation.language === "java" && (sourceIde === "notepad" || sourceIde === "vscode" || sourceIde === "eclipse" || sourceIde === "intellij")) setJavaTemplate(sourceIde);
+      if(muAssociation.language === "sql" && (sourceIde === "workbench" || sourceIde === "mysql-cli" || sourceIde === "sqlite")) setSqlTemplate(sourceIde);
     }
   },[muLabId,muAssociation,sourceIde,router]);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -366,8 +367,9 @@ function AssignmentContent() {
   const [jupyterTheme, setJupyterTheme] = useState<"light" | "dark">("light");
   const [notebookJupyterTheme, setNotebookJupyterTheme] = useState<"light" | "dark">("light");
   const [pythonTemplate, setPythonTemplate] = useState<"idle" | "jupyter" | "vscode">("idle");
-  const [javaTemplate, setJavaTemplate] = useState<"notepad" | "vscode">("notepad");
-  const [sqlTemplate, setSqlTemplate] = useState<"workbench" | "mysql-cli">("workbench");
+  const [javaTemplate, setJavaTemplate] = useState<"notepad" | "vscode" | "eclipse" | "intellij">("notepad");
+  const [sqlTemplate, setSqlTemplate] = useState<"workbench" | "mysql-cli" | "sqlite">("workbench");
+  const [rstudioTheme, setRstudioTheme] = useState<"light" | "dark">("light");
   const [notebookTemplate, setNotebookTemplate] = useState<"colab" | "jupyter">("colab");
   const [browserTheme, setBrowserTheme] = useState<"edge" | "chrome">("edge");
   const [instructions, setInstructions] = useState("");
@@ -405,11 +407,13 @@ function AssignmentContent() {
         return { ...base, source_ide: pythonTemplate === "vscode" ? "vscode" : undefined,
           python_template: pythonTemplate === "jupyter" ? "jupyter" : "idle", jupyter_theme: jupyterTheme, browser_theme: browserTheme };
       case "java":
-        return { ...base, source_ide: javaTemplate === "vscode" ? "vscode" : undefined };
+        return { ...base, source_ide: javaTemplate === "notepad" ? undefined : javaTemplate };
       case "sql":
-        return { ...base, source_ide: sqlTemplate === "mysql-cli" ? "mysql-cli" : undefined };
+        return { ...base, source_ide: sqlTemplate === "workbench" ? undefined : sqlTemplate };
       case "colab":
         return { ...base, notebook_template: notebookTemplate, colab_theme: colabTheme, jupyter_theme: notebookJupyterTheme };
+      case "r":
+        return { ...base, rstudio_theme: rstudioTheme };
       default:
         return { ...base, browser_theme: browserTheme,
           source_ide: muAssociation && (sourceIde === "codeblocks" || sourceIde === "vscode") ? sourceIde : question.source_ide };
@@ -509,8 +513,11 @@ function AssignmentContent() {
       setNotebookJupyterTheme(notebook?.jupyter_theme || "light");
       setPythonTemplate(python?.source_ide === "vscode" ? "vscode" : python?.python_template ||
         (sourceIde === "vscode" || sourceIde === "jupyter" ? sourceIde : "idle"));
-      setJavaTemplate(savedQuestion("java")?.source_ide === "vscode" || (muAssociation?.language === "java" && sourceIde === "vscode") ? "vscode" : "notepad");
-      setSqlTemplate(savedQuestion("sql")?.source_ide === "mysql-cli" ? "mysql-cli" : "workbench");
+      const java = savedQuestion("java")?.source_ide;
+      const sql = savedQuestion("sql")?.source_ide;
+      setJavaTemplate(java === "vscode" || java === "eclipse" || java === "intellij" ? java : "notepad");
+      setSqlTemplate(sql === "mysql-cli" || sql === "sqlite" ? sql : "workbench");
+      setRstudioTheme(savedQuestion("r")?.rstudio_theme || "light");
       setNotebookTemplate(notebook?.notebook_template || "colab");
       setScreenshotStyle(data.screenshot_style || "style_1");
       setManualMode(data.mode || "code_only");
@@ -1410,6 +1417,8 @@ function AssignmentContent() {
                   <select id="java-template" value={javaTemplate} disabled={running || busy || batchProcessing}
                     onChange={event => setJavaTemplate(event.target.value as typeof javaTemplate)}>
                     <option value="notepad">Notepad + Command Prompt</option>
+                    <option value="eclipse">Eclipse</option>
+                    <option value="intellij">IntelliJ IDEA</option>
                     <option value="vscode">VS Code</option>
                   </select>
                 </div>
@@ -1421,6 +1430,18 @@ function AssignmentContent() {
                     onChange={event => setSqlTemplate(event.target.value as typeof sqlTemplate)}>
                     <option value="workbench">MySQL Workbench</option>
                     <option value="mysql-cli">MySQL Command Line Client</option>
+                    <option value="sqlite">DB Browser for SQLite</option>
+                  </select>
+                  {sqlTemplate === "sqlite" && <p>Runs this exercise in SQLite.</p>}
+                </div>
+              )}
+              {selectedLanguages.includes("r") && (
+                <div className={styles.colabThemeField}>
+                  <label className={styles.screenshotLabel} htmlFor="rstudio-theme">RStudio screenshot theme</label>
+                  <select id="rstudio-theme" value={rstudioTheme} disabled={running || busy || batchProcessing}
+                    onChange={event => setRstudioTheme(event.target.value as typeof rstudioTheme)}>
+                    <option value="light">Light</option>
+                    <option value="dark">Dark</option>
                   </select>
                 </div>
               )}

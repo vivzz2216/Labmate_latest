@@ -108,15 +108,17 @@ def test_process_accepts_a_manual_with_viva_and_handwritten_digit_text(client):
 
 def test_process_preserves_each_templates_choice_in_auto_mode(client):
     questions = [
-        {'id': 1, 'text': 'Write a Python program to calculate the sum of an array.', 'language': 'python', 'source_ide': 'vscode'},
-        {'id': 2, 'text': 'Write a Java program to print student marks.', 'language': 'java', 'source_ide': 'notepad'},
-        {'id': 3, 'text': 'Execute SQL to create and query a student table.', 'language': 'sql', 'source_ide': 'mysql-cli'},
+        {'id': 1, 'text': 'Write a Java program to calculate the sum of an array.', 'language': 'java', 'source_ide': 'eclipse'},
+        {'id': 2, 'text': 'Write a Java program to print student marks.', 'language': 'java', 'source_ide': 'intellij'},
+        {'id': 3, 'text': 'Execute SQL to create and query a student table.', 'language': 'sql', 'source_ide': 'sqlite'},
         {'id': 4, 'text': MANUAL, 'language': 'colab', 'notebook_template': 'jupyter', 'jupyter_theme': 'dark'},
+        {'id': 5, 'text': 'Write an R program to calculate and print the mean of a numeric vector.', 'language': 'r', 'rstudio_theme': 'dark'},
     ]
     response = client.post(f'/api/workflows/{client.upload_id}/process', json={'questions': questions, 'language': 'auto'})
     assert response.status_code == 200, response.text
     saved = response.json()['questions']
-    assert [question['language'] for question in saved] == ['python', 'java', 'sql', 'colab']
-    assert [question['source_ide'] for question in saved[:3]] == ['vscode', 'notepad', 'mysql-cli']
+    assert [question['language'] for question in saved] == ['java', 'java', 'sql', 'colab', 'r']
+    assert [question['source_ide'] for question in saved[:3]] == ['eclipse', 'intellij', 'sqlite']
     assert saved[3]['notebook_template'] == 'jupyter'
     assert saved[3]['jupyter_theme'] == 'dark'
+    assert saved[4]['rstudio_theme'] == 'dark'

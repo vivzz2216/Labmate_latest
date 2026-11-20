@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useReportCapture, type JavaReportFrame } from "@/lib/ide/reportCapture";
 import {
   analyzeJavaProblems,
   executeJavaCode,
@@ -99,13 +100,13 @@ interface MenuEntry {
   separator?: boolean;
 }
 
-export function EclipseWorkspace() {
+export function EclipseWorkspace({ reportCapture = false }: { reportCapture?: boolean } = {}) {
   const editorRef = useRef<HTMLTextAreaElement | null>(null);
   const workbenchRef = useRef<HTMLDivElement | null>(null);
   const consoleBodyRef = useRef<HTMLDivElement | null>(null);
 
   // Workspace files & projects
-  const [projects] = useState<WorkspaceProject[]>(INITIAL_PROJECTS);
+  const [projects, setProjects] = useState<WorkspaceProject[]>(INITIAL_PROJECTS);
   const [files, setFiles] = useState<WorkspaceJavaFile[]>(INITIAL_FILES);
   const [extraPackages, setExtraPackages] = useState<Array<{ projectId: string; packageName: string }>>([]);
   const [openTabIds, setOpenTabIds] = useState<string[]>(["file-hw-openclassrooms"]);
@@ -160,6 +161,24 @@ export function EclipseWorkspace() {
   const [consolePin, setConsolePin] = useState<boolean>(false);
   const [showOnStdout, setShowOnStdout] = useState<boolean>(true);
   const [showOnStderr, setShowOnStderr] = useState<boolean>(true);
+
+  useReportCapture<JavaReportFrame>(reportCapture, ({ filename, code, output, showOutput }) => {
+    const id = "report-source";
+    setProjects([{ id: "lab", name: "Lab", hasMaven: false, hasWarning: false, jreLabel: "Java" }]);
+    const packageName = /^\s*package\s+([\w.]+)\s*;/m.exec(code)?.[1] || "";
+    setFiles([{ id, projectId: "lab", packageName, fileName: filename, code, savedCode: code }]);
+    setOpenTabIds([id]);
+    setActiveFileId(id);
+    setSelectedTreeKey("file:" + id);
+    setShowPackageExplorer(false);
+    setShowBottomPane(showOutput);
+    setBottomHeight(380);
+    setConsoleWordWrap(true);
+    setConsoleScrollLock(true);
+    setLaunches(showOutput ? [{ id, label: filename, headerText: `${filename} [Java Application]`,
+      stdout: output, stderr: "", terminated: true }] : []);
+    setActiveLaunchId(id);
+  });
 
   // Menus, dropdowns, modals, status message
   const [openMenu, setOpenMenu] = useState<string | null>(null);
