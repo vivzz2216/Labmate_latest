@@ -1487,8 +1487,8 @@ function AssignmentContent() {
           </div>
 
           {/* Center of the right box: LatticeLoader listing what it is doing */}
-          <div className={styles.centerStageBox}>
-            <div className={styles.loaderGlassCard}>
+          <div className={`${styles.centerStageBox} ${showPreview ? styles.previewStage : ''}`}>
+            <div className={`${styles.loaderGlassCard} ${showPreview ? styles.previewCard : ''}`}>
               <LatticeLoader
                 status={complete ? "done" : failed ? "error" : "working"}
                 label={getActionLabel()}
