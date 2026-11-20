@@ -27,10 +27,6 @@ const LoginModal = dynamic(() => import("@/components/auth/LoginModal"), {
   ssr: false,
 });
 
-const DarkVeil = dynamic(() => import("@/components/visual/DarkVeil"), {
-  ssr: false,
-});
-
 export default function HomePage() {
   const { user, signOut } = useAuth();
   const { theme, toggleTheme } = useDashboardTheme();
@@ -79,7 +75,7 @@ export default function HomePage() {
             {isAuthenticated ? (
               <>
                 <Link href="/workspace" className={styles.pillBtnPrimary}>
-                  Workspace <ArrowRight size={14} />
+                  Workspace
                 </Link>
                 <button onClick={signOut} className={styles.loginTextLink}>
                   Sign Out
@@ -97,7 +93,7 @@ export default function HomePage() {
                   Log In
                 </button>
                 <Link href="/dashboard" onClick={(event) => requireAccount(event, "/dashboard")} className={styles.pillBtnPrimary}>
-                  Get started <ArrowRight size={14} aria-hidden="true" />
+                  Get started
                 </Link>
               </>
             )}
@@ -241,7 +237,6 @@ export default function HomePage() {
       <section className={styles.ctaSection} aria-labelledby="cta-heading">
         <div className={styles.ctaCard}>
           <div className={styles.ctaVeilWrap} aria-hidden="true">
-            <DarkVeil hueShift={125} speed={0.4} noiseIntensity={0.02} scanlineIntensity={0.08} scanlineFrequency={0.003} warpAmount={0.06} />
             <div className={styles.ctaVeilOverlay} />
           </div>
           <div className={styles.ctaContent}>

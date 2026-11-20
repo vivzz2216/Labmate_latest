@@ -1,19 +1,26 @@
-import Link from "next/link";
 import type { IconType } from "react-icons";
-import { FaJava } from "react-icons/fa";
+import LogoLoop from "./LogoLoop";
+import { FaChartBar, FaJava, FaTerminal } from "react-icons/fa";
 import { BsFileEarmarkWordFill } from "react-icons/bs";
 import {
   SiC,
   SiCplusplus,
+  SiAndroidstudio,
+  SiCisco,
+  SiEclipseide,
   SiGooglecolab,
   SiHtml5,
   SiJavascript,
+  SiIntellijidea,
+  SiJupyter,
   SiMysql,
   SiPython,
   SiPytorch,
   SiR,
   SiReact,
+  SiSqlite,
   SiTensorflow,
+  SiUbuntu,
   SiWireshark,
 } from "react-icons/si";
 import styles from "./RuntimeLogos.module.css";
@@ -31,11 +38,14 @@ const RUNTIMES: Runtime[] = [
   { name: "Distributed Computing", detail: "Java RMI · sockets", href: "/labs/distributed-computing", marks: [
     { icon: FaJava, color: "#E76F00", label: "Java" },
   ] },
-  { name: "Python", detail: "IDLE · Jupyter", href: "/labs/python", marks: [
+  { name: "Python", detail: "IDLE · Jupyter · VS Code", href: "/labs/python", marks: [
     { icon: SiPython, color: "#3776AB", label: "Python" },
+    { icon: SiJupyter, color: "#F37626", label: "Jupyter" },
   ] },
-  { name: "Java", detail: "OpenJDK", href: "/labs/java", marks: [
+  { name: "Java", detail: "Notepad · Eclipse · IntelliJ · VS Code", href: "/labs/java", marks: [
     { icon: FaJava, color: "#E76F00", label: "Java" },
+    { icon: SiEclipseide, color: "#2C2255", label: "Eclipse" },
+    { icon: SiIntellijidea, color: "#111111", label: "IntelliJ IDEA" },
   ] },
   { name: "C / C++", detail: "GCC · Code::Blocks", href: "/labs/c-cpp", marks: [
     { icon: SiC, color: "#3949AB", label: "C" },
@@ -46,8 +56,10 @@ const RUNTIMES: Runtime[] = [
     { icon: SiJavascript, color: "#E8C400", label: "JavaScript" },
     { icon: SiReact, color: "#149ECA", label: "React" },
   ] },
-  { name: "SQL", detail: "MySQL", href: "/labs/sql", marks: [
+  { name: "SQL", detail: "Workbench · DB Browser · MySQL CLI", href: "/labs/sql", marks: [
     { icon: SiMysql, color: "#00618A", label: "MySQL" },
+    { icon: SiSqlite, color: "#003B57", label: "SQLite" },
+    { icon: FaTerminal, color: "#41414a", label: "SQL command line" },
   ] },
   { name: "Google Colab", detail: "Notebooks", href: "/labs/colab", marks: [
     { icon: SiGooglecolab, color: "#F9AB00", label: "Google Colab" },
@@ -55,37 +67,35 @@ const RUNTIMES: Runtime[] = [
   { name: "R programming", detail: "RStudio", href: "/labs/r", marks: [
     { icon: SiR, color: "#276DC3", label: "R" },
   ] },
-  { name: "Networks", detail: "Wireshark & Packet Tracer", href: "/networks/wireshark", marks: [
+  { name: "Networks", detail: "Wireshark · Packet Tracer", href: "/networks/wireshark", marks: [
     { icon: SiWireshark, color: "#1679A7", label: "Wireshark" },
+    { icon: SiCisco, color: "#049FD9", label: "Cisco" },
   ] },
-  { name: "Word report", detail: ".docx output", href: "/samples", marks: [
+  { name: "Ubuntu", detail: "Terminal · Text Editor", href: "/labs", marks: [
+    { icon: SiUbuntu, color: "#E95420", label: "Ubuntu" },
+  ] },
+  { name: "Power BI", detail: "Analytics workspace", href: "/power-bi", marks: [
+    { icon: FaChartBar, color: "#D6A900", label: "Power BI" },
+  ] },
+  { name: "Android development", detail: "Android Studio", href: "/android-studio", marks: [
+    { icon: SiAndroidstudio, color: "#3DDC84", label: "Android Studio" },
+  ] },
+  { name: "Word report", detail: ".docx output", href: "/reports", marks: [
     { icon: BsFileEarmarkWordFill, color: "#2B579A", label: "Microsoft Word" },
   ] },
 ];
 
 export default function RuntimeLogos() {
+  const logos = RUNTIMES.map((runtime) => ({
+    title: runtime.name,
+    ariaLabel: `${runtime.name}: ${runtime.detail}`,
+    href: runtime.href,
+    node: <span className={styles.marks}>{runtime.marks.map(({ icon: Icon, color, label }) => <Icon key={label} color={color} aria-hidden="true" />)}</span>,
+  }));
   return (
     <section id="runtimes" className={styles.section} aria-labelledby="runtimes-heading">
       <p id="runtimes-heading" className={styles.title}>Labs, runtimes &amp; outputs LabMate supports</p>
-      <ul className={styles.grid}>
-        {RUNTIMES.map((runtime) => (
-          <li key={runtime.name}>
-            <Link href={runtime.href} className={styles.chip} title={`${runtime.name} (${runtime.detail})`}>
-              <span className={styles.marks} aria-hidden="true">
-                {runtime.marks.map(({ icon: Icon, color, label }) => (
-                  <span key={label} className={styles.tile}>
-                    <Icon size={17} color={color} />
-                  </span>
-                ))}
-              </span>
-              <span className={styles.text}>
-                <span className={styles.name}>{runtime.name}</span>
-                <span className={styles.detail}>{runtime.detail}</span>
-              </span>
-            </Link>
-          </li>
-        ))}
-      </ul>
+      <LogoLoop logos={logos} speed={55} direction="left" logoHeight={32} gap={56} hoverSpeed={0} scaleOnHover labels="below" ariaLabel="Supported labs and tools" />
     </section>
   );
 }
