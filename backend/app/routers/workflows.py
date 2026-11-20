@@ -57,7 +57,8 @@ class QuestionInput(BaseModel):
     rstudio_theme: Literal["light", "dark"] = "light"
     browser_theme: Literal["edge", "chrome"] = "edge"
     python_template: Literal["idle", "jupyter"] = "idle"
-    source_ide: Optional[Literal["codeblocks", "vscode", "notepad", "workbench"]] = None
+    source_ide: Optional[Literal["codeblocks", "vscode", "notepad", "workbench", "mysql-cli"]] = None
+    notebook_template: Literal["colab", "jupyter"] = "colab"
     jupyter_theme: Literal["light", "dark"] = "light"
 
 
@@ -156,7 +157,7 @@ def workflow_elapsed_seconds(workflow):
 
 def same_questions(previous, current):
     """Old saved jobs omit presentation defaults now supplied by the client."""
-    defaults = {'python_template':'idle', 'jupyter_theme':'light',
+    defaults = {'python_template':'idle', 'jupyter_theme':'light', 'notebook_template':'colab',
                 'colab_theme':'dark', 'rstudio_theme':'light', 'browser_theme':'edge',
                 'datasets':{}, 'track':None}
     def canonical(items):
@@ -498,7 +499,8 @@ async def process(upload_id: int, data: ProcessInput, request: Request, backgrou
                   **({'datasets':q.datasets} if q.datasets else {}),
                   **({'source_ide':q.source_ide} if q.source_ide else {}),
                   **({'python_template':q.python_template, 'jupyter_theme':q.jupyter_theme} if q.language in {'python','auto'} or data.language in {'python','auto'} else {}),
-                  **({'colab_theme':q.colab_theme} if q.language=='colab' or data.language=='colab' else {}),
+                  **({'colab_theme':q.colab_theme, 'notebook_template':q.notebook_template, 'jupyter_theme':q.jupyter_theme}
+                     if (q.language if data.language == 'auto' else data.language) == 'colab' else {}),
                   **({'rstudio_theme':q.rstudio_theme} if q.language=='r' or data.language=='r' else {}),
                   **({'browser_theme':q.browser_theme} if q.browser_theme == 'chrome' or q.language in {'html','react','node'} or data.language in {'html','react','node'} else {})} for q in data.questions]
     if sum(sum(len(name)+len(content) for name,content in q.datasets.items()) for q in data.questions)>8*1024*1024:

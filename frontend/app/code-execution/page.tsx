@@ -340,6 +340,7 @@ function AssignmentContent() {
   const trackParam = searchParams.get("track") || "";
   const expParam = searchParams.get("exp") || "";
   const promptParam = searchParams.get("prompt") || "";
+  const assignmentParam = searchParams.get("assignment");
   const muLabId = searchParams.get("muLab") || "";
   const ideParam = searchParams.get("ide");
   const muAssociation = LAB_IDE_ASSOCIATIONS[muLabId];
@@ -347,7 +348,11 @@ function AssignmentContent() {
   useEffect(()=>{
     const href=labIdeHref(muLabId,sourceIde);
     if(href && !href.startsWith('/code-execution')){router.replace(href);return;}
-    if(muAssociation)setLanguage(muAssociation.language);
+    if(muAssociation){
+      setLanguage(muAssociation.language);
+      if(muAssociation.language === "python" && (sourceIde === "jupyter" || sourceIde === "vscode" || sourceIde === "idle")) setPythonTemplate(sourceIde);
+      if(muAssociation.language === "java" && (sourceIde === "notepad" || sourceIde === "vscode")) setJavaTemplate(sourceIde);
+    }
   },[muLabId,muAssociation,sourceIde,router]);
   const inputRef = useRef<HTMLInputElement>(null);
   const promptSeededRef = useRef("");
@@ -359,7 +364,11 @@ function AssignmentContent() {
   const [screenshotStyle, setScreenshotStyle] = useState<string>("style_1");
   const [colabTheme, setColabTheme] = useState<"light" | "dark">("dark");
   const [jupyterTheme, setJupyterTheme] = useState<"light" | "dark">("light");
-  const [pythonTemplate, setPythonTemplate] = useState<"idle" | "jupyter">("idle");
+  const [notebookJupyterTheme, setNotebookJupyterTheme] = useState<"light" | "dark">("light");
+  const [pythonTemplate, setPythonTemplate] = useState<"idle" | "jupyter" | "vscode">("idle");
+  const [javaTemplate, setJavaTemplate] = useState<"notepad" | "vscode">("notepad");
+  const [sqlTemplate, setSqlTemplate] = useState<"workbench" | "mysql-cli">("workbench");
+  const [notebookTemplate, setNotebookTemplate] = useState<"colab" | "jupyter">("colab");
   const [browserTheme, setBrowserTheme] = useState<"edge" | "chrome">("edge");
   const [instructions, setInstructions] = useState("");
   const [filename, setFilename] = useState("lab_report");
@@ -378,6 +387,34 @@ function AssignmentContent() {
   const [isBatchMode, setIsBatchMode] = useState(false);
   const [batchProcessing, setBatchProcessing] = useState(false);
   const [processingTriggered, setProcessingTriggered] = useState(false);
+  const detectedQuestions = isBatchMode
+    ? batchItems.flatMap(item => item.status === "ready" ? item.workflow?.questions ?? [] : [])
+    : questions;
+  const detectedLanguages = Array.from(new Set(detectedQuestions.map(question => question.language)))
+    .filter(value => value !== "theory" && value !== "auto");
+  const selectedLanguages = language === "auto" || isBatchMode ? detectedLanguages : [language];
+  const detectedLabel = detectedLanguages.map(value =>
+    value === "colab" ? "Colab / notebook" : languages.find(option => option.value === value)?.label ?? value,
+  ).join(", ");
+
+  const withScreenshotTemplate = (question: LabQuestion, selectedLanguage: LabLanguage): LabQuestion => {
+    const base = { ...question, track: question.track || trackParam || undefined };
+    if (question.language === "theory" || question.kind === "evidence" || question.kind === "theory") return base;
+    switch (selectedLanguage === "auto" ? question.language : selectedLanguage) {
+      case "python":
+        return { ...base, source_ide: pythonTemplate === "vscode" ? "vscode" : undefined,
+          python_template: pythonTemplate === "jupyter" ? "jupyter" : "idle", jupyter_theme: jupyterTheme, browser_theme: browserTheme };
+      case "java":
+        return { ...base, source_ide: javaTemplate === "vscode" ? "vscode" : undefined };
+      case "sql":
+        return { ...base, source_ide: sqlTemplate === "mysql-cli" ? "mysql-cli" : undefined };
+      case "colab":
+        return { ...base, notebook_template: notebookTemplate, colab_theme: colabTheme, jupyter_theme: notebookJupyterTheme };
+      default:
+        return { ...base, browser_theme: browserTheme,
+          source_ide: muAssociation && (sourceIde === "codeblocks" || sourceIde === "vscode") ? sourceIde : question.source_ide };
+    }
+  };
 
   const running =
     workflow?.status === "queued" || workflow?.status === "processing" || workflow?.status === "extracting";
@@ -462,9 +499,21 @@ function AssignmentContent() {
     if (data.status === "ready" || restoreFields) setQuestions(data.questions);
     if (restoreFields) {
       setLanguage(muAssociation?.language || data.language);
-      setColabTheme(data.questions.find((question) => question.colab_theme)?.colab_theme || "dark");
-      setJupyterTheme(data.questions.find((question) => question.jupyter_theme)?.jupyter_theme || "light");
-      setPythonTemplate(data.questions.find((question) => question.python_template)?.python_template || "idle");
+      const savedQuestion = (value: LabLanguage) => data.questions.find(question =>
+        question.kind !== "theory" && question.kind !== "evidence" && question.language !== "theory" &&
+        (data.language === "auto" ? question.language : data.language) === value);
+      const python = savedQuestion("python");
+      const notebook = savedQuestion("colab");
+      setJupyterTheme(python?.jupyter_theme || "light");
+      setColabTheme(notebook?.colab_theme || "dark");
+      setNotebookJupyterTheme(notebook?.jupyter_theme || "light");
+      setPythonTemplate(python?.source_ide === "vscode" ? "vscode" : python?.python_template ||
+        (sourceIde === "vscode" || sourceIde === "jupyter" ? sourceIde : "idle"));
+      setJavaTemplate(savedQuestion("java")?.source_ide === "vscode" || (muAssociation?.language === "java" && sourceIde === "vscode") ? "vscode" : "notepad");
+      setSqlTemplate(savedQuestion("sql")?.source_ide === "mysql-cli" ? "mysql-cli" : "workbench");
+      setNotebookTemplate(notebook?.notebook_template || "colab");
+      setScreenshotStyle(data.screenshot_style || "style_1");
+      setManualMode(data.mode || "code_only");
       setBrowserTheme(data.questions.find((question) => question.browser_theme)?.browser_theme || "edge");
       setInstructions(data.instructions);
       setFilename(sanitizeOutputName(data.output_name));
@@ -478,10 +527,8 @@ function AssignmentContent() {
       return;
     }
     let active = true;
-    const id = Number(
-      new URLSearchParams(window.location.search).get("assignment"),
-    );
-    if (!Number.isSafeInteger(id) || id < 1) return;
+    const id = Number(assignmentParam);
+    if (!Number.isSafeInteger(id) || id < 1 || upload?.id === id) return;
     const restore = async () => {
       setBusy(true);
       try {
@@ -509,7 +556,7 @@ function AssignmentContent() {
     return () => {
       active = false;
     };
-  }, [authLoading, user?.id, router]);
+  }, [authLoading, user?.id, router, assignmentParam]);
 
   useEffect(() => {
     if (!upload || !running) return;
@@ -555,7 +602,7 @@ function AssignmentContent() {
   }, [showPreview, upload?.id, workflow?.report?.id]);
 
   const extract = async (id: number) => {
-    const state = await workflowApi.extract(id);
+    const state = await workflowApi.extract(id, manualMode);
     applyWorkflow(state);
   };
 
@@ -572,13 +619,18 @@ function AssignmentContent() {
     setBusy(true);
     setError("");
     setPreview("");
+    setShowPreview(false);
     setWorkflow(null);
     setQuestions([]);
     try {
       const uploaded = await apiService.uploadFile(file);
       setUpload(uploaded);
       setFilename(outputName(uploaded.original_filename));
-      router.replace(`/code-execution?assignment=${uploaded.id}`, {
+      const params = new URLSearchParams({ assignment: String(uploaded.id) });
+      if (muLabId) params.set("muLab", muLabId);
+      if (ideParam) params.set("ide", ideParam);
+      if (trackParam) params.set("track", trackParam);
+      router.replace(`/code-execution?${params}`, {
         scroll: false,
       });
       await extract(uploaded.id);
@@ -654,7 +706,7 @@ function AssignmentContent() {
           );
 
           // Trigger extraction
-          let wf = await workflowApi.extract(uploaded.id);
+          let wf = await workflowApi.extract(uploaded.id, manualMode);
           if (!batchAlive.current) return;
           let attempts = 0;
           while (
@@ -667,93 +719,11 @@ function AssignmentContent() {
             attempts++;
           }
 
-          if (wf.status === "ready" && wf.questions && wf.questions.length > 0) {
-            if (!batchAlive.current) return;
-            setBatchItems((prev) =>
-              prev.map((it, idx) =>
-                idx === i
-                  ? { ...it, status: "processing", stage: `Generating ${wf.questions.length} exercises`, progress: 50 }
-                  : it
-              )
-            );
+          if (wf.status === "ready" && wf.questions.length > 0) {
+            setBatchItems(prev => prev.map((entry, index) => index === i
+              ? { ...entry, status: "ready", stage: "Ready for template selection", progress: 40, workflow: wf }
+              : entry));
 
-            // Process with selected manualMode
-            let runWf = await workflowApi.process(uploaded.id, {
-              questions: wf.questions.map((question) => ({
-                ...question,
-                track: question.track || trackParam || undefined,
-                colab_theme: colabTheme,
-                browser_theme: browserTheme,
-                source_ide: muAssociation ? sourceIde as LabQuestion["source_ide"] : question.source_ide,
-                python_template: pythonTemplate,
-                jupyter_theme: jupyterTheme,
-              })),
-              language: "auto",
-              instructions: "",
-              output_name: outputName(item.file.name),
-              screenshot_style: screenshotStyle,
-              mode: manualMode,
-              track: trackParam || undefined,
-            });
-
-            let runAttempts = 0;
-            while (
-              (runWf.status === "processing" || runWf.status === "queued" || runWf.status === "extracting") &&
-              runAttempts < 180
-            ) {
-              await new Promise((r) => setTimeout(r, 3000));
-              if (!batchAlive.current) return;
-              runWf = await workflowApi.status(uploaded.id);
-              runAttempts++;
-              setBatchItems((prev) =>
-                prev.map((it, idx) =>
-                  idx === i
-                    ? {
-                        ...it,
-                        stage: runWf.stage || "Capturing IDE screenshots",
-                        progress: Math.max(50, runWf.progress || 60),
-                      }
-                    : it
-                )
-              );
-            }
-
-            if(runWf.status==='awaiting_clarification') {
-              setBatchItems(prev=>prev.map((it,idx)=>idx===i?{...it,status:'awaiting_clarification',stage:'Needs your answers',workflow:runWf}:it));
-            } else if (runWf.status === "completed" && runWf.report) {
-              setBatchItems((prev) =>
-                prev.map((it, idx) =>
-                  idx === i
-                    ? {
-                        ...it,
-                        status: "completed",
-                        stage: "Manual Ready",
-                        progress: 100,
-                        reportId: runWf.report!.id,
-                        reportFilename: runWf.report!.filename,
-                        workflow: runWf,
-                      }
-                    : it
-                )
-              );
-            } else {
-              setBatchItems((prev) =>
-                prev.map((it, idx) =>
-                  idx === i
-                    ? {
-                        ...it,
-                        status: "failed",
-                        stage: runWf.error || "Failed",
-                        progress: 100,
-                        error: runWf.error || "Execution warning",
-                        reportId: runWf.report?.id,
-                        reportFilename: runWf.report?.filename,
-                        workflow: runWf,
-                      }
-                    : it
-                )
-              );
-            }
           } else {
             setBatchItems((prev) =>
               prev.map((it, idx) =>
@@ -774,6 +744,105 @@ function AssignmentContent() {
     } finally {
       setBatchProcessing(false);
       if (inputRef.current) inputRef.current.value = "";
+    }
+  };
+
+  const processBatch = async () => {
+    if (batchProcessing) return;
+    setBatchProcessing(true);
+    try {
+      for (let i = 0; i < batchItems.length; i++) {
+        const item = batchItems[i];
+        if (!batchAlive.current) return;
+        const { uploadId, workflow: wf } = item;
+        if (item.status !== "ready" || !uploadId || !wf) continue;
+        try {
+          setBatchItems((prev) =>
+            prev.map((it, idx) =>
+              idx === i
+                ? { ...it, status: "processing", stage: `Generating ${wf.questions.length} exercises`, progress: 50 }
+                : it
+            )
+          );
+
+          // Process with selected manualMode
+          let runWf = await workflowApi.process(uploadId, {
+            questions: wf.questions.map(question => withScreenshotTemplate(question, "auto")),
+            language: "auto",
+            instructions: "",
+            output_name: outputName(item.file.name),
+            screenshot_style: screenshotStyle,
+            mode: manualMode,
+            track: trackParam || undefined,
+          });
+
+          let runAttempts = 0;
+          while (
+            (runWf.status === "processing" || runWf.status === "queued" || runWf.status === "extracting") &&
+            runAttempts < 180
+          ) {
+            await new Promise((r) => setTimeout(r, 3000));
+            if (!batchAlive.current) return;
+            runWf = await workflowApi.status(uploadId);
+            runAttempts++;
+            setBatchItems((prev) =>
+              prev.map((it, idx) =>
+                idx === i
+                  ? {
+                      ...it,
+                      stage: runWf.stage || "Capturing IDE screenshots",
+                      progress: Math.max(50, runWf.progress || 60),
+                    }
+                  : it
+              )
+            );
+          }
+
+          if(runWf.status==='awaiting_clarification') {
+            setBatchItems(prev=>prev.map((it,idx)=>idx===i?{...it,status:'awaiting_clarification',stage:'Needs your answers',workflow:runWf}:it));
+          } else if (runWf.status === "completed" && runWf.report) {
+            setBatchItems((prev) =>
+              prev.map((it, idx) =>
+                idx === i
+                  ? {
+                      ...it,
+                      status: "completed",
+                      stage: "Manual Ready",
+                      progress: 100,
+                      reportId: runWf.report!.id,
+                      reportFilename: runWf.report!.filename,
+                      workflow: runWf,
+                    }
+                  : it
+              )
+            );
+          } else {
+            setBatchItems((prev) =>
+              prev.map((it, idx) =>
+                idx === i
+                  ? {
+                      ...it,
+                      status: "failed",
+                      stage: runWf.error || "Failed",
+                      progress: 100,
+                      error: runWf.error || "Execution warning",
+                      reportId: runWf.report?.id,
+                      reportFilename: runWf.report?.filename,
+                      workflow: runWf,
+                    }
+                  : it
+              )
+            );
+          }
+        } catch (requestError) {
+          const message = errorMessage(requestError);
+          setBatchItems(prev => prev.map((entry, index) => index === i
+            ? { ...entry, status: "failed", stage: message, error: message }
+            : entry));
+        }
+      }
+    } finally {
+      setBatchProcessing(false);
     }
   };
 
@@ -822,7 +891,7 @@ function AssignmentContent() {
   };
 
   const process = async () => {
-    if (!upload || !questions.length || busy || running) return;
+    if (!questions.length || busy || running) return;
     if (questions.some((question) => !question.text.trim())) {
       setError("Every question needs some text.");
       setShowQuestions(true);
@@ -839,17 +908,9 @@ function AssignmentContent() {
       const target = upload ?? (await startFromLab());
       const effectiveLanguage: LabLanguage = isDistributedMode ? "distributed" : language;
       applyWorkflow(
-        await workflowApi.process(upload.id, {
-          questions: questions.map((question) => ({
-            ...question,
-            track: question.track || trackParam || undefined,
-            colab_theme: colabTheme,
-            browser_theme: browserTheme,
-            source_ide: muAssociation ? sourceIde as LabQuestion["source_ide"] : question.source_ide,
-            python_template: pythonTemplate,
-            jupyter_theme: jupyterTheme,
-          })),
-          language,
+        await workflowApi.process(target.id, {
+          questions: questions.map(question => withScreenshotTemplate(question, effectiveLanguage)),
+          language: effectiveLanguage,
           instructions,
           output_name: sanitizeOutputName(filename || "lab_report"),
           screenshot_style: screenshotStyle,
@@ -1150,7 +1211,9 @@ function AssignmentContent() {
                       >
                         {item.status}
                       </span>
-                      {item.status==='awaiting_clarification'&&item.uploadId&&<Link href={`/code-execution?assignment=${item.uploadId}`}>Answer questions</Link>}
+                      {item.status === "awaiting_clarification" && item.uploadId && (
+                        <Link href={`/code-execution?assignment=${item.uploadId}`} onClick={() => setIsBatchMode(false)}>Answer questions</Link>
+                      )}
                       {item.reportId && (
                         <button
                           onClick={() => saveReport(item.reportId!, item.reportFilename || "lab_manual.docx")}
@@ -1170,6 +1233,7 @@ function AssignmentContent() {
                       reset();
                     }}
                     className={styles.clearBatchButton}
+                    disabled={batchProcessing}
                   >
                     Clear Batch &amp; Upload New
                   </button>
@@ -1264,7 +1328,8 @@ function AssignmentContent() {
                   if(href.startsWith('/code-execution') && searchParams.get('assignment'))href+='&assignment='+encodeURIComponent(searchParams.get('assignment')!);
                   router.push(href);
                 }} />}
-              <p>Use the detected language or choose one.</p>
+              <p role="status">{detectedLabel ? `Detected: ${detectedLabel}` : detectedQuestions.length ? "No programming language detected." : "LabMate detects the language after reading your manual."}</p>
+              {!isBatchMode && !muAssociation && (
               <select
                 aria-label="Programming language"
                 value={language}
@@ -1279,18 +1344,24 @@ function AssignmentContent() {
                   </option>
                 ))}
               </select>
-              {(language === "colab" || (language === "auto" && (!questions.length || questions.some((question) => question.language === "colab")))) && (
+              )}
+              {selectedLanguages.includes("colab") && (
                 <div className={styles.colabThemeField}>
-                  <label className={styles.screenshotLabel} htmlFor="colab-theme">Colab screenshot theme</label>
-                  <select id="colab-theme" value={colabTheme} disabled={running || busy || batchProcessing}
-                    onChange={(event) => setColabTheme(event.target.value as "light" | "dark")}>
+                  <label className={styles.screenshotLabel} htmlFor="notebook-template">Notebook screenshot template</label>
+                  <select id="notebook-template" value={notebookTemplate} disabled={running || busy || batchProcessing}
+                    onChange={event => setNotebookTemplate(event.target.value as typeof notebookTemplate)}>
+                    <option value="colab">Google Colab</option>
+                    <option value="jupyter">Jupyter Notebook</option>
+                  </select>
+                  <label className={styles.screenshotLabel} htmlFor="colab-theme">Notebook theme</label>
+                  <select id="colab-theme" value={notebookTemplate === "jupyter" ? notebookJupyterTheme : colabTheme} disabled={running || busy || batchProcessing}
+                    onChange={(event) => (notebookTemplate === "jupyter" ? setNotebookJupyterTheme : setColabTheme)(event.target.value as "light" | "dark")}>
                     <option value="dark">Dark</option>
                     <option value="light">Light</option>
                   </select>
-                  <p>Applies to every Colab code and output image.</p>
                 </div>
               )}
-              {(['html', 'react', 'node'].includes(language) || questions.some(question => ['html', 'react', 'node'].includes(question.language) || /\bflask\b/i.test(question.text))) && (
+              {(selectedLanguages.some(value => ['html', 'react', 'node'].includes(value)) || detectedQuestions.some(question => /\bflask\b/i.test(question.text))) && (
                 <div className={styles.colabThemeField}>
                   <label className={styles.screenshotLabel} htmlFor="browser-theme">Web output browser</label>
                   <select id="browser-theme" value={browserTheme} disabled={running || busy || batchProcessing}
@@ -1301,13 +1372,14 @@ function AssignmentContent() {
                   <p>The frame surrounds the captured page without changing its contents.</p>
                 </div>
               )}
-              {(language === "python" || (language === "auto" && (!questions.length || questions.some((question) => question.language === "python")))) && (
+              {selectedLanguages.includes("python") && (
                 <div style={{ marginTop: "12px" }}>
                   <label className={styles.screenshotLabel} htmlFor="python-template">Python screenshot template</label>
                   <select id="python-template" value={pythonTemplate} disabled={running || busy || batchProcessing}
-                    onChange={event => setPythonTemplate(event.target.value as "idle" | "jupyter")}>
+                    onChange={event => setPythonTemplate(event.target.value as typeof pythonTemplate)}>
                     <option value="idle">Python IDLE (Windows)</option>
                     <option value="jupyter">Jupyter Notebook</option>
+                    <option value="vscode">VS Code</option>
                   </select>
                   <p style={{fontSize: "12px", color: "#a1a1aa", marginTop: "8px"}}>Choose the look of your Python code and output screenshots.</p>
                   {pythonTemplate === "jupyter" && <>
@@ -1322,7 +1394,7 @@ function AssignmentContent() {
                   <select
                     aria-label="Python screenshot layout style"
                     value={screenshotStyle}
-                    disabled={running || busy}
+                    disabled={running || busy || batchProcessing}
                     onChange={(event) => setScreenshotStyle(event.target.value)}
                   >
                     <option value="style_1">Style 1: Output Down (Editor on Top, Shell Below)</option>
@@ -1330,6 +1402,26 @@ function AssignmentContent() {
                     <option value="style_3">Style 3: Two Different Windows (Side by Side)</option>
                   </select>
                   </>}
+                </div>
+              )}
+              {selectedLanguages.includes("java") && (
+                <div className={styles.colabThemeField}>
+                  <label className={styles.screenshotLabel} htmlFor="java-template">Java screenshot template</label>
+                  <select id="java-template" value={javaTemplate} disabled={running || busy || batchProcessing}
+                    onChange={event => setJavaTemplate(event.target.value as typeof javaTemplate)}>
+                    <option value="notepad">Notepad + Command Prompt</option>
+                    <option value="vscode">VS Code</option>
+                  </select>
+                </div>
+              )}
+              {selectedLanguages.includes("sql") && (
+                <div className={styles.colabThemeField}>
+                  <label className={styles.screenshotLabel} htmlFor="sql-template">SQL screenshot template</label>
+                  <select id="sql-template" value={sqlTemplate} disabled={running || busy || batchProcessing}
+                    onChange={event => setSqlTemplate(event.target.value as typeof sqlTemplate)}>
+                    <option value="workbench">MySQL Workbench</option>
+                    <option value="mysql-cli">MySQL Command Line Client</option>
+                  </select>
                 </div>
               )}
             </div>
@@ -1448,15 +1540,17 @@ function AssignmentContent() {
           )}
           <button
             className={styles.startButton}
-            disabled={!questions.length || running || busy || complete || workflow?.status==='awaiting_clarification'}
-            onClick={process}
+            disabled={isBatchMode
+              ? batchProcessing || !batchItems.some(item => item.status === "ready")
+              : !questions.length || running || busy || complete || workflow?.status === "awaiting_clarification"}
+            onClick={isBatchMode ? processBatch : process}
           >
-            {running || busy ? (
+            {running || busy || batchProcessing ? (
               <Loader2 className={styles.spin} size={18} />
             ) : (
               <Code2 size={19} />
             )}
-            {complete
+            {isBatchMode ? (batchProcessing ? "Working on batch…" : "Process batch") : complete
               ? "Report completed"
               : running
                 ? "Processing..."

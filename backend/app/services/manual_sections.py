@@ -37,6 +37,7 @@ def numbered_questions(text):
 
     # Shared input data belongs to every question; a later task may depend on it.
     preface = lines[:headings[0][0]]
+    default_language = manual_language_hint(preface) or "python"
     shared = []
     for index, line in enumerate(preface):
         if re.fullmatch(r'\s*Supplied data and constraints\s*', line, re.I):
@@ -52,7 +53,7 @@ def numbered_questions(text):
             if line.strip():
                 block.append(line.strip())
         body = '\n'.join(block)
-        language = section_language('\n'.join(preface[:8]), body)
+        language = section_language(heading.group(2), body, default=default_language)
         if not is_actionable_lab_question(body, language):
             return []  # Leave non-programming question lists to the normal extractor.
         if shared:
@@ -126,7 +127,7 @@ def section_language(title, content, default="python"):
     if re.search(r'\b(?:Subject\s*:\s*UNIX\s+LAB|ITL\s*402)\b|^\s*#!\s*/(?:usr/)?bin/(?:ba)?sh\b',text,re.I|re.M):return 'ubuntu'
     if re.search(r'\b(?:UNIX|Ubuntu|Bash|shell script(?:s|ing)?|(?:sed|awk|grep|egrep|perl)\s+(?:script|program)(?:s|ming)?|system administrati(?:on|ve tasks))\b',title,re.I):return 'ubuntu'
     if re.search(r'\bR\s?Studio\b|\bRscript\b|\bR\s+(?:programming|language|lab|script)\b|\b(?:in|using|with|via)\s+(?-i:R)(?![\w.+#-])',title,re.I):return 'r'
-    if re.search(r'\b(?:SQL|MySQL|SQLite)\b',title,re.I) and not re.search(r'\b(?:react|node|html|css|javascript|python|java|web|webpage|website|portfolio)\b',title,re.I):return 'sql'
+    if re.search(r'\b(?:SQL|MySQL|SQLite|DBMS|Structured Query Lab|Database Management Systems?)\b',title,re.I) and not re.search(r'\b(?:react|node|html|css|javascript|python|java|web|webpage|website|portfolio)\b',title,re.I):return 'sql'
     if re.search(r'\b(?:Colab|Jupyter|PySpark|SparkSession|SparkContext|PyTorch|TensorFlow|Keras|Data Science|Deep Learning|Neural Network|Machine Learning|Perceptron|Autoencoder|Backpropagation|MLP|ANN|LSTM|CNN|RNN|AdaBoost|Random Forest|Bayesian Network|Fuzzy Controller|Fuzzy Sets?|Classification Algorithms?)\b|\.ipynb\b', text, re.I): return 'colab'
     if re.search(r"\b(?:node(?:\.js)?|express)\b", title, re.I): return "node"
     if re.search(r"\breact\b", title, re.I): return "react"
@@ -157,6 +158,19 @@ def section_language(title, content, default="python"):
     return default
 
 
+def manual_language_hint(lines):
+    """Use an explicit lab heading for exercises without their own language clues."""
+    hints = set()
+    for line in lines[:20]:
+        if re.search(r'^\s*(?:subject|course|laboratory)\s*:', line, re.I) or re.search(
+            r'\b(?:lab(?:oratory)?|manual)\s*$', line, re.I
+        ):
+            language = section_language(line, "", default=None)
+            if language:
+                hints.add(language)
+    return next(iter(hints)) if len(hints) == 1 else None
+
+
 def numbered_experiments(text):
     """Return complete original sections or fail on ambiguous/duplicate boundaries.
 
@@ -180,6 +194,7 @@ def numbered_experiments(text):
             + ". Give distinct experiments unique numbers, or upload the original manual instead of a combined report."
         )
     if len(boundaries) > 100: raise ManualStructureError("Assignments are limited to 100 experiments.")
+    default_language = manual_language_hint(lines[:boundaries[0][0]]) or "python"
     global_lines = []
     collecting = False
     for line in lines[:boundaries[0][0]]:
@@ -208,7 +223,7 @@ def numbered_experiments(text):
         if not objective_lines:
             raise ManualStructureError(f"Experiment {match.group(1)} has no problem statement or requirements.")
         title=match.group(2).strip() or (block[1] if len(block)>1 else '')
-        language=section_language(title,body)
+        language=section_language(title,body,default=default_language)
         relevant_global=[line for line in global_lines if language=='node' or not re.search(r'For the Node\.js experiment',line,re.I)]
         if relevant_global:body += "\nGeneral requirements\n" + "\n".join(relevant_global)
         if len(body) > 15000: raise ManualStructureError(f"Experiment {match.group(1)} exceeds the supported question length.")

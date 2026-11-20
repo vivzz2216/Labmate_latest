@@ -429,7 +429,8 @@ class RuntimeEngine:
         capability = plan_experiment(objective, language, code)
         if capability['category']=='database':
             from .lab_capture import capture_sql
-            return await capture_sql(code, filename=filename, objective=objective)
+            sql_template = (project_config or {}).get('sql_template', 'workbench')
+            return await capture_sql(code, filename=filename, objective=objective, template=sql_template)
         if capability['category']=='notebook':
             # Native process restrictions are defense in depth, not an OS sandbox.
             from ..security.operator_access import execution_opted_in
