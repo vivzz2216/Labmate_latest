@@ -1,57 +1,98 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Database, FileSpreadsheet, Upload } from "lucide-react";
+import { ArrowLeft, Database, FileSpreadsheet, GraduationCap, Link2, Upload } from "lucide-react";
 import {
-  aggregateKpi,
-  applyDatasetFilters,
+  addOrUpdateCalculatedColumn,
+  autoDetectRelationships,
+  changeColumnType,
   createDefaultReportPages,
-  formatPowerBiNumber,
+  exportTableToCsv,
   getVisualDefaultTitle,
+  handleMissingValues,
   parseCsvText,
+  recomputeCalculatedColumns,
+  removeTableColumn,
+  renameTableColumn,
+  resolveTableRows,
 } from "@/lib/powerbi/csvEngine";
-import { POWERBI_SERIES_PALETTE } from "@/lib/powerbi/palette";
-import { RETAIL_SAMPLE_CSV, SOCIAL_KPI_POWERBI_CSV } from "@/lib/powerbi/sampleCsv";
+import { parseExcelArrayBuffer, type ParsedExcelSheet } from "@/lib/powerbi/excelParser";
+import { POWERBI_THEMES } from "@/lib/powerbi/palette";
+import {
+  RELATIONAL_ORDERS_CSV,
+  RELATIONAL_PRODUCTS_CSV,
+  RETAIL_SAMPLE_CSV,
+  SOCIAL_KPI_POWERBI_CSV,
+  STUDENT_PERFORMANCE_CSV,
+} from "@/lib/powerbi/sampleCsv";
 import type {
   AggregationFn,
-  ColumnMeta,
+  ColumnType,
   CrossFilterSelection,
   DatasetModel,
   DateRangeFilter,
+  MeasureDef,
+  NumericRangeFilter,
   PowerBiVisual,
   PowerBiVisualType,
   ReportPage,
   RibbonTab,
+  TableRelationship,
   ViewMode,
+  VisualAnalytics,
+  VisualLayout,
 } from "@/lib/powerbi/types";
 import { ApplicationHeader } from "./ApplicationHeader";
 import { ChartContainer } from "./ChartContainer";
-import { DashboardCard } from "./DashboardCard";
+import { DashboardCard, type DraggedFieldPayload } from "./DashboardCard";
 import { DataPane } from "./DataPane";
 import { DataTable } from "./DataTable";
-import { DaxTmdlView } from "./DaxTmdlView";
 import { EmptyState } from "./EmptyState";
+import { ExcelNavigatorModal } from "./ExcelNavigatorModal";
 import { FilterPanel } from "./FilterPanel";
+import { FormulaModal } from "./FormulaModal";
 import { LoadingState } from "./LoadingState";
 import { Modal } from "./Modal";
 import { ModelView } from "./ModelView";
-import { PowerBiServiceView } from "./PowerBiServiceView";
+import { RelationshipsModal } from "./RelationshipsModal";
 import { Sidebar } from "./Sidebar";
 import { Tabs } from "./Tabs";
+import { TransformDataModal } from "./TransformDataModal";
+import { useStudioHook } from "../netlab/studioHook";
+import { powerBiPractical, type PowerBiPracticalFrame } from "@/lib/powerbi/practicals";
 import { VisualizationsPane } from "./VisualizationsPane";
 import styles from "./powerbi.module.css";
 
-/** Full interactive Microsoft Power BI Desktop & Service replica tailored for manual CSV datasets. */
-export function PowerBiWorkspace() {
+interface WorkspaceSnapshot {
+  tables: DatasetModel[];
+  activeTableId: string;
+  pages: ReportPage[];
+  activePageId: string;
+  measures: MeasureDef[];
+  relationships: TableRelationship[];
+  themeId: string;
+}
+
+const MAX_HISTORY = 30;
+
+/** Interactive Microsoft Power BI Desktop workspace for CSV/Excel analytics & college practicals. */
+export function PowerBiWorkspace({ capture = false }: { capture?: boolean }) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const viewportRef = useRef<HTMLDivElement | null>(null);
 
-  const [surfaceMode, setSurfaceMode] = useState<"desktop" | "service-home" | "service-create">("desktop");
-  const [dataset, setDataset] = useState<DatasetModel | null>(null);
+  const [tables, setTables] = useState<DatasetModel[]>([]);
+  const [activeTableId, setActiveTableId] = useState<string>("");
   const [pages, setPages] = useState<ReportPage[]>([
     { id: "page-1", name: "Page 1", visuals: [], pageFilters: {} },
   ]);
   const [activePageId, setActivePageId] = useState("page-1");
+  const [measures, setMeasures] = useState<MeasureDef[]>([]);
+  const [relationships, setRelationships] = useState<TableRelationship[]>([]);
+  const [themeId, setThemeId] = useState<string>("default");
+
+  const [undoStack, setUndoStack] = useState<WorkspaceSnapshot[]>([]);
+  const [redoStack, setRedoStack] = useState<WorkspaceSnapshot[]>([]);
+
   const [activeView, setActiveView] = useState<ViewMode>("report");
   const [activeTab, setActiveTab] = useState<RibbonTab>("Home");
   const [ribbonCollapsed, setRibbonCollapsed] = useState(false);
@@ -60,14 +101,48 @@ export function PowerBiWorkspace() {
 
   const [selectedVisualId, setSelectedVisualId] = useState<string | null>(null);
   const [focusVisualId, setFocusVisualId] = useState<string | null>(null);
+  const [selectedColumn, setSelectedColumn] = useState<{
+    tableId: string;
+    columnName: string;
+  } | null>(null);
+
+  const [copiedVisual, setCopiedVisual] = useState<PowerBiVisual | null>(null);
+  const [copiedFormat, setCopiedFormat] = useState<PowerBiVisual["format"] | null>(null);
+  const [formatPainterActive, setFormatPainterActive] = useState(false);
 
   const [showFiltersPane, setShowFiltersPane] = useState(false);
   const [showVizPane, setShowVizPane] = useState(true);
   const [showDataPane, setShowDataPane] = useState(false);
   const [showGridlines, setShowGridlines] = useState(false);
+  const [snapToGrid, setSnapToGrid] = useState(false);
 
   const [reportFilters, setReportFilters] = useState<Record<string, string[]>>({});
   const [slicerFilters, setSlicerFilters] = useState<Record<string, string[]>>({});
+  const [captureFrame, setCaptureFrame] = useState<PowerBiPracticalFrame | null>(null);
+  useStudioHook<Record<string, never>, PowerBiPracticalFrame>({
+    load: () => {},
+    show: (step) => {
+      if (!capture) return;
+      setTables(step.tables);
+      setActiveTableId(step.tables[0].id || step.tables[0].name);
+      setPages([step.page]);
+      setActivePageId(step.page.id);
+      setMeasures(step.measures);
+      setRelationships(step.relationships);
+      setSlicerFilters(step.slicer || {});
+      setActiveView(step.view);
+      setShowDataPane(true);
+      setShowVizPane(step.view === "report");
+      setTransformOpen(Boolean(step.steps));
+      setCaptureFrame(step);
+    },
+  }, captureFrame?.id);
+  useEffect(() => {
+    if (!capture) return;
+    window.__labmatePractical = powerBiPractical;
+    return () => { delete window.__labmatePractical; };
+  }, [capture]);
+  const [numericFilters, setNumericFilters] = useState<Record<string, NumericRangeFilter>>({});
   const [dateRange, setDateRange] = useState<DateRangeFilter | null>(null);
   const [crossFilter, setCrossFilter] = useState<CrossFilterSelection | null>(null);
 
@@ -75,20 +150,66 @@ export function PowerBiWorkspace() {
   const [loadingMsg, setLoadingMsg] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
-  // Fit-to-page scale computed from viewport size vs 1280x720 page
+  // Canvas zoom scale
   const [fitScale, setFitScale] = useState(0.76);
   const [manualZoomPct, setManualZoomPct] = useState<number | null>(null);
 
-  // Dialog states
+  // Modals
   const [getDataOpen, setGetDataOpen] = useState(false);
   const [enterDataOpen, setEnterDataOpen] = useState(false);
   const [transformOpen, setTransformOpen] = useState(false);
-  const [shareOpen, setShareOpen] = useState(false);
-  const [copilotOpen, setCopilotOpen] = useState(false);
+  const [relationshipsOpen, setRelationshipsOpen] = useState(false);
+  const [formulaModal, setFormulaModal] = useState<{
+    open: boolean;
+    mode: "column" | "measure";
+    tableId: string;
+  }>({ open: false, mode: "measure", tableId: "" });
+  const [excelNav, setExcelNav] = useState<{
+    open: boolean;
+    fileName: string;
+    sheets: ParsedExcelSheet[];
+  }>({ open: false, fileName: "", sheets: [] });
+
   const [pasteName, setPasteName] = useState("CustomTable");
   const [pasteText, setPasteText] = useState(
     "category,region,sales,units\nElectronics,North,42000,120\nSoftware,West,68500,95\nServices,East,31200,80",
   );
+
+  const activeTheme = useMemo(
+    () => POWERBI_THEMES.find((t) => t.id === themeId) || POWERBI_THEMES[0],
+    [themeId],
+  );
+
+  const activeTable = useMemo(
+    () => tables.find((t) => (t.id || t.name) === activeTableId) || tables[0] || null,
+    [tables, activeTableId],
+  );
+
+  const activePage = useMemo(
+    () => pages.find((p) => p.id === activePageId) || pages[0],
+    [pages, activePageId],
+  );
+
+  const selectedVisual = useMemo(
+    () => activePage?.visuals.find((v) => v.id === selectedVisualId) || null,
+    [activePage, selectedVisualId],
+  );
+
+  const visualTable = useMemo(() => {
+    if (selectedVisual?.tableId) {
+      return tables.find((t) => (t.id || t.name) === selectedVisual.tableId) || activeTable;
+    }
+    return activeTable;
+  }, [selectedVisual, tables, activeTable]);
+
+  const selectedColumnMeta = useMemo(() => {
+    if (!selectedColumn) return null;
+    const tbl = tables.find((t) => (t.id || t.name) === selectedColumn.tableId);
+    return tbl?.columns.find((c) => c.name === selectedColumn.columnName) || null;
+  }, [selectedColumn, tables]);
+
+  const canvasW = mobileLayoutPreview ? 390 : 1280;
+  const canvasH = mobileLayoutPreview ? 720 : 720;
 
   useEffect(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
@@ -113,7 +234,7 @@ export function PowerBiWorkspace() {
     const recompute = () => {
       const availW = Math.max(180, el.clientWidth - 16);
       const availH = Math.max(160, el.clientHeight - 16);
-      const next = Math.min(availW / 1280, availH / 720, 1);
+      const next = Math.min(availW / canvasW, availH / canvasH, 1);
       setFitScale(Number(Math.max(0.18, next).toFixed(3)));
     };
 
@@ -121,61 +242,211 @@ export function PowerBiWorkspace() {
     const ro = new ResizeObserver(recompute);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [showFiltersPane, showVizPane, showDataPane, ribbonCollapsed, readingView, activeView, surfaceMode]);
+  }, [
+    showFiltersPane,
+    showVizPane,
+    showDataPane,
+    ribbonCollapsed,
+    readingView,
+    activeView,
+    canvasW,
+    canvasH,
+  ]);
 
   const effectiveScale = manualZoomPct !== null ? manualZoomPct / 100 : fitScale;
   const displayedZoomPct = Math.round(effectiveScale * 100);
 
-  const activePage = useMemo(
-    () => pages.find((p) => p.id === activePageId) || pages[0],
-    [pages, activePageId],
+  const captureSnapshot = useCallback(
+    (): WorkspaceSnapshot => ({
+      tables,
+      activeTableId,
+      pages,
+      activePageId,
+      measures,
+      relationships,
+      themeId,
+    }),
+    [tables, activeTableId, pages, activePageId, measures, relationships, themeId],
   );
 
-  const selectedVisual = useMemo(
-    () => activePage?.visuals.find((v) => v.id === selectedVisualId) || null,
-    [activePage, selectedVisualId],
-  );
+  const pushHistory = useCallback(() => {
+    const snap = captureSnapshot();
+    setUndoStack((prev) => [...prev.slice(-(MAX_HISTORY - 1)), snap]);
+    setRedoStack([]);
+  }, [captureSnapshot]);
 
-  const loadCsvIntoModel = useCallback((csvText: string, tableName: string, fileName: string) => {
-    setUploadError(null);
-    setLoadingMsg(`Loading ${fileName}...`);
+  const handleUndo = useCallback(() => {
+    setUndoStack((prev) => {
+      if (prev.length === 0) return prev;
+      const prevSnap = prev[prev.length - 1];
+      setRedoStack((r) => [...r, captureSnapshot()]);
+      setTables(prevSnap.tables);
+      setActiveTableId(prevSnap.activeTableId);
+      setPages(prevSnap.pages);
+      setActivePageId(prevSnap.activePageId);
+      setMeasures(prevSnap.measures);
+      setRelationships(prevSnap.relationships);
+      setThemeId(prevSnap.themeId);
+      return prev.slice(0, -1);
+    });
+  }, [captureSnapshot]);
 
-    window.setTimeout(() => {
-      try {
-        const parsed = parseCsvText(csvText, tableName, fileName);
-        if (parsed.columns.length === 0 || parsed.rows.length === 0) {
-          setUploadError("The CSV file appears empty or missing valid data rows.");
-          setLoadingMsg(null);
-          return;
-        }
-        const generated = createDefaultReportPages(parsed);
-        setDataset(parsed);
+  const handleRedo = useCallback(() => {
+    setRedoStack((prev) => {
+      if (prev.length === 0) return prev;
+      const nextSnap = prev[prev.length - 1];
+      setUndoStack((u) => [...u, captureSnapshot()]);
+      setTables(nextSnap.tables);
+      setActiveTableId(nextSnap.activeTableId);
+      setPages(nextSnap.pages);
+      setActivePageId(nextSnap.activePageId);
+      setMeasures(nextSnap.measures);
+      setRelationships(nextSnap.relationships);
+      setThemeId(nextSnap.themeId);
+      return prev.slice(0, -1);
+    });
+  }, [captureSnapshot]);
+
+  const applyLoadedTables = useCallback(
+    (loadedTables: DatasetModel[], mode: "replace" | "append" = "replace") => {
+      const positioned = loadedTables.map((t, i) => ({
+        ...t,
+        modelPosition: t.modelPosition || {
+          x: 36 + (i % 3) * 410,
+          y: 36 + Math.floor(i / 3) * 290,
+        },
+      }));
+
+      const nextTables =
+        mode === "append" ? [...tables, ...positioned] : positioned;
+      const autoRels = autoDetectRelationships(
+        nextTables,
+        mode === "append" ? relationships : [],
+      );
+      const primary = nextTables[0];
+      const primaryId = primary.id || primary.name;
+      const generated =
+        mode === "append" && tables.length > 0
+          ? pages
+          : createDefaultReportPages(primary);
+
+      setTables(nextTables);
+      setActiveTableId(primaryId);
+      setRelationships(autoRels);
+      if (mode === "replace") {
         setPages(generated);
         setActivePageId(generated[0].id);
         setSelectedVisualId(generated[0].visuals[0]?.id || null);
-        setFocusVisualId(null);
+        setMeasures([]);
         setReportFilters({});
         setSlicerFilters({});
+        setNumericFilters({});
         setDateRange(null);
         setCrossFilter(null);
-        const isWide = typeof window === "undefined" || window.innerWidth > 900;
-        setShowFiltersPane(isWide);
-        setShowDataPane(isWide);
-        setShowVizPane(isWide);
-        setSurfaceMode("desktop");
-        setActiveView("report");
-      } catch {
-        setUploadError("Could not parse CSV. Ensure comma-separated rows with a header line.");
-      } finally {
-        setLoadingMsg(null);
+        setUndoStack([]);
+        setRedoStack([]);
       }
-    }, 120);
-  }, []);
+      setFocusVisualId(null);
+      setSelectedColumn(
+        primary.columns[0]
+          ? { tableId: primaryId, columnName: primary.columns[0].name }
+          : null,
+      );
 
-  const handleFilePicked = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const isWide = typeof window === "undefined" || window.innerWidth > 900;
+      setShowFiltersPane(isWide);
+      setShowDataPane(isWide);
+      setShowVizPane(isWide);
+      setActiveView("report");
+    },
+    [tables, relationships, pages],
+  );
+
+  const loadCsvIntoModel = useCallback(
+    (csvText: string, tableName: string, fileName: string, append = false) => {
+      setUploadError(null);
+      setLoadingMsg(`Loading ${fileName}...`);
+
+      window.setTimeout(() => {
+        try {
+          const parsed = parseCsvText(csvText, tableName, fileName);
+          if (parsed.columns.length === 0 || parsed.rows.length === 0) {
+            setUploadError("The CSV file appears empty or missing valid data rows.");
+            setLoadingMsg(null);
+            return;
+          }
+          applyLoadedTables([parsed], append ? "append" : "replace");
+        } catch {
+          setUploadError("Could not parse CSV. Ensure delimited rows with a valid header row.");
+        } finally {
+          setLoadingMsg(null);
+        }
+      }, 60);
+    },
+    [applyLoadedTables],
+  );
+
+  const loadRelationalSample = useCallback(() => {
+    setUploadError(null);
+    setLoadingMsg("Loading Orders & Products...");
+    window.setTimeout(() => {
+      const orders = parseCsvText(RELATIONAL_ORDERS_CSV, "Orders", "orders.csv");
+      const products = parseCsvText(RELATIONAL_PRODUCTS_CSV, "Products", "products.csv");
+      applyLoadedTables([orders, products], "replace");
+      setLoadingMsg(null);
+    }, 60);
+  }, [applyLoadedTables]);
+
+  const handleFilePicked = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
+
+    const lower = file.name.toLowerCase();
+    setUploadError(null);
+
+    if (lower.endsWith(".json")) {
+      try {
+        const text = await file.text();
+        const proj = JSON.parse(text) as WorkspaceSnapshot;
+        if (!Array.isArray(proj.tables) || !Array.isArray(proj.pages)) {
+          throw new Error("Invalid report file");
+        }
+        setTables(proj.tables);
+        setActiveTableId(proj.activeTableId || proj.tables[0]?.id || proj.tables[0]?.name || "");
+        setPages(proj.pages);
+        setActivePageId(proj.activePageId || proj.pages[0]?.id || "page-1");
+        setMeasures(proj.measures || []);
+        setRelationships(proj.relationships || []);
+        setThemeId(proj.themeId || "default");
+        setSelectedVisualId(proj.pages[0]?.visuals[0]?.id || null);
+      } catch {
+        setUploadError("Could not open JSON project file. Ensure it was exported from Power BI Studio.");
+      }
+      return;
+    }
+
+    if (lower.endsWith(".xlsx") || lower.endsWith(".xls")) {
+      setLoadingMsg(`Reading Excel workbook ${file.name}...`);
+      try {
+        const buf = await file.arrayBuffer();
+        const sheets = await parseExcelArrayBuffer(buf, file.name);
+        setLoadingMsg(null);
+        if (sheets.length === 1) {
+          applyLoadedTables([sheets[0].dataset], "replace");
+        } else {
+          setExcelNav({ open: true, fileName: file.name, sheets });
+        }
+      } catch (err) {
+        setLoadingMsg(null);
+        setUploadError(
+          err instanceof Error ? err.message : "Could not read Excel workbook.",
+        );
+      }
+      return;
+    }
+
+    // Standard CSV / TSV / TXT
     const reader = new FileReader();
     reader.onload = () => {
       const content = typeof reader.result === "string" ? reader.result : "";
@@ -185,7 +456,12 @@ export function PowerBiWorkspace() {
   };
 
   const updateVisual = useCallback(
-    (visualId: string, updater: (v: PowerBiVisual) => PowerBiVisual) => {
+    (
+      visualId: string,
+      updater: (v: PowerBiVisual) => PowerBiVisual,
+      commitHistory = true,
+    ) => {
+      if (commitHistory) pushHistory();
       setPages((prev) =>
         prev.map((page) =>
           page.id !== activePageId
@@ -197,38 +473,64 @@ export function PowerBiWorkspace() {
         ),
       );
     },
-    [activePageId],
+    [activePageId, pushHistory],
   );
 
   const addVisual = useCallback(
-    (type: PowerBiVisualType) => {
-      if (!dataset) return;
-      const textCol = dataset.columns.find((c) => c.type !== "number")?.name || dataset.columns[0]?.name;
-      const numCol = dataset.columns.find((c) => c.isNumeric)?.name;
+    (type: PowerBiVisualType, customLayout?: Partial<VisualLayout>, initFields?: { tableId: string; columnName: string; isNumeric: boolean }) => {
+      const targetTbl = initFields
+        ? tables.find((t) => (t.id || t.name) === initFields.tableId) || activeTable
+        : activeTable;
+      if (!targetTbl) return;
+
+      pushHistory();
+      const tId = targetTbl.id || targetTbl.name;
+      const textCol =
+        initFields && !initFields.isNumeric
+          ? initFields.columnName
+          : targetTbl.columns.find((c) => c.type !== "number")?.name || targetTbl.columns[0]?.name;
+      const numCol =
+        initFields && initFields.isNumeric
+          ? initFields.columnName
+          : targetTbl.columns.find((c) => c.isNumeric)?.name;
+
       const idx = activePage.visuals.length;
       const offset = (idx % 5) * 26;
       const isCard = type === "card";
       const isSlicer = type === "slicer";
+      const isText = type === "textbox";
+
+      const defaultW = isCard ? 236 : isSlicer ? 268 : isText ? 340 : 460;
+      const defaultH = isCard ? 110 : isSlicer ? 240 : isText ? 140 : 272;
 
       const newVisual: PowerBiVisual = {
         id: `v-${Date.now().toString(36)}-${idx}`,
         type,
-        title: getVisualDefaultTitle(type, textCol, isSlicer || !numCol ? [] : [numCol], "sum"),
-        xAxis: isCard ? undefined : textCol,
-        yAxis: isSlicer || !numCol ? [] : [numCol],
+        tableId: tId,
+        title: isText
+          ? "Report Notes"
+          : getVisualDefaultTitle(type, textCol, isSlicer || !numCol ? [] : [numCol], "sum"),
+        xAxis: isCard || isText ? undefined : textCol,
+        yAxis: isSlicer || isText || !numCol ? [] : [numCol],
+        legend:
+          type === "matrix"
+            ? targetTbl.columns.filter((c) => !c.isNumeric && c.name !== textCol)[0]?.name
+            : undefined,
         aggregation: "sum",
+        textContent: isText ? "Key Insights:\n• Edit this note to summarize findings for your lab report." : undefined,
+        fontSize: isText ? 14 : undefined,
         layout: {
-          x: Math.min(800, 48 + offset),
-          y: Math.min(440, 48 + offset),
-          w: isCard ? 236 : isSlicer ? 268 : 460,
-          h: isCard ? 110 : isSlicer ? 240 : 272,
+          x: Math.max(0, Math.min(canvasW - defaultW, customLayout?.x ?? 48 + offset)),
+          y: Math.max(0, Math.min(canvasH - defaultH, customLayout?.y ?? 48 + offset)),
+          w: customLayout?.w ?? defaultW,
+          h: customLayout?.h ?? defaultH,
         },
         format: {
           showTitle: !isCard,
           showDataLabels: true,
           showLegend: true,
-          accentColor: POWERBI_SERIES_PALETTE[idx % POWERBI_SERIES_PALETTE.length],
-          backgroundColor: "#ffffff",
+          accentColor: activeTheme.palette[idx % activeTheme.palette.length],
+          backgroundColor: activeTheme.visualBg || "#ffffff",
           showBorder: true,
         },
         visualFilters: {},
@@ -242,11 +544,12 @@ export function PowerBiWorkspace() {
       setSelectedVisualId(newVisual.id);
       setActiveView("report");
     },
-    [dataset, activePage, activePageId],
+    [tables, activeTable, activePage, activePageId, activeTheme, canvasW, canvasH, pushHistory],
   );
 
   const deleteVisual = useCallback(
     (visualId: string) => {
+      pushHistory();
       setPages((prev) =>
         prev.map((p) =>
           p.id !== activePageId
@@ -257,19 +560,20 @@ export function PowerBiWorkspace() {
       if (selectedVisualId === visualId) setSelectedVisualId(null);
       if (focusVisualId === visualId) setFocusVisualId(null);
     },
-    [activePageId, selectedVisualId, focusVisualId],
+    [activePageId, selectedVisualId, focusVisualId, pushHistory],
   );
 
-  const duplicateSelected = () => {
+  const duplicateSelected = useCallback(() => {
     if (!selectedVisual) return;
+    pushHistory();
     const copy: PowerBiVisual = {
       ...selectedVisual,
       id: `v-copy-${Date.now().toString(36)}`,
       title: `${selectedVisual.title} (Copy)`,
       layout: {
         ...selectedVisual.layout,
-        x: Math.min(1280 - selectedVisual.layout.w, selectedVisual.layout.x + 24),
-        y: Math.min(720 - selectedVisual.layout.h, selectedVisual.layout.y + 24),
+        x: Math.min(canvasW - selectedVisual.layout.w, selectedVisual.layout.x + 24),
+        y: Math.min(canvasH - selectedVisual.layout.h, selectedVisual.layout.y + 24),
       },
     };
     setPages((prev) =>
@@ -278,7 +582,94 @@ export function PowerBiWorkspace() {
       ),
     );
     setSelectedVisualId(copy.id);
-  };
+  }, [selectedVisual, activePageId, canvasW, canvasH, pushHistory]);
+
+  const handleCopyVisual = useCallback(() => {
+    if (!selectedVisual) return;
+    setCopiedVisual({ ...selectedVisual });
+  }, [selectedVisual]);
+
+  const handleCutVisual = useCallback(() => {
+    if (!selectedVisual) return;
+    setCopiedVisual({ ...selectedVisual });
+    deleteVisual(selectedVisual.id);
+  }, [selectedVisual, deleteVisual]);
+
+  const handlePasteVisual = useCallback(() => {
+    if (!copiedVisual) return;
+    pushHistory();
+    const copy: PowerBiVisual = {
+      ...copiedVisual,
+      id: `v-paste-${Date.now().toString(36)}`,
+      layout: {
+        ...copiedVisual.layout,
+        x: Math.min(canvasW - copiedVisual.layout.w, copiedVisual.layout.x + 20),
+        y: Math.min(canvasH - copiedVisual.layout.h, copiedVisual.layout.y + 20),
+      },
+    };
+    setPages((prev) =>
+      prev.map((p) =>
+        p.id !== activePageId ? p : { ...p, visuals: [...p.visuals, copy] },
+      ),
+    );
+    setSelectedVisualId(copy.id);
+  }, [copiedVisual, activePageId, canvasW, canvasH, pushHistory]);
+
+  // Global keyboard shortcuts (Ctrl+Z, Ctrl+Y, Ctrl+C, Ctrl+X, Ctrl+V, Delete)
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const isEditingText =
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable);
+      if (isEditingText) return;
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
+        e.preventDefault();
+        if (e.shiftKey) handleRedo();
+        else handleUndo();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") {
+        e.preventDefault();
+        handleRedo();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "c") {
+        if (selectedVisual) {
+          e.preventDefault();
+          handleCopyVisual();
+        }
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "x") {
+        if (selectedVisual) {
+          e.preventDefault();
+          handleCutVisual();
+        }
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "v") {
+        if (copiedVisual) {
+          e.preventDefault();
+          handlePasteVisual();
+        }
+      } else if (e.key === "Delete" && selectedVisual && activeView === "report") {
+        e.preventDefault();
+        deleteVisual(selectedVisual.id);
+      } else if (e.key === "Escape") {
+        if (formatPainterActive) setFormatPainterActive(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [
+    handleUndo,
+    handleRedo,
+    handleCopyVisual,
+    handleCutVisual,
+    handlePasteVisual,
+    deleteVisual,
+    selectedVisual,
+    copiedVisual,
+    activeView,
+    formatPainterActive,
+  ]);
 
   const handleToggleFilterValue = (
     scope: "visual" | "page" | "report",
@@ -287,7 +678,7 @@ export function PowerBiWorkspace() {
   ) => {
     const toggleList = (map: Record<string, string[]>) => {
       const cur = map[column] || [];
-      const next = cur.includes(value) ? cur.filter((x) => x !== value) : [...cur, value];
+      const next = cur.indexOf(value) !== -1 ? cur.filter((x) => x !== value) : [...cur, value];
       const out = { ...map };
       if (next.length === 0) delete out[column];
       else out[column] = next;
@@ -337,6 +728,7 @@ export function PowerBiWorkspace() {
   const handleClearAllFilters = () => {
     setReportFilters({});
     setSlicerFilters({});
+    setNumericFilters({});
     setDateRange(null);
     setCrossFilter(null);
     setPages((prev) =>
@@ -348,33 +740,79 @@ export function PowerBiWorkspace() {
     );
   };
 
-  const handleToggleFieldOnVisual = (col: ColumnMeta) => {
-    if (!selectedVisual) {
-      addVisual(col.isNumeric ? "clusteredColumn" : "table");
-      return;
-    }
+  const applyFieldToVisual = useCallback(
+    (
+      targetVisual: PowerBiVisual,
+      fieldName: string,
+      isNumeric: boolean,
+      targetWell?: "xAxis" | "yAxis" | "legend",
+    ) => {
+      updateVisual(targetVisual.id, (v) => {
+        if (targetWell === "xAxis") {
+          return {
+            ...v,
+            xAxis: fieldName,
+            title: getVisualDefaultTitle(v.type, fieldName, v.yAxis, v.aggregation),
+          };
+        }
+        if (targetWell === "legend") {
+          return { ...v, legend: fieldName };
+        }
+        if (targetWell === "yAxis" || isNumeric) {
+          const exists = v.yAxis.indexOf(fieldName) !== -1;
+          const nextY =
+            targetWell === "yAxis" && exists
+              ? v.yAxis
+              : exists
+                ? v.yAxis.filter((y) => y !== fieldName)
+                : v.type === "card" || v.type === "gauge"
+                  ? [fieldName]
+                  : [...v.yAxis, fieldName];
+          return {
+            ...v,
+            yAxis: nextY,
+            title: getVisualDefaultTitle(v.type, v.xAxis, nextY, v.aggregation),
+          };
+        }
 
-    updateVisual(selectedVisual.id, (v) => {
-      if (col.isNumeric) {
-        const exists = v.yAxis.includes(col.name);
-        const nextY = exists
-          ? v.yAxis.filter((y) => y !== col.name)
-          : v.type === "card"
-            ? [col.name]
-            : [...v.yAxis, col.name];
+        const nextX = v.xAxis === fieldName ? undefined : fieldName;
         return {
           ...v,
-          yAxis: nextY,
-          title: getVisualDefaultTitle(v.type, v.xAxis, nextY, v.aggregation),
+          xAxis: nextX,
+          title: getVisualDefaultTitle(v.type, nextX, v.yAxis, v.aggregation),
         };
-      }
-      const nextX = v.xAxis === col.name ? undefined : col.name;
-      return {
-        ...v,
-        xAxis: nextX,
-        title: getVisualDefaultTitle(v.type, nextX, v.yAxis, v.aggregation),
-      };
-    });
+      });
+    },
+    [updateVisual],
+  );
+
+  const handleToggleFieldOnVisual = (
+    tableId: string,
+    fieldName: string,
+    isNumeric: boolean,
+  ) => {
+    if (!selectedVisual) {
+      addVisual(isNumeric ? "clusteredColumn" : "table", undefined, {
+        tableId,
+        columnName: fieldName,
+        isNumeric,
+      });
+      return;
+    }
+    applyFieldToVisual(selectedVisual, fieldName, isNumeric);
+  };
+
+  const handleDropFieldPayload = (
+    payload: DraggedFieldPayload,
+    well?: "xAxis" | "yAxis" | "legend",
+    targetVisualOverride?: PowerBiVisual,
+  ) => {
+    const tbl = tables.find((t) => (t.id || t.name) === payload.tableId) || activeTable;
+    const colMeta = tbl?.columns.find((c) => c.name === payload.columnName);
+    const isNum = Boolean(payload.isMeasure || colMeta?.isNumeric);
+    const v = targetVisualOverride || selectedVisual;
+    if (!v) return;
+    applyFieldToVisual(v, payload.columnName, isNum, well);
   };
 
   const toggleRightPane = useCallback((pane: "filters" | "viz" | "data") => {
@@ -409,491 +847,843 @@ export function PowerBiWorkspace() {
     }
   }, []);
 
-  const filteredRowCount = useMemo(() => {
-    if (!dataset) return 0;
-    return applyDatasetFilters(dataset.rows, {
+  // Data operations across Table View, Transform Data, Modeling & Formula Modal
+  const mutateTable = useCallback(
+    (tableId: string, fn: (t: DatasetModel) => DatasetModel) => {
+      pushHistory();
+      setTables((prev) =>
+        prev.map((t) => ((t.id || t.name) === tableId ? fn(t) : t)),
+      );
+    },
+    [pushHistory],
+  );
+
+  const handleRenameColumnAcrossModel = (
+    tableId: string,
+    oldName: string,
+    newName: string,
+  ) => {
+    const trimmed = newName.trim();
+    if (!trimmed || trimmed === oldName) return;
+    pushHistory();
+    setTables((prev) =>
+      prev.map((t) =>
+        (t.id || t.name) === tableId ? renameTableColumn(t, oldName, trimmed) : t,
+      ),
+    );
+    setPages((prev) =>
+      prev.map((p) => ({
+        ...p,
+        visuals: p.visuals.map((v) => ({
+          ...v,
+          xAxis: v.xAxis === oldName ? trimmed : v.xAxis,
+          legend: v.legend === oldName ? trimmed : v.legend,
+          yAxis: v.yAxis.map((y) => (y === oldName ? trimmed : y)),
+        })),
+      })),
+    );
+    if (selectedColumn?.tableId === tableId && selectedColumn.columnName === oldName) {
+      setSelectedColumn({ tableId, columnName: trimmed });
+    }
+  };
+
+  const handleSaveCalculatedColumn = (
+    tableId: string,
+    colName: string,
+    formula: string,
+  ): string | undefined => {
+    const target = tables.find((t) => (t.id || t.name) === tableId);
+    if (!target) return "Table not found";
+    const res = addOrUpdateCalculatedColumn(target, colName, formula);
+    if (res.error) return res.error;
+    pushHistory();
+    setTables((prev) =>
+      prev.map((t) => ((t.id || t.name) === tableId ? res.table : t)),
+    );
+    setSelectedColumn({ tableId, columnName: colName.trim() });
+    return undefined;
+  };
+
+  const handleSaveMeasure = (tableId: string, name: string, formula: string) => {
+    pushHistory();
+    const id = `msr-${Date.now().toString(36)}`;
+    setMeasures((prev) => [...prev, { id, name: name.trim(), tableId, formula }]);
+  };
+
+  const handleSelectTheme = (nextThemeId: string) => {
+    const theme = POWERBI_THEMES.find((t) => t.id === nextThemeId) || POWERBI_THEMES[0];
+    pushHistory();
+    setThemeId(nextThemeId);
+    setPages((prev) =>
+      prev.map((p) => ({
+        ...p,
+        visuals: p.visuals.map((v, i) => ({
+          ...v,
+          format: {
+            ...v.format,
+            accentColor: theme.palette[i % theme.palette.length],
+            backgroundColor: theme.visualBg,
+          },
+        })),
+      })),
+    );
+  };
+
+  const handleSaveProjectJson = () => {
+    if (tables.length === 0) return;
+    const snap = captureSnapshot();
+    const blob = new Blob([JSON.stringify(snap, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${activeTable?.name || "powerbi-report"}.pbi-lite.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportActiveCsv = () => {
+    if (!activeTable) return;
+    const csv = exportTableToCsv(activeTable);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${activeTable.name}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleAddPage = () => {
+    pushHistory();
+    const id = `page-${Date.now().toString(36)}`;
+    const num = pages.length + 1;
+    setPages((prev) => [...prev, { id, name: `Page ${num}`, visuals: [], pageFilters: {} }]);
+    setActivePageId(id);
+    setSelectedVisualId(null);
+    setFocusVisualId(null);
+    setActiveView("report");
+  };
+
+  const handleDuplicatePage = (pageId: string) => {
+    const src = pages.find((p) => p.id === pageId);
+    if (!src) return;
+    pushHistory();
+    const id = `page-${Date.now().toString(36)}`;
+    const cloned: ReportPage = {
+      ...src,
+      id,
+      name: `${src.name} (Copy)`,
+      visuals: src.visuals.map((v, idx) => ({
+        ...v,
+        id: `${v.id}-dup-${Date.now().toString(36)}-${idx}`,
+      })),
+    };
+    setPages((prev) => [...prev, cloned]);
+    setActivePageId(id);
+    setSelectedVisualId(cloned.visuals[0]?.id || null);
+  };
+
+  const activeTableIdResolved = activeTable ? activeTable.id || activeTable.name : "";
+  const filteredRowsActiveTable = useMemo(() => {
+    if (!activeTable) return [];
+    return resolveTableRows(activeTableIdResolved, tables, relationships, {
       reportFilters,
       pageFilters: activePage?.pageFilters,
       slicerFilters,
+      numericFilters,
       dateRange,
       crossFilter,
-    }).length;
-  }, [dataset, reportFilters, activePage, slicerFilters, dateRange, crossFilter]);
+    });
+  }, [activeTable, activeTableIdResolved, tables, relationships, reportFilters, activePage, slicerFilters, numericFilters, dateRange, crossFilter]);
 
   const activeFilterCount =
     Object.keys(reportFilters).length +
     Object.keys(activePage?.pageFilters || {}).length +
     Object.keys(slicerFilters).length +
+    Object.keys(numericFilters).length +
     (dateRange ? 1 : 0) +
     (crossFilter ? 1 : 0);
 
+  const docTitleName =
+    tables.length > 1
+      ? `${tables[0].name} (+${tables.length - 1})`
+      : activeTable?.name || "";
+
+  const visualScopedRows = useMemo(() => {
+    if (!selectedVisual || !visualTable) return filteredRowsActiveTable;
+    return resolveTableRows(visualTable.id || visualTable.name, tables, relationships, {
+      reportFilters,
+      pageFilters: activePage?.pageFilters,
+      slicerFilters,
+      visualFilters: selectedVisual.visualFilters,
+      numericFilters,
+      dateRange,
+      crossFilter: crossFilter?.sourceVisualId !== selectedVisual.id ? crossFilter : null,
+    });
+  }, [selectedVisual, visualTable, tables, relationships, reportFilters, activePage, slicerFilters, numericFilters, dateRange, crossFilter, filteredRowsActiveTable]);
+
   return (
     <>
-      {/* Hidden native CSV file picker shared by Desktop & Service screens */}
+      {/* Single native file picker shared across CSV, Excel (.xlsx/.xls), and Project (.json) */}
       <input
         ref={fileInputRef}
         type="file"
-        accept=".csv,.txt,text/csv"
+        accept=".csv,.tsv,.txt,.xlsx,.xls,.json,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         onChange={handleFilePicked}
         style={{ display: "none" }}
       />
 
-      {surfaceMode !== "desktop" ? (
-        <PowerBiServiceView
-          mode={surfaceMode === "service-home" ? "home" : "create"}
-          onChangeMode={(m) => setSurfaceMode(m === "home" ? "service-home" : "service-create")}
-          onSwitchToDesktop={() => setSurfaceMode("desktop")}
-          onUploadCsv={() => fileInputRef.current?.click()}
+      <div className={styles.workspaceRoot}>
+        <ApplicationHeader
+          documentName={docTitleName}
+          activeTab={activeTab}
+          onSelectTab={(tab) => {
+            setActiveTab(tab);
+            if (ribbonCollapsed) setRibbonCollapsed(false);
+          }}
+          ribbonCollapsed={ribbonCollapsed}
+          onToggleRibbon={() => setRibbonCollapsed((c) => !c)}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          hasDataset={tables.length > 0}
+          selectedVisual={selectedVisual}
+          selectedColumn={selectedColumnMeta}
+          activeThemeId={themeId}
+          readingView={readingView}
+          canUndo={undoStack.length > 0}
+          canRedo={redoStack.length > 0}
+          hasCopiedVisual={Boolean(copiedVisual)}
+          formatPainterActive={formatPainterActive}
+          activeFilterCount={activeFilterCount}
+          onUndo={handleUndo}
+          onRedo={handleRedo}
+          onSaveProject={handleSaveProjectJson}
+          onLoadProjectClick={() => fileInputRef.current?.click()}
+          onExportCsv={handleExportActiveCsv}
+          onToggleReadingView={() => setReadingView((r) => !r)}
+          onUploadFileClick={() => fileInputRef.current?.click()}
           onLoadSocialSample={() =>
             loadCsvIntoModel(SOCIAL_KPI_POWERBI_CSV, "social_kpi_powerbi", "social_kpi_powerbi.csv")
           }
           onLoadRetailSample={() =>
             loadCsvIntoModel(RETAIL_SAMPLE_CSV, "retail_sales_sample", "retail_sales_sample.csv")
           }
-          onOpenEnterData={() => setEnterDataOpen(true)}
+          onLoadStudentSample={() =>
+            loadCsvIntoModel(STUDENT_PERFORMANCE_CSV, "student_performance", "student_performance.csv")
+          }
+          onLoadRelationalSample={loadRelationalSample}
           onOpenGetDataModal={() => setGetDataOpen(true)}
-          currentDataset={dataset}
-        />
-      ) : (
-        <div className={styles.workspaceRoot}>
-          <ApplicationHeader
-            documentName={dataset?.name || ""}
-            activeTab={activeTab}
-            onSelectTab={(tab) => {
-              setActiveTab(tab);
-              if (ribbonCollapsed) setRibbonCollapsed(false);
-            }}
-            ribbonCollapsed={ribbonCollapsed}
-            onToggleRibbon={() => setRibbonCollapsed((c) => !c)}
-            searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
-            hasDataset={Boolean(dataset)}
-            selectedVisual={selectedVisual}
-            readingView={readingView}
-            onToggleReadingView={() => setReadingView((r) => !r)}
-            onUploadCsvClick={() => fileInputRef.current?.click()}
-            onLoadSocialSample={() =>
-              loadCsvIntoModel(SOCIAL_KPI_POWERBI_CSV, "social_kpi_powerbi", "social_kpi_powerbi.csv")
-            }
-            onLoadRetailSample={() =>
-              loadCsvIntoModel(RETAIL_SAMPLE_CSV, "retail_sales_sample", "retail_sales_sample.csv")
-            }
-            onOpenGetDataModal={() => setGetDataOpen(true)}
-            onOpenEnterData={() => setEnterDataOpen(true)}
-            onOpenTransformModal={() => setTransformOpen(true)}
-            onAddVisual={addVisual}
-            onDuplicateSelected={duplicateSelected}
-            onDeleteSelected={() => selectedVisualId && deleteVisual(selectedVisualId)}
-            onResetReport={() => {
-              if (!dataset) return;
-              const resetPages = createDefaultReportPages(dataset);
-              setPages(resetPages);
-              setActivePageId(resetPages[0].id);
-              setSelectedVisualId(resetPages[0].visuals[0]?.id || null);
-              handleClearAllFilters();
-            }}
-            onClearAllFilters={handleClearAllFilters}
-            showFiltersPane={showFiltersPane}
-            showVizPane={showVizPane}
-            showDataPane={showDataPane}
-            showGridlines={showGridlines}
-            onTogglePane={toggleRightPane}
-            onToggleGridlines={() => setShowGridlines((g) => !g)}
-            onChangeAggregation={(agg) => {
-              if (!selectedVisual) return;
-              updateVisual(selectedVisual.id, (v) => ({
-                ...v,
-                aggregation: agg,
-                title: getVisualDefaultTitle(v.type, v.xAxis, v.yAxis, agg),
-              }));
-            }}
-            onUpdateSelectedFormat={(patch, newTitle) => {
-              if (!selectedVisual) return;
-              updateVisual(selectedVisual.id, (v) => ({
-                ...v,
-                title: newTitle !== undefined ? newTitle : v.title,
-                format: { ...v.format, ...patch },
-              }));
-            }}
-            onOpenExportHelp={() => setShareOpen(true)}
-            onOpenDaxView={() => setActiveView("dax")}
-            onOpenModelView={() => setActiveView("model")}
-            onOpenCopilotModal={() => setCopilotOpen(true)}
-            onSwitchToService={(m) =>
-              setSurfaceMode(m === "home" ? "service-home" : "service-create")
-            }
-          />
-
-      {uploadError ? (
-        <div
-          role="alert"
-          style={{
-            padding: "6px 14px",
-            background: "#fde7e9",
-            borderBottom: "1px solid #d13438",
-            color: "#a4262c",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
+          onOpenEnterData={() => setEnterDataOpen(true)}
+          onOpenTransformModal={() => setTransformOpen(true)}
+          onRefreshData={() => {
+            if (tables.length === 0) return;
+            pushHistory();
+            setTables((prev) => prev.map((t) => recomputeCalculatedColumns(t)));
           }}
-        >
-          <span>{uploadError}</span>
-          <button
-            type="button"
-            onClick={() => setUploadError(null)}
-            style={{ border: 0, background: "transparent", cursor: "pointer", fontWeight: 600 }}
+          onResetReport={() => {
+            if (!activeTable) return;
+            pushHistory();
+            const resetPages = createDefaultReportPages(activeTable);
+            setPages(resetPages);
+            setActivePageId(resetPages[0].id);
+            setSelectedVisualId(resetPages[0].visuals[0]?.id || null);
+            handleClearAllFilters();
+          }}
+          onAddVisual={(t) => addVisual(t)}
+          onAddPage={handleAddPage}
+          onDuplicatePage={() => handleDuplicatePage(activePageId)}
+          onCutSelected={handleCutVisual}
+          onCopySelected={handleCopyVisual}
+          onPasteVisual={handlePasteVisual}
+          onToggleFormatPainter={() => {
+            if (!selectedVisual) return;
+            if (formatPainterActive) {
+              setFormatPainterActive(false);
+              setCopiedFormat(null);
+            } else {
+              setCopiedFormat({ ...selectedVisual.format });
+              setFormatPainterActive(true);
+            }
+          }}
+          onDuplicateSelected={duplicateSelected}
+          onDeleteSelected={() => selectedVisualId && deleteVisual(selectedVisualId)}
+          onBringForward={() =>
+            selectedVisual &&
+            updateVisual(selectedVisual.id, (v) => ({ ...v, zIndex: (v.zIndex || 1) + 1 }))
+          }
+          onSendBackward={() =>
+            selectedVisual &&
+            updateVisual(selectedVisual.id, (v) => ({
+              ...v,
+              zIndex: Math.max(1, (v.zIndex || 1) - 1),
+            }))
+          }
+          onClearAllFilters={handleClearAllFilters}
+          showFiltersPane={showFiltersPane}
+          showVizPane={showVizPane}
+          showDataPane={showDataPane}
+          showGridlines={showGridlines}
+          snapToGrid={snapToGrid}
+          onTogglePane={toggleRightPane}
+          onToggleGridlines={() => setShowGridlines((g) => !g)}
+          onToggleSnapToGrid={() => setSnapToGrid((s) => !s)}
+          onResetZoom={() => setManualZoomPct(null)}
+          onActualZoom={() => setManualZoomPct(100)}
+          onSelectTheme={handleSelectTheme}
+          onChangeAggregation={(agg) => {
+            if (!selectedVisual) return;
+            updateVisual(selectedVisual.id, (v) => ({
+              ...v,
+              aggregation: agg,
+              title: getVisualDefaultTitle(v.type, v.xAxis, v.yAxis, agg),
+            }));
+          }}
+          onChangeSort={(dir) => {
+            if (!selectedVisual) return;
+            updateVisual(selectedVisual.id, (v) => ({
+              ...v,
+              sortBy: v.sortBy || "value",
+              sortDir: dir,
+            }));
+          }}
+          onUpdateSelectedFormat={(patch, newTitle) => {
+            if (!selectedVisual) return;
+            updateVisual(selectedVisual.id, (v) => ({
+              ...v,
+              title: newTitle !== undefined ? newTitle : v.title,
+              format: { ...v.format, ...patch },
+            }));
+          }}
+          onOpenNewMeasure={() =>
+            setFormulaModal({
+              open: true,
+              mode: "measure",
+              tableId: activeTableIdResolved,
+            })
+          }
+          onOpenNewColumn={() =>
+            setFormulaModal({
+              open: true,
+              mode: "column",
+              tableId: activeTableIdResolved,
+            })
+          }
+          onOpenRelationships={() => setRelationshipsOpen(true)}
+          onChangeSelectedColumnType={(newType: ColumnType) => {
+            if (!selectedColumn) return;
+            mutateTable(selectedColumn.tableId, (t) =>
+              changeColumnType(t, selectedColumn.columnName, newType),
+            );
+          }}
+        />
+
+        {uploadError ? (
+          <div
+            role="alert"
+            style={{
+              padding: "6px 14px",
+              background: "#fde7e9",
+              borderBottom: "1px solid #d13438",
+              color: "#a4262c",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
           >
-            Dismiss
-          </button>
-        </div>
-      ) : null}
-
-      <div className={styles.mainBody}>
-        {!readingView ? <Sidebar activeView={activeView} onChangeView={setActiveView} /> : null}
-
-        <main className={styles.canvasColumn}>
-          {activeView === "report" ? (
-            <div
-              ref={viewportRef}
-              className={styles.canvasViewport}
-              onClick={() => setSelectedVisualId(null)}
+            <span>{uploadError}</span>
+            <button
+              type="button"
+              onClick={() => setUploadError(null)}
+              style={{ border: 0, background: "transparent", cursor: "pointer", fontWeight: 600 }}
             >
+              Dismiss
+            </button>
+          </div>
+        ) : null}
+
+        <div className={styles.mainBody}>
+          {!readingView ? <Sidebar activeView={activeView} onChangeView={setActiveView} /> : null}
+
+          <main className={styles.canvasColumn}>
+            {activeView === "report" ? (
               <div
-                className={styles.canvasScaleFrame}
-                style={{
-                  width: Math.round(1280 * effectiveScale),
-                  height: Math.round(720 * effectiveScale),
+                ref={viewportRef}
+                className={styles.canvasViewport}
+                onClick={() => {
+                  setSelectedVisualId(null);
+                  setFormatPainterActive(false);
                 }}
               >
                 <div
-                  className={`${styles.canvasSheet} ${showGridlines ? styles.canvasGridOverlay : ""}`}
-                  style={{ transform: `scale(${effectiveScale})` }}
+                  className={styles.canvasScaleFrame}
+                  style={{
+                    width: Math.round(canvasW * effectiveScale),
+                    height: Math.round(canvasH * effectiveScale),
+                  }}
                 >
-                  {loadingMsg ? (
-                    <LoadingState message={loadingMsg} />
-                  ) : !dataset ? (
-                    <EmptyState
-                      onUploadCsv={() => fileInputRef.current?.click()}
-                      onLoadSocialSample={() =>
-                        loadCsvIntoModel(
-                          SOCIAL_KPI_POWERBI_CSV,
-                          "social_kpi_powerbi",
-                          "social_kpi_powerbi.csv",
-                        )
+                  <div
+                    className={`${styles.canvasSheet} ${showGridlines ? styles.canvasGridOverlay : ""}`}
+                    style={{
+                      width: canvasW,
+                      height: canvasH,
+                      backgroundColor: activeTheme.canvasBg,
+                      transform: `scale(${effectiveScale})`,
+                    }}
+                    onDragOver={(e) => {
+                      if (e.dataTransfer.types.indexOf("application/x-powerbi-field") !== -1) {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = "copy";
                       }
-                      onOpenEnterData={() => setEnterDataOpen(true)}
-                      onLoadRetailSample={() =>
-                        loadCsvIntoModel(
-                          RETAIL_SAMPLE_CSV,
-                          "retail_sales_sample",
-                          "retail_sales_sample.csv",
-                        )
+                    }}
+                    onDrop={(e) => {
+                      const raw = e.dataTransfer.getData("application/x-powerbi-field");
+                      if (!raw || !activeTable) return;
+                      e.preventDefault();
+                      try {
+                        const payload = JSON.parse(raw) as DraggedFieldPayload;
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const dropX = Math.round((e.clientX - rect.left) / effectiveScale);
+                        const dropY = Math.round((e.clientY - rect.top) / effectiveScale);
+                        const tbl =
+                          tables.find((t) => (t.id || t.name) === payload.tableId) || activeTable;
+                        const colMeta = tbl.columns.find((c) => c.name === payload.columnName);
+                        const isNum = Boolean(payload.isMeasure || colMeta?.isNumeric);
+                        addVisual(isNum ? "clusteredColumn" : "table", { x: dropX, y: dropY }, {
+                          tableId: tbl.id || tbl.name,
+                          columnName: payload.columnName,
+                          isNumeric: isNum,
+                        });
+                      } catch {
+                        // ignore
                       }
-                      onOpenGetDataModal={() => setGetDataOpen(true)}
-                    />
-                  ) : (
-                    <>
-                      {focusVisualId ? (
-                        <div
-                          className={styles.focusHeaderStrip}
-                          style={{ position: "relative", zIndex: 15 }}
-                        >
-                          <button
-                            type="button"
-                            className={styles.ribbonSmBtn}
-                            onClick={() => setFocusVisualId(null)}
-                          >
-                            <ArrowLeft size={13} />
-                            <span>Back to report</span>
-                          </button>
-                          <span style={{ fontSize: 11.5, color: "#605e5c" }}>Focus mode</span>
-                        </div>
-                      ) : null}
-
-                      {(focusVisualId
-                        ? activePage.visuals.filter((v) => v.id === focusVisualId)
-                        : activePage.visuals.filter(
-                            (v) =>
-                              !searchQuery.trim() ||
-                              v.title.toLowerCase().includes(searchQuery.trim().toLowerCase()) ||
-                              v.xAxis?.toLowerCase().includes(searchQuery.trim().toLowerCase()) ||
-                              v.yAxis.some((y) =>
-                                y.toLowerCase().includes(searchQuery.trim().toLowerCase()),
-                              ),
+                    }}
+                  >
+                    {loadingMsg ? (
+                      <LoadingState message={loadingMsg} />
+                    ) : tables.length === 0 ? (
+                      <EmptyState
+                        onUploadFile={() => fileInputRef.current?.click()}
+                        onLoadSocialSample={() =>
+                          loadCsvIntoModel(
+                            SOCIAL_KPI_POWERBI_CSV,
+                            "social_kpi_powerbi",
+                            "social_kpi_powerbi.csv",
                           )
-                      ).map((visual) => (
-                        <DashboardCard
-                          key={visual.id}
-                          visual={visual}
-                          selected={selectedVisualId === visual.id}
-                          isFocusMode={focusVisualId === visual.id}
-                          activeFilterCount={
-                            activeFilterCount + Object.keys(visual.visualFilters).length
-                          }
-                          onSelect={() => setSelectedVisualId(visual.id)}
-                          onToggleFocus={() =>
-                            setFocusVisualId((cur) => (cur === visual.id ? null : visual.id))
-                          }
-                          onDelete={() => deleteVisual(visual.id)}
-                        >
-                          <ChartContainer
-                            visual={visual}
-                            columns={dataset.columns}
-                            allRows={dataset.rows}
-                            reportFilters={reportFilters}
-                            pageFilters={activePage.pageFilters}
-                            slicerFilters={slicerFilters}
-                            dateRange={dateRange}
-                            crossFilter={crossFilter}
-                            onCrossFilter={setCrossFilter}
-                            onToggleSlicerValue={(col, val) => {
-                              setSlicerFilters((prev) => {
-                                const cur = prev[col] || [];
-                                const next = cur.includes(val)
-                                  ? cur.filter((x) => x !== val)
-                                  : [...cur, val];
-                                const out = { ...prev };
-                                if (next.length === 0) delete out[col];
-                                else out[col] = next;
-                                return out;
-                              });
-                            }}
-                            onClearSlicerColumn={(col) =>
-                              setSlicerFilters((prev) => {
-                                const out = { ...prev };
-                                delete out[col];
-                                return out;
-                              })
-                            }
-                            onDateRangeChange={setDateRange}
-                          />
-                        </DashboardCard>
-                      ))}
-                    </>
-                  )}
+                        }
+                        onOpenEnterData={() => setEnterDataOpen(true)}
+                        onLoadRelationalSample={loadRelationalSample}
+                        onOpenGetDataModal={() => setGetDataOpen(true)}
+                      />
+                    ) : (
+                      <>
+                        {focusVisualId ? (
+                          <div
+                            className={styles.focusHeaderStrip}
+                            style={{ position: "relative", zIndex: 15 }}
+                          >
+                            <button
+                              type="button"
+                              className={styles.ribbonSmBtn}
+                              onClick={() => setFocusVisualId(null)}
+                            >
+                              <ArrowLeft size={13} />
+                              <span>Back to report</span>
+                            </button>
+                            <span style={{ fontSize: 11.5, color: "#605e5c" }}>Focus mode</span>
+                          </div>
+                        ) : null}
+
+                        {(focusVisualId
+                          ? activePage.visuals.filter((v) => v.id === focusVisualId)
+                          : activePage.visuals.filter(
+                              (v) =>
+                                !searchQuery.trim() ||
+                                v.title.toLowerCase().includes(searchQuery.trim().toLowerCase()) ||
+                                v.xAxis?.toLowerCase().includes(searchQuery.trim().toLowerCase()) ||
+                                v.yAxis.some((y) =>
+                                  y.toLowerCase().includes(searchQuery.trim().toLowerCase()),
+                                ),
+                            )
+                        ).map((visual, idx) => {
+                          const effectiveVisual: PowerBiVisual = mobileLayoutPreview
+                            ? {
+                                ...visual,
+                                layout: {
+                                  x: 10,
+                                  y: 10 + idx * 140,
+                                  w: 370,
+                                  h: 130,
+                                },
+                              }
+                            : visual;
+                          return (
+                            <DashboardCard
+                              key={visual.id}
+                              visual={effectiveVisual}
+                              selected={selectedVisualId === visual.id}
+                              isFocusMode={focusVisualId === visual.id}
+                              readingView={readingView}
+                              formatPainterActive={formatPainterActive}
+                              scale={effectiveScale}
+                              snapToGrid={snapToGrid}
+                              canvasWidth={canvasW}
+                              canvasHeight={canvasH}
+                              activeFilterCount={
+                                activeFilterCount + Object.keys(visual.visualFilters).length
+                              }
+                              onSelect={() => setSelectedVisualId(visual.id)}
+                              onApplyFormatPainter={() => {
+                                if (copiedFormat) {
+                                  updateVisual(visual.id, (v) => ({
+                                    ...v,
+                                    format: { ...copiedFormat },
+                                  }));
+                                  setFormatPainterActive(false);
+                                  setCopiedFormat(null);
+                                  setSelectedVisualId(visual.id);
+                                }
+                              }}
+                              onToggleFocus={() =>
+                                setFocusVisualId((cur) => (cur === visual.id ? null : visual.id))
+                              }
+                              onDelete={() => deleteVisual(visual.id)}
+                              onMoveResize={(nextLayout, commitHistory) =>
+                                updateVisual(
+                                  visual.id,
+                                  (v) => ({ ...v, layout: nextLayout }),
+                                  commitHistory,
+                                )
+                              }
+                              onDropField={(payload) =>
+                                handleDropFieldPayload(payload, undefined, visual)
+                              }
+                            >
+                              <ChartContainer
+                                visual={effectiveVisual}
+                                tables={tables}
+                                measures={measures}
+                                relationships={relationships}
+                                reportFilters={reportFilters}
+                                pageFilters={activePage.pageFilters}
+                                numericFilters={numericFilters}
+                                slicerFilters={slicerFilters}
+                                dateRange={dateRange}
+                                crossFilter={crossFilter}
+                                themePalette={activeTheme.palette}
+                                onCrossFilter={setCrossFilter}
+                                onToggleSlicerValue={(col, val) => {
+                                  setSlicerFilters((prev) => {
+                                    const cur = prev[col] || [];
+                                    const next =
+                                      cur.indexOf(val) !== -1
+                                        ? cur.filter((x) => x !== val)
+                                        : [...cur, val];
+                                    const out = { ...prev };
+                                    if (next.length === 0) delete out[col];
+                                    else out[col] = next;
+                                    return out;
+                                  });
+                                }}
+                                onSelectAllSlicerValues={(col, vals) =>
+                                  setSlicerFilters((prev) => ({ ...prev, [col]: vals }))
+                                }
+                                onClearSlicerColumn={(col) =>
+                                  setSlicerFilters((prev) => {
+                                    const out = { ...prev };
+                                    delete out[col];
+                                    return out;
+                                  })
+                                }
+                                onDateRangeChange={setDateRange}
+                                onUpdateTextBox={(vId, textContent) =>
+                                  updateVisual(
+                                    vId,
+                                    (v) => ({ ...v, textContent }),
+                                    false,
+                                  )
+                                }
+                              />
+                            </DashboardCard>
+                          );
+                        })}
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ) : null}
+            ) : null}
 
-          {activeView === "table" ? (
-            dataset ? (
-              <DataTable
-                columns={dataset.columns}
-                rows={applyDatasetFilters(dataset.rows, {
-                  reportFilters,
-                  pageFilters: activePage?.pageFilters,
-                  slicerFilters,
-                  dateRange,
-                  crossFilter,
-                })}
-                searchable
-                pageSize={25}
-              />
-            ) : (
-              <div style={{ flex: 1, background: "#ffffff" }}>
-                <EmptyState
-                  onUploadCsv={() => fileInputRef.current?.click()}
-                  onLoadSocialSample={() =>
-                    loadCsvIntoModel(
-                      SOCIAL_KPI_POWERBI_CSV,
-                      "social_kpi_powerbi",
-                      "social_kpi_powerbi.csv",
+            {activeView === "table" ? (
+              activeTable ? (
+                <DataTable
+                  columns={activeTable.columns}
+                  rows={filteredRowsActiveTable}
+                  searchable
+                  pageSize={25}
+                  tables={tables}
+                  activeTableId={activeTableIdResolved}
+                  onSelectTable={(id) => {
+                    setActiveTableId(id);
+                    const tbl = tables.find((t) => (t.id || t.name) === id);
+                    if (tbl?.columns[0]) {
+                      setSelectedColumn({ tableId: id, columnName: tbl.columns[0].name });
+                    }
+                  }}
+                  selectedColName={
+                    selectedColumn?.tableId === activeTableIdResolved
+                      ? selectedColumn.columnName
+                      : null
+                  }
+                  onSelectColumn={(colName) =>
+                    setSelectedColumn({ tableId: activeTableIdResolved, columnName: colName })
+                  }
+                  onRenameColumn={(oldName, newName) =>
+                    handleRenameColumnAcrossModel(activeTableIdResolved, oldName, newName)
+                  }
+                  onChangeColumnType={(colName, newType) =>
+                    mutateTable(activeTableIdResolved, (t) =>
+                      changeColumnType(t, colName, newType),
                     )
                   }
-                  onOpenEnterData={() => setEnterDataOpen(true)}
-                  onLoadRetailSample={() =>
-                    loadCsvIntoModel(
-                      RETAIL_SAMPLE_CSV,
-                      "retail_sales_sample",
-                      "retail_sales_sample.csv",
+                  onDeleteColumn={(colName) =>
+                    mutateTable(activeTableIdResolved, (t) =>
+                      removeTableColumn(t, colName),
                     )
                   }
-                  onOpenGetDataModal={() => setGetDataOpen(true)}
+                  onUpdateCalculatedColumn={(colName, formula) =>
+                    handleSaveCalculatedColumn(activeTableIdResolved, colName, formula)
+                  }
+                  onOpenNewColumn={() =>
+                    setFormulaModal({
+                      open: true,
+                      mode: "column",
+                      tableId: activeTableIdResolved,
+                    })
+                  }
+                  onOpenNewMeasure={() =>
+                    setFormulaModal({
+                      open: true,
+                      mode: "measure",
+                      tableId: activeTableIdResolved,
+                    })
+                  }
+                  onOpenTransformData={() => setTransformOpen(true)}
                 />
-              </div>
-            )
-          ) : null}
+              ) : (
+                <div style={{ flex: 1, background: "#ffffff" }}>
+                  <EmptyState
+                    onUploadFile={() => fileInputRef.current?.click()}
+                    onLoadSocialSample={() =>
+                      loadCsvIntoModel(
+                        SOCIAL_KPI_POWERBI_CSV,
+                        "social_kpi_powerbi",
+                        "social_kpi_powerbi.csv",
+                      )
+                    }
+                    onOpenEnterData={() => setEnterDataOpen(true)}
+                    onLoadRelationalSample={loadRelationalSample}
+                    onOpenGetDataModal={() => setGetDataOpen(true)}
+                  />
+                </div>
+              )
+            ) : null}
 
-          {activeView === "model" ? (
-            dataset ? (
-              <ModelView dataset={dataset} />
-            ) : (
-              <div style={{ flex: 1, background: "#ffffff" }}>
-                <EmptyState
-                  onUploadCsv={() => fileInputRef.current?.click()}
-                  onLoadSocialSample={() =>
-                    loadCsvIntoModel(
-                      SOCIAL_KPI_POWERBI_CSV,
-                      "social_kpi_powerbi",
-                      "social_kpi_powerbi.csv",
+            {activeView === "model" ? (
+              tables.length > 0 ? (
+                <ModelView
+                  tables={tables}
+                  measures={measures}
+                  relationships={relationships}
+                  onMoveTableCard={(tableId, pos) =>
+                    setTables((prev) =>
+                      prev.map((t) =>
+                        (t.id || t.name) === tableId ? { ...t, modelPosition: pos } : t,
+                      ),
                     )
                   }
-                  onOpenEnterData={() => setEnterDataOpen(true)}
-                  onLoadRetailSample={() =>
-                    loadCsvIntoModel(
-                      RETAIL_SAMPLE_CSV,
-                      "retail_sales_sample",
-                      "retail_sales_sample.csv",
-                    )
+                  onAutoDetectRelationships={() =>
+                    setRelationships((prev) => autoDetectRelationships(tables, prev))
                   }
-                  onOpenGetDataModal={() => setGetDataOpen(true)}
+                  onOpenManageRelationships={() => setRelationshipsOpen(true)}
                 />
-              </div>
-            )
-          ) : null}
+              ) : (
+                <div style={{ flex: 1, background: "#ffffff" }}>
+                  <EmptyState
+                    onUploadFile={() => fileInputRef.current?.click()}
+                    onLoadSocialSample={() =>
+                      loadCsvIntoModel(
+                        SOCIAL_KPI_POWERBI_CSV,
+                        "social_kpi_powerbi",
+                        "social_kpi_powerbi.csv",
+                      )
+                    }
+                    onOpenEnterData={() => setEnterDataOpen(true)}
+                    onLoadRelationalSample={loadRelationalSample}
+                    onOpenGetDataModal={() => setGetDataOpen(true)}
+                  />
+                </div>
+              )
+            ) : null}
 
-          {activeView === "dax" || activeView === "tmdl" ? (
-            dataset ? (
-              <DaxTmdlView mode={activeView} dataset={dataset} />
-            ) : (
-              <div style={{ flex: 1, background: "#ffffff" }}>
-                <EmptyState
-                  onUploadCsv={() => fileInputRef.current?.click()}
-                  onLoadSocialSample={() =>
-                    loadCsvIntoModel(
-                      SOCIAL_KPI_POWERBI_CSV,
-                      "social_kpi_powerbi",
-                      "social_kpi_powerbi.csv",
-                    )
-                  }
-                  onOpenEnterData={() => setEnterDataOpen(true)}
-                  onLoadRetailSample={() =>
-                    loadCsvIntoModel(
-                      RETAIL_SAMPLE_CSV,
-                      "retail_sales_sample",
-                      "retail_sales_sample.csv",
-                    )
-                  }
-                  onOpenGetDataModal={() => setGetDataOpen(true)}
-                />
-              </div>
-            )
-          ) : null}
-
-          <Tabs
-            pages={pages}
-            activePageId={activePageId}
-            onSelectPage={(id) => {
-              setActivePageId(id);
-              setFocusVisualId(null);
-              const target = pages.find((p) => p.id === id);
-              setSelectedVisualId(target?.visuals[0]?.id || null);
-            }}
-            onAddPage={() => {
-              const id = `page-${Date.now().toString(36)}`;
-              const num = pages.length + 1;
-              setPages((prev) => [
-                ...prev,
-                { id, name: `Page ${num}`, visuals: [], pageFilters: {} },
-              ]);
-              setActivePageId(id);
-              setSelectedVisualId(null);
-              setFocusVisualId(null);
-              setActiveView("report");
-            }}
-            onRenamePage={(id, name) =>
-              setPages((prev) => prev.map((p) => (p.id === id ? { ...p, name } : p)))
-            }
-            onDeletePage={(id) => {
-              setPages((prev) => {
-                const next = prev.filter((p) => p.id !== id);
-                if (activePageId === id && next[0]) setActivePageId(next[0].id);
-                return next;
-              });
-            }}
-            zoomPct={displayedZoomPct}
-            onZoomChange={(pct) => setManualZoomPct(pct)}
-            onResetZoom={() => setManualZoomPct(null)}
-            rowCount={dataset?.rows.length || 0}
-            filteredRowCount={filteredRowCount}
-            mobileLayoutPreview={mobileLayoutPreview}
-            onToggleMobileLayoutPreview={() => setMobileLayoutPreview((m) => !m)}
-          />
-        </main>
-
-        {!readingView && (activeView === "report" || activeView === "model") ? (
-          <div
-            className={`${styles.rightDock} ${
-              showFiltersPane || showVizPane || showDataPane ? styles.rightDockOverlay : ""
-            }`}
-          >
-            <FilterPanel
-              expanded={showFiltersPane}
-              onToggleExpand={() => toggleRightPane("filters")}
-              columns={dataset?.columns || []}
-              rows={dataset?.rows || []}
-              selectedVisual={selectedVisual}
-              pageFilters={activePage?.pageFilters || {}}
-              reportFilters={reportFilters}
-              onToggleFilterValue={handleToggleFilterValue}
-              onClearFilterField={handleClearFilterField}
-            />
-
-            <VisualizationsPane
-              expanded={showVizPane}
-              onToggleExpand={() => toggleRightPane("viz")}
-              columns={dataset?.columns || []}
-              selectedVisual={selectedVisual}
-              onSelectVisualType={(type) => {
-                if (!dataset) return;
-                if (selectedVisual) {
-                  updateVisual(selectedVisual.id, (v) => ({
-                    ...v,
-                    type,
-                    title: getVisualDefaultTitle(type, v.xAxis, v.yAxis, v.aggregation),
-                  }));
-                } else {
-                  addVisual(type);
-                }
+            <Tabs
+              pages={pages}
+              activePageId={activePageId}
+              onSelectPage={(id) => {
+                setActivePageId(id);
+                setFocusVisualId(null);
+                const target = pages.find((p) => p.id === id);
+                setSelectedVisualId(target?.visuals[0]?.id || null);
               }}
-              onUpdateFields={(patch) => {
-                if (!selectedVisual) return;
-                updateVisual(selectedVisual.id, (v) => {
-                  const nextX = "xAxis" in patch ? patch.xAxis : v.xAxis;
-                  const nextY = patch.yAxis !== undefined ? patch.yAxis : v.yAxis;
-                  const nextAgg = patch.aggregation || v.aggregation;
-                  return {
-                    ...v,
-                    xAxis: nextX,
-                    yAxis: nextY,
-                    aggregation: nextAgg,
-                    title: getVisualDefaultTitle(v.type, nextX, nextY, nextAgg),
-                  };
+              onAddPage={handleAddPage}
+              onDuplicatePage={handleDuplicatePage}
+              onRenamePage={(id, name) => {
+                pushHistory();
+                setPages((prev) => prev.map((p) => (p.id === id ? { ...p, name } : p)));
+              }}
+              onDeletePage={(id) => {
+                if (pages.length <= 1) return;
+                pushHistory();
+                setPages((prev) => {
+                  const next = prev.filter((p) => p.id !== id);
+                  if (activePageId === id && next[0]) setActivePageId(next[0].id);
+                  return next;
                 });
               }}
-              onUpdateFormat={(patch, nextTitle) => {
-                if (!selectedVisual) return;
-                updateVisual(selectedVisual.id, (v) => ({
-                  ...v,
-                  title: nextTitle !== undefined ? nextTitle : v.title,
-                  format: { ...v.format, ...patch },
-                }));
-              }}
+              zoomPct={displayedZoomPct}
+              onZoomChange={(pct) => setManualZoomPct(pct)}
+              onResetZoom={() => setManualZoomPct(null)}
+              rowCount={activeTable?.rows.length || 0}
+              filteredRowCount={filteredRowsActiveTable.length}
+              mobileLayoutPreview={mobileLayoutPreview}
+              onToggleMobileLayoutPreview={() => setMobileLayoutPreview((m) => !m)}
             />
+          </main>
 
-            <DataPane
-              expanded={showDataPane}
-              onToggleExpand={() => toggleRightPane("data")}
-              tableName={dataset?.name || "Tables"}
-              columns={dataset?.columns || []}
-              selectedVisual={selectedVisual}
-              onToggleFieldOnVisual={handleToggleFieldOnVisual}
-            />
-          </div>
-        ) : null}
-      </div>
+          {!readingView && (activeView === "report" || activeView === "model") ? (
+            <div
+              className={`${styles.rightDock} ${
+                showFiltersPane || showVizPane || showDataPane ? styles.rightDockOverlay : ""
+              }`}
+            >
+              <FilterPanel
+                expanded={showFiltersPane}
+                onToggleExpand={() => toggleRightPane("filters")}
+                columns={visualTable?.columns || []}
+                rows={visualTable?.rows || []}
+                selectedVisual={selectedVisual}
+                pageFilters={activePage?.pageFilters || {}}
+                reportFilters={reportFilters}
+                numericFilters={numericFilters}
+                onToggleFilterValue={handleToggleFilterValue}
+                onClearFilterField={handleClearFilterField}
+                onUpdateNumericFilter={(col, bounds) =>
+                  setNumericFilters((prev) => {
+                    const out = { ...prev };
+                    if (!bounds || (bounds.min === undefined && bounds.max === undefined)) {
+                      delete out[col];
+                    } else {
+                      out[col] = bounds;
+                    }
+                    return out;
+                  })
+                }
+              />
+
+              <VisualizationsPane
+                expanded={showVizPane}
+                onToggleExpand={() => toggleRightPane("viz")}
+                columns={visualTable?.columns || []}
+                measures={measures}
+                scopedRows={visualScopedRows}
+                selectedVisual={selectedVisual}
+                onSelectVisualType={(type) => {
+                  if (tables.length === 0) return;
+                  if (selectedVisual) {
+                    updateVisual(selectedVisual.id, (v) => ({
+                      ...v,
+                      type,
+                      title: getVisualDefaultTitle(type, v.xAxis, v.yAxis, v.aggregation),
+                    }));
+                  } else {
+                    addVisual(type);
+                  }
+                }}
+                onUpdateFields={(patch) => {
+                  if (!selectedVisual) return;
+                  updateVisual(selectedVisual.id, (v) => {
+                    const nextX = "xAxis" in patch ? patch.xAxis : v.xAxis;
+                    const nextY = patch.yAxis !== undefined ? patch.yAxis : v.yAxis;
+                    const nextLegend = "legend" in patch ? patch.legend : v.legend;
+                    const nextAgg = patch.aggregation || v.aggregation;
+                    return {
+                      ...v,
+                      xAxis: nextX,
+                      yAxis: nextY,
+                      legend: nextLegend,
+                      aggregation: nextAgg,
+                      perFieldAggregations:
+                        patch.perFieldAggregations !== undefined
+                          ? patch.perFieldAggregations
+                          : v.perFieldAggregations,
+                      sortBy: patch.sortBy !== undefined ? patch.sortBy : v.sortBy,
+                      sortDir: patch.sortDir !== undefined ? patch.sortDir : v.sortDir,
+                      title: getVisualDefaultTitle(v.type, nextX, nextY, nextAgg),
+                    };
+                  });
+                }}
+                onUpdateFormat={(patch, nextTitle, extraPatch) => {
+                  if (!selectedVisual) return;
+                  updateVisual(selectedVisual.id, (v) => ({
+                    ...v,
+                    ...(extraPatch || {}),
+                    title: nextTitle !== undefined ? nextTitle : v.title,
+                    format: { ...v.format, ...patch },
+                  }));
+                }}
+                onUpdateLayout={(nextLayout) => {
+                  if (!selectedVisual) return;
+                  updateVisual(selectedVisual.id, (v) => ({ ...v, layout: nextLayout }));
+                }}
+                onUpdateAnalytics={(nextAnalytics: VisualAnalytics) => {
+                  if (!selectedVisual) return;
+                  updateVisual(selectedVisual.id, (v) => ({ ...v, analytics: nextAnalytics }));
+                }}
+                onDropFieldToWell={(well, payload) => handleDropFieldPayload(payload, well)}
+              />
+
+              <DataPane
+                expanded={showDataPane}
+                onToggleExpand={() => toggleRightPane("data")}
+                tables={tables}
+                activeTableId={activeTableIdResolved}
+                onSelectTable={(id) => setActiveTableId(id)}
+                measures={measures}
+                selectedVisual={selectedVisual}
+                selectedColumn={selectedColumn}
+                onSelectColumn={(tableId, colName) =>
+                  setSelectedColumn({ tableId, columnName: colName })
+                }
+                onToggleFieldOnVisual={handleToggleFieldOnVisual}
+                onOpenNewMeasure={(tableId) =>
+                  setFormulaModal({ open: true, mode: "measure", tableId })
+                }
+                onOpenNewColumn={(tableId) =>
+                  setFormulaModal({ open: true, mode: "column", tableId })
+                }
+                onDeleteMeasure={(measureId) => {
+                  pushHistory();
+                  setMeasures((prev) => prev.filter((m) => m.id !== measureId));
+                }}
+              />
+            </div>
+          ) : null}
         </div>
-      )}
+      </div>
 
-      {/* ---------- Shared Modals (available from Desktop & Service screens) ---------- */}
-      <Modal
-        open={getDataOpen}
-        title="Get Data"
-        onClose={() => setGetDataOpen(false)}
-      >
+      {/* ---------- Functional Dialogs ---------- */}
+      <Modal open={getDataOpen} title="Get Data" onClose={() => setGetDataOpen(false)} width={560}>
         <p style={{ marginTop: 0, fontSize: 12.5, color: "#605e5c" }}>
-          Choose a dataset source to populate the Power BI Data pane and build your manual report.
+          Import your own CSV or Excel (.xlsx) workbook, or load a ready-made analytics dataset:
         </p>
         <div style={{ display: "grid", gap: 8 }}>
           <button
@@ -902,23 +1692,13 @@ export function PowerBiWorkspace() {
               setGetDataOpen(false);
               fileInputRef.current?.click();
             }}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              padding: "10px 12px",
-              border: "1px solid #e1dfdd",
-              borderRadius: 3,
-              background: "#faf9f8",
-              cursor: "pointer",
-              textAlign: "left",
-            }}
+            className={styles.getDataOptionBtn}
           >
             <Upload size={18} color="#117865" />
             <div>
-              <div style={{ fontWeight: 600 }}>Text/CSV File Upload</div>
+              <div style={{ fontWeight: 600 }}>Import Local CSV or Excel (.xlsx) Workbook</div>
               <div style={{ fontSize: 11, color: "#605e5c" }}>
-                Import any local .csv file (e.g. social_kpi_powerbi.csv from your lab manual)
+                Supports comma/tab/semicolon CSV files and multi-sheet .xlsx workbooks
               </div>
             </div>
           </button>
@@ -933,23 +1713,13 @@ export function PowerBiWorkspace() {
                 "social_kpi_powerbi.csv",
               );
             }}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              padding: "10px 12px",
-              border: "1px solid #e1dfdd",
-              borderRadius: 3,
-              background: "#faf9f8",
-              cursor: "pointer",
-              textAlign: "left",
-            }}
+            className={styles.getDataOptionBtn}
           >
             <Database size={18} color="#118DFF" />
             <div>
-              <div style={{ fontWeight: 600 }}>Social Media KPI Dataset (Built-in SMA Lab 7)</div>
+              <div style={{ fontWeight: 600 }}>Social Media KPI Dataset (360 rows)</div>
               <div style={{ fontSize: 11, color: "#605e5c" }}>
-                360 rows · date, platform, impressions, reach, likes, comments, shares, clicks, followers, engagement_rate
+                date, platform, impressions, reach, likes, comments, shares, clicks, followers, engagement_rate
               </div>
             </div>
           </button>
@@ -960,26 +1730,82 @@ export function PowerBiWorkspace() {
               setGetDataOpen(false);
               loadCsvIntoModel(RETAIL_SAMPLE_CSV, "retail_sales_sample", "retail_sales_sample.csv");
             }}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              padding: "10px 12px",
-              border: "1px solid #e1dfdd",
-              borderRadius: 3,
-              background: "#faf9f8",
-              cursor: "pointer",
-              textAlign: "left",
-            }}
+            className={styles.getDataOptionBtn}
           >
             <FileSpreadsheet size={18} color="#107c41" />
             <div>
-              <div style={{ fontWeight: 600 }}>Retail Sales Sample</div>
+              <div style={{ fontWeight: 600 }}>Retail Sales &amp; Margin Dataset (36 rows)</div>
               <div style={{ fontSize: 11, color: "#605e5c" }}>
-                12 regional transactions with revenue, units_sold, profit, and margin_rate
+                date, region, category, channel, product, revenue, cost, units_sold, profit, margin_rate
               </div>
             </div>
           </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setGetDataOpen(false);
+              loadCsvIntoModel(
+                STUDENT_PERFORMANCE_CSV,
+                "student_performance",
+                "student_performance.csv",
+              );
+            }}
+            className={styles.getDataOptionBtn}
+          >
+            <GraduationCap size={18} color="#744EC2" />
+            <div>
+              <div style={{ fontWeight: 600 }}>Student Academic Performance (32 rows)</div>
+              <div style={{ fontSize: 11, color: "#605e5c" }}>
+                student_id, department, semester, subject, attendance_pct, internal_marks, exam_marks, total_score, grade
+              </div>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setGetDataOpen(false);
+              loadRelationalSample();
+            }}
+            className={styles.getDataOptionBtn}
+          >
+            <Link2 size={18} color="#E66C37" />
+            <div>
+              <div style={{ fontWeight: 600 }}>Relational Sales Model (Orders &amp; Products · 2 tables)</div>
+              <div style={{ fontSize: 11, color: "#605e5c" }}>
+                Auto-linked on product_id for Model View diagrams and cross-table filtering
+              </div>
+            </div>
+          </button>
+
+          {tables.length > 0 ? (
+            <div style={{ paddingTop: 6, borderTop: "1px solid #e1dfdd", fontSize: 11.5, color: "#605e5c" }}>
+              Append another table to your current model:{" "}
+              <button
+                type="button"
+                onClick={() => {
+                  setGetDataOpen(false);
+                  loadCsvIntoModel(
+                    RELATIONAL_PRODUCTS_CSV,
+                    "Products",
+                    "products.csv",
+                    true,
+                  );
+                }}
+                style={{
+                  border: 0,
+                  background: "transparent",
+                  color: "#117865",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  textDecoration: "underline",
+                }}
+              >
+                + Append Products lookup table
+              </button>
+            </div>
+          ) : null}
         </div>
       </Modal>
 
@@ -1003,6 +1829,27 @@ export function PowerBiWorkspace() {
             >
               Cancel
             </button>
+            {tables.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setEnterDataOpen(false);
+                  loadCsvIntoModel(pasteText, pasteName || "CustomTable", `${pasteName || "table"}.csv`, true);
+                }}
+                style={{
+                  height: 28,
+                  padding: "0 12px",
+                  border: "1px solid #117865",
+                  background: "#ffffff",
+                  color: "#117865",
+                  fontWeight: 600,
+                  borderRadius: 2,
+                  cursor: "pointer",
+                }}
+              >
+                Add as Table
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() => {
@@ -1045,7 +1892,7 @@ export function PowerBiWorkspace() {
           </div>
           <div>
             <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, marginBottom: 4 }}>
-              Paste CSV rows (header row required)
+              Paste CSV or Tab-separated rows (header row required)
             </label>
             <textarea
               rows={7}
@@ -1064,115 +1911,76 @@ export function PowerBiWorkspace() {
         </div>
       </Modal>
 
-      <Modal
+      <TransformDataModal
         open={transformOpen}
-        title={`Power Query Schema Preview — ${dataset?.name || "Dataset"}`}
+        recordedSteps={captureFrame?.steps}
+        tables={tables}
+        activeTableId={activeTableIdResolved}
         onClose={() => setTransformOpen(false)}
-        width={680}
-      >
-        {dataset ? (
-          <div style={{ display: "grid", gap: 12 }}>
-            <div style={{ fontSize: 12, color: "#605e5c" }}>
-              Loaded <strong>{dataset.rows.length}</strong> rows across{" "}
-              <strong>{dataset.columns.length}</strong> columns from <code>{dataset.fileName}</code>.
-            </div>
-            <DataTable columns={dataset.columns} rows={dataset.rows.slice(0, 12)} compact pageSize={12} />
-          </div>
-        ) : null}
-      </Modal>
+        onRenameColumn={handleRenameColumnAcrossModel}
+        onChangeColumnType={(tableId, colName, type) =>
+          mutateTable(tableId, (t) => changeColumnType(t, colName, type))
+        }
+        onRemoveColumn={(tableId, colName) =>
+          mutateTable(tableId, (t) => removeTableColumn(t, colName))
+        }
+        onCleanMissing={(tableId, colName, strat) =>
+          mutateTable(tableId, (t) => handleMissingValues(t, colName, strat))
+        }
+      />
 
-      <Modal
-        open={shareOpen}
-        title="Manual Screenshot & Export Options"
-        onClose={() => setShareOpen(false)}
-      >
-        <div style={{ display: "grid", gap: 10, fontSize: 12.5, lineHeight: 1.5 }}>
-          <p style={{ margin: 0, color: "#605e5c" }}>
-            To capture crisp dashboard figures for your lab manual:
-          </p>
-          <ul style={{ margin: 0, paddingLeft: 18, color: "#252423" }}>
-            <li>Keep the full desktop view for a Power BI workspace screenshot showing Ribbon, Panes &amp; Canvas.</li>
-            <li>Or toggle <strong>Screenshot / Clean view</strong> below to hide the ribbon and side panes, leaving only the white 16:9 report sheet.</li>
-          </ul>
-          <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
-            <button
-              type="button"
-              onClick={() => {
-                setReadingView((r) => !r);
-                setShareOpen(false);
-              }}
-              style={{
-                height: 30,
-                padding: "0 14px",
-                border: 0,
-                borderRadius: 3,
-                background: "#117865",
-                color: "#ffffff",
-                fontWeight: 600,
-                cursor: "pointer",
-              }}
-            >
-              {readingView ? "Restore Authoring Workspace" : "Switch to Clean Screenshot View"}
-            </button>
-            <a
-              href="/samples/social_kpi_powerbi.csv"
-              download="social_kpi_powerbi.csv"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                height: 30,
-                padding: "0 12px",
-                border: "1px solid #c8c6c4",
-                borderRadius: 3,
-                color: "#252423",
-                textDecoration: "none",
-              }}
-            >
-              Download social_kpi_powerbi.csv
-            </a>
-          </div>
-        </div>
-      </Modal>
+      <FormulaModal
+        open={formulaModal.open}
+        mode={formulaModal.mode}
+        tables={tables}
+        initialTableId={formulaModal.tableId || activeTableIdResolved}
+        measures={measures}
+        onClose={() => setFormulaModal((f) => ({ ...f, open: false }))}
+        onSaveColumn={handleSaveCalculatedColumn}
+        onSaveMeasure={handleSaveMeasure}
+      />
 
-      <Modal
-        open={copilotOpen}
-        title="Copilot — Report Summary"
-        onClose={() => setCopilotOpen(false)}
-      >
-        {dataset ? (
-          <div style={{ display: "grid", gap: 8, fontSize: 12.5, lineHeight: 1.55 }}>
-            <div>
-              <strong>Dataset:</strong> <code>{dataset.fileName}</code> ({dataset.rows.length.toLocaleString()} rows,{" "}
-              {dataset.columns.length} columns)
-            </div>
-            <div style={{ display: "grid", gap: 6, marginTop: 4 }}>
-              {dataset.columns
-                .filter((c) => c.isNumeric)
-                .slice(0, 4)
-                .map((c) => (
-                  <div
-                    key={c.name}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      padding: "6px 10px",
-                      background: "#faf9f8",
-                      border: "1px solid #e1dfdd",
-                      borderRadius: 3,
-                    }}
-                  >
-                    <span>Total {c.label}</span>
-                    <strong>{formatPowerBiNumber(aggregateKpi(dataset.rows, c.name, "sum"), c.name)}</strong>
-                  </div>
-                ))}
-            </div>
-          </div>
-        ) : (
-          <p style={{ margin: 0, fontSize: 12.5, color: "#605e5c" }}>
-            Load a CSV dataset or click <strong>Use sample data</strong> to generate metric summaries.
-          </p>
-        )}
-      </Modal>
+      <ExcelNavigatorModal
+        open={excelNav.open}
+        fileName={excelNav.fileName}
+        sheets={excelNav.sheets}
+        onClose={() => setExcelNav({ open: false, fileName: "", sheets: [] })}
+        onConfirmLoad={(selected) => {
+          setExcelNav({ open: false, fileName: "", sheets: [] });
+          applyLoadedTables(
+            selected.map((s) => s.dataset),
+            "replace",
+          );
+        }}
+      />
+
+      <RelationshipsModal
+        open={relationshipsOpen}
+        tables={tables}
+        relationships={relationships}
+        onClose={() => setRelationshipsOpen(false)}
+        onAddRelationship={(rel) => {
+          pushHistory();
+          setRelationships((prev) => [
+            ...prev,
+            { ...rel, id: `rel-${Date.now().toString(36)}` },
+          ]);
+        }}
+        onToggleActive={(id) => {
+          pushHistory();
+          setRelationships((prev) =>
+            prev.map((r) => (r.id === id ? { ...r, active: !r.active } : r)),
+          );
+        }}
+        onDeleteRelationship={(id) => {
+          pushHistory();
+          setRelationships((prev) => prev.filter((r) => r.id !== id));
+        }}
+        onAutoDetect={() => {
+          pushHistory();
+          setRelationships((prev) => autoDetectRelationships(tables, prev));
+        }}
+      />
     </>
   );
 }

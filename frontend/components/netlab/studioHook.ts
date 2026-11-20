@@ -15,6 +15,7 @@ export interface StudioHook<State, Step> {
 
 declare global {
   interface Window {
+    __labmatePractical?: (topic: string) => { id: string; title: string; explain: string }[];
     __labmate?: { ready: boolean; settled: boolean; load: (state: unknown) => void; show: (step: unknown) => void };
   }
 }

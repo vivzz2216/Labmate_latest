@@ -25,6 +25,15 @@ def anonymous_review_message(message, name=None):
     return text[:1200]
 
 
+def format_public_name(name: Optional[str]) -> str:
+    if not name or not name.strip():
+        return "Student"
+    parts = name.strip().split()
+    if len(parts) == 1:
+        return parts[0]
+    return f"{parts[0]} {parts[-1][0]}."
+
+
 @router.get('/feedback/reviews')
 def public_reviews(response: Response, limit: int = Query(6, ge=1, le=12),
                    offset: int = Query(0, ge=0, le=1000000), db: Session = Depends(get_db)):
@@ -37,7 +46,35 @@ def public_reviews(response: Response, limit: int = Query(6, ge=1, le=12),
     return {'total': count, 'average_rating': round(float(average), 1) if average is not None else None,
             'reviews': [{'id': row.id, 'rating': row.rating,
                          'message': anonymous_review_message(row.message, row.user.name if row.user else None),
+                         'student_name': format_public_name(row.user.name if row.user else None),
                          'created_at': row.created_at.isoformat() if row.created_at else None} for row in rows]}
+
+
+@router.get("/feedback/my")
+def get_my_feedback(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    limit: int = Query(default=10, ge=1, le=50),
+):
+    """Return the current signed-in student's feedback submissions."""
+    rows = (
+        db.query(StudentFeedback)
+        .filter(StudentFeedback.user_id == current_user.id)
+        .order_by(StudentFeedback.created_at.desc(), StudentFeedback.id.desc())
+        .limit(limit)
+        .all()
+    )
+    return {
+        "feedback": [
+            {
+                "id": r.id,
+                "rating": r.rating,
+                "message": r.message,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in rows
+        ]
+    }
 
 
 @router.post("/feedback")

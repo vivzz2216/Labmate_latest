@@ -6,7 +6,6 @@ import Image from "next/image";
 import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
 import {
-  ArrowRight,
   CheckCircle2,
   FileText,
   Moon,
@@ -58,7 +57,6 @@ export default function HomePage() {
               <Link href="/labs" className={styles.navLink}>Lab catalogue</Link>
               <a href="#labs" className={styles.navLink}>Screenshot styles</a>
               <a href="#pricing" className={styles.navLink}>Pricing</a>
-              <Link href="/samples" className={styles.navLink}>Sample reports</Link>
             </div>
           </div>
 
@@ -124,7 +122,7 @@ export default function HomePage() {
             onClick={(event) => requireAccount(event, "/code-execution")}
             className={styles.ctaPrimaryBtn}
           >
-            Upload a manual <ArrowRight size={16} aria-hidden="true" />
+            Upload a manual
           </Link>
           <Link href="/labs" className={styles.ctaSecondaryBtn}>
             See lab sections
@@ -200,7 +198,7 @@ export default function HomePage() {
                 <span>PDF</span><span className={styles.formatDivider} aria-hidden="true" /><span>Word (.docx)</span>
               </div>
               <Link href="/code-execution" onClick={(event) => requireAccount(event, "/code-execution")} className={styles.pillBtnPrimary}>
-                Upload a manual <ArrowRight size={16} aria-hidden="true" />
+                Upload a manual
               </Link>
             </div>
           </li>
@@ -246,7 +244,7 @@ export default function HomePage() {
             </p>
             <div className={styles.ctaActions}>
               <Link href="/code-execution" className={styles.ctaPrimaryBtn}>
-                Upload a manual <ArrowRight size={16} aria-hidden="true" />
+                Upload a manual
               </Link>
               <Link href="/workspace" className={styles.ctaSecondaryBtn}>
                 Go to workspace
@@ -282,7 +280,6 @@ export default function HomePage() {
             <ul className={styles.footerNavList}>
               <li><a href="#how-it-works" className={styles.footerLink}>How it works</a></li>
               <li><a href="#labs" className={styles.footerLink}>Screenshot styles</a></li>
-              <li><Link href="/samples" className={styles.footerLink}>Sample reports</Link></li>
               <li><a href="#pricing" className={styles.footerLink}>Pricing</a></li>
               <li><Link href="/contact" className={styles.footerLink}>Contact</Link></li>
             </ul>

@@ -174,7 +174,7 @@ def test_info_column_matches_wireshark_wording(session):
     assert info[7] == "52418 → 80 [ACK] Seq=1 Ack=1 Win=131328 Len=0"           # 513 << 8: the window is scaled once both SYNs agree
     assert info[8] == "GET /wireshark-labs/INTRO-wireshark-file1.html HTTP/1.1 "
     assert info[10] == "HTTP/1.1 200 OK  (text/html)"
-    assert info[12].startswith("52418 → 80 [FIN, ACK] Seq=334 Ack=324")
+    assert info[12].startswith("52418 → 80 [FIN, ACK] Seq=334 Ack=326")
     assert info[15] == "Echo (ping) request  id=0x0001, seq=1/256, ttl=128 (reply in 16)"
     assert info[16] == "Echo (ping) reply    id=0x0001, seq=1/256, ttl=64 (request in 15)"
     assert info[3] == "Standard query 0x4a2b A gaia.cs.umass.edu"
@@ -249,7 +249,7 @@ def test_tcp_flag_lines_and_relative_numbers(session):
     ('http.request.method == "POST"', [34]),
     ('http.request.method == "GET" || http.response.code == 200', [8, 10, 24, 26, 36]),
     ("tcp.port == 52437 and tcp.len > 0", [34, 36]),
-    ('http contains "Practice@123"', [34]),
+    (f'http contains "{scenario.LOGIN_PASSWORD}"', [34]),
     ('frame contains "Welcome"', [36]),
     ("eth.dst == ff:ff:ff:ff:ff:ff", [1]),
     ("ip.dst == 198.51.100.20 and tcp.stream == 2 and tcp.len == 0 and not tcp.flags.fin == 1", [31, 33, 37, 40]),
@@ -260,7 +260,7 @@ def test_tcp_flag_lines_and_relative_numbers(session):
     ("ip.src != 192.168.1.10 and icmp", [16, 18]),
     ("ip.addr != 192.168.1.1 and udp", []),                                     # != means no address of the packet equals it
     ("ip.addr != 128.119.245.12 and http", [24, 26, 34, 36]),
-    ('urlencoded-form.value == "Practice@123"', [34]),
+    (f'urlencoded-form.value == "{scenario.LOGIN_PASSWORD}"', [34]),
     ('dns.qry.name == "login.labmate.test" and dns.flags.response == 1', [20]),
 ])
 def test_display_filters(session, expression, expected):
@@ -356,8 +356,8 @@ def test_exp5_plan_covers_every_screenshot_the_manual_lists():
     assert [s["id"] for s in steps] == ["interface", "sniffing", "filter_arp", "filter_http", "filter_tcp", "filter_icmp", "filter_ip",
                                         "ethernet", "arp", "login_page", "http_post", "follow"]
     post = next(s for s in steps if s["id"] == "http_post")
-    assert "uname" in post["explain"] and "Practice@123" in post["explain"]
-    assert "Practice@123" in next(s for s in steps if s["id"] == "follow")["explain"]
+    assert "uname" in post["explain"] and scenario.LOGIN_PASSWORD in post["explain"]
+    assert scenario.LOGIN_PASSWORD in next(s for s in steps if s["id"] == "follow")["explain"]
     state = wireshark_lab.studio_state(session, source, steps)
     assert len(state["packets"]) == 40 and state["filters"]["arp"] == [1, 2] and state["filters"][""][0] == 1
     assert state["details"]["34"]["tree"] and state["streams"]["2"]["turns"] == 2

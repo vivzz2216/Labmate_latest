@@ -9,7 +9,7 @@ import asyncio
 import logging
 from .config import settings
 from .database import engine, Base
-from .routers import upload, parse, run, compose, download, analyze, tasks, assignments, basic_auth, ai_review, admin, feedback, workflows, billing, lab_catalog, netlab, ide_java, ide_mysql, admission
+from .routers import upload, parse, run, compose, download, analyze, tasks, assignments, basic_auth, ai_review, admin, feedback, lab_requests, workflows, billing, lab_catalog, netlab, ide_java, ide_mysql, ide_android, admission
 from .middleware.rate_limit import RateLimitMiddleware
 from .middleware.body_limit import RequestBodyLimitMiddleware
 from .middleware.path_ids import PathIdRangeMiddleware
@@ -335,11 +335,13 @@ app.include_router(basic_auth.router, prefix="/api/basic-auth", tags=["basic-aut
 app.include_router(ai_review.router, prefix="/api/ai-review", tags=["ai-review"])
 app.include_router(admin.router, prefix="/api", tags=["admin"])
 app.include_router(feedback.router, prefix="/api", tags=["feedback"])
+app.include_router(lab_requests.router, prefix="/api", tags=["lab-requests"])
 app.include_router(workflows.router, prefix="/api", tags=["assignment-workflow"])
 app.include_router(lab_catalog.router, prefix="/api", tags=["lab-catalog"])
 app.include_router(netlab.router, prefix="/api", tags=["netlab"])
 app.include_router(ide_java.router, prefix="/api", tags=["ide-java"])
 app.include_router(ide_mysql.router, prefix="/api", tags=["ide-mysql"])
+app.include_router(ide_android.router, prefix="/api", tags=["ide-android"])
 app.include_router(admission.router, prefix="/api", tags=["admission"])
 
 # Serve frontend for all non-API routes (must come after API routes to prevent interception)

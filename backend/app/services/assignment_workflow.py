@@ -1809,6 +1809,7 @@ def build_word_report(upload, workflow):
     from .compact_report import _filter_output_only_paths
     from .docx_layout import embed_screenshots_after, find_question_anchor
     from .instruction_policy import parse_instruction_preferences
+    from .pdf_render import render_page_image
     from .student_diagnostics import execution_was_not_attempted, student_failure_message
 
     upload = SimpleNamespace(**{**vars(upload), 'file_path': local_upload_path(upload.file_path)})
@@ -1882,7 +1883,7 @@ def build_word_report(upload, workflow):
             document.add_paragraph(upload.original_filename)
             with pdfplumber.open(upload.file_path) as pdf:
                 for page in pdf.pages:
-                    image = page.to_image(resolution=130).original
+                    image = render_page_image(page)
                     buffer = io.BytesIO()
                     image.save(buffer, format="PNG")
                     buffer.seek(0)

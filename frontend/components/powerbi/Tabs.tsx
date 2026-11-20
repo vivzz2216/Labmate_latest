@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { ChevronLeft, ChevronRight, Maximize2, Monitor, Plus, Smartphone, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Copy, Maximize2, Monitor, Pencil, Plus, Smartphone, X } from "lucide-react";
 import type { ReportPage } from "@/lib/powerbi/types";
 import styles from "./powerbi.module.css";
 
@@ -10,6 +10,7 @@ interface TabsProps {
   activePageId: string;
   onSelectPage: (id: string) => void;
   onAddPage: () => void;
+  onDuplicatePage: (id: string) => void;
   onRenamePage: (id: string, name: string) => void;
   onDeletePage: (id: string) => void;
   zoomPct: number;
@@ -21,12 +22,13 @@ interface TabsProps {
   onToggleMobileLayoutPreview?: () => void;
 }
 
-/** Bottom Power BI Desktop page-tab strip + zoom slider & fit-to-page status bar. */
+/** Bottom Power BI Desktop page-tab strip + rename/duplicate/delete + zoom controls & status bar. */
 export function Tabs({
   pages,
   activePageId,
   onSelectPage,
   onAddPage,
+  onDuplicatePage,
   onRenamePage,
   onDeletePage,
   zoomPct,
@@ -60,7 +62,7 @@ export function Tabs({
           >
             <button
               type="button"
-              title="Desktop layout"
+              title="Desktop 16:9 canvas layout"
               aria-label="Desktop layout"
               onClick={() => mobileLayoutPreview && onToggleMobileLayoutPreview?.()}
               className={styles.pageStripIconBtn}
@@ -70,7 +72,7 @@ export function Tabs({
             </button>
             <button
               type="button"
-              title="Mobile layout preview"
+              title="Mobile phone canvas preview"
               aria-label="Mobile layout preview"
               onClick={() => onToggleMobileLayoutPreview?.()}
               className={styles.pageStripIconBtn}
@@ -117,6 +119,7 @@ export function Tabs({
                   setDraftName(page.name);
                 }}
                 className={`${styles.pageTab} ${isActive ? styles.pageTabActive : ""}`}
+                title="Double-click to rename page"
               >
                 {editingId === page.id ? (
                   <input
@@ -148,23 +151,47 @@ export function Tabs({
                 ) : (
                   <span>{page.name}</span>
                 )}
+
+                {isActive && editingId !== page.id ? (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 1 }}>
+                    <button
+                      type="button"
+                      aria-label={`Rename ${page.name}`}
+                      title="Rename page"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingId(page.id);
+                        setDraftName(page.name);
+                      }}
+                      className={styles.pageTabActionBtn}
+                    >
+                      <Pencil size={10} />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Duplicate ${page.name}`}
+                      title="Duplicate page"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDuplicatePage(page.id);
+                      }}
+                      className={styles.pageTabActionBtn}
+                    >
+                      <Copy size={10} />
+                    </button>
+                  </span>
+                ) : null}
+
                 {pages.length > 1 ? (
                   <button
                     type="button"
                     aria-label={`Remove ${page.name}`}
+                    title="Delete page"
                     onClick={(e) => {
                       e.stopPropagation();
                       onDeletePage(page.id);
                     }}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      border: 0,
-                      background: "transparent",
-                      color: "#797775",
-                      padding: 1,
-                      cursor: "pointer",
-                    }}
+                    className={styles.pageTabActionBtn}
                   >
                     <X size={11} />
                   </button>

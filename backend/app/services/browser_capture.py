@@ -19,6 +19,7 @@ import os
 import threading
 import tempfile
 import shutil
+from collections.abc import Awaitable, Callable
 from typing import Any, AsyncIterator, Iterator, Optional
 from playwright.async_api import Browser as AsyncBrowser, BrowserContext as AsyncContext, Error as AsyncPlaywrightError, async_playwright
 from playwright.sync_api import Browser as SyncBrowser, BrowserContext as SyncContext, Error as SyncPlaywrightError, sync_playwright
@@ -47,6 +48,19 @@ if os.name == 'nt' and not os.environ.get('PLAYWRIGHT_NODEJS_PATH'):
 
 class CaptureBrowserUnavailable(RuntimeError):
     """Capture infrastructure failed; changing student source cannot fix it."""
+
+
+async def run_capture_job(job: Callable[[], Awaitable[Any]], timeout: float):
+    """Playwright needs subprocess support, which Windows reload's selector loop lacks."""
+    async def bounded():
+        return await asyncio.wait_for(job(), timeout)
+
+    if os.name == "nt" and isinstance(asyncio.get_running_loop(), asyncio.SelectorEventLoop):
+        def run_on_proactor():
+            with asyncio.Runner(loop_factory=asyncio.ProactorEventLoop) as runner:
+                return runner.run(bounded())
+        return await asyncio.to_thread(run_on_proactor)
+    return await bounded()
 
 
 def _launch_failure(original):

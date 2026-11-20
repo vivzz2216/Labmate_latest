@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import styles from "./androidStudio.module.css";
 import {
   DesignSurfaceMode,
@@ -10,16 +10,29 @@ import {
   StudioProblem,
 } from "@/lib/ide/androidStudioEngine";
 import {
+  PaletteWidgetKind,
+  XmlLayoutElement,
+  collectAllXmlIds,
+  formatAndroidXml,
+  formatJavaOrKotlinCode,
+  insertComponentIntoLayoutXml,
+  parseAndroidLayoutXml,
+  parseAndroidResources,
+  removeComponentFromLayoutXml,
+  resolveResourceValue,
+  updateElementAttributeInXml,
+} from "@/lib/ide/androidXmlLayout";
+import {
   CheckGreenIcon,
   ComposableGutterIcon,
   EditorOnlyIcon,
   EditorPreviewSplitIcon,
   ErrorCircleIcon,
   GradleFileIcon,
+  JavaFileIcon,
   KotlinFileIcon,
   KotlinGradleScriptIcon,
   ManifestFileIcon,
-  MoreVerticalIcon,
   PreviewOnlyDesignIcon,
   PropertiesFileIcon,
   RestartIcon,
@@ -30,7 +43,14 @@ import {
   XmlFileIcon,
 } from "./StudioIcons";
 
+export interface EditorCommandSignal {
+  seq: number;
+  kind: "find" | "replace" | "format" | "comment" | "autocomplete" | "gotoLine";
+  line?: number;
+}
+
 interface StudioEditorSplitPaneProps {
+  allFiles: StudioFile[];
   openTabs: StudioFile[];
   activeFile: StudioFile;
   dirtyFileIds: Set<string>;
@@ -50,11 +70,14 @@ interface StudioEditorSplitPaneProps {
   onOpenProblemsPanel: () => void;
   cursorPos: { line: number; col: number };
   onChangeCursorPos: (pos: { line: number; col: number }) => void;
+  commandSignal?: EditorCommandSignal | null;
 }
 
 export function renderFileTabIcon(file: StudioFile) {
   if (file.kind === "manifest") return <ManifestFileIcon size={15} />;
   switch (file.kind) {
+    case "java":
+      return <JavaFileIcon size={15} />;
     case "kotlin":
       return <KotlinFileIcon size={15} />;
     case "xml":
@@ -62,6 +85,8 @@ export function renderFileTabIcon(file: StudioFile) {
       return <XmlFileIcon size={15} />;
     case "gradle-kts":
       return <KotlinGradleScriptIcon size={15} />;
+    case "gradle":
+      return <GradleFileIcon size={15} />;
     case "toml":
       return <TomlFileIcon size={15} />;
     case "properties":
@@ -72,29 +97,55 @@ export function renderFileTabIcon(file: StudioFile) {
   }
 }
 
-const KOTLIN_KEYWORDS = new Set([
+const CODE_KEYWORDS = new Set([
   "package",
   "import",
+  "public",
+  "private",
+  "protected",
+  "internal",
   "class",
+  "interface",
+  "extends",
+  "implements",
+  "enum",
+  "object",
+  "data",
+  "sealed",
+  "abstract",
+  "static",
+  "final",
+  "void",
   "fun",
   "val",
   "var",
   "override",
-  "private",
-  "public",
-  "internal",
-  "protected",
-  "object",
-  "interface",
-  "data",
-  "sealed",
-  "enum",
+  "int",
+  "double",
+  "float",
+  "long",
+  "boolean",
+  "char",
+  "byte",
+  "short",
   "return",
   "if",
   "else",
   "when",
+  "switch",
+  "case",
+  "default",
+  "break",
+  "continue",
   "for",
   "while",
+  "do",
+  "try",
+  "catch",
+  "finally",
+  "throw",
+  "throws",
+  "new",
   "true",
   "false",
   "null",
@@ -106,7 +157,13 @@ const KOTLIN_KEYWORDS = new Set([
   "this",
   "plugins",
   "android",
+  "defaultConfig",
+  "buildTypes",
+  "compileOptions",
   "dependencies",
+  "implementation",
+  "testImplementation",
+  "include",
 ]);
 
 function highlightCodeLine(line: string, kind: StudioFile["kind"]): React.ReactNode {
@@ -116,7 +173,7 @@ function highlightCodeLine(line: string, kind: StudioFile["kind"]): React.ReactN
   }
   if (kind === "xml" || kind === "manifest" || kind === "svg") {
     const parts: React.ReactNode[] = [];
-    const regex = /(<!--[\s\S]*?-->|<\/?[a-zA-Z0-9_.:-]+|\s+[a-zA-Z0-9_:-]+(?==)|"[^"]*"|\/>|>)/g;
+    const regex = /(<!--[\s\S]*?-->|<\?[\s\S]*?\?>|<\/?[a-zA-Z0-9_.:-]+|\s+[a-zA-Z0-9_:-]+(?==)|"[^"]*"|\/>|>)/g;
     let lastIndex = 0;
     let match: RegExpExecArray | null;
     let key = 0;
@@ -125,7 +182,7 @@ function highlightCodeLine(line: string, kind: StudioFile["kind"]): React.ReactN
         parts.push(line.slice(lastIndex, match.index));
       }
       const token = match[0];
-      if (token.startsWith("<!--")) {
+      if (token.startsWith("<!--") || token.startsWith("<?")) {
         parts.push(
           <span key={key++} className={styles.tokComment}>
             {token}
@@ -160,7 +217,7 @@ function highlightCodeLine(line: string, kind: StudioFile["kind"]): React.ReactN
 
   const tokens: React.ReactNode[] = [];
   const tokenRegex =
-    /(\/\/.*$|@[A-Za-z0-9_]+|"(?:[^"\\]|\\.)*"|\b0x[0-9A-Fa-f]+\b|\b\d+(?:\.\d+)?\b|\b[A-Za-z_][A-Za-z0-9_]*\b)/g;
+    /(\/\/.*$|@[A-Za-z0-9_]+|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\b0x[0-9A-Fa-f]+\b|\b\d+(?:\.\d+)?\b|\b[A-Za-z_][A-Za-z0-9_]*\b)/g;
   let lastIdx = 0;
   let m: RegExpExecArray | null;
   let k = 0;
@@ -181,7 +238,7 @@ function highlightCodeLine(line: string, kind: StudioFile["kind"]): React.ReactN
           {word}
         </span>
       );
-    } else if (word.startsWith('"')) {
+    } else if (word.startsWith('"') || word.startsWith("'")) {
       tokens.push(
         <span key={k++} className={styles.tokString}>
           {word}
@@ -193,7 +250,7 @@ function highlightCodeLine(line: string, kind: StudioFile["kind"]): React.ReactN
           {word}
         </span>
       );
-    } else if (KOTLIN_KEYWORDS.has(word)) {
+    } else if (CODE_KEYWORDS.has(word)) {
       tokens.push(
         <span key={k++} className={styles.tokKeyword}>
           {word}
@@ -202,6 +259,12 @@ function highlightCodeLine(line: string, kind: StudioFile["kind"]): React.ReactN
     } else if (line[m.index + word.length] === "(") {
       tokens.push(
         <span key={k++} className={styles.tokCall}>
+          {word}
+        </span>
+      );
+    } else if (/^[A-Z]/.test(word)) {
+      tokens.push(
+        <span key={k++} className={styles.tokProperty}>
           {word}
         </span>
       );
@@ -216,7 +279,36 @@ function highlightCodeLine(line: string, kind: StudioFile["kind"]): React.ReactN
   return tokens;
 }
 
+interface CompletionItem {
+  label: string;
+  detail: string;
+  insertText: string;
+}
+
+const PALETTE_ITEMS: Array<{ kind: PaletteWidgetKind; category: "Common" | "Text" | "Buttons" | "Layouts"; icon: string }> = [
+  { kind: "TextView", category: "Text", icon: "T" },
+  { kind: "EditText", category: "Text", icon: "ab" },
+  { kind: "Button", category: "Buttons", icon: "▢" },
+  { kind: "ImageView", category: "Common", icon: "🖼" },
+  { kind: "CheckBox", category: "Buttons", icon: "☑" },
+  { kind: "Switch", category: "Buttons", icon: "⊶" },
+  { kind: "LinearLayout", category: "Layouts", icon: "▤" },
+  { kind: "RelativeLayout", category: "Layouts", icon: "▥" },
+  { kind: "ConstraintLayout", category: "Layouts", icon: "⊞" },
+];
+
+function findElementByIdOrUid(node: XmlLayoutElement | null, target: string): XmlLayoutElement | null {
+  if (!node) return null;
+  if (target && (node.id === target || node.uid === target)) return node;
+  for (let i = 0; i < node.children.length; i++) {
+    const hit = findElementByIdOrUid(node.children[i], target);
+    if (hit) return hit;
+  }
+  return null;
+}
+
 export function StudioEditorSplitPane({
+  allFiles,
   openTabs,
   activeFile,
   dirtyFileIds,
@@ -236,14 +328,30 @@ export function StudioEditorSplitPane({
   onOpenProblemsPanel,
   cursorPos,
   onChangeCursorPos,
+  commandSignal,
 }: StudioEditorSplitPaneProps) {
-  const [breakpoints, setBreakpoints] = useState<Set<string>>(new Set(["main-activity:20"]));
+  const [breakpoints, setBreakpoints] = useState<Set<string>>(new Set());
   const [interactivePreview, setInteractivePreview] = useState(true);
-  const [paletteCategory, setPaletteCategory] = useState<
-    "Common" | "Text" | "Buttons" | "Widgets" | "Layouts"
-  >("Common");
-  const [selectedXmlWidgetId, setSelectedXmlWidgetId] = useState<string>("greetingText");
+  const [paletteCategory, setPaletteCategory] = useState<"Common" | "Text" | "Buttons" | "Layouts">("Common");
+  const [selectedXmlId, setSelectedXmlId] = useState<string>("");
 
+  // Find & Replace Bar
+  const [showFindBar, setShowFindBar] = useState(false);
+  const [showReplaceRow, setShowReplaceRow] = useState(false);
+  const [findQuery, setFindQuery] = useState("");
+  const [replaceText, setReplaceText] = useState("");
+  const [findCaseSensitive, setFindCaseSensitive] = useState(false);
+  const [currentMatchIdx, setCurrentMatchIdx] = useState(0);
+
+  // Autocomplete
+  const [acState, setAcState] = useState<{
+    open: boolean;
+    prefixStart: number;
+    items: CompletionItem[];
+    selectedIndex: number;
+  }>({ open: false, prefixStart: 0, items: [], selectedIndex: 0 });
+
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const preRef = useRef<HTMLPreElement | null>(null);
   const gutterRef = useRef<HTMLDivElement | null>(null);
 
@@ -252,7 +360,192 @@ export function StudioEditorSplitPane({
   const errorCount = fileProblems.filter((p) => p.severity === "error").length;
   const warnCount = fileProblems.filter((p) => p.severity === "warning").length;
 
-  const isXmlLayoutFile = Boolean(activeFile.isLayoutXml || activeFile.id === "activity-main-xml");
+  const isXmlLayoutFile = Boolean(activeFile.isLayoutXml || activeFile.path.indexOf("res/layout/") >= 0);
+
+  const parsedResources = useMemo(() => parseAndroidResources(allFiles), [allFiles]);
+  const parsedXmlTree = useMemo(
+    () => (isXmlLayoutFile ? parseAndroidLayoutXml(activeFile.content) : { root: null, errors: [] }),
+    [isXmlLayoutFile, activeFile.content]
+  );
+
+  const selectedElement = useMemo(() => {
+    if (!parsedXmlTree.root) return null;
+    const hit = selectedXmlId ? findElementByIdOrUid(parsedXmlTree.root, selectedXmlId) : null;
+    return hit || parsedXmlTree.root.children[0] || parsedXmlTree.root;
+  }, [parsedXmlTree.root, selectedXmlId]);
+
+  const allXmlIds = useMemo(() => {
+    const combined: string[] = [];
+    for (let i = 0; i < allFiles.length; i++) {
+      if (allFiles[i].isLayoutXml || allFiles[i].path.indexOf("res/layout/") >= 0) {
+        const res = parseAndroidLayoutXml(allFiles[i].content);
+        const ids = collectAllXmlIds(res.root);
+        for (let j = 0; j < ids.length; j++) {
+          if (combined.indexOf(ids[j]) < 0) combined.push(ids[j]);
+        }
+      }
+    }
+    return combined;
+  }, [allFiles]);
+
+  // Compute Find matches
+  const findMatches = useMemo(() => {
+    if (!findQuery) return [];
+    const hay = findCaseSensitive ? activeFile.content : activeFile.content.toLowerCase();
+    const needle = findCaseSensitive ? findQuery : findQuery.toLowerCase();
+    const hits: number[] = [];
+    let pos = 0;
+    while (pos <= hay.length - needle.length) {
+      const found = hay.indexOf(needle, pos);
+      if (found < 0) break;
+      hits.push(found);
+      pos = found + Math.max(1, needle.length);
+    }
+    return hits;
+  }, [activeFile.content, findQuery, findCaseSensitive]);
+
+  const jumpToOffset = (offset: number, length: number) => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.focus();
+    el.setSelectionRange(offset, offset + length);
+    const lineNum = el.value.slice(0, offset).split("\n").length;
+    el.scrollTop = Math.max(0, (lineNum - 5) * 21);
+    onChangeCursorPos({
+      line: lineNum,
+      col: offset - el.value.lastIndexOf("\n", offset - 1),
+    });
+  };
+
+  const buildCompletions = (source: string, cursorOffset: number): { prefixStart: number; items: CompletionItem[] } => {
+    const before = source.slice(0, cursorOffset);
+    const tokenMatch = /([A-Za-z0-9_.:@+/]*)$/.exec(before);
+    const token = tokenMatch ? tokenMatch[1] : "";
+    const prefixStart = cursorOffset - token.length;
+    const lower = token.toLowerCase();
+
+    const pool: CompletionItem[] = [];
+    if (activeFile.kind === "xml" || activeFile.kind === "manifest") {
+      [
+        { label: "TextView", detail: "android.widget", insertText: '<TextView\n    android:id="@+id/tvItem"\n    android:layout_width="wrap_content"\n    android:layout_height="wrap_content"\n    android:text="Label" />' },
+        { label: "EditText", detail: "android.widget", insertText: '<EditText\n    android:id="@+id/etInput"\n    android:layout_width="match_parent"\n    android:layout_height="wrap_content"\n    android:hint="Enter text" />' },
+        { label: "Button", detail: "android.widget", insertText: '<Button\n    android:id="@+id/btnAction"\n    android:layout_width="wrap_content"\n    android:layout_height="wrap_content"\n    android:text="Submit" />' },
+        { label: "ImageView", detail: "android.widget", insertText: '<ImageView\n    android:id="@+id/ivIcon"\n    android:layout_width="48dp"\n    android:layout_height="48dp"\n    android:src="@drawable/ic_launcher_foreground" />' },
+        { label: "LinearLayout", detail: "android.widget", insertText: '<LinearLayout\n    android:layout_width="match_parent"\n    android:layout_height="wrap_content"\n    android:orientation="vertical">\n</LinearLayout>' },
+        { label: "android:id", detail: "XML Attribute", insertText: 'android:id="@+id/"' },
+        { label: "android:layout_width", detail: "XML Attribute", insertText: 'android:layout_width="match_parent"' },
+        { label: "android:layout_height", detail: "XML Attribute", insertText: 'android:layout_height="wrap_content"' },
+        { label: "android:text", detail: "XML Attribute", insertText: 'android:text=""' },
+        { label: "android:hint", detail: "XML Attribute", insertText: 'android:hint=""' },
+        { label: "android:orientation", detail: "XML Attribute", insertText: 'android:orientation="vertical"' },
+        { label: "android:textSize", detail: "XML Attribute", insertText: 'android:textSize="16sp"' },
+        { label: "android:padding", detail: "XML Attribute", insertText: 'android:padding="16dp"' },
+      ].forEach((c) => pool.push(c));
+    } else {
+      for (let i = 0; i < allXmlIds.length; i++) {
+        pool.push({
+          label: `R.id.${allXmlIds[i]}`,
+          detail: "View ID",
+          insertText: `R.id.${allXmlIds[i]}`,
+        });
+      }
+      [
+        { label: "findViewById", detail: "Activity", insertText: "findViewById(R.id.)" },
+        { label: "setOnClickListener", detail: "View", insertText: "setOnClickListener(v -> {\n    \n})" },
+        { label: "Toast.makeText", detail: "android.widget", insertText: 'Toast.makeText(this, "", Toast.LENGTH_SHORT).show();' },
+        { label: "Intent", detail: "android.content", insertText: "Intent intent = new Intent(this, SecondActivity.class);\nstartActivity(intent);" },
+        { label: "Log.i", detail: "android.util", insertText: 'Log.i("MainActivity", "");' },
+        { label: "Log.d", detail: "android.util", insertText: 'Log.d("MainActivity", "");' },
+        { label: "Log.e", detail: "android.util", insertText: 'Log.e("MainActivity", "");' },
+        { label: "EditText", detail: "android.widget", insertText: "EditText" },
+        { label: "TextView", detail: "android.widget", insertText: "TextView" },
+        { label: "Button", detail: "android.widget", insertText: "Button" },
+        { label: "AppCompatActivity", detail: "androidx.appcompat", insertText: "AppCompatActivity" },
+        { label: "setContentView", detail: "Activity", insertText: "setContentView(R.layout.activity_main);" },
+      ].forEach((c) => pool.push(c));
+    }
+
+    const filtered = token
+      ? pool.filter((p) => p.label.toLowerCase().indexOf(lower) >= 0)
+      : pool;
+    return { prefixStart, items: filtered.slice(0, 10) };
+  };
+
+  const applyCompletion = (item: CompletionItem) => {
+    const el = textareaRef.current;
+    if (!el) return;
+    const end = el.selectionStart || 0;
+    const next = el.value.slice(0, acState.prefixStart) + item.insertText + el.value.slice(end);
+    onUpdateFileContent(activeFile.id, next);
+    const caret = acState.prefixStart + item.insertText.length;
+    setAcState((s) => ({ ...s, open: false }));
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(caret, caret);
+    });
+  };
+
+  const handleFormatActiveFile = () => {
+    const formatted =
+      activeFile.kind === "xml" || activeFile.kind === "manifest"
+        ? formatAndroidXml(activeFile.content)
+        : formatJavaOrKotlinCode(activeFile.content);
+    onUpdateFileContent(activeFile.id, formatted);
+  };
+
+  const handleToggleLineComment = () => {
+    const el = textareaRef.current;
+    if (!el) return;
+    const val = el.value;
+    const selStart = el.selectionStart || 0;
+    const lineStart = val.lastIndexOf("\n", selStart - 1) + 1;
+    const lineEndRaw = val.indexOf("\n", selStart);
+    const lineEnd = lineEndRaw < 0 ? val.length : lineEndRaw;
+    const line = val.slice(lineStart, lineEnd);
+    const isXml = activeFile.kind === "xml" || activeFile.kind === "manifest";
+
+    let nextLine = line;
+    if (isXml) {
+      const m = /^(\s*)<!--\s?([\s\S]*?)\s?-->$/.exec(line);
+      nextLine = m ? `${m[1]}${m[2]}` : line.replace(/^(\s*)(.+)$/, "$1<!-- $2 -->");
+    } else {
+      const m = /^(\s*)\/\/\s?(.*)$/.exec(line);
+      nextLine = m ? `${m[1]}${m[2]}` : line.replace(/^(\s*)(.*)$/, "$1// $2");
+    }
+    const nextVal = val.slice(0, lineStart) + nextLine + val.slice(lineEnd);
+    onUpdateFileContent(activeFile.id, nextVal);
+  };
+
+  // Respond to Main Menu / Problems click commands
+  useEffect(() => {
+    if (!commandSignal) return;
+    if (commandSignal.kind === "find") {
+      setShowFindBar(true);
+      setShowReplaceRow(false);
+    } else if (commandSignal.kind === "replace") {
+      setShowFindBar(true);
+      setShowReplaceRow(true);
+    } else if (commandSignal.kind === "format") {
+      handleFormatActiveFile();
+    } else if (commandSignal.kind === "comment") {
+      handleToggleLineComment();
+    } else if (commandSignal.kind === "autocomplete") {
+      const el = textareaRef.current;
+      if (el) {
+        const res = buildCompletions(el.value, el.selectionStart || 0);
+        setAcState({ open: res.items.length > 0, prefixStart: res.prefixStart, items: res.items, selectedIndex: 0 });
+      }
+    } else if (commandSignal.kind === "gotoLine" && commandSignal.line) {
+      const targetLine = Math.max(1, commandSignal.line);
+      const split = activeFile.content.split("\n");
+      let offset = 0;
+      for (let i = 0; i < Math.min(targetLine - 1, split.length); i++) {
+        offset += split[i].length + 1;
+      }
+      jumpToOffset(offset, 0);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [commandSignal?.seq]);
 
   const handleTextareaScroll = (e: React.UIEvent<HTMLTextAreaElement>) => {
     const top = e.currentTarget.scrollTop;
@@ -276,6 +569,122 @@ export function StudioEditorSplitPane({
     });
   };
 
+  const handleEditorKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const el = e.currentTarget;
+    const start = el.selectionStart || 0;
+    const end = el.selectionEnd || 0;
+    const val = el.value;
+
+    // Autocomplete keyboard navigation
+    if (acState.open) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setAcState((s) => ({ ...s, selectedIndex: (s.selectedIndex + 1) % s.items.length }));
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setAcState((s) => ({ ...s, selectedIndex: (s.selectedIndex - 1 + s.items.length) % s.items.length }));
+        return;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        const chosen = acState.items[acState.selectedIndex];
+        if (chosen) applyCompletion(chosen);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setAcState((s) => ({ ...s, open: false }));
+        return;
+      }
+    }
+
+    // Ctrl+Space triggers autocomplete
+    if ((e.ctrlKey || e.metaKey) && e.code === "Space") {
+      e.preventDefault();
+      const res = buildCompletions(val, start);
+      setAcState({ open: res.items.length > 0, prefixStart: res.prefixStart, items: res.items, selectedIndex: 0 });
+      return;
+    }
+
+    // Ctrl+F / Ctrl+H / Ctrl+/
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
+      e.preventDefault();
+      setShowFindBar(true);
+      setShowReplaceRow(false);
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "h") {
+      e.preventDefault();
+      setShowFindBar(true);
+      setShowReplaceRow(true);
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === "/") {
+      e.preventDefault();
+      handleToggleLineComment();
+      return;
+    }
+
+    // Tab indentation
+    if (e.key === "Tab") {
+      e.preventDefault();
+      const next = val.slice(0, start) + "    " + val.slice(end);
+      onUpdateFileContent(activeFile.id, next);
+      requestAnimationFrame(() => {
+        el.setSelectionRange(start + 4, start + 4);
+        updateCursorFromTextarea(el);
+      });
+      return;
+    }
+
+    // Enter smart auto-indent
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const lineStart = val.lastIndexOf("\n", start - 1) + 1;
+      const curLine = val.slice(lineStart, start);
+      const baseIndent = /^\s*/.exec(curLine)?.[0] || "";
+      const extraIndent = /[\{\>]$/.test(curLine.trim()) && curLine.trim().indexOf("/>") < 0 ? "    " : "";
+      const insert = "\n" + baseIndent + extraIndent;
+      const next = val.slice(0, start) + insert + val.slice(end);
+      onUpdateFileContent(activeFile.id, next);
+      const caret = start + insert.length;
+      requestAnimationFrame(() => {
+        el.setSelectionRange(caret, caret);
+        updateCursorFromTextarea(el);
+      });
+      return;
+    }
+
+    // Auto-closing brackets & quotes
+    const pairs: Record<string, string> = {
+      "(": ")",
+      "[": "]",
+      "{": "}",
+      '"': '"',
+      "'": "'",
+    };
+    const closers = [")", "]", "}", '"', "'"];
+    if (closers.indexOf(e.key) >= 0 && val.charAt(start) === e.key && start === end) {
+      e.preventDefault();
+      requestAnimationFrame(() => {
+        el.setSelectionRange(start + 1, start + 1);
+      });
+      return;
+    }
+    if (pairs[e.key]) {
+      e.preventDefault();
+      const selected = val.slice(start, end);
+      const next = val.slice(0, start) + e.key + selected + pairs[e.key] + val.slice(end);
+      onUpdateFileContent(activeFile.id, next);
+      requestAnimationFrame(() => {
+        el.setSelectionRange(start + 1, start + 1 + selected.length);
+      });
+      return;
+    }
+  };
+
   const toggleBreakpoint = (lineNum: number) => {
     const key = `${activeFile.id}:${lineNum}`;
     setBreakpoints((prev) => {
@@ -286,26 +695,261 @@ export function StudioEditorSplitPane({
     });
   };
 
-  const handleAddXmlWidget = (tag: "Button" | "TextView" | "Switch") => {
-    if (!activeFile.content.includes("</androidx.constraintlayout.widget.ConstraintLayout>")) {
-      return;
-    }
-    const idName = `${tag.toLowerCase()}_${lines.length}`;
-    const snippet =
-      tag === "Button"
-        ? `\n    <Button\n        android:id="@+id/${idName}"\n        android:layout_width="wrap_content"\n        android:layout_height="wrap_content"\n        android:text="Action ${tag}" />`
-        : `\n    <${tag}\n        android:id="@+id/${idName}"\n        android:layout_width="wrap_content"\n        android:layout_height="wrap_content"\n        android:text="New ${tag}" />`;
-    const updated = activeFile.content.replace(
-      "</androidx.constraintlayout.widget.ConstraintLayout>",
-      `${snippet}\n\n</androidx.constraintlayout.widget.ConstraintLayout>`
-    );
-    onUpdateFileContent(activeFile.id, updated);
-    setSelectedXmlWidgetId(idName);
+  const handleAddXmlWidget = (kind: PaletteWidgetKind) => {
+    const res = insertComponentIntoLayoutXml(activeFile.content, kind, allXmlIds);
+    onUpdateFileContent(activeFile.id, res.xml);
+    setSelectedXmlId(res.insertedId);
   };
+
+  const handleUpdateXmlAttr = (attrKey: string, value: string) => {
+    if (!selectedElement) return;
+    const nextXml = updateElementAttributeInXml(
+      activeFile.content,
+      selectedElement.id || selectedElement.uid,
+      attrKey,
+      value
+    );
+    onUpdateFileContent(activeFile.id, nextXml);
+    if (attrKey === "android:id" && value.trim()) {
+      setSelectedXmlId(value.replace(/^@\+?id\//, "").trim());
+    }
+  };
+
+  const handleDeleteSelectedWidget = () => {
+    if (!selectedElement || selectedElement === parsedXmlTree.root) return;
+    const nextXml = removeComponentFromLayoutXml(
+      activeFile.content,
+      selectedElement.id || selectedElement.uid
+    );
+    onUpdateFileContent(activeFile.id, nextXml);
+    setSelectedXmlId("");
+  };
+
+  const renderXmlTreeNode = (node: XmlLayoutElement, depth: number): React.ReactNode => {
+    const isSel = selectedElement && selectedElement.uid === node.uid;
+    return (
+      <React.Fragment key={node.uid}>
+        <button
+          type="button"
+          className={`${styles.treeRow} ${isSel ? styles.treeRowSelected : ""}`}
+          style={{ paddingLeft: 8 + depth * 12, height: 22 }}
+          onClick={() => setSelectedXmlId(node.id)}
+        >
+          <span>{node.shortTag}</span>
+          <span className={styles.treeHintSuffix}>@{node.id}</span>
+        </button>
+        {node.children.map((ch) => renderXmlTreeNode(ch, depth + 1))}
+      </React.Fragment>
+    );
+  };
+
+  const renderXmlPreviewElement = (node: XmlLayoutElement): React.ReactNode => {
+    const isSel = selectedElement && selectedElement.uid === node.uid;
+    const textVal = resolveResourceValue(node.attrs["android:text"], parsedResources);
+    const hintVal = resolveResourceValue(node.attrs["android:hint"], parsedResources);
+    const textSizeRaw = parseFloat(node.attrs["android:textSize"] || "");
+    const textColorRaw = node.attrs["android:textColor"]
+      ? resolveResourceValue(node.attrs["android:textColor"], parsedResources)
+      : undefined;
+    const bgRaw = node.attrs["android:background"]
+      ? resolveResourceValue(node.attrs["android:background"], parsedResources)
+      : undefined;
+
+    const selBorder = isSel ? "2px solid #3574F0" : undefined;
+
+    if (
+      node.shortTag === "LinearLayout" ||
+      node.shortTag === "RelativeLayout" ||
+      node.shortTag === "ConstraintLayout" ||
+      node.shortTag === "FrameLayout" ||
+      node.shortTag === "ScrollView"
+    ) {
+      const isHorizontal = node.attrs["android:orientation"] === "horizontal";
+      return (
+        <div
+          key={node.uid}
+          onClick={(e) => {
+            e.stopPropagation();
+            setSelectedXmlId(node.id);
+          }}
+          style={{
+            display: "flex",
+            flexDirection: isHorizontal ? "row" : "column",
+            gap: 8,
+            padding: 10,
+            width: "100%",
+            flex: node === parsedXmlTree.root ? 1 : undefined,
+            background: bgRaw || (node === parsedXmlTree.root ? "transparent" : "rgba(53,116,240,0.04)"),
+            border: selBorder || (node !== parsedXmlTree.root ? "1px dashed rgba(102,80,164,0.35)" : undefined),
+            borderRadius: 6,
+            cursor: "pointer",
+          }}
+        >
+          {node.children.map((ch) => renderXmlPreviewElement(ch))}
+        </div>
+      );
+    }
+
+    if (node.shortTag === "Button") {
+      return (
+        <button
+          key={node.uid}
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setSelectedXmlId(node.id);
+          }}
+          style={{
+            padding: "7px 14px",
+            borderRadius: 18,
+            background: bgRaw || "#6650A4",
+            color: textColorRaw || "#FFFFFF",
+            fontWeight: 600,
+            fontSize: isNaN(textSizeRaw) ? 12 : Math.max(10, Math.min(20, textSizeRaw * 0.78)),
+            border: selBorder || "none",
+            cursor: "pointer",
+            alignSelf: node.attrs["android:layout_width"] === "match_parent" ? "stretch" : "flex-start",
+          }}
+        >
+          {textVal || "Button"}
+        </button>
+      );
+    }
+
+    if (node.shortTag === "EditText") {
+      return (
+        <div
+          key={node.uid}
+          onClick={(e) => {
+            e.stopPropagation();
+            setSelectedXmlId(node.id);
+          }}
+          style={{
+            width: "100%",
+            padding: "6px 8px",
+            borderRadius: 6,
+            border: selBorder || "1px solid #9E97A8",
+            background: "#FFFFFF",
+            color: textVal ? "#1C1B1F" : "#79747E",
+            fontSize: 12,
+            cursor: "pointer",
+          }}
+        >
+          {textVal || hintVal || "EditText"}
+        </div>
+      );
+    }
+
+    if (node.shortTag === "ImageView") {
+      return (
+        <div
+          key={node.uid}
+          onClick={(e) => {
+            e.stopPropagation();
+            setSelectedXmlId(node.id);
+          }}
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: 10,
+            background: bgRaw || "#E8DEF8",
+            border: selBorder || "1px solid #C4B5FD",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "#3574F0",
+            fontSize: 18,
+            cursor: "pointer",
+          }}
+          title={node.attrs["android:src"] || "ImageView"}
+        >
+          ▲
+        </div>
+      );
+    }
+
+    if (node.shortTag === "CheckBox" || node.shortTag === "Switch") {
+      return (
+        <div
+          key={node.uid}
+          onClick={(e) => {
+            e.stopPropagation();
+            setSelectedXmlId(node.id);
+          }}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "4px 6px",
+            border: selBorder,
+            borderRadius: 4,
+            fontSize: 12,
+            color: textColorRaw || "#1C1B1F",
+            cursor: "pointer",
+          }}
+        >
+          <span>{node.shortTag === "CheckBox" ? "☐" : "⊶"}</span>
+          <span>{textVal || node.shortTag}</span>
+        </div>
+      );
+    }
+
+    // TextView
+    return (
+      <div
+        key={node.uid}
+        onClick={(e) => {
+          e.stopPropagation();
+          setSelectedXmlId(node.id);
+        }}
+        style={{
+          padding: "3px 5px",
+          borderRadius: 4,
+          background: bgRaw || "transparent",
+          color: textColorRaw || "#1C1B1F",
+          fontSize: isNaN(textSizeRaw) ? 13 : Math.max(10, Math.min(24, textSizeRaw * 0.78)),
+          fontWeight: textSizeRaw >= 18 ? 600 : 400,
+          border: selBorder || "1px dashed rgba(102,80,164,0.22)",
+          cursor: "pointer",
+        }}
+      >
+        {textVal || "TextView"}
+      </div>
+    );
+  };
+
+  const renderBlueprintElement = (node: XmlLayoutElement): React.ReactNode => {
+    const isSel = selectedElement && selectedElement.uid === node.uid;
+    return (
+      <div
+        key={node.uid}
+        onClick={(e) => {
+          e.stopPropagation();
+          setSelectedXmlId(node.id);
+        }}
+        style={{
+          padding: node.children.length > 0 ? "6px 8px" : "4px 8px",
+          border: isSel ? "1.5px solid #FFFFFF" : "1px solid rgba(154,210,255,0.65)",
+          borderRadius: 4,
+          fontSize: 10.5,
+          color: "#D6ECFF",
+          display: "flex",
+          flexDirection: "column",
+          gap: 5,
+          cursor: "pointer",
+        }}
+      >
+        <span>@{node.id} [{node.shortTag}]</span>
+        {node.children.map((ch) => renderBlueprintElement(ch))}
+      </div>
+    );
+  };
+
+  const caretTopPx = 8 + Math.min(cursorPos.line, 20) * 21;
 
   return (
     <section className={styles.editorSection} aria-label="Editor and Design Split View">
-      {/* 40px Editor Tab Bar + Top-Right Code | Split | Design Segmented Toggle */}
+      {/* 40px Editor Tab Bar */}
       <div className={styles.editorTabBar}>
         <div className={styles.editorTabsScroll} role="tablist">
           {openTabs.map((tab) => {
@@ -346,8 +990,15 @@ export function StudioEditorSplitPane({
           })}
         </div>
 
-        {/* Right: Code | Split | Design Segmented Control */}
         <div className={styles.editorTabRightControls}>
+          <button
+            type="button"
+            className={styles.previewToolBtn}
+            title="Reformat Code (Ctrl+Alt+L)"
+            onClick={handleFormatActiveFile}
+          >
+            Format
+          </button>
           <div className={styles.segmentedGroup} role="group" aria-label="Editor Split Mode">
             <button
               type="button"
@@ -377,23 +1028,117 @@ export function StudioEditorSplitPane({
               <span>Design</span>
             </button>
           </div>
-          <button
-            type="button"
-            className={styles.panelActionIcon}
-            title="Editor Options"
-            onClick={onOpenProblemsPanel}
-          >
-            <MoreVerticalIcon size={14} />
-          </button>
         </div>
       </div>
 
+      {/* Find & Replace Bar */}
+      {showFindBar && splitMode !== "Design" && (
+        <div className={styles.findReplaceBar} role="search" aria-label="Find and Replace">
+          <input
+            type="text"
+            className={styles.findInput}
+            placeholder="Find in file..."
+            value={findQuery}
+            autoFocus
+            onChange={(e) => {
+              setFindQuery(e.target.value);
+              setCurrentMatchIdx(0);
+            }}
+          />
+          <button
+            type="button"
+            className={styles.secondaryBtn}
+            style={{ height: 24, padding: "0 8px" }}
+            onClick={() => setFindCaseSensitive((v) => !v)}
+            title="Match Case"
+          >
+            {findCaseSensitive ? "Cc ✓" : "Cc"}
+          </button>
+          <span style={{ color: "var(--as-text-muted)", fontSize: 11.5 }}>
+            {findMatches.length === 0 ? "0 results" : `${(currentMatchIdx % findMatches.length) + 1}/${findMatches.length}`}
+          </span>
+          <button
+            type="button"
+            className={styles.secondaryBtn}
+            style={{ height: 24, padding: "0 8px" }}
+            disabled={findMatches.length === 0}
+            onClick={() => {
+              const prev = (currentMatchIdx - 1 + findMatches.length) % findMatches.length;
+              setCurrentMatchIdx(prev);
+              jumpToOffset(findMatches[prev], findQuery.length);
+            }}
+          >
+            ↑
+          </button>
+          <button
+            type="button"
+            className={styles.secondaryBtn}
+            style={{ height: 24, padding: "0 8px" }}
+            disabled={findMatches.length === 0}
+            onClick={() => {
+              const next = (currentMatchIdx + 1) % findMatches.length;
+              setCurrentMatchIdx(next);
+              jumpToOffset(findMatches[next], findQuery.length);
+            }}
+          >
+            ↓
+          </button>
+          {showReplaceRow && (
+            <>
+              <input
+                type="text"
+                className={styles.findInput}
+                placeholder="Replace with..."
+                value={replaceText}
+                onChange={(e) => setReplaceText(e.target.value)}
+              />
+              <button
+                type="button"
+                className={styles.secondaryBtn}
+                style={{ height: 24, padding: "0 8px" }}
+                disabled={findMatches.length === 0}
+                onClick={() => {
+                  const idx = findMatches[currentMatchIdx % findMatches.length];
+                  const next =
+                    activeFile.content.slice(0, idx) +
+                    replaceText +
+                    activeFile.content.slice(idx + findQuery.length);
+                  onUpdateFileContent(activeFile.id, next);
+                }}
+              >
+                Replace
+              </button>
+              <button
+                type="button"
+                className={styles.secondaryBtn}
+                style={{ height: 24, padding: "0 8px" }}
+                disabled={findMatches.length === 0}
+                onClick={() => {
+                  const flags = findCaseSensitive ? "g" : "gi";
+                  const escaped = findQuery.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+                  const next = activeFile.content.replace(new RegExp(escaped, flags), replaceText);
+                  onUpdateFileContent(activeFile.id, next);
+                }}
+              >
+                Replace All
+              </button>
+            </>
+          )}
+          <button
+            type="button"
+            className={styles.panelActionIcon}
+            title="Close Find Bar"
+            onClick={() => setShowFindBar(false)}
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       {/* Main Editor + Design Split Body */}
       <div className={styles.editorMainArea}>
-        {/* Left/Full Code Editor Pane */}
         {splitMode !== "Design" && (
           <div className={styles.codePaneWrap}>
-            {/* Top-Right Inspection Widget */}
             <button
               type="button"
               className={styles.inspectionPill}
@@ -415,12 +1160,12 @@ export function StudioEditorSplitPane({
               )}
             </button>
 
-            {/* Gutter */}
             <div className={styles.editorGutter} ref={gutterRef}>
               {lines.map((lineText, idx) => {
                 const lineNum = idx + 1;
                 const bpKey = `${activeFile.id}:${lineNum}`;
                 const hasBp = breakpoints.has(bpKey);
+                const lineProblem = fileProblems.find((p) => p.line === lineNum);
                 const isComposable = lineText.trim().startsWith("@Composable");
                 const isPreview = lineText.trim().startsWith("@Preview");
                 const isRunnable =
@@ -431,15 +1176,18 @@ export function StudioEditorSplitPane({
                 return (
                   <div key={lineNum} className={styles.gutterRow}>
                     <span
-                      className={`${styles.gutterLineNum} ${
-                        cursorPos.line === lineNum ? styles.gutterLineNumActive : ""
-                      }`}
+                      className={`${styles.gutterLineNum} ${cursorPos.line === lineNum ? styles.gutterLineNumActive : ""
+                        }`}
                       onClick={() => toggleBreakpoint(lineNum)}
                     >
                       {lineNum}
                     </span>
-                    <span className={styles.gutterIconSlot}>
-                      {hasBp ? (
+                    <span className={styles.gutterIconSlot} title={lineProblem?.message}>
+                      {lineProblem && lineProblem.severity === "error" ? (
+                        <span className={styles.gutterErrorDot} />
+                      ) : lineProblem && lineProblem.severity === "warning" ? (
+                        <span className={styles.gutterWarnDot} />
+                      ) : hasBp ? (
                         <button
                           type="button"
                           className={styles.gutterBtn}
@@ -452,7 +1200,7 @@ export function StudioEditorSplitPane({
                         <button
                           type="button"
                           className={styles.gutterBtn}
-                          title="Run / Deploy Preview"
+                          title="Run Activity"
                           onClick={onRunFromGutter}
                         >
                           <RunPlayIcon size={12} />
@@ -466,12 +1214,21 @@ export function StudioEditorSplitPane({
               })}
             </div>
 
-            {/* Code Canvas */}
             <div className={styles.editorCodeArea}>
               <div
                 className={styles.currentLineHighlight}
                 style={{ top: `${8 + (cursorPos.line - 1) * 21}px` }}
               />
+              {fileProblems
+                .filter((p) => p.severity === "error")
+                .map((err) => (
+                  <div
+                    key={err.id}
+                    className={styles.editorLineError}
+                    style={{ top: `${8 + (Math.max(1, err.line) - 1) * 21}px` }}
+                    title={err.message}
+                  />
+                ))}
               <pre ref={preRef} className={styles.editorHighlightPre} aria-hidden="true">
                 {lines.map((ln, idx) => (
                   <React.Fragment key={idx}>
@@ -481,6 +1238,7 @@ export function StudioEditorSplitPane({
                 ))}
               </pre>
               <textarea
+                ref={textareaRef}
                 className={styles.editorTextarea}
                 value={activeFile.content}
                 spellCheck={false}
@@ -488,178 +1246,182 @@ export function StudioEditorSplitPane({
                 autoComplete="off"
                 aria-label={`Code editor for ${activeFile.tabTitle}`}
                 onChange={(e) => {
-                  onUpdateFileContent(activeFile.id, e.target.value);
+                  const nextVal = e.target.value;
+                  const pos = e.currentTarget.selectionStart || 0;
+                  onUpdateFileContent(activeFile.id, nextVal);
                   updateCursorFromTextarea(e.currentTarget);
+
+                  // Trigger contextual autocomplete on `.` or `:` or explicit request
+                  const ch = nextVal.charAt(pos - 1);
+                  if (ch === "." || ch === ":" || acState.open) {
+                    const res = buildCompletions(nextVal, pos);
+                    if (res.items.length > 0) {
+                      setAcState({
+                        open: true,
+                        prefixStart: res.prefixStart,
+                        items: res.items,
+                        selectedIndex: 0,
+                      });
+                    } else {
+                      setAcState((s) => ({ ...s, open: false }));
+                    }
+                  }
                 }}
+                onKeyDown={handleEditorKeyDown}
                 onScroll={handleTextareaScroll}
-                onClick={(e) => updateCursorFromTextarea(e.currentTarget)}
+                onClick={(e) => {
+                  updateCursorFromTextarea(e.currentTarget);
+                  if (acState.open) setAcState((s) => ({ ...s, open: false }));
+                }}
                 onKeyUp={(e) => updateCursorFromTextarea(e.currentTarget)}
               />
+
+              {acState.open && acState.items.length > 0 && (
+                <div
+                  className={styles.autocompletePopup}
+                  style={{ top: caretTopPx + 4, left: 28 }}
+                  role="listbox"
+                  aria-label="Code Autocomplete Suggestions"
+                >
+                  {acState.items.map((item, idx) => (
+                    <button
+                      key={item.label}
+                      type="button"
+                      role="option"
+                      aria-selected={idx === acState.selectedIndex}
+                      className={`${styles.autocompleteItem} ${idx === acState.selectedIndex ? styles.autocompleteItemActive : ""
+                        }`}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        applyCompletion(item);
+                      }}
+                    >
+                      <span>{item.label}</span>
+                      <span style={{ fontSize: 10.5, opacity: 0.7 }}>{item.detail}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
 
-        {/* Right/Full Compose @Preview OR XML Layout Designer Surface */}
+        {/* Right/Full Layout Editor OR Compose Preview Surface */}
         {splitMode !== "Code" && (
           <div className={styles.designSurfaceRoot}>
             {isXmlLayoutFile ? (
               <>
-                {/* XML Layout Design Toolbar */}
                 <div className={styles.designToolbar}>
                   <div className={styles.designToolbarGroup}>
                     {(["Design", "Blueprint", "Both"] as DesignSurfaceMode[]).map((mode) => (
                       <button
                         key={mode}
                         type="button"
-                        className={`${styles.previewToolBtn} ${
-                          designSurfaceMode === mode ? styles.previewToolBtnActive : ""
-                        }`}
+                        className={`${styles.previewToolBtn} ${designSurfaceMode === mode ? styles.previewToolBtnActive : ""
+                          }`}
                         onClick={() => onChangeDesignSurfaceMode(mode)}
                       >
                         {mode === "Both" ? "Design + Blueprint" : mode}
                       </button>
                     ))}
                     <span className={styles.toolbarSeparator} />
-                    <span style={{ fontSize: 11.5, color: "#9DA0A8" }}>
-                      Pixel 8 (411 × 891 dp, 420dpi) · API 35 · Theme.MyApplication
+                    <span style={{ fontSize: 11.5, color: "var(--as-text-secondary)" }}>
+                      {parsedXmlTree.root?.shortTag || "Layout"} · API 35
                     </span>
                   </div>
                   <div className={styles.designToolbarGroup}>
-                    <button
-                      type="button"
-                      className={styles.previewToolBtn}
-                      onClick={() => handleAddXmlWidget("Button")}
-                    >
-                      + Add Button
-                    </button>
+                    {selectedElement && selectedElement !== parsedXmlTree.root && (
+                      <button
+                        type="button"
+                        className={styles.previewToolBtn}
+                        style={{ color: "var(--as-red)" }}
+                        title="Remove Selected Component"
+                        onClick={handleDeleteSelectedWidget}
+                      >
+                        Delete @{selectedElement.id}
+                      </button>
+                    )}
                   </div>
                 </div>
 
-                {/* 3-Column XML Layout Editor: Palette+ComponentTree | Surface | Attributes */}
                 <div className={styles.xmlDesignerBody}>
+                  {/* Palette + Recursive Component Tree */}
                   <div className={styles.xmlLeftDock}>
                     <div className={styles.xmlSectionBar}>
                       <span>Palette</span>
                     </div>
+                    <div style={{ display: "flex", gap: 2, padding: "4px", borderBottom: "1px solid var(--as-border-panel)", flexWrap: "wrap" }}>
+                      {(["Common", "Text", "Buttons", "Layouts"] as const).map((cat) => (
+                        <button
+                          key={cat}
+                          type="button"
+                          className={`${styles.xmlPaletteItem} ${paletteCategory === cat ? styles.xmlPaletteItemActive : ""
+                            }`}
+                          style={{ width: "auto", padding: "2px 6px", fontSize: 10.5 }}
+                          onClick={() => setPaletteCategory(cat)}
+                        >
+                          {cat}
+                        </button>
+                      ))}
+                    </div>
                     <div className={styles.xmlPaletteCols}>
-                      <div className={styles.xmlCategoryList}>
-                        {(["Common", "Text", "Buttons", "Widgets", "Layouts"] as const).map(
-                          (cat) => (
-                            <button
-                              key={cat}
-                              type="button"
-                              className={`${styles.xmlPaletteItem} ${
-                                paletteCategory === cat ? styles.xmlPaletteItemActive : ""
-                              }`}
-                              onClick={() => setPaletteCategory(cat)}
-                            >
-                              {cat}
-                            </button>
-                          )
-                        )}
-                      </div>
-                      <div className={styles.xmlCategoryList}>
+                      {PALETTE_ITEMS.filter(
+                        (p) => paletteCategory === "Common" || p.category === paletteCategory
+                      ).map((item) => (
                         <button
+                          key={item.kind}
                           type="button"
                           className={styles.xmlPaletteItem}
-                          onClick={() => handleAddXmlWidget("TextView")}
+                          title={`Add <${item.kind}> to layout`}
+                          onClick={() => handleAddXmlWidget(item.kind)}
                         >
-                          T TextView
+                          {item.icon} {item.kind}
                         </button>
-                        <button
-                          type="button"
-                          className={styles.xmlPaletteItem}
-                          onClick={() => handleAddXmlWidget("Button")}
-                        >
-                          ▢ Button
-                        </button>
-                        <button
-                          type="button"
-                          className={styles.xmlPaletteItem}
-                          onClick={() => handleAddXmlWidget("Switch")}
-                        >
-                          ⊶ Switch
-                        </button>
-                      </div>
+                      ))}
                     </div>
 
                     <div className={styles.xmlSectionBar}>
                       <span>Component Tree</span>
                     </div>
                     <div className={styles.treeScroll}>
-                      <div style={{ fontSize: 11.5, fontWeight: 600, padding: "4px 6px" }}>
-                        ▾ ConstraintLayout (main)
-                      </div>
-                      {(previewTree.children || []).map((child) => (
-                        <button
-                          key={child.id}
-                          type="button"
-                          className={`${styles.treeRow} ${
-                            selectedXmlWidgetId === child.id ? styles.treeRowSelected : ""
-                          }`}
-                          style={{ paddingLeft: 18, height: 22 }}
-                          onClick={() => setSelectedXmlWidgetId(child.id)}
-                        >
-                          <span>{child.id}</span>
-                          <span className={styles.treeHintSuffix}>({child.type})</span>
-                        </button>
-                      ))}
+                      {parsedXmlTree.root ? (
+                        renderXmlTreeNode(parsedXmlTree.root, 0)
+                      ) : (
+                        <div style={{ padding: 8, fontSize: 11, color: "var(--as-red)" }}>
+                          Fix XML syntax errors to inspect component tree.
+                        </div>
+                      )}
                     </div>
                   </div>
 
-                  {/* Center Phone Surface(s) */}
+                  {/* Center Design / Blueprint Surface */}
                   <div className={styles.xmlCenterStage}>
                     {(designSurfaceMode === "Design" || designSurfaceMode === "Both") && (
                       <div className={styles.xmlSurfacePhone}>
                         <div
                           style={{
-                            height: 24,
-                            background: "#6650A4",
+                            height: 26,
+                            background: "#3574F0",
                             color: "#FFFFFF",
-                            fontSize: 10.5,
+                            fontSize: 11,
+                            fontWeight: 600,
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "space-between",
                             padding: "0 10px",
                           }}
                         >
-                          <span>9:41</span>
-                          <span>5G · 100%</span>
+                          <span>{parsedResources.strings.app_name || "Android App"}</span>
+                          <span style={{ fontSize: 9.5, opacity: 0.85 }}>{activeFile.name}</span>
                         </div>
-                        <div
-                          style={{
-                            flex: 1,
-                            padding: 16,
-                            display: "flex",
-                            flexDirection: "column",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            gap: 12,
-                          }}
-                        >
-                          {(previewTree.children || []).map((widget) => (
-                            <div
-                              key={widget.id}
-                              onClick={() => setSelectedXmlWidgetId(widget.id)}
-                              style={{
-                                padding: widget.type === "Button" ? "8px 16px" : "6px 10px",
-                                borderRadius: widget.type === "Button" ? 20 : 6,
-                                background:
-                                  widget.type === "Button" ? "#6650A4" : "rgba(102,80,164,0.08)",
-                                color: widget.type === "Button" ? "#FFFFFF" : "#1C1B1F",
-                                fontWeight: widget.type === "Button" ? 600 : 500,
-                                fontSize: 12.5,
-                                border:
-                                  selectedXmlWidgetId === widget.id
-                                    ? "2px solid #3574F0"
-                                    : "1px dashed rgba(102,80,164,0.35)",
-                                cursor: "pointer",
-                                textAlign: "center",
-                              }}
-                            >
-                              {widget.text}
+                        <div style={{ flex: 1, padding: 8, display: "flex", flexDirection: "column", overflow: "auto" }}>
+                          {parsedXmlTree.root ? (
+                            renderXmlPreviewElement(parsedXmlTree.root)
+                          ) : (
+                            <div style={{ color: "#B3261E", padding: 12, fontSize: 11.5 }}>
+                              Invalid XML: {parsedXmlTree.errors[0]?.message || "Parse failed"}
                             </div>
-                          ))}
+                          )}
                         </div>
                       </div>
                     )}
@@ -668,109 +1430,164 @@ export function StudioEditorSplitPane({
                       <div className={`${styles.xmlSurfacePhone} ${styles.xmlSurfaceBlueprint}`}>
                         <div
                           style={{
-                            height: 24,
+                            height: 26,
                             borderBottom: "1px solid rgba(130,195,255,0.35)",
-                            fontSize: 10,
+                            fontSize: 10.5,
                             display: "flex",
                             alignItems: "center",
                             padding: "0 10px",
                           }}
                         >
-                          <span>ConstraintLayout Blueprint</span>
+                          <span>{parsedXmlTree.root?.shortTag || "Layout"} Blueprint</span>
                         </div>
-                        <div
-                          style={{
-                            flex: 1,
-                            padding: 16,
-                            display: "flex",
-                            flexDirection: "column",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            gap: 12,
-                          }}
-                        >
-                          {(previewTree.children || []).map((widget) => (
-                            <div
-                              key={widget.id}
-                              onClick={() => setSelectedXmlWidgetId(widget.id)}
-                              style={{
-                                padding: "7px 14px",
-                                border:
-                                  selectedXmlWidgetId === widget.id
-                                    ? "1.5px solid #59B8FF"
-                                    : "1px solid rgba(154,210,255,0.65)",
-                                borderRadius: 4,
-                                fontSize: 11.5,
-                                color: "#D6ECFF",
-                                cursor: "pointer",
-                              }}
-                            >
-                              @{widget.id} [{widget.type}]
-                            </div>
-                          ))}
+                        <div style={{ flex: 1, padding: 8, display: "flex", flexDirection: "column", overflow: "auto" }}>
+                          {parsedXmlTree.root ? renderBlueprintElement(parsedXmlTree.root) : null}
                         </div>
                       </div>
                     )}
                   </div>
 
-                  {/* Right Attributes Inspector */}
+                  {/* Right Interactive Attributes Inspector */}
                   <div className={styles.xmlRightAttrs}>
                     <div className={styles.xmlSectionBar}>
                       <span>Attributes</span>
-                      <span style={{ color: "#868A91", fontWeight: 400 }}>@{selectedXmlWidgetId}</span>
+                      <span style={{ color: "var(--as-text-muted)", fontWeight: 400 }}>
+                        @{selectedElement?.id || "none"}
+                      </span>
                     </div>
-                    <div className={styles.attrGroup}>
-                      <div className={styles.attrGroupTitle}>Declared Attributes</div>
-                      <div className={styles.attrRow}>
-                        <span className={styles.attrKey}>id</span>
-                        <input
-                          className={styles.attrInput}
-                          value={selectedXmlWidgetId}
-                          readOnly
-                        />
+                    {selectedElement ? (
+                      <>
+                        <div className={styles.attrGroup}>
+                          <div className={styles.attrGroupTitle}>Identity &amp; Text</div>
+                          <div className={styles.attrRow}>
+                            <span className={styles.attrKey}>id</span>
+                            <input
+                              className={styles.attrInput}
+                              aria-label="Attribute android:id"
+                              value={selectedElement.attrs["android:id"] || ""}
+                              onChange={(e) => handleUpdateXmlAttr("android:id", e.target.value)}
+                            />
+                          </div>
+                          {selectedElement.shortTag !== "ImageView" && (
+                            <div className={styles.attrRow}>
+                              <span className={styles.attrKey}>text</span>
+                              <input
+                                className={styles.attrInput}
+                                aria-label="Attribute android:text"
+                                value={selectedElement.attrs["android:text"] || ""}
+                                onChange={(e) => handleUpdateXmlAttr("android:text", e.target.value)}
+                              />
+                            </div>
+                          )}
+                          {selectedElement.shortTag === "EditText" && (
+                            <div className={styles.attrRow}>
+                              <span className={styles.attrKey}>hint</span>
+                              <input
+                                className={styles.attrInput}
+                                aria-label="Attribute android:hint"
+                                value={selectedElement.attrs["android:hint"] || ""}
+                                onChange={(e) => handleUpdateXmlAttr("android:hint", e.target.value)}
+                              />
+                            </div>
+                          )}
+                          {selectedElement.shortTag === "ImageView" && (
+                            <div className={styles.attrRow}>
+                              <span className={styles.attrKey}>src</span>
+                              <input
+                                className={styles.attrInput}
+                                aria-label="Attribute android:src"
+                                value={selectedElement.attrs["android:src"] || ""}
+                                onChange={(e) => handleUpdateXmlAttr("android:src", e.target.value)}
+                              />
+                            </div>
+                          )}
+                        </div>
+                        <div className={styles.attrGroup}>
+                          <div className={styles.attrGroupTitle}>Layout &amp; Appearance</div>
+                          <div className={styles.attrRow}>
+                            <span className={styles.attrKey}>width</span>
+                            <input
+                              className={styles.attrInput}
+                              aria-label="Attribute android:layout_width"
+                              value={selectedElement.attrs["android:layout_width"] || "wrap_content"}
+                              onChange={(e) => handleUpdateXmlAttr("android:layout_width", e.target.value)}
+                            />
+                          </div>
+                          <div className={styles.attrRow}>
+                            <span className={styles.attrKey}>height</span>
+                            <input
+                              className={styles.attrInput}
+                              aria-label="Attribute android:layout_height"
+                              value={selectedElement.attrs["android:layout_height"] || "wrap_content"}
+                              onChange={(e) => handleUpdateXmlAttr("android:layout_height", e.target.value)}
+                            />
+                          </div>
+                          {selectedElement.shortTag === "LinearLayout" && (
+                            <div className={styles.attrRow}>
+                              <span className={styles.attrKey}>orient</span>
+                              <select
+                                className={styles.attrInput}
+                                aria-label="Attribute android:orientation"
+                                value={selectedElement.attrs["android:orientation"] || "vertical"}
+                                onChange={(e) => handleUpdateXmlAttr("android:orientation", e.target.value)}
+                              >
+                                <option value="vertical">vertical</option>
+                                <option value="horizontal">horizontal</option>
+                              </select>
+                            </div>
+                          )}
+                          <div className={styles.attrRow}>
+                            <span className={styles.attrKey}>textSize</span>
+                            <input
+                              className={styles.attrInput}
+                              aria-label="Attribute android:textSize"
+                              placeholder="16sp"
+                              value={selectedElement.attrs["android:textSize"] || ""}
+                              onChange={(e) => handleUpdateXmlAttr("android:textSize", e.target.value)}
+                            />
+                          </div>
+                          <div className={styles.attrRow}>
+                            <span className={styles.attrKey}>color</span>
+                            <input
+                              className={styles.attrInput}
+                              aria-label="Attribute android:textColor"
+                              placeholder="#1C1B1F"
+                              value={selectedElement.attrs["android:textColor"] || ""}
+                              onChange={(e) => handleUpdateXmlAttr("android:textColor", e.target.value)}
+                            />
+                          </div>
+                          <div className={styles.attrRow}>
+                            <span className={styles.attrKey}>padding</span>
+                            <input
+                              className={styles.attrInput}
+                              aria-label="Attribute android:padding"
+                              placeholder="12dp"
+                              value={selectedElement.attrs["android:padding"] || ""}
+                              onChange={(e) => handleUpdateXmlAttr("android:padding", e.target.value)}
+                            />
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <div style={{ padding: 10, fontSize: 11.5, color: "var(--as-text-muted)" }}>
+                        Select a component in the layout preview to edit its XML attributes.
                       </div>
-                      <div className={styles.attrRow}>
-                        <span className={styles.attrKey}>layout_width</span>
-                        <input className={styles.attrInput} value="wrap_content" readOnly />
-                      </div>
-                      <div className={styles.attrRow}>
-                        <span className={styles.attrKey}>layout_height</span>
-                        <input className={styles.attrInput} value="wrap_content" readOnly />
-                      </div>
-                    </div>
-                    <div className={styles.attrGroup}>
-                      <div className={styles.attrGroupTitle}>Constraint Widget</div>
-                      <div
-                        style={{
-                          height: 82,
-                          border: "1px dashed #4E5157",
-                          borderRadius: 6,
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          fontSize: 11,
-                          color: "#9DA0A8",
-                        }}
-                      >
-                        0dp ↑ · ↔ 50% · ↓ 0dp
-                      </div>
-                    </div>
+                    )}
                   </div>
                 </div>
               </>
             ) : (
               <>
-                {/* Jetpack Compose @Preview Toolbar */}
                 <div className={styles.designToolbar}>
                   <div className={styles.designToolbarGroup}>
                     <span className={styles.previewStatusBadge}>
                       <CheckGreenIcon size={12} />
-                      <span>Up-to-date</span>
+                      <span>Preview Ready</span>
                     </span>
                     <button
                       type="button"
                       className={styles.previewToolBtn}
-                      title="Build & Refresh (Ctrl+Shift+F5)"
+                      title="Refresh Preview"
                       onClick={onIncrementComposeCounter}
                     >
                       <RestartIcon size={13} />
@@ -780,9 +1597,8 @@ export function StudioEditorSplitPane({
                   <div className={styles.designToolbarGroup}>
                     <button
                       type="button"
-                      className={`${styles.previewToolBtn} ${
-                        interactivePreview ? styles.previewToolBtnActive : ""
-                      }`}
+                      className={`${styles.previewToolBtn} ${interactivePreview ? styles.previewToolBtnActive : ""
+                        }`}
                       onClick={() => setInteractivePreview((v) => !v)}
                     >
                       <span>{interactivePreview ? "Interactive Mode: ON" : "Interactive Mode"}</span>
@@ -790,21 +1606,20 @@ export function StudioEditorSplitPane({
                     <button
                       type="button"
                       className={styles.previewToolBtn}
-                      title="Deploy Preview to Device"
+                      title="Run in Device Emulator"
                       onClick={onDeployPreviewToDevice}
                     >
                       <RunPreviewOnDeviceIcon size={14} />
-                      <span>Deploy Preview</span>
+                      <span>Run on Emulator</span>
                     </button>
                   </div>
                 </div>
 
-                {/* Jetpack Compose @Preview Canvas */}
                 <div className={styles.composeCanvasArea}>
                   <div className={styles.previewCardFrame} style={{ width: 292 }}>
                     <div className={styles.previewCardTitle}>
-                      <span>GreetingPreview (@Preview)</span>
-                      <span style={{ color: "#3DDC84" }}>API 35 · Material3</span>
+                      <span>{activeFile.tabTitle} Preview</span>
+                      <span style={{ color: "var(--as-android-green)" }}>API 35</span>
                     </div>
 
                     <div
@@ -819,20 +1634,6 @@ export function StudioEditorSplitPane({
                         border: "1px solid #D0BCFF",
                       }}
                     >
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          fontSize: 11,
-                          color: "#6650A4",
-                          fontWeight: 600,
-                        }}
-                      >
-                        <span>Scaffold · Surface</span>
-                        <span>Compose 1.7.5</span>
-                      </div>
-
                       {(previewTree.children || []).map((node) =>
                         node.type === "Button" ? (
                           <button
@@ -849,28 +1650,21 @@ export function StudioEditorSplitPane({
                               fontSize: 12.5,
                               cursor: "pointer",
                               alignSelf: "flex-start",
-                              boxShadow: "0 2px 6px rgba(102,80,164,0.35)",
                             }}
                           >
                             {node.text}
                           </button>
                         ) : (
-                          <div
-                            key={node.id}
-                            style={{
-                              fontSize: 15,
-                              fontWeight: 600,
-                              color: "#1D1B20",
-                            }}
-                          >
+                          <div key={node.id} style={{ fontSize: 15, fontWeight: 600, color: "#1D1B20" }}>
                             {node.text}
                           </div>
                         )
                       )}
-
-                      <div style={{ fontSize: 11, color: "#625B71" }}>
-                        Recomposition count: {composeClickCount + 1} · Click button to test state
-                      </div>
+                      {activeFile.hasComposePreview && (
+                        <div style={{ fontSize: 11, color: "#625B71" }}>
+                          State recompositions: {composeClickCount + 1}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

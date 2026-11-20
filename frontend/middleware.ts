@@ -1,8 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-// Lab workspaces switched off on the live site (2026-11-20). Their pages stay in the codebase; remove a path here and the
-// matching track from the backend's UNAVAILABLE_LAB_TRACKS to turn a lab back on.
-const UNAVAILABLE_PREFIXES = ["/android-studio", "/power-bi", "/networks"];
+// Ubuntu stays off; Power BI Desktop, Android Studio, and Computer Networks studios are enabled.
+const UNAVAILABLE_PREFIXES: string[] = [];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -16,5 +15,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/android-studio/:path*", "/power-bi/:path*", "/networks/:path*"],
+  matcher: [],
 };

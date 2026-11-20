@@ -1,11 +1,31 @@
-// Pure TypeScript engine for Google Android Studio (New UI Dark) clone.
+// Pure TypeScript engine for Google Android Studio clone.
 // Zero "@/" path aliases and ES5-iteration-safe so both Next.js and Node --experimental-strip-types run cleanly.
+
+import { parseAndroidLayoutXml, parseAndroidResources } from "./androidXmlLayout.ts";
 
 export type AndroidViewMode = "Android" | "Project" | "Packages";
 export type EditorSplitMode = "Code" | "Split" | "Design";
 export type DesignSurfaceMode = "Design" | "Blueprint" | "Both";
 export type LogcatLevel = "V" | "D" | "I" | "W" | "E" | "A";
-export type StudioFileKind = "kotlin" | "xml" | "manifest" | "gradle-kts" | "properties" | "toml" | "proguard" | "svg";
+export type StudioFileKind =
+  | "java"
+  | "kotlin"
+  | "xml"
+  | "manifest"
+  | "gradle"
+  | "gradle-kts"
+  | "toml"
+  | "properties"
+  | "proguard"
+  | "svg"
+  | "text";
+
+export type AndroidProjectTemplate =
+  | "two-activity-java"
+  | "empty-views-java"
+  | "calculator-java"
+  | "empty-views-kotlin"
+  | "compose-kotlin";
 
 export interface StudioFile {
   id: string;
@@ -28,6 +48,11 @@ export interface StudioProjectPreset {
   monogramBg: string;
   packageName: string;
   branch: string;
+  language?: "java" | "kotlin";
+  template?: AndroidProjectTemplate;
+  folders?: string[];
+  isCustom?: boolean;
+  snapshotFiles?: StudioFile[];
   files: StudioFile[];
 }
 
@@ -45,6 +70,7 @@ export interface AndroidTreeNode {
     | "file";
   fileId?: string;
   fileKind?: StudioFileKind;
+  folderPath?: string;
   isTest?: boolean;
   children?: AndroidTreeNode[];
 }
@@ -821,17 +847,1271 @@ export const STUDIO_PRESETS: StudioProjectPreset[] = [
   },
 ];
 
+export interface NewProjectOptions {
+  appName: string;
+  packageName: string;
+  template: AndroidProjectTemplate;
+  minSdk?: number;
+}
+
+function makeMonogram(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length >= 2) return (words[0].charAt(0) + words[1].charAt(0)).toUpperCase();
+  const caps = name.replace(/[^A-Z]/g, "");
+  if (caps.length >= 2) return caps.slice(0, 2);
+  return name.slice(0, 2).toUpperCase() || "AP";
+}
+
+function buildJavaGroovyModuleGradle(pkg: string, minSdk: number): string {
+  return `plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace '${pkg}'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "${pkg}"
+        minSdk ${minSdk}
+        targetSdk 35
+        versionCode 1
+        versionName "1.0"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.2.0'
+    testImplementation 'junit:junit:4.13.2'
+}
+`;
+}
+
+function buildJavaGroovyRootGradle(): string {
+  return `// Top-level build file where you can add configuration options common to all sub-projects/modules.
+plugins {
+    id 'com.android.application' version '8.7.2' apply false
+}
+`;
+}
+
+function buildIcLauncherDrawable(accentHex: string): string {
+  return `<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="${accentHex}"
+        android:pathData="M31,63.928c0,0 6.4,-11 12.1,-13.1c7.2,-2.6 26,-1.4 26,-1.4l38.1,38.1L107,108.928l-32,-1L31,63.928z" />
+</vector>
+`;
+}
+
+export function createNewAndroidProject(opts: NewProjectOptions): StudioProjectPreset {
+  const cleanName = opts.appName.trim() || "My Application";
+  const projectFolderName = cleanName.replace(/\s+/g, "");
+  const pkg = /^[a-zA-Z_]\w*(\.[a-zA-Z_]\w*)+$/.test(opts.packageName.trim())
+    ? opts.packageName.trim()
+    : "com.example.myapp";
+  const pkgPath = pkg.replace(/\./g, "/");
+  const minSdk = opts.minSdk || 24;
+  const idSlug = projectFolderName.toLowerCase() + "-" + Math.random().toString(36).slice(2, 6);
+
+  const colorsXml = `<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="primary">#3574F0</color>
+    <color name="primary_dark">#1D4ED8</color>
+    <color name="accent">#3DDC84</color>
+    <color name="black">#1C1B1F</color>
+    <color name="white">#FFFFFF</color>
+</resources>
+`;
+
+  const stringsXml = `<resources>
+    <string name="app_name">${cleanName}</string>
+    <string name="welcome_title">${cleanName}</string>
+</resources>
+`;
+
+  const icForeground = buildIcLauncherDrawable("#3DDC84");
+  const icMipmap = `<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/primary" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+</adaptive-icon>
+`;
+
+  const files: StudioFile[] = [];
+
+  if (opts.template === "two-activity-java") {
+    const manifestXml = `<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="${pkg}">
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.MyApplication">
+        <activity
+            android:name=".SecondActivity"
+            android:exported="false" />
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
+`;
+
+    const mainJava = `package ${pkg};
+
+import android.content.Intent;
+import android.os.Bundle;
+import android.util.Log;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.TextView;
+import android.widget.Toast;
+import androidx.appcompat.app.AppCompatActivity;
+
+public class MainActivity extends AppCompatActivity {
+    private int greetCount = 0;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        Log.i("MainActivity", "onCreate: initialized ${cleanName}");
+
+        EditText etName = findViewById(R.id.etName);
+        TextView tvStatus = findViewById(R.id.tvStatus);
+        Button btnGreet = findViewById(R.id.btnGreet);
+        Button btnOpenDetails = findViewById(R.id.btnOpenDetails);
+
+        btnGreet.setOnClickListener(v -> {
+            String name = etName.getText().toString().trim();
+            if (name.isEmpty()) {
+                Toast.makeText(MainActivity.this, "Please enter your name first", Toast.LENGTH_SHORT).show();
+                Log.w("MainActivity", "Empty name submitted");
+                return;
+            }
+            greetCount++;
+            String greeting = "Hello, " + name + "! (" + greetCount + ")";
+            tvStatus.setText(greeting);
+            Log.d("MainActivity", "Updated greeting for " + name);
+            Toast.makeText(MainActivity.this, greeting, Toast.LENGTH_SHORT).show();
+        });
+
+        btnOpenDetails.setOnClickListener(v -> {
+            String name = etName.getText().toString().trim();
+            if (name.isEmpty()) {
+                name = "Lab Student";
+            }
+            Intent intent = new Intent(MainActivity.this, SecondActivity.class);
+            intent.putExtra("student_name", name);
+            intent.putExtra("greet_count", String.valueOf(greetCount));
+            Log.i("MainActivity", "Starting SecondActivity via explicit Intent");
+            startActivity(intent);
+        });
+    }
+}
+`;
+
+    const secondJava = `package ${pkg};
+
+import android.os.Bundle;
+import android.util.Log;
+import android.widget.Button;
+import android.widget.TextView;
+import androidx.appcompat.app.AppCompatActivity;
+
+public class SecondActivity extends AppCompatActivity {
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_second);
+
+        TextView tvSummary = findViewById(R.id.tvSummary);
+        Button btnBack = findViewById(R.id.btnBack);
+
+        String name = getIntent().getStringExtra("student_name");
+        String count = getIntent().getStringExtra("greet_count");
+        if (name == null || name.isEmpty()) {
+            name = "Guest";
+        }
+        tvSummary.setText("Welcome to SecondActivity, " + name + "! Greetings sent: " + count);
+        Log.i("SecondActivity", "Received Intent extra student_name=" + name);
+
+        btnBack.setOnClickListener(v -> {
+            Log.d("SecondActivity", "Finishing SecondActivity");
+            finish();
+        });
+    }
+}
+`;
+
+    const mainXml = `<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/main"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <ImageView
+        android:id="@+id/ivLogo"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:src="@drawable/ic_launcher_foreground"
+        android:contentDescription="App Logo" />
+
+    <TextView
+        android:id="@+id/tvTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/app_name"
+        android:textSize="20sp"
+        android:textColor="#1C1B1F" />
+
+    <EditText
+        android:id="@+id/etName"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Enter student name"
+        android:inputType="textPersonName" />
+
+    <TextView
+        android:id="@+id/tvStatus"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Ready for interaction"
+        android:textSize="14sp"
+        android:textColor="#49454F" />
+
+    <Button
+        android:id="@+id/btnGreet"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Show Greeting" />
+
+    <Button
+        android:id="@+id/btnOpenDetails"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Open Second Activity" />
+
+</LinearLayout>
+`;
+
+    const secondXml = `<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/secondRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="16dp">
+
+    <TextView
+        android:id="@+id/tvSecondHeader"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Activity Details"
+        android:textSize="19sp"
+        android:textColor="#1C1B1F" />
+
+    <TextView
+        android:id="@+id/tvSummary"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Waiting for Intent extras..."
+        android:textSize="14sp"
+        android:textColor="#49454F" />
+
+    <Button
+        android:id="@+id/btnBack"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Back to MainActivity" />
+
+</RelativeLayout>
+`;
+
+    const unitTestJava = `package ${pkg};
+
+import org.junit.Test;
+import static org.junit.Assert.*;
+
+public class ExampleUnitTest {
+    @Test
+    public void addition_isCorrect() {
+        assertEquals(4L, (long) (2 + 2));
+    }
+}
+`;
+
+    files.push(
+      {
+        id: "main-activity",
+        name: "MainActivity.java",
+        tabTitle: "MainActivity.java",
+        path: `app/src/main/java/${pkgPath}/MainActivity.java`,
+        breadcrumbs: [projectFolderName, "app", "src", "main", "java", pkg, "MainActivity.java"],
+        kind: "java",
+        content: mainJava,
+      },
+      {
+        id: "second-activity",
+        name: "SecondActivity.java",
+        tabTitle: "SecondActivity.java",
+        path: `app/src/main/java/${pkgPath}/SecondActivity.java`,
+        breadcrumbs: [projectFolderName, "app", "src", "main", "java", pkg, "SecondActivity.java"],
+        kind: "java",
+        content: secondJava,
+      },
+      {
+        id: "activity-main-xml",
+        name: "activity_main.xml",
+        tabTitle: "activity_main.xml",
+        path: "app/src/main/res/layout/activity_main.xml",
+        breadcrumbs: [projectFolderName, "app", "src", "main", "res", "layout", "activity_main.xml"],
+        kind: "xml",
+        isLayoutXml: true,
+        content: mainXml,
+      },
+      {
+        id: "activity-second-xml",
+        name: "activity_second.xml",
+        tabTitle: "activity_second.xml",
+        path: "app/src/main/res/layout/activity_second.xml",
+        breadcrumbs: [projectFolderName, "app", "src", "main", "res", "layout", "activity_second.xml"],
+        kind: "xml",
+        isLayoutXml: true,
+        content: secondXml,
+      },
+      {
+        id: "manifest-xml",
+        name: "AndroidManifest.xml",
+        tabTitle: "AndroidManifest.xml",
+        path: "app/src/main/AndroidManifest.xml",
+        breadcrumbs: [projectFolderName, "app", "manifests", "AndroidManifest.xml"],
+        kind: "manifest",
+        content: manifestXml,
+      },
+      {
+        id: "strings-xml",
+        name: "strings.xml",
+        tabTitle: "strings.xml",
+        path: "app/src/main/res/values/strings.xml",
+        breadcrumbs: [projectFolderName, "app", "res", "values", "strings.xml"],
+        kind: "xml",
+        content: stringsXml,
+      },
+      {
+        id: "colors-xml",
+        name: "colors.xml",
+        tabTitle: "colors.xml",
+        path: "app/src/main/res/values/colors.xml",
+        breadcrumbs: [projectFolderName, "app", "res", "values", "colors.xml"],
+        kind: "xml",
+        content: colorsXml,
+      },
+      {
+        id: "themes-xml",
+        name: "themes.xml",
+        tabTitle: "themes.xml",
+        path: "app/src/main/res/values/themes.xml",
+        breadcrumbs: [projectFolderName, "app", "res", "values", "themes.xml"],
+        kind: "xml",
+        content: THEMES_XML,
+      },
+      {
+        id: "ic-launcher-fg",
+        name: "ic_launcher_foreground.xml",
+        tabTitle: "ic_launcher_foreground.xml",
+        path: "app/src/main/res/drawable/ic_launcher_foreground.xml",
+        breadcrumbs: [projectFolderName, "app", "res", "drawable", "ic_launcher_foreground.xml"],
+        kind: "xml",
+        content: icForeground,
+      },
+      {
+        id: "ic-launcher-mipmap",
+        name: "ic_launcher.xml",
+        tabTitle: "ic_launcher.xml",
+        path: "app/src/main/res/mipmap/ic_launcher.xml",
+        breadcrumbs: [projectFolderName, "app", "res", "mipmap", "ic_launcher.xml"],
+        kind: "xml",
+        content: icMipmap,
+      },
+      {
+        id: "unit-test-java",
+        name: "ExampleUnitTest.java",
+        tabTitle: "ExampleUnitTest.java",
+        path: `app/src/test/java/${pkgPath}/ExampleUnitTest.java`,
+        breadcrumbs: [projectFolderName, "app", "test", "ExampleUnitTest.java"],
+        kind: "java",
+        isTest: true,
+        content: unitTestJava,
+      },
+      {
+        id: "gradle-module",
+        name: "build.gradle",
+        tabTitle: "build.gradle (Module :app)",
+        path: "app/build.gradle",
+        breadcrumbs: [projectFolderName, "Gradle Scripts", "build.gradle (Module :app)"],
+        kind: "gradle",
+        androidHint: "(Module :app)",
+        content: buildJavaGroovyModuleGradle(pkg, minSdk),
+      },
+      {
+        id: "gradle-project",
+        name: "build.gradle",
+        tabTitle: `build.gradle (Project: ${projectFolderName})`,
+        path: "build.gradle",
+        breadcrumbs: [projectFolderName, "Gradle Scripts", `build.gradle (Project: ${projectFolderName})`],
+        kind: "gradle",
+        androidHint: `(Project: ${projectFolderName})`,
+        content: buildJavaGroovyRootGradle(),
+      },
+      {
+        id: "settings-gradle",
+        name: "settings.gradle",
+        tabTitle: "settings.gradle",
+        path: "settings.gradle",
+        breadcrumbs: [projectFolderName, "Gradle Scripts", "settings.gradle"],
+        kind: "gradle",
+        androidHint: "(Project Settings)",
+        content: `rootProject.name = "${projectFolderName}"\ninclude ':app'\n`,
+      }
+    );
+  } else if (opts.template === "calculator-java") {
+    const mainJava = `package ${pkg};
+
+import android.os.Bundle;
+import android.util.Log;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.TextView;
+import android.widget.Toast;
+import androidx.appcompat.app.AppCompatActivity;
+
+public class MainActivity extends AppCompatActivity {
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        Log.i("CalculatorLab", "Calculator initialized");
+
+        EditText etFirst = findViewById(R.id.etFirstNumber);
+        EditText etSecond = findViewById(R.id.etSecondNumber);
+        TextView tvResult = findViewById(R.id.tvResult);
+        Button btnAdd = findViewById(R.id.btnAdd);
+        Button btnSub = findViewById(R.id.btnSub);
+        Button btnMul = findViewById(R.id.btnMul);
+        Button btnDiv = findViewById(R.id.btnDiv);
+
+        btnAdd.setOnClickListener(v -> {
+            double a = Double.parseDouble(etFirst.getText().toString().trim());
+            double b = Double.parseDouble(etSecond.getText().toString().trim());
+            double res = a + b;
+            tvResult.setText("Result: " + res);
+            Log.i("CalculatorLab", "Add result=" + res);
+        });
+
+        btnSub.setOnClickListener(v -> {
+            double a = Double.parseDouble(etFirst.getText().toString().trim());
+            double b = Double.parseDouble(etSecond.getText().toString().trim());
+            double res = a - b;
+            tvResult.setText("Result: " + res);
+            Log.i("CalculatorLab", "Subtract result=" + res);
+        });
+
+        btnMul.setOnClickListener(v -> {
+            double a = Double.parseDouble(etFirst.getText().toString().trim());
+            double b = Double.parseDouble(etSecond.getText().toString().trim());
+            double res = a * b;
+            tvResult.setText("Result: " + res);
+            Log.i("CalculatorLab", "Multiply result=" + res);
+        });
+
+        btnDiv.setOnClickListener(v -> {
+            double a = Double.parseDouble(etFirst.getText().toString().trim());
+            double b = Double.parseDouble(etSecond.getText().toString().trim());
+            if (b == 0) {
+                Log.e("CalculatorLab", "Division by zero attempted");
+                Toast.makeText(MainActivity.this, "Cannot divide by zero", Toast.LENGTH_SHORT).show();
+                tvResult.setText("Error: / by 0");
+                return;
+            }
+            double res = a / b;
+            tvResult.setText("Result: " + res);
+            Log.i("CalculatorLab", "Divide result=" + res);
+        });
+    }
+}
+`;
+
+    const mainXml = `<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/calcRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <TextView
+        android:id="@+id/tvHeading"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/app_name"
+        android:textSize="20sp"
+        android:textColor="#1C1B1F" />
+
+    <EditText
+        android:id="@+id/etFirstNumber"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="First number"
+        android:inputType="numberDecimal" />
+
+    <EditText
+        android:id="@+id/etSecondNumber"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Second number"
+        android:inputType="numberDecimal" />
+
+    <TextView
+        android:id="@+id/tvResult"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Result: 0"
+        android:textSize="17sp"
+        android:textColor="#3574F0" />
+
+    <Button
+        android:id="@+id/btnAdd"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Add (+)" />
+
+    <Button
+        android:id="@+id/btnSub"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Subtract (-)" />
+
+    <Button
+        android:id="@+id/btnMul"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Multiply (×)" />
+
+    <Button
+        android:id="@+id/btnDiv"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Divide (÷)" />
+
+</LinearLayout>
+`;
+
+    files.push(
+      {
+        id: "main-activity",
+        name: "MainActivity.java",
+        tabTitle: "MainActivity.java",
+        path: `app/src/main/java/${pkgPath}/MainActivity.java`,
+        breadcrumbs: [projectFolderName, "app", "src", "main", "java", pkg, "MainActivity.java"],
+        kind: "java",
+        content: mainJava,
+      },
+      {
+        id: "activity-main-xml",
+        name: "activity_main.xml",
+        tabTitle: "activity_main.xml",
+        path: "app/src/main/res/layout/activity_main.xml",
+        breadcrumbs: [projectFolderName, "app", "src", "main", "res", "layout", "activity_main.xml"],
+        kind: "xml",
+        isLayoutXml: true,
+        content: mainXml,
+      },
+      {
+        id: "manifest-xml",
+        name: "AndroidManifest.xml",
+        tabTitle: "AndroidManifest.xml",
+        path: "app/src/main/AndroidManifest.xml",
+        breadcrumbs: [projectFolderName, "app", "manifests", "AndroidManifest.xml"],
+        kind: "manifest",
+        content: `<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="${pkg}">
+    <application
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name">
+        <activity android:name=".MainActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
+`,
+      },
+      {
+        id: "strings-xml",
+        name: "strings.xml",
+        tabTitle: "strings.xml",
+        path: "app/src/main/res/values/strings.xml",
+        breadcrumbs: [projectFolderName, "app", "res", "values", "strings.xml"],
+        kind: "xml",
+        content: stringsXml,
+      },
+      {
+        id: "colors-xml",
+        name: "colors.xml",
+        tabTitle: "colors.xml",
+        path: "app/src/main/res/values/colors.xml",
+        breadcrumbs: [projectFolderName, "app", "res", "values", "colors.xml"],
+        kind: "xml",
+        content: colorsXml,
+      },
+      {
+        id: "ic-launcher-fg",
+        name: "ic_launcher_foreground.xml",
+        tabTitle: "ic_launcher_foreground.xml",
+        path: "app/src/main/res/drawable/ic_launcher_foreground.xml",
+        breadcrumbs: [projectFolderName, "app", "res", "drawable", "ic_launcher_foreground.xml"],
+        kind: "xml",
+        content: icForeground,
+      },
+      {
+        id: "ic-launcher-mipmap",
+        name: "ic_launcher.xml",
+        tabTitle: "ic_launcher.xml",
+        path: "app/src/main/res/mipmap/ic_launcher.xml",
+        breadcrumbs: [projectFolderName, "app", "res", "mipmap", "ic_launcher.xml"],
+        kind: "xml",
+        content: icMipmap,
+      },
+      {
+        id: "gradle-module",
+        name: "build.gradle",
+        tabTitle: "build.gradle (Module :app)",
+        path: "app/build.gradle",
+        breadcrumbs: [projectFolderName, "Gradle Scripts", "build.gradle (Module :app)"],
+        kind: "gradle",
+        androidHint: "(Module :app)",
+        content: buildJavaGroovyModuleGradle(pkg, minSdk),
+      },
+      {
+        id: "settings-gradle",
+        name: "settings.gradle",
+        tabTitle: "settings.gradle",
+        path: "settings.gradle",
+        breadcrumbs: [projectFolderName, "Gradle Scripts", "settings.gradle"],
+        kind: "gradle",
+        androidHint: "(Project Settings)",
+        content: `rootProject.name = "${projectFolderName}"\ninclude ':app'\n`,
+      }
+    );
+  } else if (opts.template === "empty-views-java") {
+    files.push(
+      {
+        id: "main-activity",
+        name: "MainActivity.java",
+        tabTitle: "MainActivity.java",
+        path: `app/src/main/java/${pkgPath}/MainActivity.java`,
+        breadcrumbs: [projectFolderName, "app", "src", "main", "java", pkg, "MainActivity.java"],
+        kind: "java",
+        content: `package ${pkg};
+
+import android.os.Bundle;
+import android.util.Log;
+import android.widget.Button;
+import android.widget.TextView;
+import android.widget.Toast;
+import androidx.appcompat.app.AppCompatActivity;
+
+public class MainActivity extends AppCompatActivity {
+    private int taps = 0;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        TextView tvHello = findViewById(R.id.tvHello);
+        Button btnAction = findViewById(R.id.btnAction);
+
+        btnAction.setOnClickListener(v -> {
+            taps++;
+            tvHello.setText("Button clicked " + taps + " times");
+            Log.i("MainActivity", "Tap count=" + taps);
+            Toast.makeText(MainActivity.this, "Tapped " + taps, Toast.LENGTH_SHORT).show();
+        });
+    }
+}
+`,
+      },
+      {
+        id: "activity-main-xml",
+        name: "activity_main.xml",
+        tabTitle: "activity_main.xml",
+        path: "app/src/main/res/layout/activity_main.xml",
+        breadcrumbs: [projectFolderName, "app", "src", "main", "res", "layout", "activity_main.xml"],
+        kind: "xml",
+        isLayoutXml: true,
+        content: `<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/main"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="16dp">
+
+    <TextView
+        android:id="@+id/tvHello"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Hello World!"
+        android:textSize="20sp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <Button
+        android:id="@+id/btnAction"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Tap Me"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/tvHello" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>
+`,
+      },
+      {
+        id: "manifest-xml",
+        name: "AndroidManifest.xml",
+        tabTitle: "AndroidManifest.xml",
+        path: "app/src/main/AndroidManifest.xml",
+        breadcrumbs: [projectFolderName, "app", "manifests", "AndroidManifest.xml"],
+        kind: "manifest",
+        content: ANDROID_MANIFEST_XML.replace(/com\.example\.myapplication/g, pkg),
+      },
+      {
+        id: "strings-xml",
+        name: "strings.xml",
+        tabTitle: "strings.xml",
+        path: "app/src/main/res/values/strings.xml",
+        breadcrumbs: [projectFolderName, "app", "res", "values", "strings.xml"],
+        kind: "xml",
+        content: stringsXml,
+      },
+      {
+        id: "colors-xml",
+        name: "colors.xml",
+        tabTitle: "colors.xml",
+        path: "app/src/main/res/values/colors.xml",
+        breadcrumbs: [projectFolderName, "app", "res", "values", "colors.xml"],
+        kind: "xml",
+        content: colorsXml,
+      },
+      {
+        id: "ic-launcher-fg",
+        name: "ic_launcher_foreground.xml",
+        tabTitle: "ic_launcher_foreground.xml",
+        path: "app/src/main/res/drawable/ic_launcher_foreground.xml",
+        breadcrumbs: [projectFolderName, "app", "res", "drawable", "ic_launcher_foreground.xml"],
+        kind: "xml",
+        content: icForeground,
+      },
+      {
+        id: "gradle-module",
+        name: "build.gradle",
+        tabTitle: "build.gradle (Module :app)",
+        path: "app/build.gradle",
+        breadcrumbs: [projectFolderName, "Gradle Scripts", "build.gradle (Module :app)"],
+        kind: "gradle",
+        androidHint: "(Module :app)",
+        content: buildJavaGroovyModuleGradle(pkg, minSdk),
+      },
+      {
+        id: "settings-gradle",
+        name: "settings.gradle",
+        tabTitle: "settings.gradle",
+        path: "settings.gradle",
+        breadcrumbs: [projectFolderName, "Gradle Scripts", "settings.gradle"],
+        kind: "gradle",
+        androidHint: "(Project Settings)",
+        content: `rootProject.name = "${projectFolderName}"\ninclude ':app'\n`,
+      }
+    );
+  } else if (opts.template === "empty-views-kotlin") {
+    files.push(
+      {
+        id: "main-activity",
+        name: "MainActivity",
+        tabTitle: "MainActivity.kt",
+        path: `app/src/main/java/${pkgPath}/MainActivity.kt`,
+        breadcrumbs: [projectFolderName, "app", "src", "main", "java", pkg, "MainActivity.kt"],
+        kind: "kotlin",
+        content: `package ${pkg}
+
+import android.os.Bundle
+import android.util.Log
+import android.widget.Button
+import android.widget.EditText
+import android.widget.TextView
+import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
+
+class MainActivity : AppCompatActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
+        val input = findViewById<EditText>(R.id.etInput)
+        val output = findViewById<TextView>(R.id.tvOutput)
+        val btn = findViewById<Button>(R.id.btnRun)
+
+        btn.setOnClickListener {
+            val text = input.getText().toString().trim()
+            if (text.isEmpty()) {
+                Toast.makeText(this, "Enter text first", Toast.LENGTH_SHORT).show()
+                return
+            }
+            output.setText("Kotlin says: $text")
+            Log.i("MainActivity", "Updated output to: $text")
+        }
+    }
+}
+`,
+      },
+      {
+        id: "activity-main-xml",
+        name: "activity_main.xml",
+        tabTitle: "activity_main.xml",
+        path: "app/src/main/res/layout/activity_main.xml",
+        breadcrumbs: [projectFolderName, "app", "src", "main", "res", "layout", "activity_main.xml"],
+        kind: "xml",
+        isLayoutXml: true,
+        content: `<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/main"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <TextView
+        android:id="@+id/tvOutput"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/app_name"
+        android:textSize="20sp" />
+
+    <EditText
+        android:id="@+id/etInput"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Type a message" />
+
+    <Button
+        android:id="@+id/btnRun"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Update Text" />
+
+</LinearLayout>
+`,
+      },
+      {
+        id: "manifest-xml",
+        name: "AndroidManifest.xml",
+        tabTitle: "AndroidManifest.xml",
+        path: "app/src/main/AndroidManifest.xml",
+        breadcrumbs: [projectFolderName, "app", "manifests", "AndroidManifest.xml"],
+        kind: "manifest",
+        content: ANDROID_MANIFEST_XML.replace(/com\.example\.myapplication/g, pkg),
+      },
+      {
+        id: "strings-xml",
+        name: "strings.xml",
+        tabTitle: "strings.xml",
+        path: "app/src/main/res/values/strings.xml",
+        breadcrumbs: [projectFolderName, "app", "res", "values", "strings.xml"],
+        kind: "xml",
+        content: stringsXml,
+      },
+      {
+        id: "gradle-module",
+        name: "build.gradle.kts",
+        tabTitle: "build.gradle.kts (Module :app)",
+        path: "app/build.gradle.kts",
+        breadcrumbs: [projectFolderName, "Gradle Scripts", "build.gradle.kts (Module :app)"],
+        kind: "gradle-kts",
+        androidHint: "(Module :app)",
+        content: BUILD_GRADLE_MODULE_KTS.replace(/com\.example\.myapplication/g, pkg),
+      },
+      {
+        id: "settings-gradle",
+        name: "settings.gradle.kts",
+        tabTitle: "settings.gradle.kts",
+        path: "settings.gradle.kts",
+        breadcrumbs: [projectFolderName, "Gradle Scripts", "settings.gradle.kts"],
+        kind: "gradle-kts",
+        androidHint: "(Project Settings)",
+        content: `rootProject.name = "${projectFolderName}"\ninclude(":app")\n`,
+      }
+    );
+  } else {
+    // compose-kotlin
+    files.push(
+      {
+        id: "main-activity",
+        name: "MainActivity",
+        tabTitle: "MainActivity.kt",
+        path: `app/src/main/java/${pkgPath}/MainActivity.kt`,
+        breadcrumbs: [projectFolderName, "app", "src", "main", "java", pkg, "MainActivity.kt"],
+        kind: "kotlin",
+        hasComposePreview: true,
+        content: MAIN_ACTIVITY_KT.replace(/com\.example\.myapplication/g, pkg).replace(/MyApplicationTheme/g, projectFolderName + "Theme"),
+      },
+      {
+        id: "manifest-xml",
+        name: "AndroidManifest.xml",
+        tabTitle: "AndroidManifest.xml",
+        path: "app/src/main/AndroidManifest.xml",
+        breadcrumbs: [projectFolderName, "app", "manifests", "AndroidManifest.xml"],
+        kind: "manifest",
+        content: ANDROID_MANIFEST_XML.replace(/com\.example\.myapplication/g, pkg),
+      },
+      {
+        id: "strings-xml",
+        name: "strings.xml",
+        tabTitle: "strings.xml",
+        path: "app/src/main/res/values/strings.xml",
+        breadcrumbs: [projectFolderName, "app", "res", "values", "strings.xml"],
+        kind: "xml",
+        content: stringsXml,
+      },
+      {
+        id: "gradle-module",
+        name: "build.gradle.kts",
+        tabTitle: "build.gradle.kts (Module :app)",
+        path: "app/build.gradle.kts",
+        breadcrumbs: [projectFolderName, "Gradle Scripts", "build.gradle.kts (Module :app)"],
+        kind: "gradle-kts",
+        androidHint: "(Module :app)",
+        content: BUILD_GRADLE_MODULE_KTS.replace(/com\.example\.myapplication/g, pkg),
+      },
+      {
+        id: "settings-gradle",
+        name: "settings.gradle.kts",
+        tabTitle: "settings.gradle.kts",
+        path: "settings.gradle.kts",
+        breadcrumbs: [projectFolderName, "Gradle Scripts", "settings.gradle.kts"],
+        kind: "gradle-kts",
+        androidHint: "(Project Settings)",
+        content: `rootProject.name = "${projectFolderName}"\ninclude(":app")\n`,
+      }
+    );
+  }
+
+  return {
+    id: idSlug,
+    name: projectFolderName,
+    monogram: makeMonogram(cleanName),
+    monogramBg: opts.template.indexOf("java") >= 0 ? "#2E6F40" : "#3574F0",
+    packageName: pkg,
+    branch: "main",
+    language: opts.template.indexOf("java") >= 0 ? "java" : "kotlin",
+    template: opts.template,
+    folders: [
+      "app/src/main/res/drawable",
+      "app/src/main/res/layout",
+      "app/src/main/res/mipmap",
+      "app/src/main/res/values",
+    ],
+    snapshotFiles: files.map((f) => ({ ...f })),
+    files,
+  };
+}
+
+const STUDENT_PORTAL_PRESET = {
+  ...createNewAndroidProject({
+    appName: "StudentPortal",
+    packageName: "com.example.studentportal",
+    template: "two-activity-java",
+    minSdk: 24,
+  }),
+  id: "student-portal-java",
+  monogramBg: "#2E6F40",
+};
+
+const CALCULATOR_PRESET = {
+  ...createNewAndroidProject({
+    appName: "CalculatorLab",
+    packageName: "com.example.calculator",
+    template: "calculator-java",
+    minSdk: 24,
+  }),
+  id: "calculator-java",
+  monogramBg: "#9A5B25",
+};
+
+STUDIO_PRESETS.push(STUDENT_PORTAL_PRESET, CALCULATOR_PRESET);
+
+export const DEFAULT_UI_PRESET_ID = "student-portal-java";
+
+export function createProjectFile(
+  preset: StudioProjectPreset,
+  opts: {
+    parentDir: string;
+    fileName: string;
+    registerInManifest?: boolean;
+  }
+): { preset: StudioProjectPreset; createdFile: StudioFile } {
+  const cleanDir = opts.parentDir.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+  let rawName = opts.fileName.trim().replace(/[\\/]/g, "");
+  if (!rawName) rawName = "NewClass.java";
+  if (rawName.indexOf(".") < 0) {
+    rawName += preset.language === "java" || cleanDir.indexOf("/java/") >= 0 ? ".java" : ".xml";
+  }
+
+  const fullPath = cleanDir ? `${cleanDir}/${rawName}` : rawName;
+  const stem = rawName.replace(/\.[^.]+$/, "");
+  const ext = rawName.slice(rawName.lastIndexOf(".")).toLowerCase();
+
+  let kind: StudioFileKind = "text";
+  let isLayoutXml = false;
+  let content = "";
+
+  if (ext === ".java") {
+    kind = "java";
+    const isActivity = /Activity$/.test(stem);
+    const layoutSnake = stem
+      .replace(/Activity$/, "")
+      .replace(/([a-z])([A-Z])/g, "$1_$2")
+      .toLowerCase();
+    content = isActivity
+      ? `package ${preset.packageName};
+
+import android.os.Bundle;
+import android.util.Log;
+import androidx.appcompat.app.AppCompatActivity;
+
+public class ${stem} extends AppCompatActivity {
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_${layoutSnake || "main"});
+        Log.i("${stem}", "onCreate executed");
+    }
+}
+`
+      : `package ${preset.packageName};
+
+public class ${stem} {
+    public String describe() {
+        return "${stem} ready";
+    }
+}
+`;
+  } else if (ext === ".kt") {
+    kind = "kotlin";
+    content = `package ${preset.packageName}
+
+class ${stem} {
+    fun describe(): String = "${stem} ready"
+}
+`;
+  } else if (ext === ".xml") {
+    kind = rawName === "AndroidManifest.xml" ? "manifest" : "xml";
+    isLayoutXml = fullPath.indexOf("res/layout/") >= 0 || cleanDir.indexOf("layout") >= 0;
+    if (isLayoutXml) {
+      content = `<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <TextView
+        android:id="@+id/tvHeader"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="${stem}"
+        android:textSize="18sp" />
+
+</LinearLayout>
+`;
+    } else if (fullPath.indexOf("res/values/") >= 0) {
+      content = `<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="${stem.replace(/[^A-Za-z0-9_]/g, "_")}">Sample Value</string>
+</resources>
+`;
+    } else {
+      content = `<?xml version="1.0" encoding="utf-8"?>
+<resources />
+`;
+    }
+  } else if (ext === ".gradle") {
+    kind = "gradle";
+    content = "// Gradle build script\n";
+  } else if (ext === ".kts") {
+    kind = "gradle-kts";
+    content = "// Kotlin Gradle build script\n";
+  } else if (ext === ".properties") {
+    kind = "properties";
+  }
+
+  const createdFile: StudioFile = {
+    id: `file-${stem.toLowerCase()}-${Date.now().toString(36)}`,
+    name: rawName,
+    tabTitle: rawName,
+    path: fullPath,
+    breadcrumbs: [preset.name, ...fullPath.split("/")],
+    kind,
+    isLayoutXml,
+    isTest: fullPath.indexOf("/test/") >= 0 || fullPath.indexOf("/androidTest/") >= 0,
+    content,
+  };
+
+  let nextFiles = [...preset.files, createdFile];
+
+  if (opts.registerInManifest && kind === "java" || (opts.registerInManifest && kind === "kotlin")) {
+    if (/Activity$/.test(stem)) {
+      nextFiles = nextFiles.map((f) => {
+        if (f.kind === "manifest" && f.content.indexOf(`.${stem}`) < 0) {
+          const insertion = `        <activity android:name=".${stem}" android:exported="false" />\n`;
+          return {
+            ...f,
+            content: f.content.replace("</application>", `${insertion}    </application>`),
+          };
+        }
+        return f;
+      });
+    }
+  }
+
+  return {
+    preset: { ...preset, files: nextFiles },
+    createdFile,
+  };
+}
+
+export function createProjectFolder(preset: StudioProjectPreset, folderPath: string): StudioProjectPreset {
+  const cleaned = folderPath.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+  if (!cleaned) return preset;
+  const existing = preset.folders ? [...preset.folders] : [];
+  if (existing.indexOf(cleaned) < 0) existing.push(cleaned);
+  return { ...preset, folders: existing };
+}
+
+export function renameProjectFile(
+  preset: StudioProjectPreset,
+  fileId: string,
+  newName: string
+): StudioProjectPreset {
+  const cleanName = newName.trim().replace(/[\\/]/g, "");
+  if (!cleanName) return preset;
+  return {
+    ...preset,
+    files: preset.files.map((f) => {
+      if (f.id !== fileId) return f;
+      const slash = f.path.lastIndexOf("/");
+      const dir = slash >= 0 ? f.path.slice(0, slash + 1) : "";
+      const nextPath = dir + cleanName;
+      return {
+        ...f,
+        name: cleanName,
+        tabTitle: cleanName,
+        path: nextPath,
+        breadcrumbs: [preset.name, ...nextPath.split("/")],
+        isLayoutXml: nextPath.indexOf("res/layout/") >= 0,
+      };
+    }),
+  };
+}
+
+export function deleteProjectFile(preset: StudioProjectPreset, fileId: string): StudioProjectPreset {
+  if (preset.files.length <= 1) return preset;
+  return {
+    ...preset,
+    files: preset.files.filter((f) => f.id !== fileId),
+  };
+}
+
+export interface GitFileStatusEntry {
+  path: string;
+  fileId?: string;
+  status: "modified" | "added" | "deleted";
+}
+
+export function computeProjectGitStatus(
+  currentFiles: StudioFile[],
+  snapshotFiles?: StudioFile[]
+): GitFileStatusEntry[] {
+  if (!snapshotFiles || snapshotFiles.length === 0) return [];
+  const baseByPath: Record<string, StudioFile> = {};
+  for (let i = 0; i < snapshotFiles.length; i++) {
+    baseByPath[snapshotFiles[i].path] = snapshotFiles[i];
+  }
+  const curByPath: Record<string, StudioFile> = {};
+  const entries: GitFileStatusEntry[] = [];
+
+  for (let i = 0; i < currentFiles.length; i++) {
+    const cur = currentFiles[i];
+    curByPath[cur.path] = cur;
+    const base = baseByPath[cur.path];
+    if (!base) {
+      entries.push({ path: cur.path, fileId: cur.id, status: "added" });
+    } else if (base.content !== cur.content) {
+      entries.push({ path: cur.path, fileId: cur.id, status: "modified" });
+    }
+  }
+  for (let i = 0; i < snapshotFiles.length; i++) {
+    const base = snapshotFiles[i];
+    if (!curByPath[base.path]) {
+      entries.push({ path: base.path, status: "deleted" });
+    }
+  }
+  return entries;
+}
+
 export function buildAndroidProjectTree(preset: StudioProjectPreset, viewMode: AndroidViewMode): AndroidTreeNode[] {
-  const byId = new Map<string, StudioFile>();
-  preset.files.forEach((f) => byId.set(f.id, f));
+  const pkgPath = preset.packageName.replace(/\./g, "/");
 
   if (viewMode === "Packages") {
-    const pkgFiles = preset.files.filter((f) => f.kind === "kotlin");
+    const pkgFiles = preset.files.filter((f) => f.kind === "kotlin" || f.kind === "java");
     return [
       {
         id: "pkg-root",
         label: preset.packageName,
         kind: "package",
+        folderPath: `app/src/main/java/${pkgPath}`,
         children: pkgFiles.map((f) => ({
           id: "pkg-node-" + f.id,
           label: f.name,
@@ -845,74 +2125,111 @@ export function buildAndroidProjectTree(preset: StudioProjectPreset, viewMode: A
   }
 
   if (viewMode === "Project") {
+    // Build nested folder hierarchy from all real paths + explicit folders
+    interface FolderBucket {
+      name: string;
+      fullPath: string;
+      subfolders: Record<string, FolderBucket>;
+      files: StudioFile[];
+    }
+    const root: FolderBucket = { name: preset.name, fullPath: "", subfolders: {}, files: [] };
+
+    const ensureFolder = (parts: string[]): FolderBucket => {
+      let cur = root;
+      let acc = "";
+      for (let i = 0; i < parts.length; i++) {
+        const part = parts[i];
+        acc = acc ? `${acc}/${part}` : part;
+        if (!cur.subfolders[part]) {
+          cur.subfolders[part] = { name: part, fullPath: acc, subfolders: {}, files: [] };
+        }
+        cur = cur.subfolders[part];
+      }
+      return cur;
+    };
+
+    const extraFolders = preset.folders || [];
+    for (let i = 0; i < extraFolders.length; i++) {
+      const segs = extraFolders[i].split("/").filter(Boolean);
+      if (segs.length > 0) ensureFolder(segs);
+    }
+
+    for (let i = 0; i < preset.files.length; i++) {
+      const f = preset.files[i];
+      const segs = f.path.split("/").filter(Boolean);
+      const dirSegs = segs.slice(0, -1);
+      const bucket = ensureFolder(dirSegs);
+      bucket.files.push(f);
+    }
+
+    const toTreeNodes = (bucket: FolderBucket): AndroidTreeNode[] => {
+      const folderKeys = Object.keys(bucket.subfolders).sort();
+      const nodes: AndroidTreeNode[] = [];
+      for (let i = 0; i < folderKeys.length; i++) {
+        const sub = bucket.subfolders[folderKeys[i]];
+        nodes.push({
+          id: `proj-dir-${sub.fullPath}`,
+          label: sub.name,
+          kind: sub.fullPath === "app" ? "module" : "folder",
+          folderPath: sub.fullPath,
+          children: toTreeNodes(sub),
+        });
+      }
+      for (let i = 0; i < bucket.files.length; i++) {
+        const f = bucket.files[i];
+        nodes.push({
+          id: `proj-f-${f.id}`,
+          label: f.tabTitle,
+          kind: "file",
+          fileId: f.id,
+          fileKind: f.kind,
+          isTest: f.isTest,
+        });
+      }
+      return nodes;
+    };
+
     return [
       {
         id: "proj-root",
         label: preset.name,
         hint: "~/AndroidStudioProjects/" + preset.name,
         kind: "folder",
-        children: [
-          {
-            id: "proj-app",
-            label: "app",
-            kind: "module",
-            children: preset.files
-              .filter((f) => f.path.indexOf("app/") === 0)
-              .map((f) => ({
-                id: "proj-f-" + f.id,
-                label: f.tabTitle,
-                kind: "file" as const,
-                fileId: f.id,
-                fileKind: f.kind,
-                isTest: f.isTest,
-              })),
-          },
-          {
-            id: "proj-gradle",
-            label: "gradle",
-            kind: "folder",
-            children: preset.files
-              .filter((f) => f.path.indexOf("gradle") === 0 || f.path.indexOf("build.") === 0 || f.path.indexOf("settings.") === 0)
-              .map((f) => ({
-                id: "proj-g-" + f.id,
-                label: f.tabTitle,
-                kind: "file" as const,
-                fileId: f.id,
-                fileKind: f.kind,
-              })),
-          },
-        ],
+        folderPath: "",
+        children: toTreeNodes(root),
       },
     ];
   }
 
-  // Exact "Android" View hierarchy matching official New UI screenshots
-  const kotlinSrcChildren: AndroidTreeNode[] = [];
-  const mainActivity = byId.get("main-activity");
-  if (mainActivity) {
-    kotlinSrcChildren.push({
-      id: "node-main-activity",
-      label: mainActivity.name,
-      kind: "file",
-      fileId: mainActivity.id,
-      fileKind: "kotlin",
-    });
-  }
-  const themeKids: AndroidTreeNode[] = [];
-  const cKt = byId.get("theme-color-kt");
-  const tKt = byId.get("theme-kt");
-  if (cKt) {
-    themeKids.push({ id: "node-color-kt", label: cKt.name, kind: "file", fileId: cKt.id, fileKind: "kotlin" });
-  }
-  if (tKt) {
-    themeKids.push({ id: "node-theme-kt", label: tKt.name, kind: "file", fileId: tKt.id, fileKind: "kotlin" });
-  }
-  if (themeKids.length > 0) {
-    kotlinSrcChildren.push({
+  // Android View hierarchy (manifests, kotlin+java, res, Gradle Scripts)
+  const manifestFiles = preset.files.filter((f) => f.kind === "manifest");
+  const codeFiles = preset.files.filter((f) => f.kind === "kotlin" || f.kind === "java");
+  const mainCodeFiles = codeFiles.filter((f) => !f.isTest && f.path.indexOf("/ui/theme/") < 0);
+  const themeCodeFiles = codeFiles.filter((f) => !f.isTest && f.path.indexOf("/ui/theme/") >= 0);
+  const androidTestFiles = codeFiles.filter((f) => f.path.indexOf("/androidTest/") >= 0);
+  const unitTestFiles = codeFiles.filter((f) => f.path.indexOf("/test/") >= 0);
+
+  const mainPkgChildren: AndroidTreeNode[] = mainCodeFiles.map((f) => ({
+    id: f.id === "main-activity" ? "node-main-activity" : "node-" + f.id,
+    label: f.name,
+    kind: "file" as const,
+    fileId: f.id,
+    fileKind: f.kind,
+  }));
+
+  if (themeCodeFiles.length > 0) {
+    mainPkgChildren.push({
       id: "node-ui-theme",
       label: "ui.theme",
       kind: "package",
-      children: themeKids,
+      folderPath: `app/src/main/java/${pkgPath}/ui/theme`,
+      children: themeCodeFiles.map((f) => ({
+        id: "node-" + f.id,
+        label: f.name,
+        kind: "file" as const,
+        fileId: f.id,
+        fileKind: f.kind,
+      })),
     });
   }
 
@@ -921,158 +2238,220 @@ export function buildAndroidProjectTree(preset: StudioProjectPreset, viewMode: A
       id: "node-pkg-main",
       label: preset.packageName,
       kind: "package",
-      children: kotlinSrcChildren,
+      folderPath: `app/src/main/java/${pkgPath}`,
+      children: mainPkgChildren,
     },
   ];
-  const androidTest = byId.get("instrumented-test-kt");
-  if (androidTest) {
+
+  if (androidTestFiles.length > 0) {
     kotlinPackages.push({
       id: "node-pkg-android-test",
       label: preset.packageName + " (androidTest)",
       kind: "package",
+      folderPath: `app/src/androidTest/java/${pkgPath}`,
       isTest: true,
-      children: [
-        {
-          id: "node-instr-test",
-          label: androidTest.name,
-          kind: "file",
-          fileId: androidTest.id,
-          fileKind: "kotlin",
-          isTest: true,
-        },
-      ],
+      children: androidTestFiles.map((f) => ({
+        id: "node-" + f.id,
+        label: f.name,
+        kind: "file" as const,
+        fileId: f.id,
+        fileKind: f.kind,
+        isTest: true,
+      })),
     });
   }
-  const unitTest = byId.get("unit-test-kt");
-  if (unitTest) {
+
+  if (unitTestFiles.length > 0) {
     kotlinPackages.push({
       id: "node-pkg-unit-test",
       label: preset.packageName + " (test)",
       kind: "package",
+      folderPath: `app/src/test/java/${pkgPath}`,
       isTest: true,
-      children: [
-        {
-          id: "node-unit-test",
-          label: unitTest.name,
-          kind: "file",
-          fileId: unitTest.id,
-          fileKind: "kotlin",
-          isTest: true,
-        },
-      ],
+      children: unitTestFiles.map((f) => ({
+        id: "node-" + f.id,
+        label: f.name,
+        kind: "file" as const,
+        fileId: f.id,
+        fileKind: f.kind,
+        isTest: true,
+      })),
     });
   }
 
-  const valuesKids: AndroidTreeNode[] = [];
-  ["colors-xml", "strings-xml", "themes-xml"].forEach((vid) => {
-    const vf = byId.get(vid);
-    if (vf) {
-      valuesKids.push({
-        id: "node-" + vf.id,
-        label: vf.name,
-        kind: "file",
-        fileId: vf.id,
-        fileKind: "xml",
-      });
-    }
-  });
+  const drawableFiles = preset.files.filter((f) => f.path.indexOf("res/drawable/") >= 0);
+  const layoutFiles = preset.files.filter((f) => f.path.indexOf("res/layout/") >= 0 || f.isLayoutXml);
+  const mipmapFiles = preset.files.filter((f) => f.path.indexOf("res/mipmap/") >= 0);
+  const valuesFiles = preset.files.filter((f) => f.path.indexOf("res/values/") >= 0);
+  const otherAppFiles = preset.files.filter(
+    (f) =>
+      f.path.indexOf("app/") === 0 &&
+      f.kind !== "manifest" &&
+      f.kind !== "kotlin" &&
+      f.kind !== "java" &&
+      f.kind !== "gradle" &&
+      f.kind !== "gradle-kts" &&
+      f.kind !== "proguard" &&
+      f.path.indexOf("res/drawable/") < 0 &&
+      f.path.indexOf("res/layout/") < 0 &&
+      f.path.indexOf("res/mipmap/") < 0 &&
+      f.path.indexOf("res/values/") < 0 &&
+      !f.isLayoutXml
+  );
 
   const resChildren: AndroidTreeNode[] = [
-    { id: "node-res-drawable", label: "drawable", kind: "folder", children: [] },
-  ];
-  const layoutXml = byId.get("activity-main-xml");
-  if (layoutXml) {
-    resChildren.push({
+    {
+      id: "node-res-drawable",
+      label: "drawable",
+      kind: "folder",
+      folderPath: "app/src/main/res/drawable",
+      children: drawableFiles.map((f) => ({
+        id: "node-" + f.id,
+        label: f.name,
+        kind: "file" as const,
+        fileId: f.id,
+        fileKind: f.kind,
+      })),
+    },
+    {
       id: "node-res-layout",
       label: "layout",
       kind: "folder",
-      children: [
-        {
-          id: "node-activity-main",
-          label: layoutXml.name,
-          kind: "file",
-          fileId: layoutXml.id,
-          fileKind: "xml",
-        },
-      ],
-    });
-  }
-  resChildren.push({ id: "node-res-mipmap", label: "mipmap", kind: "folder", children: [] });
-  if (valuesKids.length > 0) {
-    resChildren.push({
+      folderPath: "app/src/main/res/layout",
+      children: layoutFiles.map((f) => ({
+        id: "node-" + f.id,
+        label: f.name,
+        kind: "file" as const,
+        fileId: f.id,
+        fileKind: f.kind,
+      })),
+    },
+    {
+      id: "node-res-mipmap",
+      label: "mipmap",
+      kind: "folder",
+      folderPath: "app/src/main/res/mipmap",
+      children: mipmapFiles.map((f) => ({
+        id: "node-" + f.id,
+        label: f.name,
+        kind: "file" as const,
+        fileId: f.id,
+        fileKind: f.kind,
+      })),
+    },
+    {
       id: "node-res-values",
       label: "values",
       kind: "folder",
-      children: valuesKids,
-    });
-  }
-
-  const gradleIds = [
-    "gradle-project",
-    "gradle-module",
-    "proguard-rules",
-    "gradle-properties",
-    "gradle-wrapper",
-    "libs-versions",
-    "settings-gradle",
+      folderPath: "app/src/main/res/values",
+      children: valuesFiles.map((f) => ({
+        id: "node-" + f.id,
+        label: f.name,
+        kind: "file" as const,
+        fileId: f.id,
+        fileKind: f.kind,
+      })),
+    },
   ];
-  const gradleChildren: AndroidTreeNode[] = [];
-  gradleIds.forEach((gid) => {
-    const gf = byId.get(gid);
-    if (gf) {
-      gradleChildren.push({
-        id: "node-" + gf.id,
-        label: gf.name,
-        hint: gf.androidHint,
-        kind: "file",
-        fileId: gf.id,
-        fileKind: gf.kind,
+
+  // Add any custom user folders under app/src/main/res/
+  const extraFolders = preset.folders || [];
+  for (let i = 0; i < extraFolders.length; i++) {
+    const fp = extraFolders[i];
+    if (
+      fp.indexOf("app/src/main/res/") === 0 &&
+      ["app/src/main/res/drawable", "app/src/main/res/layout", "app/src/main/res/mipmap", "app/src/main/res/values"].indexOf(fp) < 0
+    ) {
+      const folderLabel = fp.slice("app/src/main/res/".length);
+      const insideFiles = preset.files.filter((f) => f.path.indexOf(fp + "/") === 0);
+      resChildren.push({
+        id: "node-res-custom-" + folderLabel,
+        label: folderLabel,
+        kind: "folder",
+        folderPath: fp,
+        children: insideFiles.map((f) => ({
+          id: "node-" + f.id,
+          label: f.name,
+          kind: "file" as const,
+          fileId: f.id,
+          fileKind: f.kind,
+        })),
       });
     }
-  });
+  }
 
-  const manifestFile = byId.get("manifest-xml");
+  const gradleFiles = preset.files.filter(
+    (f) => f.kind === "gradle" || f.kind === "gradle-kts" || f.kind === "toml" || f.kind === "properties" || f.kind === "proguard"
+  );
+  const gradleChildren: AndroidTreeNode[] = gradleFiles.map((gf) => ({
+    id: "node-" + gf.id,
+    label: gf.name,
+    hint: gf.androidHint,
+    kind: "file" as const,
+    fileId: gf.id,
+    fileKind: gf.kind,
+  }));
+
   const appChildren: AndroidTreeNode[] = [];
-  if (manifestFile) {
+  if (manifestFiles.length > 0) {
     appChildren.push({
       id: "node-manifests",
       label: "manifests",
       kind: "source-root",
-      children: [
-        {
-          id: "node-manifest-xml",
-          label: "AndroidManifest.xml",
-          kind: "file",
-          fileId: manifestFile.id,
-          fileKind: "manifest",
-        },
-      ],
+      folderPath: "app/src/main",
+      children: manifestFiles.map((mf) => ({
+        id: "node-" + mf.id,
+        label: mf.name,
+        kind: "file" as const,
+        fileId: mf.id,
+        fileKind: "manifest" as const,
+      })),
     });
   }
   appChildren.push({
     id: "node-kotlin-java",
     label: "kotlin+java",
     kind: "source-root",
+    folderPath: `app/src/main/java/${pkgPath}`,
     children: kotlinPackages,
   });
   appChildren.push({
     id: "node-res",
     label: "res",
     kind: "resources-root",
+    folderPath: "app/src/main/res",
     children: resChildren,
   });
+
+  if (otherAppFiles.length > 0) {
+    appChildren.push({
+      id: "node-other-assets",
+      label: "assets",
+      kind: "folder",
+      folderPath: "app/src/main/assets",
+      children: otherAppFiles.map((f) => ({
+        id: "node-" + f.id,
+        label: f.name,
+        kind: "file" as const,
+        fileId: f.id,
+        fileKind: f.kind,
+      })),
+    });
+  }
 
   return [
     {
       id: "node-app",
       label: "app",
       kind: "module",
+      folderPath: "app",
       children: appChildren,
     },
     {
       id: "node-gradle-scripts",
       label: "Gradle Scripts",
       kind: "gradle-root",
+      folderPath: "",
       children: gradleChildren,
     },
   ];
@@ -1281,10 +2660,11 @@ function countBraces(line: string): number {
 
 export function analyzeStudioProblems(files: StudioFile[]): StudioProblem[] {
   const problems: StudioProblem[] = [];
+  const resources = parseAndroidResources(files);
 
   files.forEach((file) => {
     const lines = file.content.split(/\r?\n/);
-    if (file.kind === "kotlin" || file.kind === "gradle-kts") {
+    if (file.kind === "kotlin" || file.kind === "java" || file.kind === "gradle" || file.kind === "gradle-kts") {
       let braceBalance = 0;
       let firstOpenLine = 1;
       let inBlockComment = false;
@@ -1343,60 +2723,37 @@ export function analyzeStudioProblems(files: StudioFile[]): StudioProblem[] {
         });
       }
     } else if (file.kind === "xml" || file.kind === "manifest") {
-      const stack: Array<{ tag: string; line: number }> = [];
-      const cleanedXml = file.content.replace(/<!--[\s\S]*?-->/g, "");
-      const tokenRegex = /<\/?([A-Za-z0-9_.:-]+)(?:\s+[\s\S]*?)?(\/?)>/g;
-      let match: RegExpExecArray | null = tokenRegex.exec(cleanedXml);
-      while (match) {
-        const fullToken = match[0];
-        const tagName = match[1];
-        const selfClosing = match[2] === "/";
-        const lineNum = file.content.slice(0, match.index).split(/\r?\n/).length;
-
-        if (fullToken.indexOf("<?") === 0 || fullToken.indexOf("<!") === 0 || selfClosing) {
-          // declaration or self-closing tag (<TextView ... />)
-        } else if (fullToken.indexOf("</") === 0) {
-          if (stack.length === 0) {
-            problems.push({
-              id: `${file.id}-xml-extra-${lineNum}`,
-              fileId: file.id,
-              fileName: file.tabTitle,
-              line: lineNum,
-              column: 1,
-              severity: "error",
-              message: `Unexpected closing tag </${tagName}>`,
-            });
-          } else {
-            const top = stack[stack.length - 1];
-            if (top.tag !== tagName) {
-              problems.push({
-                id: `${file.id}-xml-mismatch-${lineNum}`,
-                fileId: file.id,
-                fileName: file.tabTitle,
-                line: lineNum,
-                column: 1,
-                severity: "error",
-                message: `Mismatched XML tag: expected </${top.tag}>, found </${tagName}>`,
-              });
-            }
-            stack.pop();
-          }
-        } else {
-          stack.push({ tag: tagName, line: lineNum });
-        }
-        match = tokenRegex.exec(cleanedXml);
-      }
-      if (stack.length > 0) {
-        const unclosed = stack[stack.length - 1];
+      const parsed = parseAndroidLayoutXml(file.content);
+      parsed.errors.forEach((err, idx) => {
         problems.push({
-          id: `${file.id}-xml-unclosed`,
+          id: `${file.id}-xml-${err.line}-${idx}`,
           fileId: file.id,
           fileName: file.tabTitle,
-          line: unclosed.line,
+          line: err.line,
           column: 1,
           severity: "error",
-          message: `Unclosed XML element <${unclosed.tag}>`,
+          message: err.message,
         });
+      });
+
+      // Check unresolved @string/... references
+      for (let i = 0; i < lines.length; i++) {
+        const strRef = /@string\/([A-Za-z_][A-Za-z0-9_]*)/g;
+        let sm = strRef.exec(lines[i]);
+        while (sm) {
+          if (resources.strings[sm[1]] === undefined) {
+            problems.push({
+              id: `${file.id}-str-${i + 1}-${sm[1]}`,
+              fileId: file.id,
+              fileName: file.tabTitle,
+              line: i + 1,
+              column: sm.index + 1,
+              severity: "warning",
+              message: `Unresolved string resource @string/${sm[1]}`,
+            });
+          }
+          sm = strRef.exec(lines[i]);
+        }
       }
     }
   });
@@ -1863,23 +3220,67 @@ export function executeStudioTerminal(
 ): TerminalExecResult {
   const trimmed = cmd.trim();
   if (!trimmed) return { lines: [] };
+  const parts = trimmed.split(/\s+/);
+  const bin = parts[0].toLowerCase();
+  const arg = parts.slice(1).join(" ").trim();
   const lower = trimmed.toLowerCase();
 
   if (lower === "clear" || lower === "cls") {
     return { lines: [], clear: true };
   }
   if (lower === "pwd") {
-    return { lines: [`/Users/developer/AndroidStudioProjects/${preset.name}`] };
+    return { lines: [`~/AndroidStudioProjects/${preset.name}`] };
   }
-  if (lower === "ls" || lower === "dir") {
-    return { lines: ["app/    build.gradle.kts    gradle/    gradle.properties    gradlew*    gradlew.bat    settings.gradle.kts"] };
+  if (bin === "ls" || bin === "dir") {
+    const prefix = arg ? arg.replace(/\/+$/, "") + "/" : "";
+    const entries: string[] = [];
+    for (let i = 0; i < preset.files.length; i++) {
+      const p = preset.files[i].path;
+      if (p.indexOf(prefix) === 0) {
+        const rest = p.slice(prefix.length);
+        const firstSeg = rest.indexOf("/") >= 0 ? rest.slice(0, rest.indexOf("/") + 1) : rest;
+        if (firstSeg && entries.indexOf(firstSeg) < 0) entries.push(firstSeg);
+      }
+    }
+    const folders = preset.folders || [];
+    for (let i = 0; i < folders.length; i++) {
+      const f = folders[i];
+      if (f.indexOf(prefix) === 0) {
+        const rest = f.slice(prefix.length);
+        const firstSeg = rest.indexOf("/") >= 0 ? rest.slice(0, rest.indexOf("/") + 1) : rest + "/";
+        if (firstSeg && entries.indexOf(firstSeg) < 0) entries.push(firstSeg);
+      }
+    }
+    entries.sort();
+    return {
+      lines: entries.length > 0 ? [entries.join("    ")] : [`ls: cannot access '${arg}': No such file or directory`],
+    };
+  }
+  if (bin === "cat") {
+    if (!arg) return { lines: ["usage: cat <project-relative-path>"] };
+    const found = preset.files.find(
+      (f) => f.path === arg || f.name === arg || f.tabTitle === arg
+    );
+    if (!found) {
+      return { lines: [`cat: ${arg}: No such file in project`] };
+    }
+    return { lines: found.content.replace(/\r\n/g, "\n").split("\n") };
   }
   if (lower === "git status") {
+    const changes = computeProjectGitStatus(preset.files, preset.snapshotFiles);
+    if (changes.length === 0) {
+      return {
+        lines: [
+          `On branch ${preset.branch}`,
+          "nothing to commit, working tree clean",
+        ],
+      };
+    }
     return {
       lines: [
         `On branch ${preset.branch}`,
-        "Your branch is up to date with 'origin/" + preset.branch + "'.",
-        "nothing to commit, working tree clean",
+        "Changes not staged for commit:",
+        ...changes.map((c) => `  ${c.status}:   ${c.path}`),
       ],
     };
   }
@@ -1887,45 +3288,71 @@ export function executeStudioTerminal(
     const active = devices.filter((d) => d.booted);
     const rows = ["List of devices attached"];
     active.forEach((d) => {
-      rows.push(`${d.adbSerial}\tdevice`);
+      rows.push(`${d.adbSerial}\tdevice\t(Browser Android Runtime)`);
     });
     if (active.length === 0) {
-      rows.push("(no running emulators — start one from Device Manager)");
+      rows.push("(no active virtual device — start one from Device Manager)");
     }
     return { lines: rows };
   }
-  if (lower === "./gradlew assembledebug" || lower === "gradlew assembledebug") {
+  if (
+    lower === "./gradlew assembledebug" ||
+    lower === "gradlew assembledebug" ||
+    lower === "./gradlew compiledebugjava" ||
+    lower === "gradlew compiledebugjava"
+  ) {
+    const problems = analyzeStudioProblems(preset.files).filter((p) => p.severity === "error");
+    if (problems.length > 0) {
+      return {
+        lines: [
+          "> Task :app:mergeDebugResources",
+          ...problems.map((p) => `e: ${p.fileName}:${p.line}:${p.column}: ${p.message}`),
+          "",
+          "BUILD FAILED",
+        ],
+      };
+    }
     return {
       lines: [
         "> Task :app:preBuild UP-TO-DATE",
-        "> Task :app:compileDebugKotlin",
+        "> Task :app:mergeDebugResources",
+        `> Task :app:compileDebug${preset.language === "kotlin" ? "Kotlin" : "JavaWithJavac"}`,
         "> Task :app:packageDebug",
         "> Task :app:assembleDebug",
         "",
-        "BUILD SUCCESSFUL in 1s",
-        "28 actionable tasks: 3 executed, 25 up-to-date",
+        "BUILD SUCCESSFUL (local validation clean; use Build menu or signed-in session for isolated javac APK build)",
       ],
     };
   }
+  if (lower === "./gradlew clean" || lower === "gradlew clean") {
+    return { lines: ["> Task :app:clean", "BUILD SUCCESSFUL"] };
+  }
   if (lower === "./gradlew test" || lower === "gradlew test") {
+    const problems = analyzeStudioProblems(preset.files).filter((p) => p.severity === "error");
+    if (problems.length > 0) {
+      return {
+        lines: [
+          ...problems.map((p) => `e: ${p.fileName}:${p.line}:${p.column}: ${p.message}`),
+          "BUILD FAILED",
+        ],
+      };
+    }
     return {
       lines: [
-        "> Task :app:compileDebugUnitTestKotlin",
+        "> Task :app:compileDebugUnitTestSources",
         "> Task :app:testDebugUnitTest",
-        "ExampleUnitTest > addition_isCorrect PASSED",
-        "",
-        "BUILD SUCCESSFUL in 840ms",
+        "Validation checks passed.",
       ],
     };
   }
   if (lower === "help") {
     return {
       lines: [
-        "Available commands: pwd, ls, git status, adb devices, ./gradlew assembleDebug, ./gradlew test, clear",
+        "Available commands: pwd, ls [dir], cat <file>, git status, adb devices, ./gradlew assembleDebug, ./gradlew test, ./gradlew clean, clear",
       ],
     };
   }
   return {
-    lines: [`zsh: command output ready for '${trimmed}' (try 'help', 'adb devices', './gradlew assembleDebug')`],
+    lines: [`sh: ${trimmed}: command not found. Type 'help' for supported commands.`],
   };
 }

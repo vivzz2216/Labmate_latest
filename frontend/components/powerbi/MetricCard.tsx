@@ -10,6 +10,7 @@ interface MetricCardProps {
   field: string;
   label: string;
   aggregation: AggregationFn;
+  isMeasure?: boolean;
   showDataLabels?: boolean;
 }
 
@@ -19,11 +20,13 @@ export function MetricCard({
   field,
   label,
   aggregation,
+  isMeasure = false,
   showDataLabels = true,
 }: MetricCardProps) {
   const displayValue = showDataLabels ? formatPowerBiNumber(value, field) : "—";
-  const prefix =
-    aggregation === "average"
+  const prefix = isMeasure
+    ? ""
+    : aggregation === "average"
       ? "Avg "
       : aggregation === "count"
         ? "Count of "

@@ -60,7 +60,10 @@ export interface PtDevice {
   gateway?: string;
   dns?: string;
   dhcp?: boolean;
-  interfaces?: Record<string, { ip: string; mask: string; shutdown?: boolean; mac?: string }>;
+  interfaces?: Record<string, { ip: string; mask: string; shutdown?: boolean; mac?: string; vlan?: number }>;
+  vlans?: { id: number; name: string }[];
+  ssid?: string;
+  installedModules?: string[];
   rip?: string[];
   staticRoutes?: { network: string; mask: string; nextHop: string }[];
   services?: ServerServices;
@@ -135,4 +138,13 @@ export interface DeviceModelMeta {
   defaultPorts: string[];
   hasCli: boolean;
   mdiX: boolean; // true = switch/hub (MDI-X), false = router/pc/server (MDI)
+}
+
+export interface PtPreferences {
+  showPortLabels: boolean;
+  showModelLabels: boolean;
+  showNameLabels: boolean;
+  showIpLabels: boolean;
+  showGrid: boolean;
+  showLinkLights: boolean;
 }

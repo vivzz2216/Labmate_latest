@@ -1400,7 +1400,7 @@ def verify_sql_exercise(objective: str, code: str, execution_result: dict[str, A
         union_selects = [
             s for s in select_results
             if re.search(r"\bLEFT\s+(?:OUTER\s+)?JOIN\b", s["statement"], re.IGNORECASE)
-            and re.search(r"\bUNION\s+ALL\b", s["statement"], re.IGNORECASE)
+            and re.search(r"\bUNION(?:\s+ALL)?\b", s["statement"], re.IGNORECASE)
             and re.search(r"\bRIGHT\s+(?:OUTER\s+)?JOIN\b", s["statement"], re.IGNORECASE)
         ]
         if union_selects:

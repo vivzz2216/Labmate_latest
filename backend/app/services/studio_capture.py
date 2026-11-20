@@ -12,7 +12,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from ..config import settings
-from .browser_capture import launch_capture_browser
+from .browser_capture import launch_capture_browser, run_capture_job
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +20,7 @@ VIEWPORT = {"width": 1600, "height": 900}
 SCALE = 1.25
 OVERALL_TIMEOUT_SECONDS = 150
 HIDE_DEV_OVERLAY = "nextjs-portal, [data-nextjs-toast], [data-next-badge-root], #__next-build-watcher {display: none !important}"
-ROUTES = {"wireshark": "/networks/wireshark", "packettracer": "/networks/packet-tracer"}
+ROUTES = {"wireshark": "/networks/wireshark", "packettracer": "/networks/packet-tracer", "powerbi": "/power-bi", "android": "/android-studio"}
 
 
 class StudioCaptureUnavailable(RuntimeError):
@@ -41,9 +41,9 @@ def studio_url(tool):
     return studio_origin() + ROUTES[tool] + "?capture=1"
 
 
-async def _capture(tool, state, steps, out_dir):
+async def _capture(tool, state, steps, out_dir, practical=None):
     from playwright.async_api import Error as PlaywrightError, async_playwright
-    url = studio_url(tool)
+    url = studio_url(tool) if practical is None else studio_origin() + ROUTES[tool] + "?capture=practical"
     origin = "{0.scheme}://{0.netloc}".format(urlsplit(url))
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -56,7 +56,7 @@ async def _capture(tool, state, steps, out_dir):
 
             async def only_studio_origin(route):
                 target = route.request.url
-                if target.startswith(("data:", "blob:")) or target.startswith(origin):
+                if target.startswith(("data:", "blob:", origin + "/")):
                     await route.continue_()
                 else:
                     await route.abort()
@@ -72,6 +72,9 @@ async def _capture(tool, state, steps, out_dir):
                 # The hook appears once React has attached; evaluate again until it does.
                 await page.wait_for_function("() => window.__labmate && window.__labmate.ready === true", timeout=30000)
                 await page.evaluate("state => window.__labmate.load(state)", state)
+                if practical is not None:
+                    await page.wait_for_function("() => typeof window.__labmatePractical === 'function'", timeout=10000)
+                    steps = await page.evaluate("topic => window.__labmatePractical(topic)", practical)
             except PlaywrightError as error:
                 raise StudioCaptureUnavailable("The studio did not become ready.") from error
             await page.add_style_tag(content=HIDE_DEV_OVERLAY)
@@ -83,17 +86,22 @@ async def _capture(tool, state, steps, out_dir):
                     raise StudioCaptureUnavailable("The studio could not draw step %s." % step.get("id", number)) from error
                 await page.wait_for_timeout(250)
                 path = out_dir / ("%02d_%s.png" % (number, "".join(c if c.isalnum() else "_" for c in str(step.get("id", number)))[:40]))
-                await page.screenshot(path=str(path), full_page=False)
-                shots.append({"id": step.get("id"), "path": str(path)})
+                await page.screenshot(path=str(path), full_page=practical is not None)
+                shot = {"id": step.get("id"), "path": str(path)}
+                if practical is not None:
+                    shot.update(title=step["title"], explain=step["explain"])
+                shots.append(shot)
             return shots
         finally:
             await browser.close()
 
 
-async def capture_studio(tool, state, steps, out_dir):
+async def capture_studio(tool, state, steps, out_dir, *, practical=None):
     """Screenshots, one per step, as [{"id", "path"}]. Raises StudioCaptureUnavailable when the studio cannot produce them."""
     try:
-        return await asyncio.wait_for(_capture(tool, state, steps, out_dir), OVERALL_TIMEOUT_SECONDS)
+        def job():
+            return _capture(tool, state, steps, out_dir) if practical is None else _capture(tool, state, steps, out_dir, practical)
+        return await run_capture_job(job, OVERALL_TIMEOUT_SECONDS)
     except asyncio.TimeoutError as error:
         raise StudioCaptureUnavailable("The studio took too long to render.") from error
     except StudioCaptureUnavailable:

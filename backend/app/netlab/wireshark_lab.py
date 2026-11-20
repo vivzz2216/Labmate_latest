@@ -224,6 +224,75 @@ def procedure(session, source, steps):
     return "\n".join(lines)
 
 
+# For a focused practical, select only the packets needed by that exercise.
+FOCUSED_TRACES = {
+    "arp-icmp": [
+        ("ARP request", "arp.opcode == 1", "Address Resolution Protocol"),
+        ("ARP reply", "arp.opcode == 2", "Address Resolution Protocol"),
+        ("ICMP echo request", "icmp.type == 8", "Internet Control Message Protocol"),
+        ("ICMP echo reply", "icmp.type == 0", "Internet Control Message Protocol"),
+    ],
+    "tcp-handshake": [
+        ("TCP SYN", "tcp.flags.syn == 1 && tcp.flags.ack == 0", "Transmission Control Protocol"),
+        ("TCP SYN-ACK", "tcp.flags.syn == 1 && tcp.flags.ack == 1", "Transmission Control Protocol"),
+        ("TCP ACK", "tcp.flags.syn == 0 && tcp.flags.ack == 1 && tcp.len == 0", "Transmission Control Protocol"),
+    ],
+    "dns": [
+        ("DNS query", "dns.flags.response == 0", "Domain Name System"),
+        ("DNS response", "dns.flags.response == 1", "Domain Name System"),
+    ],
+    "http": [
+        ("HTTP request", "http.request", "Hypertext Transfer Protocol"),
+        ("HTTP response", "http.response", "Hypertext Transfer Protocol"),
+    ],
+    "tcp-udp": [
+        ("UDP packets", "udp", "User Datagram Protocol"),
+        ("TCP packets", "tcp", "Transmission Control Protocol"),
+    ],
+}
+
+
+def focused_plan(session, topic):
+    steps, missing = [], []
+    tcp_stream = dns_id = query_number = http_stream = None
+    for index, (title, expression, layer) in enumerate(FOCUSED_TRACES[topic]):
+        if tcp_stream is not None:
+            expression += f" && tcp.stream == {tcp_stream}"
+        if dns_id is not None:
+            expression += f" && dns.id == {dns_id}"
+        if http_stream is not None:
+            expression += f" && tcp.stream == {http_stream}"
+        numbers = apply_filter(session, expression)
+        if topic == "dns":
+            # Match both the ID and the address pair when IDs are reused.
+            if query_number:
+                query = session.packets[query_number - 1]
+                numbers = [n for n in numbers if session.packets[n - 1].source == query.destination
+                           and session.packets[n - 1].destination == query.source and n > query_number]
+                if numbers:
+                    # Keep the list in the studio aligned with the response discussed.
+                    expression += f" && frame.number == {numbers[0]}"
+        if not numbers:
+            missing.append(f"{title} was absent from this capture.")
+            continue
+        packet = session.packets[numbers[0] - 1]
+        if topic == "tcp-handshake" and index == 0:
+            tcp_stream = packet.stream
+        if topic == "dns" and index == 0:
+            dns_id = packet.fields["dns.id"][0]
+            query_number = packet.number
+        if topic == "http" and index == 0:
+            http_stream = packet.stream
+        steps.append({"id": f"packet_{index + 1}", "view": "main", "filter": expression,
+                      "select": packet.number, "expand": [layer], "title": title,
+                      "explain": f"{len(numbers)} matching packets. Frame {packet.number}, {packet.source} to {packet.destination}. {packet.info}"})
+    if topic == "http" and http_stream is not None and steps:
+        steps.append({"id": "http_stream", "view": "follow", "stream": http_stream,
+                      "select": steps[0]["select"], "title": "HTTP conversation",
+                      "explain": f"Reassembled TCP stream {http_stream} for the selected HTTP request."})
+    return steps, missing
+
+
 def tables(session):
     key = key_packets(session)
     out = []

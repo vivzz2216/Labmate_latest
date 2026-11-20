@@ -1,4 +1,4 @@
-import {
+import type {
   CableType,
   DeviceKind,
   DeviceModelMeta,
@@ -8,7 +8,7 @@ import {
   PtRouteRow,
   PtSpec,
   ServerServices,
-} from "./ptTypes";
+} from "./ptTypes.ts";
 
 export const DEVICE_CATALOG: Record<string, DeviceModelMeta[]> = {
   routers: [
@@ -329,6 +329,24 @@ export function resolveDnsName(spec: PtSpec, source: PtDevice, hostOrIp: string)
   return byDevName?.ip ?? null;
 }
 
+function getPrimaryIp(dev: PtDevice): string {
+  if (dev.ip) return dev.ip;
+  const ifaces = dev.interfaces ? Object.values(dev.interfaces) : [];
+  for (let i = 0; i < ifaces.length; i++) {
+    if (ifaces[i]?.ip && !ifaces[i]?.shutdown) return ifaces[i].ip;
+  }
+  return ifaces[0]?.ip || "";
+}
+
+function getPrimaryMask(dev: PtDevice): string {
+  if (dev.mask) return dev.mask;
+  const ifaces = dev.interfaces ? Object.values(dev.interfaces) : [];
+  for (let i = 0; i < ifaces.length; i++) {
+    if (ifaces[i]?.ip && ifaces[i]?.mask) return ifaces[i].mask;
+  }
+  return "255.255.255.0";
+}
+
 export function simulateLocalPing(
   spec: PtSpec,
   sourceName: string,
@@ -359,41 +377,65 @@ export function simulateLocalPing(
     return { success: false, targetIp, targetName: "?", path: [sourceName], events: [], error: "Request timed out." };
   }
 
-  // BFS shortest active path across green cables
-  const adj = new Map<string, string[]>();
-  for (const cable of spec.links) {
+  // BFS shortest active path across green non-console cables, enforcing switch access VLAN isolation
+  const portEdges = new Map<string, { port: string; peer: string; peerPort: string }[]>();
+  for (let i = 0; i < spec.links.length; i++) {
+    const cable = spec.links[i];
+    if (cable.cable === "console") continue;
     if (!isLinkUp(spec, cable)) continue;
-    if (!adj.has(cable.a)) adj.set(cable.a, []);
-    if (!adj.has(cable.b)) adj.set(cable.b, []);
-    adj.get(cable.a)!.push(cable.b);
-    adj.get(cable.b)!.push(cable.a);
+    const listA = portEdges.get(cable.a) ?? [];
+    listA.push({ port: cable.ap, peer: cable.b, peerPort: cable.bp });
+    portEdges.set(cable.a, listA);
+    const listB = portEdges.get(cable.b) ?? [];
+    listB.push({ port: cable.bp, peer: cable.a, peerPort: cable.ap });
+    portEdges.set(cable.b, listB);
   }
 
-  const queue: string[][] = [[src.name]];
-  const visited = new Set([src.name]);
+  const queue: { name: string; inPort: string | null; path: string[] }[] = [
+    { name: src.name, inPort: null, path: [src.name] },
+  ];
+  const visitedStates = new Set<string>([src.name]);
   let foundPath: string[] | null = null;
+
   while (queue.length > 0) {
-    const path = queue.shift()!;
-    const tail = path[path.length - 1];
-    if (tail === targetDev.name) {
-      foundPath = path;
+    const cur = queue.shift()!;
+    if (cur.name === targetDev.name) {
+      foundPath = cur.path;
       break;
     }
-    for (const next of adj.get(tail) ?? []) {
-      if (!visited.has(next)) {
-        visited.add(next);
-        queue.push([...path, next]);
+    const curDev = spec.devices.find((d) => d.name === cur.name);
+    const edges = portEdges.get(cur.name) ?? [];
+    for (let i = 0; i < edges.length; i++) {
+      const edge = edges[i];
+      if (curDev && curDev.type === "switch" && cur.inPort) {
+        const inVlan = curDev.interfaces?.[cur.inPort]?.vlan ?? 1;
+        const outVlan = curDev.interfaces?.[edge.port]?.vlan ?? 1;
+        if (inVlan !== outVlan) continue;
+      }
+      const nextDev = spec.devices.find((d) => d.name === edge.peer);
+      const visitKey = nextDev?.type === "switch" ? `${edge.peer}:${edge.peerPort}` : edge.peer;
+      if (!visitedStates.has(visitKey)) {
+        visitedStates.add(visitKey);
+        queue.push({ name: edge.peer, inPort: edge.peerPort, path: [...cur.path, edge.peer] });
       }
     }
   }
 
-  // Check L3 reachability if path crosses a router or stays within subnet
   if (!foundPath) {
-    return { success: false, targetIp, targetName: targetDev.name, path: [src.name], events: [], error: "Destination host unreachable (no active physical link)." };
+    return {
+      success: false,
+      targetIp,
+      targetName: targetDev.name,
+      path: [src.name],
+      events: [],
+      error: "Destination host unreachable (no active same-VLAN physical link).",
+    };
   }
 
+  const srcIp = getPrimaryIp(src);
+  const srcMask = getPrimaryMask(src);
   const hasRouter = foundPath.slice(1, -1).some((n) => spec.devices.find((d) => d.name === n)?.type === "router");
-  if (!hasRouter && src.ip && targetDev.ip && !sameSubnet(src.ip, targetIp, src.mask || "255.255.255.0")) {
+  if (!hasRouter && srcIp && !sameSubnet(srcIp, targetIp, srcMask)) {
     return { success: false, targetIp, targetName: targetDev.name, path: [src.name], events: [], error: "No route to host (different subnet, no router/gateway)." };
   }
   if (hasRouter && src.type !== "router" && !src.gateway) {
@@ -402,29 +444,80 @@ export function simulateLocalPing(
 
   const events: PtEvent[] = [];
   let t = 0.0;
-  const srcIp = src.ip || Object.values(src.interfaces ?? {})[0]?.ip || "0.0.0.0";
-  events.push({ time: t, pdu: pduNum, last: "", at: src.name, type: "ICMP", info: `Echo request to ${targetIp}`, action: "created" });
+  const effectiveSrcIp = srcIp || "0.0.0.0";
+
+  // Emit realistic ARP resolution across local Layer-2 hop(s) up to target or default gateway router
+  const routerHopIdx = foundPath.findIndex((n, idx) => idx > 0 && idx < foundPath!.length - 1 && spec.devices.find((d) => d.name === n)?.type === "router");
+  const arpEndIdx = routerHopIdx > 0 ? routerHopIdx : foundPath.length - 1;
+  const arpEndName = foundPath[arpEndIdx];
+  const arpQueryIp = routerHopIdx > 0 ? (src.gateway || targetIp) : targetIp;
+
+  events.push({
+    time: Number(t.toFixed(3)),
+    pdu: pduNum,
+    last: "",
+    at: src.name,
+    type: "ARP",
+    info: `ARP Request: Who has ${arpQueryIp}? Tell ${effectiveSrcIp}`,
+    action: "created",
+  });
+  for (let i = 1; i <= arpEndIdx; i++) {
+    t += 0.001;
+    events.push({
+      time: Number(t.toFixed(3)),
+      pdu: pduNum,
+      last: foundPath[i - 1],
+      at: foundPath[i],
+      type: "ARP",
+      info: `Who has ${arpQueryIp}? Tell ${effectiveSrcIp}`,
+      action: i === arpEndIdx ? "accepted" : "forwarded",
+    });
+  }
+  for (let i = arpEndIdx - 1; i >= 0; i--) {
+    t += 0.001;
+    events.push({
+      time: Number(t.toFixed(3)),
+      pdu: pduNum,
+      last: foundPath[i + 1],
+      at: foundPath[i],
+      type: "ARP",
+      info: `${arpQueryIp} is at ${syntheticMac(arpEndName)}`,
+      action: i === 0 ? "accepted" : "forwarded",
+    });
+  }
+
+  // Emit ICMP Echo Request & Echo Reply across full end-to-end path
+  t += 0.002;
+  events.push({
+    time: Number(t.toFixed(3)),
+    pdu: pduNum,
+    last: "",
+    at: src.name,
+    type: "ICMP",
+    info: `Echo request to ${targetIp}`,
+    action: "created",
+  });
   for (let i = 1; i < foundPath.length; i++) {
     t += 0.002;
     events.push({
-      time: t,
+      time: Number(t.toFixed(3)),
       pdu: pduNum,
       last: foundPath[i - 1],
       at: foundPath[i],
       type: "ICMP",
-      info: `Echo request ${srcIp} -> ${targetIp} ttl=${128 - i + 1}`,
+      info: `Echo request ${effectiveSrcIp} -> ${targetIp} ttl=${128 - i + 1}`,
       action: i === foundPath.length - 1 ? "accepted" : "forwarded",
     });
   }
   for (let i = foundPath.length - 2; i >= 0; i--) {
     t += 0.002;
     events.push({
-      time: t,
+      time: Number(t.toFixed(3)),
       pdu: pduNum,
       last: foundPath[i + 1],
       at: foundPath[i],
       type: "ICMP",
-      info: `Echo reply ${targetIp} -> ${srcIp}`,
+      info: `Echo reply ${targetIp} -> ${effectiveSrcIp}`,
       action: i === 0 ? "accepted" : "forwarded",
     });
   }
@@ -494,10 +587,12 @@ export function executeIosCommand(
       return {
         output: [
           "Interface configuration commands:",
-          "  ip address <ip> <mask>   Set IP address and subnet mask",
-          "  no shutdown              Enable interface",
-          "  shutdown                 Administratively disable interface",
-          "  exit                     Exit from interface configuration mode",
+          "  ip address <ip> <mask>        Set IP address and subnet mask",
+          "  no shutdown                   Enable interface",
+          "  shutdown                      Administratively disable interface",
+          "  switchport mode access        Set interface to access mode",
+          "  switchport access vlan <id>   Assign access VLAN (1-4094)",
+          "  exit                          Exit from interface configuration mode",
         ],
         nextSession,
       };
@@ -506,11 +601,12 @@ export function executeIosCommand(
       return {
         output: [
           "Configure commands:",
-          "  hostname <name>          Set system network name",
-          "  interface <type/num>     Select an interface to configure",
-          "  router rip               Enable RIP routing protocol",
-          "  ip route <net> <mask> <next-hop>  Establish static route",
-          "  end                      Exit configure mode",
+          "  hostname <name>                    Set system network name",
+          "  interface <type/num>               Select an interface to configure",
+          "  vlan <id>                          Configure a VLAN (1-4094)",
+          "  router rip                         Enable RIP routing protocol",
+          "  ip route <net> <mask> <next-hop>   Establish static route",
+          "  end                                Exit configure mode",
         ],
         nextSession,
       };
@@ -522,6 +618,9 @@ export function executeIosCommand(
         "  configure terminal       Enter configuration mode",
         "  show ip interface brief  Summary of interface IP status",
         "  show ip route            IP routing table",
+        "  show vlan brief          Switch VLAN membership table",
+        "  show arp                 Display ARP cache",
+        "  show version             Display IOS software version",
         "  show running-config      Current operating configuration",
         "  show mac-address-table   Switch MAC forwarding table",
         "  ping <ip>                Send ICMP echo messages",
@@ -589,13 +688,28 @@ export function executeIosCommand(
     return { output: [], nextSession, updatedDevice: { ...dev, rip } };
   }
 
+  if (session.configMode && head === "vlan" && parts[1]) {
+    const vlanId = Number(parts[1]);
+    if (!Number.isInteger(vlanId) || vlanId < 1 || vlanId > 4094) {
+      return { output: ["% Invalid VLAN ID (must be 1..4094)"], nextSession };
+    }
+    if (vlanId === 1) return { output: [], nextSession };
+    const existing = dev.vlans ?? [];
+    const customName = parts[2] || `VLAN${String(vlanId).padStart(4, "0")}`;
+    const already = existing.some((v) => v.id === vlanId);
+    const nextVlans = already
+      ? existing.map((v) => (v.id === vlanId && parts[2] ? { id: v.id, name: parts[2] } : v))
+      : [...existing, { id: vlanId, name: customName }];
+    return { output: [], nextSession, updatedDevice: { ...dev, vlans: nextVlans } };
+  }
+
   if (session.configMode && head === "ip" && parts[1]?.toLowerCase() === "route" && parts[4]) {
     const staticRoutes = [...(dev.staticRoutes ?? []), { network: parts[2], mask: parts[3], nextHop: parts[4] }];
     return { output: [], nextSession, updatedDevice: { ...dev, staticRoutes } };
   }
 
   if (session.iface) {
-    const cur = dev.interfaces?.[session.iface] ?? { ip: "", mask: "", shutdown: true };
+    const cur = dev.interfaces?.[session.iface] ?? { ip: "", mask: "", shutdown: dev.type === "router" };
     const nextIfaces = { ...(dev.interfaces ?? {}) };
     if (head === "ip" && parts[1]?.toLowerCase().startsWith("add") && parts[2] && parts[3]) {
       nextIfaces[session.iface] = { ...cur, ip: parts[2], mask: parts[3] };
@@ -615,6 +729,26 @@ export function executeIosCommand(
         output: [`%LINK-5-CHANGED: Interface ${session.iface}, changed state to administratively down`],
         nextSession,
         updatedDevice: { ...dev, interfaces: nextIfaces },
+      };
+    }
+    if (head.startsWith("sw") && parts[1]?.toLowerCase().startsWith("m") && parts[2]?.toLowerCase().startsWith("acc")) {
+      return { output: [], nextSession };
+    }
+    if (head.startsWith("sw") && parts[1]?.toLowerCase().startsWith("acc") && parts[2]?.toLowerCase().startsWith("v") && parts[3]) {
+      const vlanId = Number(parts[3]);
+      if (!Number.isInteger(vlanId) || vlanId < 1 || vlanId > 4094) {
+        return { output: ["% Invalid VLAN ID (must be 1..4094)"], nextSession };
+      }
+      nextIfaces[session.iface] = { ...cur, vlan: vlanId };
+      const existingVlans = dev.vlans ?? [];
+      const hasVlan = vlanId === 1 || existingVlans.some((v) => v.id === vlanId);
+      const nextVlans = hasVlan
+        ? existingVlans
+        : [...existingVlans, { id: vlanId, name: `VLAN${String(vlanId).padStart(4, "0")}` }];
+      return {
+        output: hasVlan ? [] : [`% Access VLAN does not exist. Creating vlan ${vlanId}`],
+        nextSession,
+        updatedDevice: { ...dev, interfaces: nextIfaces, vlans: nextVlans },
       };
     }
   }
@@ -652,6 +786,58 @@ export function executeIosCommand(
       lines.push("!");
     }
     lines.push("end");
+    return { output: lines, nextSession };
+  }
+
+  if (effectiveCmd.startsWith("sh vlan") || effectiveCmd.startsWith("show vlan")) {
+    const switchPorts = getDevicePorts(dev).filter((p) => p !== "Console");
+    const vlanMap = new Map<number, string>();
+    vlanMap.set(1, "default");
+    (dev.vlans ?? []).forEach((v) => vlanMap.set(v.id, v.name));
+    switchPorts.forEach((p) => {
+      const vid = dev.interfaces?.[p]?.vlan ?? 1;
+      if (!vlanMap.has(vid)) vlanMap.set(vid, `VLAN${String(vid).padStart(4, "0")}`);
+    });
+    const ids = Array.from(vlanMap.keys()).sort((a, b) => a - b);
+    const lines = [
+      "",
+      "VLAN Name                             Status    Ports",
+      "---- -------------------------------- --------- -------------------------------",
+    ];
+    for (let i = 0; i < ids.length; i++) {
+      const vid = ids[i];
+      const vname = vlanMap.get(vid) ?? `VLAN${vid}`;
+      const memberPorts = switchPorts
+        .filter((p) => (dev.interfaces?.[p]?.vlan ?? 1) === vid)
+        .map((p) => p.replace("FastEthernet", "Fa").replace("GigabitEthernet", "Gi"));
+      lines.push(`${String(vid).padEnd(5)}${vname.padEnd(33)}active    ${memberPorts.join(", ")}`);
+    }
+    return { output: lines, nextSession };
+  }
+
+  if (effectiveCmd.startsWith("sh ver") || effectiveCmd.startsWith("show ver")) {
+    const mod = dev.model || "C2960";
+    return {
+      output: [
+        `Cisco IOS Software, ${mod} Software (${mod}-ADVIPSERVICESK9-M), Version 15.1(4)M4`,
+        `ROM: System Bootstrap, Version 15.0(1r)M15`,
+        `${dev.hostname || dev.name} uptime is 0 hours, 12 minutes`,
+        `cisco ${mod} processor with 524288K bytes of memory.`,
+      ],
+      nextSession,
+    };
+  }
+
+  if (effectiveCmd.startsWith("sh arp") || effectiveCmd.startsWith("show arp")) {
+    const lines = ["Protocol  Address          Age (min)  Hardware Addr   Type   Interface"];
+    for (let i = 0; i < spec.devices.length; i++) {
+      const d = spec.devices[i];
+      if (d.name === dev.name || d.power === false) continue;
+      const ip = getPrimaryIp(d);
+      if (ip) {
+        lines.push(`Internet  ${ip.padEnd(17)}0          ${syntheticMac(d.name).toLowerCase()}  ARPA   FastEthernet0/0`);
+      }
+    }
     return { output: lines, nextSession };
   }
 

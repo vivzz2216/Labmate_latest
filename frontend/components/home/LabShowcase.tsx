@@ -37,87 +37,117 @@ const L = "/images/labs/";
 // Showcase images come from sample runs or from the LabMate workspaces.
 // Paired images show the source and output of the same run.
 const labs: Lab[] = [
-  { id: "deep-learning", name: "Deep Learning", icon: SiPytorch, color: "#EE4C2C", href: "/labs/deep-learning", status: "available",
+  {
+    id: "deep-learning", name: "Deep Learning", icon: SiPytorch, color: "#EE4C2C", href: "/labs/deep-learning", status: "available",
     description: "Neural networks with PyTorch, TensorFlow and Keras. Training output and plots appear in a Colab-style notebook.",
     templates: [
       { name: "Model results", image: "showcase-deep-learning-plots.webp", caption: "PyTorch digit classifier · training loss and the test confusion matrix" },
       { name: "Training log", image: "showcase-deep-learning-training.webp", caption: "CPU training and evaluation · 96.39% accuracy on 360 held-out digits" },
-    ] },
-  { id: "distributed", name: "Distributed Computing", icon: FaJava, color: "#E76F00", href: "/labs/distributed-computing", status: "available",
+    ]
+  },
+  {
+    id: "distributed", name: "Distributed Computing", icon: FaJava, color: "#E76F00", href: "/labs/distributed-computing", status: "available",
     description: "Multi-process Java: TCP and UDP sockets, Java RMI and consensus algorithms, captured in VS Code.",
     templates: [
       { name: "Server code", image: "showcase-distributed-source.webp", caption: "Java TCP server source · listens for and replies to local clients" },
       { name: "Client and server output", image: "showcase-distributed-run.webp", caption: "Actual TCP execution · client requests, server replies, and shutdown in the VS Code terminal" },
-    ] },
-  { id: "python", name: "Python", icon: SiPython, color: "#3776AB", href: "/labs/python", status: "available",
+    ]
+  },
+  {
+    id: "python", name: "Python", icon: SiPython, color: "#3776AB", href: "/labs/python", status: "available",
     description: "Functions, OOP and programming practicals. Choose the editor your college uses.",
     templates: [
       { name: "IDLE editor", image: "showcase-python-idle-editor.webp", caption: "Python IDLE editor · a function that squares its input" },
       { name: "IDLE shell", image: "showcase-python-idle-shell.webp", caption: "Python IDLE shell · result from the same function" },
       { name: "Jupyter · Light", image: "showcase-python-jupyter-light.webp", caption: "Jupyter notebook in light mode · a function and its executed output" },
       { name: "Jupyter · Dark", image: "showcase-python-jupyter-dark.webp", caption: "Jupyter notebook in dark mode · attendance statistics from an executed cell" },
-    ] },
-  { id: "java", name: "Java", icon: FaJava, color: "#E76F00", href: "/labs/java", status: "available",
+    ]
+  },
+  {
+    id: "java", name: "Java", icon: FaJava, color: "#E76F00", href: "/labs/java", status: "available",
     description: "Java source and output in the IDE your lab uses: Eclipse, IntelliJ IDEA, or Notepad with a command prompt.",
     templates: [
       { name: "Eclipse", image: "showcase-java-eclipse.webp", caption: "Eclipse workspace · student records sorted by marks and name" },
       { name: "IntelliJ IDEA", image: "showcase-java-intellij.webp", caption: "IntelliJ IDEA workspace · a frequency map and its console output" },
       { name: "Notepad + Command Prompt", image: "showcase-java-notepad.webp", caption: "Java source, compilation, and output · Notepad and Command Prompt from the same run" },
-    ] },
-  { id: "c-cpp", name: "C / C++", icon: SiCplusplus, color: "#00599C", href: "/labs/c-cpp", status: "available",
+    ]
+  },
+  {
+    id: "c-cpp", name: "C / C++", icon: SiCplusplus, color: "#00599C", href: "/labs/c-cpp", status: "available",
     description: "Programming and data-structure exercises, with Code::Blocks source and Windows-style output.",
     templates: [
       { name: "C · Code::Blocks", image: "showcase-c-marks.webp", caption: "C arrays in Code::Blocks · marks, average, and highest score" },
       { name: "C++ · Code::Blocks", image: "showcase-cpp-stack.webp", caption: "C++ stack in Code::Blocks · undo operation and remaining stack size" },
-    ] },
-  { id: "web", name: "Web Development", icon: SiHtml5, color: "#E34F26", href: "/labs/web-development", status: "available",
+    ]
+  },
+  {
+    id: "web", name: "Web Development", icon: SiHtml5, color: "#E34F26", href: "/labs/web-development", status: "available",
     description: "HTML, CSS, JavaScript, React and Node.js. Source in VS Code; web output in a browser frame.",
     templates: [
       { name: "React in browser", image: "showcase-react-browser.webp", caption: "Running React experiment tracker · filter narrowed the list to two practicals" },
       { name: "React in VS Code", image: "showcase-react-source.webp", caption: "React source in VS Code · state and filtering for the same tracker" },
       { name: "HTML portfolio", image: "showcase-web-portfolio.webp", caption: "HTML and CSS portfolio · rendered in a Microsoft Edge frame" },
-    ] },
-  { id: "sql", name: "SQL", icon: SiMysql, color: "#00618A", href: "/labs/sql", status: "available",
+    ]
+  },
+  {
+    id: "sql", name: "SQL", icon: SiMysql, color: "#00618A", href: "/labs/sql", status: "available",
     description: "Compare a SQLite shell session, a MySQL Workbench report, and the DB Browser for SQLite workspace.",
     templates: [
       { name: "MySQL Workbench", image: "showcase-sql-workbench.webp", caption: "MySQL Workbench report · executing a GROUP BY query and inspecting its result grid" },
       { name: "SQLite", image: "showcase-sqlite-shell.webp", caption: "SQLite shell session · stock rows and the calculated inventory total" },
       { name: "DB Browser for SQLite", image: "showcase-sqlite-browser.webp", caption: "DB Browser for SQLite workspace · a join result alongside the database schema" },
-    ] },
-  { id: "colab", name: "Google Colab", icon: SiGooglecolab, color: "#F9AB00", href: "/labs/colab", status: "available",
+    ]
+  },
+  {
+    id: "colab", name: "Google Colab", icon: SiGooglecolab, color: "#F9AB00", href: "/labs/colab", status: "available",
     description: "Python data science practicals with executed notebook cells, calculated results, and plots.",
     templates: [
       { name: "Clean and summarise data", image: "showcase-colab-cleaning.webp", caption: "Colab notebook · Pandas cleaning code, grouped marks, and the resulting chart" },
       { name: "Evaluate a classifier", image: "showcase-colab-classifier.webp", caption: "Colab notebook · Iris classification results and a held-out confusion matrix" },
-    ] },
-  { id: "android-studio", name: "Android Studio", icon: SiAndroidstudio, color: "#3DDC84", status: "soon",
-    description: "An Android development workspace is in development.",
-    templates: [] },
-  { id: "docker", name: "Docker", icon: SiDocker, color: "#2496ED", status: "soon",
-    description: "A Docker learning workspace is in development.", templates: [] },
-  { id: "kubernetes", name: "Kubernetes", icon: SiKubernetes, color: "#326CE5", status: "soon",
-    description: "A Kubernetes learning workspace is in development.", templates: [] },
-  { id: "power-bi", name: "Power BI", icon: BarChart3, color: "#E9BA13", href: "/power-bi", status: "planned",
-    description: "A Power BI-inspired workspace for CSV data and reports.",
-    templates: [] },
-  { id: "packet-tracer", name: "Cisco Packet Tracer", icon: Network, color: "#049FD9", href: "/networks/packet-tracer", status: "planned",
-    description: "A practice studio for network labs: place devices, cable them and follow guided steps. It is LabMate's own simulator, not Cisco's software.",
+    ]
+  },
+  {
+    id: "android-studio", name: "Android Studio", icon: SiAndroidstudio, color: "#3DDC84", href: "/android-studio", status: "available",
+    description: "Interactive Android Studio workspace for Java/Kotlin apps, XML layouts, Logcat, and live activity preview.",
+    templates: []
+  },
+  {
+    id: "docker", name: "Docker", icon: SiDocker, color: "#2496ED", status: "soon",
+    description: "A Docker learning workspace is in development.", templates: []
+  },
+  {
+    id: "kubernetes", name: "Kubernetes", icon: SiKubernetes, color: "#326CE5", status: "soon",
+    description: "A Kubernetes learning workspace is in development.", templates: []
+  },
+  {
+    id: "power-bi", name: "Power BI", icon: BarChart3, color: "#E9BA13", href: "/power-bi", status: "available",
+    description: "A Power BI Desktop workspace for CSV/Excel data import, interactive charts, DAX measures, and reports.",
+    templates: []
+  },
+  {
+    id: "packet-tracer", name: "Cisco Packet Tracer", icon: Network, color: "#049FD9", href: "/networks/packet-tracer", status: "available",
+    description: "Network topology workspace: place routers, switches, and workstations, configure interfaces, and inspect packet transmissions in simulation mode.",
     templates: [
-      { name: "Network topology", image: "showcase-packet-tracer.webp", caption: "LabMate practice studio · three PCs connected in a star topology through a hub" },
-      { name: "Device configuration", image: "showcase-packet-tracer-config.webp", caption: "LabMate practice studio · inspecting a PC's network configuration" },
-    ] },
-  { id: "wireshark", name: "Wireshark", icon: SiWireshark, color: "#1679A7", href: "/networks/wireshark", status: "planned",
-    description: "A practice packet analyser: open a capture, apply display filters, read headers and follow streams. LabMate's own engine, not Wireshark.",
+      { name: "Network topology", image: "showcase-packet-tracer.webp", caption: "Cisco Packet Tracer · three PCs connected in a star topology through a hub" },
+      { name: "Device configuration", image: "showcase-packet-tracer-config.webp", caption: "Cisco Packet Tracer · inspecting a PC's network configuration" },
+    ]
+  },
+  {
+    id: "wireshark", name: "Wireshark", icon: SiWireshark, color: "#1679A7", href: "/networks/wireshark", status: "available",
+    description: "Deep network packet analyzer: open capture files, apply display filters, inspect multi-layer packet headers, and follow TCP streams.",
     templates: [
-      { name: "Packet list", image: "showcase-wireshark-packets.webp", caption: "LabMate practice capture · ARP, DNS, TCP, HTTP, and ICMP traffic" },
-      { name: "DNS inspection", image: "showcase-wireshark-dns.webp", caption: "LabMate packet analyser · DNS filter, packet headers, and captured bytes" },
-    ] },
-  { id: "ubuntu", name: "Ubuntu", icon: SiUbuntu, color: "#E95420", status: "planned",
+      { name: "Packet list", image: "showcase-wireshark-packets.webp", caption: "Wireshark · ARP, DNS, TCP, HTTP, and ICMP traffic" },
+      { name: "DNS inspection", image: "showcase-wireshark-dns.webp", caption: "Wireshark · DNS filter, packet headers, and captured bytes" },
+    ]
+  },
+  {
+    id: "ubuntu", name: "Ubuntu", icon: SiUbuntu, color: "#E95420", status: "planned",
     description: "A preview from LabMate’s local Ubuntu environment, with native terminal and text editor captures.",
     templates: [
       { name: "Terminal", image: "showcase-ubuntu-native-terminal.webp", caption: "Ubuntu terminal · running a Bash arithmetic practical with inputs 12 and 4" },
       { name: "Text editor", image: "showcase-ubuntu-native-editor.webp", caption: "GNOME Text Editor · Bash source for the same arithmetic practical" },
-    ] },
+    ]
+  },
 ];
 
 const STATUS_LABEL = { available: "Available", studio: "Practice studio", soon: "In development", planned: "Developed · coming later" } as const;

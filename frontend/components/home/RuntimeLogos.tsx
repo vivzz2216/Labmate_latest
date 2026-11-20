@@ -67,27 +67,27 @@ const RUNTIMES: Runtime[] = [
   { name: "R programming", detail: "RStudio", href: "/labs/r", marks: [
     { icon: SiR, color: "#276DC3", label: "R" },
   ] },
-  { name: "Networks", detail: "Wireshark · Packet Tracer · Coming soon", href: "/labs", marks: [
+  { name: "Networks", detail: "Wireshark · Packet Tracer", href: "/networks/wireshark", marks: [
     { icon: SiWireshark, color: "#1679A7", label: "Wireshark" },
     { icon: SiCisco, color: "#049FD9", label: "Cisco" },
   ] },
-  { name: "Ubuntu", detail: "Terminal · Text Editor · Coming soon", href: "/labs", marks: [
+  { name: "Ubuntu", detail: "Terminal · Text Editor", href: "/labs", marks: [
     { icon: SiUbuntu, color: "#E95420", label: "Ubuntu" },
   ] },
-  { name: "Power BI", detail: "Analytics workspace · Coming soon", href: "/labs", marks: [
+  { name: "Power BI", detail: "Analytics workspace", href: "/power-bi", marks: [
     { icon: FaChartBar, color: "#D6A900", label: "Power BI" },
   ] },
-  { name: "Android development", detail: "Android Studio · Coming soon", href: "/labs", marks: [
+  { name: "Android development", detail: "Android Studio", href: "/android-studio", marks: [
     { icon: SiAndroidstudio, color: "#3DDC84", label: "Android Studio" },
   ] },
-  { name: "Word report", detail: ".docx output", href: "/samples", marks: [
+  { name: "Word report", detail: ".docx output", href: "/reports", marks: [
     { icon: BsFileEarmarkWordFill, color: "#2B579A", label: "Microsoft Word" },
   ] },
 ];
 
 export default function RuntimeLogos() {
   const logos = RUNTIMES.map((runtime) => ({
-    title: runtime.detail.includes("Coming soon") ? `${runtime.name} · Coming soon` : runtime.name,
+    title: runtime.name,
     ariaLabel: `${runtime.name}: ${runtime.detail}`,
     href: runtime.href,
     node: <span className={styles.marks}>{runtime.marks.map(({ icon: Icon, color, label }) => <Icon key={label} color={color} aria-hidden="true" />)}</span>,

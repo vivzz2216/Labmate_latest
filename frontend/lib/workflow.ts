@@ -27,7 +27,7 @@ export interface LabQuestion {
   builtin_datasets?: string[];
   evidence_slots?: { id: string; label: string }[];
   // A part LabMate builds itself in a practice studio (Computer Networks labs): Wireshark analyser or Packet Tracer simulator.
-  studio?: "wireshark" | "packettracer";
+  studio?: "wireshark" | "packettracer" | "powerbi" | "android";
   studio_args?: Record<string, string>;
   datasets?: Record<string, string>;
   source_ide?: "codeblocks" | "vscode" | "notepad" | "workbench" | "mysql-cli";

@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import styles from "./androidStudio.module.css";
 import {
+  GitFileStatusEntry,
   GradleBuildStep,
   LogcatEntry,
   LogcatLevel,
@@ -10,10 +11,10 @@ import {
   StudioProblem,
   getLogcatTagColor,
 } from "@/lib/ide/androidStudioEngine";
+import type { AndroidApkArtifact } from "@/lib/ide/androidRemote";
 import {
   CheckGreenIcon,
-  EmulatorRecordIcon,
-  EmulatorScreenshotIcon,
+  DownloadApkIcon,
   ErrorCircleIcon,
   FilterFunnelIcon,
   PauseBarsIcon,
@@ -27,6 +28,8 @@ import { BottomToolId } from "./StudioStripes";
 
 interface StudioBottomWindowProps {
   height: number;
+  projectName: string;
+  activeBranch: string;
   activeTool: BottomToolId;
   onSelectTool: (tool: BottomToolId) => void;
   onHide: () => void;
@@ -39,32 +42,38 @@ interface StudioBottomWindowProps {
   onChangeLogcatQuery: (q: string) => void;
   onClearLogcat: () => void;
   onRestartLogcat: () => void;
-  onEmitSampleCrash: () => void;
+  buildStatus: "idle" | "building" | "success" | "failed";
   buildSteps: GradleBuildStep[];
   buildConsoleLines: string[];
+  apkArtifact: AndroidApkArtifact | null;
+  onDownloadApk: () => void;
   runConsoleLines: string[];
   problems: StudioProblem[];
   onSelectProblem: (problem: StudioProblem) => void;
   terminalHistory: { id: string; command: string; output: string[] }[];
   onExecuteTerminal: (command: string) => void;
   onClearTerminal: () => void;
-  onTakeScreenshot: () => void;
+  gitChanges: GitFileStatusEntry[];
+  onOpenFileById: (fileId: string) => void;
+  onResetProject: () => void;
 }
 
 const LEVEL_BADGE_STYLES: Record<
   LogcatLevel,
-  { bg: string; fg: string; msgColor: string }
+  { bg: string; fg: string; msgVar: string }
 > = {
-  V: { bg: "#D6D6D6", fg: "#000000", msgColor: "#BBBBBB" },
-  D: { bg: "#305D78", fg: "#BBBBBB", msgColor: "#299999" },
-  I: { bg: "#6A8759", fg: "#E9F5E6", msgColor: "#ABC023" },
-  W: { bg: "#BBB529", fg: "#000000", msgColor: "#BBB529" },
-  E: { bg: "#CF5B56", fg: "#000000", msgColor: "#FF6B68" },
-  A: { bg: "#8B3C3C", fg: "#FFFFFF", msgColor: "#FF6B68" },
+  V: { bg: "#D6D6D6", fg: "#000000", msgVar: "var(--as-text-muted)" },
+  D: { bg: "#305D78", fg: "#FFFFFF", msgVar: "var(--as-syn-call)" },
+  I: { bg: "#57965C", fg: "#FFFFFF", msgVar: "var(--as-green)" },
+  W: { bg: "#E0A82E", fg: "#000000", msgVar: "var(--as-yellow)" },
+  E: { bg: "#DB5C5C", fg: "#FFFFFF", msgVar: "var(--as-red)" },
+  A: { bg: "#8B3C3C", fg: "#FFFFFF", msgVar: "var(--as-red)" },
 };
 
 export function StudioBottomWindow({
   height,
+  projectName,
+  activeBranch,
   activeTool,
   onSelectTool,
   onHide,
@@ -76,22 +85,27 @@ export function StudioBottomWindow({
   onChangeLogcatQuery,
   onClearLogcat,
   onRestartLogcat,
-  onEmitSampleCrash,
+  buildStatus,
   buildSteps,
   buildConsoleLines,
+  apkArtifact,
+  onDownloadApk,
   runConsoleLines,
   problems,
   onSelectProblem,
   terminalHistory,
   onExecuteTerminal,
   onClearTerminal,
-  onTakeScreenshot,
+  gitChanges,
+  onOpenFileById,
+  onResetProject,
 }: StudioBottomWindowProps) {
   const [logcatPaused, setLogcatPaused] = useState(false);
   const [softWrap, setSoftWrap] = useState(false);
   const [compactView, setCompactView] = useState(false);
   const [terminalInput, setTerminalInput] = useState("");
   const logcatScrollRef = useRef<HTMLDivElement | null>(null);
+  const termScrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!logcatPaused && logcatScrollRef.current) {
@@ -99,10 +113,16 @@ export function StudioBottomWindow({
     }
   }, [filteredLogcat.length, logcatPaused]);
 
+  useEffect(() => {
+    if (activeTool === "terminal" && termScrollRef.current) {
+      termScrollRef.current.scrollTop = termScrollRef.current.scrollHeight;
+    }
+  }, [activeTool, terminalHistory.length]);
+
   const hasPackageMinePill = /\bpackage:mine\b/i.test(logcatQuery);
 
   const toggleQueryToken = (token: string) => {
-    if (logcatQuery.includes(token)) {
+    if (logcatQuery.indexOf(token) >= 0) {
       onChangeLogcatQuery(logcatQuery.replace(token, "").replace(/\s+/g, " ").trim());
     } else {
       onChangeLogcatQuery(`${logcatQuery.trim()} ${token}`.trim());
@@ -115,7 +135,6 @@ export function StudioBottomWindow({
       style={{ height }}
       aria-label="Bottom Tool Window"
     >
-      {/* Top Header Strip */}
       <div className={styles.bottomHeaderBar}>
         <div className={styles.bottomTitleTabs}>
           <button
@@ -166,29 +185,11 @@ export function StudioBottomWindow({
           <button
             type="button"
             className={`${styles.bottomTabBtn} ${
-              activeTool === "profiler" ? styles.bottomTabBtnActive : ""
-            }`}
-            onClick={() => onSelectTool("profiler")}
-          >
-            Profiler
-          </button>
-          <button
-            type="button"
-            className={`${styles.bottomTabBtn} ${
-              activeTool === "aqi" ? styles.bottomTabBtnActive : ""
-            }`}
-            onClick={() => onSelectTool("aqi")}
-          >
-            App Quality Insights
-          </button>
-          <button
-            type="button"
-            className={`${styles.bottomTabBtn} ${
               activeTool === "vcs" ? styles.bottomTabBtnActive : ""
             }`}
             onClick={() => onSelectTool("vcs")}
           >
-            Version Control
+            Git ({gitChanges.length})
           </button>
         </div>
 
@@ -216,12 +217,11 @@ export function StudioBottomWindow({
                 const next = devices[(idx + 1) % devices.length];
                 onSelectDevice(next.id);
               }}
-              title="Click to cycle connected emulator/device"
+              title="Click to cycle target device"
             >
               <RunningDevicesStripeIcon size={14} />
               <span>
-                {activeDevice.name} ({activeDevice.adbSerial}) {activeDevice.androidVersion}, API{" "}
-                {activeDevice.apiLevel}
+                {activeDevice.name} ({activeDevice.adbSerial}) {activeDevice.androidVersion}
               </span>
               <span>⌄</span>
             </button>
@@ -233,7 +233,7 @@ export function StudioBottomWindow({
                 className={styles.logcatQueryInput}
                 value={logcatQuery}
                 aria-label="Logcat Query Filter"
-                placeholder="Filter (package:mine tag:MainActivity level:INFO - Choreographer is:crash)"
+                placeholder="Filter (package:mine tag:MainActivity level:INFO is:crash)"
                 onChange={(e) => onChangeLogcatQuery(e.target.value)}
               />
               {logcatQuery && (
@@ -261,7 +261,7 @@ export function StudioBottomWindow({
               <button
                 type="button"
                 className={`${styles.segmentedBtn} ${
-                  logcatQuery.includes("level:INFO") ? styles.segmentedBtnActive : ""
+                  logcatQuery.indexOf("level:INFO") >= 0 ? styles.segmentedBtnActive : ""
                 }`}
                 onClick={() => toggleQueryToken("level:INFO")}
               >
@@ -270,19 +270,11 @@ export function StudioBottomWindow({
               <button
                 type="button"
                 className={`${styles.segmentedBtn} ${
-                  logcatQuery.includes("level:ERROR") ? styles.segmentedBtnActive : ""
+                  logcatQuery.indexOf("level:ERROR") >= 0 ? styles.segmentedBtnActive : ""
                 }`}
                 onClick={() => toggleQueryToken("level:ERROR")}
               >
                 level:ERROR
-              </button>
-              <button
-                type="button"
-                className={styles.segmentedBtn}
-                title="Simulate AndroidRuntime Crash Log"
-                onClick={onEmitSampleCrash}
-              >
-                + Test Crash Log
               </button>
             </div>
           </div>
@@ -310,22 +302,10 @@ export function StudioBottomWindow({
               <button
                 type="button"
                 className={styles.panelActionIcon}
-                title="Restart Logcat"
+                title="Restart Runtime Logcat"
                 onClick={onRestartLogcat}
               >
                 <RestartIcon size={14} />
-              </button>
-              <button
-                type="button"
-                className={styles.panelActionIcon}
-                title="Scroll to the End"
-                onClick={() => {
-                  if (logcatScrollRef.current) {
-                    logcatScrollRef.current.scrollTop = logcatScrollRef.current.scrollHeight;
-                  }
-                }}
-              >
-                ↓
               </button>
               <button
                 type="button"
@@ -342,32 +322,16 @@ export function StudioBottomWindow({
                 className={`${styles.panelActionIcon} ${
                   compactView ? styles.toolbarIconBtnActive : ""
                 }`}
-                title="Configure Logcat Formatting Options (Standard / Compact)"
+                title="Compact Formatting"
                 onClick={() => setCompactView((v) => !v)}
               >
                 ≡
-              </button>
-              <button
-                type="button"
-                className={styles.panelActionIcon}
-                title="Take Screenshot"
-                onClick={onTakeScreenshot}
-              >
-                <EmulatorScreenshotIcon size={14} />
-              </button>
-              <button
-                type="button"
-                className={styles.panelActionIcon}
-                title="Record Screen"
-                onClick={onTakeScreenshot}
-              >
-                <EmulatorRecordIcon size={14} />
               </button>
             </div>
 
             <div className={styles.logcatConsoleScroll} ref={logcatScrollRef}>
               {filteredLogcat.length === 0 ? (
-                <div style={{ color: "#868A91", padding: "12px 8px" }}>
+                <div style={{ color: "var(--as-text-muted)", padding: "12px 8px" }}>
                   No logcat entries match query &quot;{logcatQuery}&quot;.
                 </div>
               ) : (
@@ -397,7 +361,7 @@ export function StudioBottomWindow({
                       >
                         {entry.level}
                       </span>
-                      <span style={{ color: badge.msgColor }}>{entry.message}</span>
+                      <span style={{ color: badge.msgVar }}>{entry.message}</span>
                     </div>
                   );
                 })
@@ -412,15 +376,24 @@ export function StudioBottomWindow({
         <div className={styles.logcatBodyRow}>
           <div
             style={{
-              width: 245,
-              borderRight: "1px solid #35373B",
+              width: 268,
+              borderRight: "1px solid var(--as-border-panel)",
               padding: 8,
               overflow: "auto",
-              background: "#2B2D30",
+              background: "var(--as-bg-chrome)",
+              display: "flex",
+              flexDirection: "column",
+              gap: 6,
             }}
           >
-            <div style={{ fontWeight: 600, fontSize: 12, marginBottom: 6, color: "#DFE1E5" }}>
-              ✓ Build :app:assembleDebug
+            <div style={{ fontWeight: 600, fontSize: 12, color: "var(--as-text-primary)" }}>
+              {buildStatus === "building"
+                ? "Building :app..."
+                : buildStatus === "success"
+                ? "✓ Build Succeeded"
+                : buildStatus === "failed"
+                ? "✕ Build Failed"
+                : "Build Not Run Yet"}
             </div>
             {buildSteps.map((step) => (
               <div
@@ -429,36 +402,60 @@ export function StudioBottomWindow({
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
-                  padding: "3px 6px",
-                  fontSize: 12,
-                  color: "#CED0D6",
+                  padding: "3px 4px",
+                  fontSize: 11.5,
+                  color: "var(--as-text-primary)",
                 }}
               >
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                  <CheckGreenIcon size={12} />
+                  {step.status === "failed" ? (
+                    <ErrorCircleIcon size={12} />
+                  ) : (
+                    <CheckGreenIcon size={12} />
+                  )}
                   <span>{step.label}</span>
                 </span>
-                <span style={{ color: "#868A91", fontSize: 11 }}>
-                  {step.status === "up-to-date" ? "UP-TO-DATE" : `${step.durationMs}ms`}
+                <span style={{ color: "var(--as-text-muted)", fontSize: 11 }}>
+                  {step.durationMs}ms
                 </span>
               </div>
             ))}
+            {apkArtifact && (
+              <button
+                type="button"
+                className={styles.primaryBtn}
+                style={{ marginTop: 6, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}
+                onClick={onDownloadApk}
+              >
+                <DownloadApkIcon size={14} />
+                <span>Download {apkArtifact.filename} ({Math.max(1, Math.round(apkArtifact.size_bytes / 1024))} KB)</span>
+              </button>
+            )}
           </div>
           <div className={styles.logcatConsoleScroll}>
-            {buildConsoleLines.map((line, i) => (
-              <div
-                key={i}
-                style={{
-                  color: line.includes("BUILD SUCCESSFUL")
-                    ? "#57965C"
-                    : line.startsWith("> Task")
-                    ? "#9DA0A8"
-                    : "#BCBEC4",
-                }}
-              >
-                {line}
+            {buildConsoleLines.length === 0 ? (
+              <div style={{ color: "var(--as-text-muted)" }}>
+                Click Build (Ctrl+F9) or Build APK in the toolbar/menu to validate XML and compile Java sources via isolated javac.
               </div>
-            ))}
+            ) : (
+              buildConsoleLines.map((line, i) => (
+                <div
+                  key={i}
+                  style={{
+                    color:
+                      line.indexOf("BUILD SUCCESSFUL") >= 0
+                        ? "var(--as-green)"
+                        : line.indexOf("FAILED") >= 0 || line.indexOf("error:") >= 0
+                        ? "var(--as-red)"
+                        : line.indexOf("> Task") === 0
+                        ? "var(--as-text-secondary)"
+                        : "var(--as-text-code)",
+                  }}
+                >
+                  {line}
+                </div>
+              ))
+            )}
           </div>
         </div>
       )}
@@ -466,40 +463,49 @@ export function StudioBottomWindow({
       {/* 3. RUN TOOL WINDOW */}
       {activeTool === "run" && (
         <div className={styles.logcatConsoleScroll}>
-          {runConsoleLines.map((line, i) => (
-            <div
-              key={i}
-              style={{
-                color: line.includes("Connected to process")
-                  ? "#3DDC84"
-                  : line.startsWith("$ adb")
-                  ? "#6B9BFA"
-                  : "#BCBEC4",
-              }}
-            >
-              {line}
+          {runConsoleLines.length === 0 ? (
+            <div style={{ color: "var(--as-text-muted)" }}>
+              Press Run (Shift+F10) to start the interactive Activity session.
             </div>
-          ))}
+          ) : (
+            runConsoleLines.map((line, i) => (
+              <div
+                key={i}
+                style={{
+                  color:
+                    line.indexOf("EXCEPTION") >= 0 || line.indexOf("error:") >= 0
+                      ? "var(--as-red)"
+                      : line.indexOf("Started") >= 0 || line.indexOf("Launched") >= 0
+                      ? "var(--as-green)"
+                      : "var(--as-text-code)",
+                }}
+              >
+                {line}
+              </div>
+            ))
+          )}
         </div>
       )}
 
       {/* 4. TERMINAL TOOL WINDOW */}
       {activeTool === "terminal" && (
         <div
+          ref={termScrollRef}
           className={styles.logcatConsoleScroll}
           style={{ display: "flex", flexDirection: "column", gap: 6 }}
         >
-          <div style={{ color: "#868A91" }}>
-            Android Studio Local Terminal (Try: <code>./gradlew assembleDebug</code>,{" "}
-            <code>./gradlew test</code>, <code>adb devices</code>, <code>git status</code>)
+          <div style={{ color: "var(--as-text-muted)" }}>
+            Android Studio Project Terminal — Supported: <code>ls</code>, <code>cat &lt;path&gt;</code>,{" "}
+            <code>pwd</code>, <code>git status</code>, <code>adb devices</code>,{" "}
+            <code>./gradlew assembleDebug</code>, <code>./gradlew test</code>, <code>clear</code>
           </div>
           {terminalHistory.map((item) => (
             <div key={item.id}>
-              <div style={{ color: "#3DDC84" }}>
-                PS C:\AndroidStudioProjects\MyApplication&gt; {item.command}
+              <div style={{ color: "var(--as-android-green)", fontWeight: 600 }}>
+                ~/AndroidStudioProjects/{projectName}$ {item.command}
               </div>
               {item.output.map((out, idx) => (
-                <div key={idx} style={{ color: "#DFE1E5", whiteSpace: "pre-wrap" }}>
+                <div key={idx} style={{ color: "var(--as-text-code)", whiteSpace: "pre-wrap" }}>
                   {out}
                 </div>
               ))}
@@ -518,8 +524,8 @@ export function StudioBottomWindow({
             }}
             style={{ display: "flex", alignItems: "center", gap: 6 }}
           >
-            <span style={{ color: "#3DDC84", flexShrink: 0 }}>
-              PS C:\AndroidStudioProjects\MyApplication&gt;
+            <span style={{ color: "var(--as-android-green)", fontWeight: 600, flexShrink: 0 }}>
+              ~/AndroidStudioProjects/{projectName}$
             </span>
             <input
               type="text"
@@ -532,7 +538,7 @@ export function StudioBottomWindow({
                 background: "transparent",
                 border: "none",
                 outline: "none",
-                color: "#FFFFFF",
+                color: "var(--as-text-primary)",
                 fontFamily: "inherit",
                 fontSize: 12,
               }}
@@ -545,9 +551,9 @@ export function StudioBottomWindow({
       {activeTool === "problems" && (
         <div className={styles.logcatConsoleScroll}>
           {problems.length === 0 ? (
-            <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#57965C" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--as-green)" }}>
               <CheckGreenIcon size={14} />
-              <span>No problems found in project files (Kotlin 2.0.21 &amp; Android Lint clean).</span>
+              <span>No problems found in project files.</span>
             </div>
           ) : (
             problems.map((prob) => (
@@ -568,8 +574,8 @@ export function StudioBottomWindow({
                 ) : (
                   <WarningTriangleIcon size={14} />
                 )}
-                <span style={{ color: "#DFE1E5" }}>{prob.message}</span>
-                <span style={{ color: "#868A91" }}>
+                <span style={{ color: "var(--as-text-primary)" }}>{prob.message}</span>
+                <span style={{ color: "var(--as-text-muted)" }}>
                   {prob.fileName}:{prob.line}
                 </span>
               </div>
@@ -578,38 +584,58 @@ export function StudioBottomWindow({
         </div>
       )}
 
-      {/* 6. PROFILER / AQI / VCS */}
-      {activeTool === "profiler" && (
-        <div className={styles.logcatConsoleScroll}>
-          <div style={{ color: "#3DDC84", fontWeight: 600, marginBottom: 6 }}>
-            Android Profiler — Session: {activeDevice.name} (PID 14820)
-          </div>
-          <div style={{ display: "flex", gap: 16, color: "#CED0D6" }}>
-            <div>CPU: 8.4% (RenderThread + Compose FrameClock 120Hz)</div>
-            <div>Memory: 64.2 MB / 256 MB (Native 18MB, Kotlin Heap 29MB)</div>
-            <div>Network: 0 B/s idle</div>
-            <div>Energy: Light</div>
-          </div>
-        </div>
-      )}
-
-      {activeTool === "aqi" && (
-        <div className={styles.logcatConsoleScroll}>
-          <div style={{ color: "#DFE1E5", fontWeight: 600, marginBottom: 4 }}>
-            App Quality Insights (Firebase Crashlytics)
-          </div>
-          <div style={{ color: "#868A91" }}>
-            99.94% Crash-free users over last 7 days · 0 Fatal issues in MainActivity.kt
-          </div>
-        </div>
-      )}
-
+      {/* 6. GIT / VERSION CONTROL */}
       {activeTool === "vcs" && (
-        <div className={styles.logcatConsoleScroll}>
-          <div style={{ color: "#6B9BFA" }}>commit 8f41c2b (HEAD -&gt; main, origin/main)</div>
-          <div style={{ color: "#DFE1E5" }}>
-            Author: Android Developer &lt;dev@android.example.com&gt; — Initial Jetpack Compose Material3 setup
+        <div className={styles.logcatConsoleScroll} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <span style={{ color: "var(--as-accent)", fontWeight: 600 }}>
+              Branch: {activeBranch} · {gitChanges.length} local change(s)
+            </span>
+            <button
+              type="button"
+              className={styles.secondaryBtn}
+              style={{ height: 24, padding: "0 10px", fontSize: 11.5 }}
+              onClick={onResetProject}
+            >
+              Reset Changes to Template
+            </button>
           </div>
+          {gitChanges.length === 0 ? (
+            <div style={{ color: "var(--as-text-muted)" }}>
+              Working tree clean — all project files match baseline snapshot.
+            </div>
+          ) : (
+            gitChanges.map((ch) => (
+              <div
+                key={ch.path}
+                onClick={() => ch.fileId && onOpenFileById(ch.fileId)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  cursor: ch.fileId ? "pointer" : "default",
+                  padding: "2px 4px",
+                }}
+              >
+                <span
+                  style={{
+                    fontWeight: 700,
+                    fontSize: 11,
+                    color:
+                      ch.status === "added"
+                        ? "var(--as-green)"
+                        : ch.status === "deleted"
+                        ? "var(--as-red)"
+                        : "var(--as-accent)",
+                    minWidth: 66,
+                  }}
+                >
+                  {ch.status.toUpperCase()}
+                </span>
+                <span style={{ color: "var(--as-text-primary)" }}>{ch.path}</span>
+              </div>
+            ))
+          )}
         </div>
       )}
     </section>

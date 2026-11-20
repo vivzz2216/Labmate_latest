@@ -1,23 +1,26 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import styles from "./androidStudio.module.css";
 import {
   AndroidTreeNode,
   AndroidViewMode,
   StudioFile,
 } from "@/lib/ide/androidStudioEngine";
+import { parseAndroidResources } from "@/lib/ide/androidXmlLayout";
 import {
   AndroidModuleIcon,
   ChevronDownIcon,
   ChevronRightIcon,
+  FilePlusIcon,
   FolderDarkIcon,
+  FolderPlusIcon,
   GradleFileIcon,
+  JavaFileIcon,
   KotlinClassIcon,
   KotlinFileIcon,
   KotlinGradleScriptIcon,
   ManifestFileIcon,
-  MoreVerticalIcon,
   PackageFolderIcon,
   PropertiesFileIcon,
   ResourcesRootFolderIcon,
@@ -43,7 +46,10 @@ interface AndroidProjectTreeProps {
   dirtyFileIds: Set<string>;
   onSelectTreeNode: (node: AndroidTreeNode) => void;
   onOpenFileById: (fileId: string) => void;
-  onCreateNewFile: (kind: "kotlin" | "xml") => void;
+  onRequestNewFile: (targetDir?: string) => void;
+  onRequestNewFolder: (targetDir?: string) => void;
+  onRequestRenameFile: (fileId: string) => void;
+  onDeleteFile: (fileId: string) => void;
   onCommitChanges: (message: string) => void;
   onHidePanel: () => void;
 }
@@ -62,6 +68,7 @@ export function renderNodeIcon(node: AndroidTreeNode) {
       return <GradleFileIcon size={16} />;
     case "file": {
       if (node.fileKind === "manifest") return <ManifestFileIcon size={16} />;
+      if (node.fileKind === "java") return <JavaFileIcon size={16} />;
       if (node.fileKind === "kotlin") {
         return node.label.endsWith(".kt") ? (
           <KotlinFileIcon size={16} />
@@ -71,11 +78,12 @@ export function renderNodeIcon(node: AndroidTreeNode) {
       }
       if (node.fileKind === "xml" || node.fileKind === "svg") return <XmlFileIcon size={16} />;
       if (node.fileKind === "gradle-kts") return <KotlinGradleScriptIcon size={16} />;
+      if (node.fileKind === "gradle") return <GradleFileIcon size={16} />;
       if (node.fileKind === "toml") return <TomlFileIcon size={16} />;
       if (node.fileKind === "properties" || node.fileKind === "proguard") {
         return <PropertiesFileIcon size={16} />;
       }
-      return <KotlinFileIcon size={16} />;
+      return <JavaFileIcon size={16} />;
     }
     case "folder":
     default:
@@ -99,25 +107,42 @@ export function AndroidProjectTree({
   dirtyFileIds,
   onSelectTreeNode,
   onOpenFileById,
-  onCreateNewFile,
+  onRequestNewFile,
+  onRequestNewFolder,
+  onRequestRenameFile,
+  onDeleteFile,
   onCommitChanges,
   onHidePanel,
 }: AndroidProjectTreeProps) {
   const [viewDropdownOpen, setViewDropdownOpen] = useState(false);
-  const [commitMessage, setCommitMessage] = useState(
-    "feat(ui): update Greeting composable & Material3 counter"
-  );
-  const [resourceTab, setResourceTab] = useState<"Drawable" | "Color" | "Layout" | "String">(
-    "Color"
-  );
+  const [commitMessage, setCommitMessage] = useState("Update Android practical sources");
+  const [resourceTab, setResourceTab] = useState<"Drawable" | "Color" | "Layout" | "String">("Layout");
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    node: AndroidTreeNode;
+  } | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const closeMenu = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setContextMenu(null);
+      }
+    };
+    document.addEventListener("mousedown", closeMenu);
+    return () => document.removeEventListener("mousedown", closeMenu);
+  }, []);
 
   const modifiedFiles = files.filter((f) => dirtyFileIds.has(f.id));
+  const resources = parseAndroidResources(files);
 
   const renderTreeRow = (node: AndroidTreeNode, depth: number): React.ReactNode => {
     const hasChildren = Boolean(node.children && node.children.length > 0);
     const isExpanded = expandedIds.has(node.id);
     const isSelected =
       selectedNodeId === node.id || (node.fileId !== undefined && node.fileId === activeFileId);
+    const isDirty = node.fileId !== undefined && dirtyFileIds.has(node.fileId);
 
     return (
       <React.Fragment key={node.id}>
@@ -133,28 +158,32 @@ export function AndroidProjectTree({
             }
             onSelectTreeNode(node);
           }}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            onSelectTreeNode(node);
+            setContextMenu({ x: e.clientX, y: e.clientY, node });
+          }}
         >
           <span className={styles.treeChevron}>
             {hasChildren ? (
               isExpanded ? (
-                <ChevronDownIcon size={12} color={isSelected ? "#FFFFFF" : "#9DA0A8"} />
+                <ChevronDownIcon size={12} color={isSelected ? "var(--as-bg-selected-text)" : "var(--as-text-secondary)"} />
               ) : (
-                <ChevronRightIcon size={12} color={isSelected ? "#FFFFFF" : "#9DA0A8"} />
+                <ChevronRightIcon size={12} color={isSelected ? "var(--as-bg-selected-text)" : "var(--as-text-secondary)"} />
               )
             ) : null}
           </span>
           <span className={styles.treeIconWrap}>{renderNodeIcon(node)}</span>
           <span
-            className={`${styles.treeLabelText} ${
-              depth === 0 ? styles.treeLabelBold : ""
-            }`}
+            className={`${styles.treeLabelText} ${depth === 0 ? styles.treeLabelBold : ""}`}
+            style={isDirty && !isSelected ? { color: "var(--as-accent)" } : undefined}
           >
             {node.label}
           </span>
           {node.hint && (
             <span
               className={styles.treeHintSuffix}
-              style={isSelected ? { color: "#CFD8EC" } : undefined}
+              style={isSelected ? { opacity: 0.8 } : undefined}
             >
               {node.hint}
             </span>
@@ -184,36 +213,48 @@ export function AndroidProjectTree({
           </div>
         </div>
         <div className={styles.treeScroll} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <div style={{ fontSize: 11.5, color: "#9DA0A8", fontWeight: 600 }}>
-            Changes ({modifiedFiles.length > 0 ? modifiedFiles.length : 1} files)
+          <div style={{ fontSize: 11.5, color: "var(--as-text-secondary)", fontWeight: 600 }}>
+            Unsaved / Modified ({modifiedFiles.length})
           </div>
-          {(modifiedFiles.length > 0 ? modifiedFiles : files.slice(0, 1)).map((f) => (
-            <button
-              key={f.id}
-              type="button"
-              className={styles.treeRow}
-              style={{ paddingLeft: 8 }}
-              onClick={() => onOpenFileById(f.id)}
-            >
-              <span className={styles.treeIconWrap}>
-                {f.kind === "kotlin" ? <KotlinFileIcon size={15} /> : <XmlFileIcon size={15} />}
-              </span>
-              <span className={styles.treeLabelText} style={{ color: "#6B9BFA" }}>
-                {f.tabTitle}
-              </span>
-              <span className={styles.treeHintSuffix}>{f.path}</span>
-            </button>
-          ))}
+          {modifiedFiles.length === 0 ? (
+            <div style={{ fontSize: 12, color: "var(--as-text-muted)", padding: "4px 6px" }}>
+              No uncommitted changes. Edit a file to stage changes.
+            </div>
+          ) : (
+            modifiedFiles.map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                className={styles.treeRow}
+                style={{ paddingLeft: 8 }}
+                onClick={() => onOpenFileById(f.id)}
+              >
+                <span className={styles.treeIconWrap}>
+                  {f.kind === "java" ? (
+                    <JavaFileIcon size={15} />
+                  ) : f.kind === "kotlin" ? (
+                    <KotlinFileIcon size={15} />
+                  ) : (
+                    <XmlFileIcon size={15} />
+                  )}
+                </span>
+                <span className={styles.treeLabelText} style={{ color: "var(--as-accent)" }}>
+                  {f.tabTitle}
+                </span>
+                <span className={styles.treeHintSuffix}>{f.path}</span>
+              </button>
+            ))
+          )}
           <textarea
             value={commitMessage}
             onChange={(e) => setCommitMessage(e.target.value)}
-            placeholder="Commit Message"
+            placeholder="Checkpoint message"
             style={{
               width: "100%",
-              minHeight: 82,
-              background: "#1E1F22",
-              color: "#DFE1E5",
-              border: "1px solid #4E5157",
+              minHeight: 76,
+              background: "var(--as-bg-input)",
+              color: "var(--as-text-primary)",
+              border: "1px solid var(--as-border-comp)",
               borderRadius: 6,
               padding: 8,
               fontSize: 12,
@@ -221,28 +262,26 @@ export function AndroidProjectTree({
               fontFamily: "inherit",
             }}
           />
-          <div style={{ display: "flex", gap: 6 }}>
-            <button
-              type="button"
-              className={styles.primaryBtn}
-              onClick={() => onCommitChanges(commitMessage)}
-            >
-              Commit
-            </button>
-            <button
-              type="button"
-              className={styles.secondaryBtn}
-              onClick={() => onCommitChanges(`${commitMessage} (pushed)`)}
-            >
-              Commit and Push...
-            </button>
-          </div>
+          <button
+            type="button"
+            className={styles.primaryBtn}
+            onClick={() => onCommitChanges(commitMessage)}
+          >
+            Save Snapshot
+          </button>
         </div>
       </section>
     );
   }
 
   if (activeLeftTool === "resources") {
+    const colorKeys = Object.keys(resources.colors);
+    const stringKeys = Object.keys(resources.strings);
+    const layoutFiles = files.filter((f) => f.isLayoutXml || f.path.indexOf("res/layout/") >= 0);
+    const drawableFiles = files.filter((f) => f.path.indexOf("res/drawable/") >= 0);
+    const colorsFile = files.find((f) => f.name === "colors.xml");
+    const stringsFile = files.find((f) => f.name === "strings.xml");
+
     return (
       <section className={styles.sideToolPanel} style={{ width }}>
         <div className={styles.sidePanelHeader}>
@@ -251,10 +290,10 @@ export function AndroidProjectTree({
             <button
               type="button"
               className={styles.panelActionIcon}
-              title="Add Resource (+)"
-              onClick={() => onCreateNewFile("xml")}
+              title="Add Layout Resource (+)"
+              onClick={() => onRequestNewFile("app/src/main/res/layout")}
             >
-              +
+              <FilePlusIcon size={14} />
             </button>
             <button
               type="button"
@@ -266,8 +305,8 @@ export function AndroidProjectTree({
             </button>
           </div>
         </div>
-        <div style={{ display: "flex", gap: 4, padding: "6px 8px", borderBottom: "1px solid #35373B" }}>
-          {(["Drawable", "Color", "Layout", "String"] as const).map((tab) => (
+        <div style={{ display: "flex", gap: 4, padding: "6px 8px", borderBottom: "1px solid var(--as-border-panel)" }}>
+          {(["Layout", "Color", "String", "Drawable"] as const).map((tab) => (
             <button
               key={tab}
               type="button"
@@ -278,87 +317,93 @@ export function AndroidProjectTree({
             </button>
           ))}
         </div>
-        <div className={styles.treeScroll} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {resourceTab === "Color" && (
-            <>
-              {[
-                { name: "purple_80", hex: "#D0BCFF", fileId: "theme-color-kt" },
-                { name: "purple_40", hex: "#6650A4", fileId: "theme-color-kt" },
-                { name: "teal_200", hex: "#03DAC5", fileId: "colors-xml" },
-                { name: "android_green", hex: "#3DDC84", fileId: "colors-xml" },
-              ].map((c) => (
+        <div className={styles.treeScroll} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          {resourceTab === "Layout" &&
+            layoutFiles.map((lf) => (
+              <button
+                key={lf.id}
+                type="button"
+                className={styles.treeRow}
+                style={{ height: 30, paddingLeft: 8 }}
+                onClick={() => onOpenFileById(lf.id)}
+              >
+                <XmlFileIcon size={15} />
+                <span>{lf.name}</span>
+                <span className={styles.treeHintSuffix}>res/layout</span>
+              </button>
+            ))}
+
+          {resourceTab === "Color" &&
+            (colorKeys.length > 0 ? (
+              colorKeys.map((key) => (
                 <button
-                  key={c.name}
+                  key={key}
                   type="button"
                   className={styles.treeRow}
-                  style={{ height: 32, paddingLeft: 8, justifyContent: "space-between" }}
-                  onClick={() => onOpenFileById(c.fileId)}
+                  style={{ height: 30, paddingLeft: 8, justifyContent: "space-between" }}
+                  onClick={() => colorsFile && onOpenFileById(colorsFile.id)}
                 >
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
                     <span
                       style={{
-                        width: 16,
-                        height: 16,
+                        width: 14,
+                        height: 14,
                         borderRadius: 4,
-                        background: c.hex,
-                        border: "1px solid rgba(255,255,255,0.25)",
+                        background: resources.colors[key],
+                        border: "1px solid var(--as-border-comp)",
                       }}
                     />
-                    <span>{c.name}</span>
+                    <span>{key}</span>
                   </span>
-                  <span className={styles.treeHintSuffix}>{c.hex}</span>
+                  <span className={styles.treeHintSuffix}>{resources.colors[key]}</span>
                 </button>
-              ))}
-            </>
-          )}
-          {resourceTab === "Drawable" && (
-            <>
-              <button
-                type="button"
-                className={styles.treeRow}
-                style={{ height: 34, paddingLeft: 8 }}
-                onClick={() => onOpenFileById("manifest-xml")}
-              >
-                <AndroidModuleIcon size={16} />
-                <span>ic_launcher_foreground.xml</span>
-                <span className={styles.treeHintSuffix}>vector (108×108dp)</span>
-              </button>
-              <button
-                type="button"
-                className={styles.treeRow}
-                style={{ height: 34, paddingLeft: 8 }}
-                onClick={() => onOpenFileById("manifest-xml")}
-              >
-                <AndroidModuleIcon size={16} />
-                <span>ic_launcher_background.xml</span>
-                <span className={styles.treeHintSuffix}>#3DDC84</span>
-              </button>
-            </>
-          )}
-          {resourceTab === "Layout" && (
-            <button
-              type="button"
-              className={styles.treeRow}
-              style={{ height: 34, paddingLeft: 8 }}
-              onClick={() => onOpenFileById("activity-main-xml")}
-            >
-              <XmlFileIcon size={16} />
-              <span>activity_main.xml</span>
-              <span className={styles.treeHintSuffix}>res/layout</span>
-            </button>
-          )}
-          {resourceTab === "String" && (
-            <button
-              type="button"
-              className={styles.treeRow}
-              style={{ height: 34, paddingLeft: 8 }}
-              onClick={() => onOpenFileById("strings-xml")}
-            >
-              <XmlFileIcon size={16} />
-              <span>strings.xml (4 keys)</span>
-              <span className={styles.treeHintSuffix}>res/values</span>
-            </button>
-          )}
+              ))
+            ) : (
+              <div style={{ fontSize: 12, color: "var(--as-text-muted)", padding: 8 }}>
+                No colors defined in res/values/colors.xml.
+              </div>
+            ))}
+
+          {resourceTab === "String" &&
+            (stringKeys.length > 0 ? (
+              stringKeys.map((key) => (
+                <button
+                  key={key}
+                  type="button"
+                  className={styles.treeRow}
+                  style={{ height: 30, paddingLeft: 8, justifyContent: "space-between" }}
+                  onClick={() => stringsFile && onOpenFileById(stringsFile.id)}
+                >
+                  <span>@string/{key}</span>
+                  <span className={styles.treeHintSuffix}>{resources.strings[key]}</span>
+                </button>
+              ))
+            ) : (
+              <div style={{ fontSize: 12, color: "var(--as-text-muted)", padding: 8 }}>
+                No strings defined in strings.xml.
+              </div>
+            ))}
+
+          {resourceTab === "Drawable" &&
+            (drawableFiles.length > 0 ? (
+              drawableFiles.map((df) => (
+                <button
+                  key={df.id}
+                  type="button"
+                  className={styles.treeRow}
+                  style={{ height: 30, paddingLeft: 8 }}
+                  onClick={() => onOpenFileById(df.id)}
+                >
+                  <XmlFileIcon size={15} />
+                  <span>{df.name}</span>
+                  <span className={styles.treeHintSuffix}>res/drawable</span>
+                </button>
+              ))
+            ) : (
+              <div style={{ fontSize: 12, color: "var(--as-text-muted)", padding: 8 }}>
+                No drawable XML files found.
+              </div>
+            ))}
         </div>
       </section>
     );
@@ -411,10 +456,20 @@ export function AndroidProjectTree({
           <button
             type="button"
             className={styles.panelActionIcon}
-            title="New Kotlin Class/File"
-            onClick={() => onCreateNewFile("kotlin")}
+            title="New File / Activity..."
+            aria-label="New File"
+            onClick={() => onRequestNewFile()}
           >
-            +
+            <FilePlusIcon size={14} />
+          </button>
+          <button
+            type="button"
+            className={styles.panelActionIcon}
+            title="New Folder..."
+            aria-label="New Folder"
+            onClick={() => onRequestNewFolder()}
+          >
+            <FolderPlusIcon size={14} />
           </button>
           <button
             type="button"
@@ -435,14 +490,6 @@ export function AndroidProjectTree({
           <button
             type="button"
             className={styles.panelActionIcon}
-            title="More Options"
-            onClick={() => onCreateNewFile("xml")}
-          >
-            <MoreVerticalIcon size={14} />
-          </button>
-          <button
-            type="button"
-            className={styles.panelActionIcon}
             title="Hide (Shift+Esc)"
             onClick={onHidePanel}
           >
@@ -454,6 +501,80 @@ export function AndroidProjectTree({
       <div className={styles.treeScroll} role="tree" aria-label="Android Project Hierarchy">
         {treeNodes.map((node) => renderTreeRow(node, 0))}
       </div>
+
+      {contextMenu && (
+        <div
+          ref={menuRef}
+          className={styles.contextMenu}
+          style={{ left: Math.min(contextMenu.x, 260), top: Math.min(contextMenu.y, 520) }}
+          role="menu"
+        >
+          {contextMenu.node.fileId ? (
+            <>
+              <button
+                type="button"
+                className={styles.menuDropdownItem}
+                onClick={() => {
+                  const fid = contextMenu.node.fileId!;
+                  setContextMenu(null);
+                  onOpenFileById(fid);
+                }}
+              >
+                <span>Open in Editor</span>
+              </button>
+              <button
+                type="button"
+                className={styles.menuDropdownItem}
+                onClick={() => {
+                  const fid = contextMenu.node.fileId!;
+                  setContextMenu(null);
+                  onRequestRenameFile(fid);
+                }}
+              >
+                <span>Rename...</span>
+              </button>
+              <div className={styles.dropdownDivider} />
+              <button
+                type="button"
+                className={styles.menuDropdownItem}
+                style={{ color: "var(--as-red)" }}
+                onClick={() => {
+                  const fid = contextMenu.node.fileId!;
+                  setContextMenu(null);
+                  onDeleteFile(fid);
+                }}
+              >
+                <span>Delete File</span>
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                className={styles.menuDropdownItem}
+                onClick={() => {
+                  const dir = contextMenu.node.folderPath;
+                  setContextMenu(null);
+                  onRequestNewFile(dir);
+                }}
+              >
+                <span>New File / Activity...</span>
+              </button>
+              <button
+                type="button"
+                className={styles.menuDropdownItem}
+                onClick={() => {
+                  const dir = contextMenu.node.folderPath;
+                  setContextMenu(null);
+                  onRequestNewFolder(dir);
+                }}
+              >
+                <span>New Folder...</span>
+              </button>
+            </>
+          )}
+        </div>
+      )}
     </section>
   );
 }

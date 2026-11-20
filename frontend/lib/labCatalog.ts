@@ -19,7 +19,7 @@ export interface LabPart {
   builtinDatasets?: string[];
   evidenceSlots?: LabEvidenceSlot[];
   // A part LabMate builds itself in a practice studio (Computer Networks): the packet analyser or the network simulator.
-  studio?: "wireshark" | "packettracer";
+  studio?: "wireshark" | "packettracer" | "powerbi" | "android";
   studioArgs?: Record<string, string>;
 }
 

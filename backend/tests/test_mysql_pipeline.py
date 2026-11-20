@@ -413,3 +413,30 @@ DROP VIEW product_data;
         assert os.path.isfile(f["path"])
         with Image.open(f["path"]) as img:
             assert img.width == 1200 and 420 <= img.height <= 1200
+
+
+def test_mysql_distinct_union_full_outer_join_emulation_is_verified():
+    sql = """
+    CREATE TABLE Customers (CustomerID INT PRIMARY KEY, CustomerName VARCHAR(50));
+    CREATE TABLE Orders (OrderID INT PRIMARY KEY, CustomerID INT);
+    INSERT INTO Customers VALUES (1, 'Asha'), (2, 'Rohan'), (3, 'Neha');
+    INSERT INTO Orders VALUES (101, 1), (102, 99);
+    SELECT c.CustomerName, o.OrderID FROM Customers c INNER JOIN Orders o ON c.CustomerID = o.CustomerID ORDER BY o.OrderID;
+    SELECT c.CustomerName, o.OrderID FROM Customers c LEFT JOIN Orders o ON c.CustomerID = o.CustomerID ORDER BY c.CustomerID;
+    SELECT c.CustomerName, o.OrderID FROM Customers c RIGHT JOIN Orders o ON c.CustomerID = o.CustomerID ORDER BY o.OrderID;
+    SELECT c.CustomerName, o.OrderID
+    FROM Customers c LEFT JOIN Orders o ON c.CustomerID = o.CustomerID
+    UNION
+    SELECT c.CustomerName, o.OrderID
+    FROM Customers c RIGHT JOIN Orders o ON c.CustomerID = o.CustomerID
+    ORDER BY OrderID, CustomerName;
+    """
+    result = execute_sql(sql)
+    assert result["success"] is True
+    verification = verify_sql_exercise(
+        objective="Perform INNER, LEFT, RIGHT and FULL OUTER JOIN on Customers and Orders",
+        code=sql,
+        execution_result=result,
+    )
+    assert verification["verified"] is True, f"Expected UNION FULL OUTER JOIN to pass verification: {verification}"
+

@@ -3,16 +3,13 @@
 import React from "react";
 import styles from "./androidStudio.module.css";
 import {
-  AppQualityInsightsStripeIcon,
   BuildStripeIcon,
   CommitStripeIcon,
   DeviceManagerIcon,
-  GeminiSparkleIcon,
   GradleStripeIcon,
   LogcatStripeIcon,
   NotificationsStripeIcon,
   ProblemsStripeIcon,
-  ProfilerStripeIcon,
   ProjectStripeIcon,
   ResourceManagerStripeIcon,
   RunStripeIcon,
@@ -28,10 +25,8 @@ export type BottomToolId =
   | "run"
   | "terminal"
   | "problems"
-  | "vcs"
-  | "profiler"
-  | "aqi";
-export type RightToolId = "runningDevices" | "gradle" | "deviceManager" | "notifications" | "gemini";
+  | "vcs";
+export type RightToolId = "runningDevices" | "gradle" | "deviceManager" | "notifications";
 
 interface StudioLeftStripeProps {
   activeLeftTool: LeftToolId | null;
@@ -141,26 +136,6 @@ export function StudioLeftStripe({
 
         <button
           type="button"
-          className={`${styles.stripeBtn} ${activeBottomTool === "profiler" ? styles.stripeBtnActive : ""}`}
-          title="Android Profiler"
-          aria-label="Android Profiler Tool Window"
-          onClick={() => onToggleBottomTool("profiler")}
-        >
-          <ProfilerStripeIcon size={18} />
-        </button>
-
-        <button
-          type="button"
-          className={`${styles.stripeBtn} ${activeBottomTool === "aqi" ? styles.stripeBtnActive : ""}`}
-          title="App Quality Insights (Firebase Crashlytics)"
-          aria-label="App Quality Insights Tool Window"
-          onClick={() => onToggleBottomTool("aqi")}
-        >
-          <AppQualityInsightsStripeIcon size={18} />
-        </button>
-
-        <button
-          type="button"
           className={`${styles.stripeBtn} ${activeBottomTool === "vcs" ? styles.stripeBtnActive : ""}`}
           title="Version Control / Git (Alt+9)"
           aria-label="Version Control Tool Window"
@@ -221,21 +196,11 @@ export function StudioRightStripe({
         <button
           type="button"
           className={`${styles.stripeBtn} ${activeRightTool === "runningDevices" ? styles.stripeBtnActive : ""}`}
-          title="Running Devices (Embedded Android Emulator)"
+          title="Running Devices (Interactive Android Emulator)"
           aria-label="Running Devices Tool Window"
           onClick={() => onToggleRightTool("runningDevices")}
         >
           <RunningDevicesStripeIcon size={18} />
-        </button>
-
-        <button
-          type="button"
-          className={`${styles.stripeBtn} ${activeRightTool === "gemini" ? styles.stripeBtnActive : ""}`}
-          title="Gemini in Android Studio"
-          aria-label="Gemini in Android Studio"
-          onClick={() => onToggleRightTool("gemini")}
-        >
-          <GeminiSparkleIcon size={18} />
         </button>
       </div>
     </aside>

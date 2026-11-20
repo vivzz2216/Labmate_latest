@@ -16,6 +16,7 @@ interface SvgChartsProps {
   grouped: GroupedAggregationResult;
   rawRows: DataRow[];
   crossFilter: CrossFilterSelection | null;
+  themePalette?: readonly string[];
   onSelectCategory: (category: string) => void;
 }
 
@@ -34,18 +35,19 @@ function shortenLabel(val: string, max = 13): string {
   return `${val.slice(0, max - 1)}…`;
 }
 
-/** Crisp Power BI SVG chart renderer with official dotted gridlines, palette, labels, and cross-filtering. */
+/** Crisp Power BI SVG chart renderer with official dotted gridlines, palette, analytics lines, labels, and cross-filtering. */
 export function PowerBiSvgCharts({
   visual,
   grouped,
   rawRows,
   crossFilter,
+  themePalette = POWERBI_SERIES_PALETTE,
   onSelectCategory,
 }: SvgChartsProps) {
   const [hover, setHover] = useState<HoverState>(EMPTY_HOVER);
 
-  const w = Math.max(260, visual.layout.w - 22);
-  const h = Math.max(150, visual.layout.h - 40);
+  const w = Math.max(240, visual.layout.w - 22);
+  const h = Math.max(130, visual.layout.h - 40);
   const activeCross =
     crossFilter && crossFilter.column === visual.xAxis ? crossFilter.value : null;
 
@@ -66,7 +68,7 @@ export function PowerBiSvgCharts({
           flexShrink: 0,
         }}
       >
-        {items.slice(0, 6).map((item) => (
+        {items.slice(0, 8).map((item) => (
           <span key={item.label} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
             <span
               style={{
@@ -97,83 +99,105 @@ export function PowerBiSvgCharts({
           padding: 12,
         }}
       >
-        Select fields in the Data pane or field wells to render this visual.
+        Drag fields from Data or use the field wells to build this visual.
       </div>
     );
   }
 
   // ---------- PIE / DONUT ----------
   if (visual.type === "pie" || visual.type === "donut") {
-    const primaryField = visual.yAxis[0];
-    const sliceRows = grouped.rows.slice(0, 7);
-    const total = sliceRows.reduce((s, r) => s + Math.max(0, r.values[primaryField] ?? 0), 0) || 1;
-    const cx = w * 0.38;
-    const cy = (h - 24) * 0.52;
-    const outerR = Math.max(36, Math.min(cx - 14, cy - 12));
+    const primarySeriesKey = grouped.series[0]?.key || visual.yAxis[0];
+    const sliceRows = grouped.rows.slice(0, 8);
+    const total =
+      sliceRows.reduce((s, r) => s + Math.max(0, r.values[primarySeriesKey] ?? 0), 0) || 1;
+    const cx = visual.format.showLegend ? w * 0.36 : w * 0.5;
+    const cy = h * 0.5;
+    const outerR = Math.max(32, Math.min((visual.format.showLegend ? cx : w * 0.44) - 16, cy - 16));
     const innerR = visual.type === "donut" ? outerR * 0.56 : 0;
 
     let cumAngle = -Math.PI / 2;
     const paths = sliceRows.map((row, idx) => {
-      const val = Math.max(0, row.values[primaryField] ?? 0);
+      const val = Math.max(0, row.values[primarySeriesKey] ?? 0);
       const frac = val / total;
       const startAngle = cumAngle;
       const endAngle = startAngle + frac * Math.PI * 2;
+      const midAngle = (startAngle + endAngle) / 2;
       cumAngle = endAngle;
 
-      const largeArc = endAngle - startAngle > Math.PI ? 1 : 0;
-      const x1 = cx + outerR * Math.cos(startAngle);
-      const y1 = cy + outerR * Math.sin(startAngle);
-      const x2 = cx + outerR * Math.cos(endAngle);
-      const y2 = cy + outerR * Math.sin(endAngle);
-
+      const safeSpan = endAngle - startAngle;
       const d =
-        innerR > 0
-          ? [
-              `M ${x1} ${y1}`,
-              `A ${outerR} ${outerR} 0 ${largeArc} 1 ${x2} ${y2}`,
-              `L ${cx + innerR * Math.cos(endAngle)} ${cy + innerR * Math.sin(endAngle)}`,
-              `A ${innerR} ${innerR} 0 ${largeArc} 0 ${cx + innerR * Math.cos(startAngle)} ${cy + innerR * Math.sin(startAngle)}`,
-              "Z",
-            ].join(" ")
-          : `M ${cx} ${cy} L ${x1} ${y1} A ${outerR} ${outerR} 0 ${largeArc} 1 ${x2} ${y2} Z`;
+        safeSpan >= Math.PI * 1.9999
+          ? innerR > 0
+            ? `M ${cx} ${cy - outerR} A ${outerR} ${outerR} 0 1 1 ${cx - 0.01} ${cy - outerR} L ${cx - 0.01} ${cy - innerR} A ${innerR} ${innerR} 0 1 0 ${cx} ${cy - innerR} Z`
+            : `M ${cx} ${cy - outerR} A ${outerR} ${outerR} 0 1 1 ${cx - 0.01} ${cy - outerR} Z`
+          : (() => {
+              const largeArc = safeSpan > Math.PI ? 1 : 0;
+              const x1 = cx + outerR * Math.cos(startAngle);
+              const y1 = cy + outerR * Math.sin(startAngle);
+              const x2 = cx + outerR * Math.cos(endAngle);
+              const y2 = cy + outerR * Math.sin(endAngle);
+              return innerR > 0
+                ? [
+                    `M ${x1} ${y1}`,
+                    `A ${outerR} ${outerR} 0 ${largeArc} 1 ${x2} ${y2}`,
+                    `L ${cx + innerR * Math.cos(endAngle)} ${cy + innerR * Math.sin(endAngle)}`,
+                    `A ${innerR} ${innerR} 0 ${largeArc} 0 ${cx + innerR * Math.cos(startAngle)} ${cy + innerR * Math.sin(startAngle)}`,
+                    "Z",
+                  ].join(" ")
+                : `M ${cx} ${cy} L ${x1} ${y1} A ${outerR} ${outerR} 0 ${largeArc} 1 ${x2} ${y2} Z`;
+            })();
 
-      const color = POWERBI_SERIES_PALETTE[idx % POWERBI_SERIES_PALETTE.length];
-      return { row, val, frac, d, color };
+      const color = themePalette[idx % themePalette.length];
+      return { row, val, frac, midAngle, d, color };
     });
 
     return (
       <div style={{ flex: 1, minHeight: 0, display: "flex", alignItems: "center", gap: 8 }}>
         <svg viewBox={`0 0 ${w} ${h}`} style={{ width: "100%", height: "100%", overflow: "visible" }}>
-          {paths.map(({ row, val, frac, d, color }) => (
-            <path
-              key={row.category}
-              d={d}
-              fill={color}
-              fillOpacity={isDimmed(row.category) ? 0.3 : 0.94}
-              stroke="#ffffff"
-              strokeWidth={1.5}
-              style={{ cursor: "pointer", transition: "fill-opacity 0.15s ease" }}
-              onClick={(e) => {
-                e.stopPropagation();
-                onSelectCategory(row.category);
-              }}
-              onMouseMove={(e) =>
-                setHover({
-                  visible: true,
-                  x: e.clientX,
-                  y: e.clientY,
-                  title: row.category,
-                  rows: [
-                    {
-                      label: primaryField,
-                      value: `${formatPowerBiNumber(val, primaryField)} (${(frac * 100).toFixed(1)}%)`,
-                      color,
-                    },
-                  ],
-                })
-              }
-              onMouseLeave={() => setHover(EMPTY_HOVER)}
-            />
+          {paths.map(({ row, val, frac, midAngle, d, color }) => (
+            <g key={row.category}>
+              <path
+                d={d}
+                fill={color}
+                fillOpacity={isDimmed(row.category) ? 0.3 : 0.94}
+                stroke="#ffffff"
+                strokeWidth={1.5}
+                style={{ cursor: "pointer", transition: "fill-opacity 0.15s ease" }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelectCategory(row.category);
+                }}
+                onMouseMove={(e) =>
+                  setHover({
+                    visible: true,
+                    x: e.clientX,
+                    y: e.clientY,
+                    title: row.category,
+                    rows: [
+                      {
+                        label: visual.yAxis[0],
+                        value: `${formatPowerBiNumber(val, visual.yAxis[0])} (${(frac * 100).toFixed(1)}%)`,
+                        color,
+                      },
+                    ],
+                  })
+                }
+                onMouseLeave={() => setHover(EMPTY_HOVER)}
+              />
+              {visual.format.showDataLabels && frac >= 0.08 ? (
+                <text
+                  x={cx + (innerR > 0 ? (outerR + innerR) / 2 : outerR * 0.62) * Math.cos(midAngle)}
+                  y={cy + (innerR > 0 ? (outerR + innerR) / 2 : outerR * 0.62) * Math.sin(midAngle) + 3}
+                  textAnchor="middle"
+                  fontSize={9}
+                  fontWeight={600}
+                  fill="#ffffff"
+                  pointerEvents="none"
+                >
+                  {`${Math.round(frac * 100)}%`}
+                </text>
+              ) : null}
+            </g>
           ))}
           {visual.type === "donut" ? (
             <text
@@ -184,7 +208,7 @@ export function PowerBiSvgCharts({
               fontWeight={600}
               fill="#252423"
             >
-              {formatPowerBiNumber(total, primaryField)}
+              {formatPowerBiNumber(total, visual.yAxis[0])}
             </text>
           ) : null}
 
@@ -192,7 +216,7 @@ export function PowerBiSvgCharts({
             ? paths.map(({ row, frac, color }, idx) => (
                 <g
                   key={`leg-${row.category}`}
-                  transform={`translate(${cx + outerR + 18}, ${20 + idx * 20})`}
+                  transform={`translate(${cx + outerR + 18}, ${Math.max(12, cy - paths.length * 10) + idx * 20})`}
                   style={{ cursor: "pointer" }}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -215,9 +239,14 @@ export function PowerBiSvgCharts({
   // ---------- GAUGE ----------
   if (visual.type === "gauge") {
     const field = visual.yAxis[0];
-    const total = grouped.rows.reduce((s, r) => s + (r.values[field] ?? 0), 0);
+    const total = grouped.rows.reduce((s, r) => s + (r.values[grouped.series[0]?.key || field] ?? 0), 0);
     const val = grouped.rows.length ? total : 0;
-    const goal = val > 0 ? val * 1.25 : 100;
+    const goal =
+      visual.analytics?.constantLineValue && visual.analytics.constantLineValue > 0
+        ? visual.analytics.constantLineValue
+        : val > 0
+          ? val * 1.25
+          : 100;
     const pct = Math.min(1, Math.max(0, val / goal));
     const cx = w / 2;
     const cy = h * 0.72;
@@ -256,10 +285,10 @@ export function PowerBiSvgCharts({
 
   // ---------- FUNNEL ----------
   if (visual.type === "funnel") {
-    const field = visual.yAxis[0];
-    const rows = grouped.rows.slice(0, 6);
+    const field = grouped.series[0]?.key || visual.yAxis[0];
+    const rows = grouped.rows.slice(0, 7);
     const maxV = Math.max(1, ...rows.map((r) => r.values[field] ?? 0));
-    const rowH = Math.max(22, (h - 20) / Math.max(1, rows.length) - 6);
+    const rowH = Math.max(20, (h - 20) / Math.max(1, rows.length) - 6);
     const maxBarW = Math.max(80, w - 150);
 
     return (
@@ -294,7 +323,7 @@ export function PowerBiSvgCharts({
                 />
                 {visual.format.showDataLabels ? (
                   <text x={x + bw + 6} y={y + rowH / 2 + 4} fontSize={10.5} fontWeight={600} fill="#252423">
-                    {formatPowerBiNumber(val, field)}
+                    {formatPowerBiNumber(val, visual.yAxis[0])}
                   </text>
                 ) : null}
               </g>
@@ -307,8 +336,8 @@ export function PowerBiSvgCharts({
 
   // ---------- TREEMAP ----------
   if (visual.type === "treemap") {
-    const field = visual.yAxis[0];
-    const items = grouped.rows.slice(0, 6);
+    const field = grouped.series[0]?.key || visual.yAxis[0];
+    const items = grouped.rows.slice(0, 7);
     const total = items.reduce((s, r) => s + Math.max(0, r.values[field] ?? 0), 0) || 1;
     let cursorX = 0;
 
@@ -320,7 +349,7 @@ export function PowerBiSvgCharts({
             const bw = (val / total) * w;
             const x = cursorX;
             cursorX += bw;
-            const color = POWERBI_SERIES_PALETTE[idx % POWERBI_SERIES_PALETTE.length];
+            const color = themePalette[idx % themePalette.length];
             return (
               <g
                 key={r.category}
@@ -339,7 +368,7 @@ export function PowerBiSvgCharts({
                 ) : null}
                 {bw > 52 && visual.format.showDataLabels ? (
                   <text x={x + 8} y={38} fontSize={10.5} fill="#ffffff" opacity={0.9}>
-                    {formatPowerBiNumber(val, field)}
+                    {formatPowerBiNumber(val, visual.yAxis[0])}
                   </text>
                 ) : null}
               </g>
@@ -354,7 +383,7 @@ export function PowerBiSvgCharts({
   if (visual.type === "scatter") {
     const xField = visual.yAxis[0] || visual.xAxis;
     const yField = visual.yAxis[1] || visual.yAxis[0];
-    const points = rawRows.slice(0, 60);
+    const points = rawRows.slice(0, 80);
     const xs = points.map((r) => Number(r[xField || ""]) || 0);
     const ys = points.map((r) => Number(r[yField || ""]) || 0);
     const minX = Math.min(...xs, 0);
@@ -372,15 +401,12 @@ export function PowerBiSvgCharts({
           {[0, 0.5, 1].map((t) => {
             const y = 10 + (1 - t) * plotH;
             return (
-              <line
-                key={t}
-                x1={padL}
-                y1={y}
-                x2={w - 8}
-                y2={y}
-                stroke="#e1dfdd"
-                strokeDasharray="2 3"
-              />
+              <g key={t}>
+                <line x1={padL} y1={y} x2={w - 8} y2={y} stroke="#e1dfdd" strokeDasharray="2 3" />
+                <text x={padL - 6} y={y + 3} textAnchor="end" fontSize={9.5} fill="#605e5c">
+                  {formatPowerBiNumber(minY + t * (maxY - minY), yField)}
+                </text>
+              </g>
             );
           })}
           {points.map((r, i) => {
@@ -394,7 +420,7 @@ export function PowerBiSvgCharts({
                 cx={px}
                 cy={py}
                 r={4.2}
-                fill={POWERBI_SERIES_PALETTE[i % POWERBI_SERIES_PALETTE.length]}
+                fill={themePalette[i % themePalette.length]}
                 fillOpacity={0.78}
               />
             );
@@ -406,20 +432,32 @@ export function PowerBiSvgCharts({
 
   // ---------- CLUSTERED / STACKED HORIZONTAL BAR ----------
   if (visual.type === "clusteredBar" || visual.type === "stackedBar") {
-    const rows = grouped.rows.slice(0, 8);
+    const rows = grouped.rows.slice(0, 9);
     const isStacked = visual.type === "stackedBar";
     const maxV = Math.max(
       1,
-      ...rows.map((r) =>
-        isStacked
-          ? r.total
-          : Math.max(...grouped.series.map((s) => r.values[s.key] ?? 0)),
-      ),
+      1.1 *
+        Math.max(
+          1,
+          ...rows.map((r) =>
+            isStacked
+              ? r.total
+              : Math.max(...grouped.series.map((s) => r.values[s.key] ?? 0)),
+          ),
+        ),
     );
-    const padL = 86;
-    const padR = 46;
+    const padL = 88;
+    const padR = 48;
     const plotW = Math.max(80, w - padL - padR);
     const rowSlot = Math.max(22, (h - 28) / Math.max(1, rows.length));
+    const chartH = rows.length * rowSlot;
+
+    // Optional Analytics lines (vertical target in horizontal bar charts)
+    const primarySer = grouped.series[0]?.key || visual.yAxis[0];
+    const avgValue =
+      rows.length > 0
+        ? rows.reduce((s, r) => s + (r.values[primarySer] ?? 0), 0) / rows.length
+        : 0;
 
     return (
       <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
@@ -433,7 +471,7 @@ export function PowerBiSvgCharts({
                 x1={x}
                 y1={4}
                 x2={x}
-                y2={rows.length * rowSlot}
+                y2={chartH}
                 stroke="#e1dfdd"
                 strokeDasharray="2 3"
               />
@@ -488,7 +526,7 @@ export function PowerBiSvgCharts({
                             x: e.clientX,
                             y: e.clientY,
                             title: row.category,
-                            rows: [{ label: s.label, value: formatPowerBiNumber(val, s.key), color: s.color }],
+                            rows: [{ label: s.label, value: formatPowerBiNumber(val, visual.yAxis[0] || s.key), color: s.color }],
                           })
                         }
                         onMouseLeave={() => setHover(EMPTY_HOVER)}
@@ -500,7 +538,7 @@ export function PowerBiSvgCharts({
                           fontSize={10}
                           fill="#252423"
                         >
-                          {formatPowerBiNumber(isStacked ? row.total : val, s.key)}
+                          {formatPowerBiNumber(isStacked ? row.total : val, visual.yAxis[0] || s.key)}
                         </text>
                       ) : null}
                     </g>
@@ -509,6 +547,29 @@ export function PowerBiSvgCharts({
               </g>
             );
           })}
+
+          {visual.analytics?.showAverageLine ? (
+            <line
+              x1={padL + Math.min(1, avgValue / maxV) * plotW}
+              y1={2}
+              x2={padL + Math.min(1, avgValue / maxV) * plotW}
+              y2={chartH}
+              stroke="#117865"
+              strokeWidth={1.6}
+              strokeDasharray="4 3"
+            />
+          ) : null}
+          {visual.analytics?.constantLineValue !== undefined ? (
+            <line
+              x1={padL + Math.min(1, Math.max(0, visual.analytics.constantLineValue / maxV)) * plotW}
+              y1={2}
+              x2={padL + Math.min(1, Math.max(0, visual.analytics.constantLineValue / maxV)) * plotW}
+              y2={chartH}
+              stroke="#E66C37"
+              strokeWidth={1.6}
+              strokeDasharray="4 2"
+            />
+          ) : null}
         </svg>
         <Tooltip {...hover} />
       </div>
@@ -525,8 +586,16 @@ export function PowerBiSvgCharts({
     const plotW = Math.max(120, w - padL - padR);
     const svgH = Math.max(110, h - (visual.format.showLegend ? 24 : 4));
     const plotH = Math.max(60, svgH - padT - padB);
-    const maxV = Math.max(1, grouped.maxVal * 1.12);
+    const constVal = visual.analytics?.constantLineValue;
+    const rawMax = Math.max(grouped.maxVal, constVal ?? 0);
+    const maxV = Math.max(1, rawMax * 1.12);
     const isArea = visual.type === "area";
+
+    const primarySer = grouped.series[0]?.key || visual.yAxis[0];
+    const avgVal =
+      rows.length > 0
+        ? rows.reduce((s, r) => s + (r.values[primarySer] ?? 0), 0) / rows.length
+        : 0;
 
     return (
       <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
@@ -574,16 +643,20 @@ export function PowerBiSvgCharts({
                       key={c.cat}
                       cx={c.x}
                       cy={c.y}
-                      r={3}
+                      r={3.2}
                       fill={s.color}
                       style={{ cursor: "pointer" }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelectCategory(c.cat);
+                      }}
                       onMouseMove={(e) =>
                         setHover({
                           visible: true,
                           x: e.clientX,
                           y: e.clientY,
                           title: c.cat,
-                          rows: [{ label: s.label, value: formatPowerBiNumber(c.val, s.key), color: s.color }],
+                          rows: [{ label: s.label, value: formatPowerBiNumber(c.val, visual.yAxis[0] || s.key), color: s.color }],
                         })
                       }
                       onMouseLeave={() => setHover(EMPTY_HOVER)}
@@ -593,7 +666,53 @@ export function PowerBiSvgCharts({
             );
           })}
 
-          {/* Sparse X axis ticks */}
+          {visual.analytics?.showAverageLine ? (
+            <g>
+              <line
+                x1={padL}
+                y1={padT + (1 - avgVal / maxV) * plotH}
+                x2={w - padR}
+                y2={padT + (1 - avgVal / maxV) * plotH}
+                stroke="#117865"
+                strokeWidth={1.6}
+                strokeDasharray="4 3"
+              />
+              <text
+                x={w - padR - 4}
+                y={Math.max(10, padT + (1 - avgVal / maxV) * plotH - 4)}
+                textAnchor="end"
+                fontSize={9}
+                fontWeight={600}
+                fill="#117865"
+              >
+                Avg: {formatPowerBiNumber(avgVal, visual.yAxis[0])}
+              </text>
+            </g>
+          ) : null}
+
+          {constVal !== undefined ? (
+            <g>
+              <line
+                x1={padL}
+                y1={padT + (1 - Math.min(1, Math.max(0, constVal / maxV))) * plotH}
+                x2={w - padR}
+                y2={padT + (1 - Math.min(1, Math.max(0, constVal / maxV))) * plotH}
+                stroke="#E66C37"
+                strokeWidth={1.6}
+                strokeDasharray="4 2"
+              />
+              <text
+                x={padL + 6}
+                y={Math.max(10, padT + (1 - Math.min(1, Math.max(0, constVal / maxV))) * plotH - 4)}
+                fontSize={9}
+                fontWeight={600}
+                fill="#E66C37"
+              >
+                {visual.analytics?.constantLineLabel || "Target"}: {formatPowerBiNumber(constVal, visual.yAxis[0])}
+              </text>
+            </g>
+          ) : null}
+
           {rows
             .map((r, i) => ({ r, i }))
             .filter(({ i }) => i === 0 || i === Math.floor(rows.length / 2) || i === rows.length - 1)
@@ -614,20 +733,19 @@ export function PowerBiSvgCharts({
   }
 
   // ---------- DEFAULT: CLUSTERED / STACKED VERTICAL COLUMN ----------
-  const rows = grouped.rows.slice(0, 10);
+  const rows = grouped.rows.slice(0, 12);
   const isStacked = visual.type === "stackedColumn";
-  const maxV = Math.max(
+  const constVal = visual.analytics?.constantLineValue;
+  const maxSeriesV = Math.max(
     1,
-    1.12 *
-      Math.max(
-        1,
-        ...rows.map((r) =>
-          isStacked
-            ? r.total
-            : Math.max(...grouped.series.map((s) => r.values[s.key] ?? 0)),
-        ),
-      ),
+    ...rows.map((r) =>
+      isStacked
+        ? r.total
+        : Math.max(...grouped.series.map((s) => r.values[s.key] ?? 0)),
+    ),
+    constVal ?? 0,
   );
+  const maxV = Math.max(1, 1.12 * maxSeriesV);
   const padL = 46;
   const padB = 26;
   const padT = 14;
@@ -635,6 +753,12 @@ export function PowerBiSvgCharts({
   const plotW = Math.max(120, w - padL - 10);
   const plotH = Math.max(60, svgH - padT - padB);
   const groupSlot = plotW / Math.max(1, rows.length);
+
+  const primarySer = grouped.series[0]?.key || visual.yAxis[0];
+  const avgVal =
+    rows.length > 0
+      ? rows.reduce((s, r) => s + (isStacked ? r.total : r.values[primarySer] ?? 0), 0) / rows.length
+      : 0;
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
@@ -655,7 +779,9 @@ export function PowerBiSvgCharts({
         {rows.map((row, rIdx) => {
           const gx = padL + rIdx * groupSlot;
           const innerW = Math.min(groupSlot * 0.72, isStacked ? 48 : 76);
-          const barW = isStacked ? innerW : Math.max(8, (innerW - (grouped.series.length - 1) * 3) / grouped.series.length);
+          const barW = isStacked
+            ? innerW
+            : Math.max(8, (innerW - (grouped.series.length - 1) * 3) / grouped.series.length);
           const startX = gx + (groupSlot - innerW) / 2;
           let stackedHeight = 0;
 
@@ -694,7 +820,7 @@ export function PowerBiSvgCharts({
                           title: row.category,
                           rows: grouped.series.map((ser) => ({
                             label: ser.label,
-                            value: formatPowerBiNumber(row.values[ser.key] ?? 0, ser.key),
+                            value: formatPowerBiNumber(row.values[ser.key] ?? 0, visual.yAxis[0] || ser.key),
                             color: ser.color,
                           })),
                         })
@@ -709,7 +835,7 @@ export function PowerBiSvgCharts({
                         fontSize={9}
                         fill="#252423"
                       >
-                        {formatPowerBiNumber(isStacked ? row.total : val, s.key)}
+                        {formatPowerBiNumber(isStacked ? row.total : val, visual.yAxis[0] || s.key)}
                       </text>
                     ) : null}
                   </g>
@@ -728,6 +854,53 @@ export function PowerBiSvgCharts({
             </g>
           );
         })}
+
+        {visual.analytics?.showAverageLine ? (
+          <g>
+            <line
+              x1={padL}
+              y1={padT + (1 - avgVal / maxV) * plotH}
+              x2={w - 8}
+              y2={padT + (1 - avgVal / maxV) * plotH}
+              stroke="#117865"
+              strokeWidth={1.6}
+              strokeDasharray="4 3"
+            />
+            <text
+              x={w - 12}
+              y={Math.max(10, padT + (1 - avgVal / maxV) * plotH - 4)}
+              textAnchor="end"
+              fontSize={9}
+              fontWeight={600}
+              fill="#117865"
+            >
+              Avg: {formatPowerBiNumber(avgVal, visual.yAxis[0])}
+            </text>
+          </g>
+        ) : null}
+
+        {constVal !== undefined ? (
+          <g>
+            <line
+              x1={padL}
+              y1={padT + (1 - Math.min(1, Math.max(0, constVal / maxV))) * plotH}
+              x2={w - 8}
+              y2={padT + (1 - Math.min(1, Math.max(0, constVal / maxV))) * plotH}
+              stroke="#E66C37"
+              strokeWidth={1.6}
+              strokeDasharray="4 2"
+            />
+            <text
+              x={padL + 6}
+              y={Math.max(10, padT + (1 - Math.min(1, Math.max(0, constVal / maxV))) * plotH - 4)}
+              fontSize={9}
+              fontWeight={600}
+              fill="#E66C37"
+            >
+              {visual.analytics?.constantLineLabel || "Target"}: {formatPowerBiNumber(constVal, visual.yAxis[0])}
+            </text>
+          </g>
+        ) : null}
       </svg>
       <Tooltip {...hover} />
     </div>

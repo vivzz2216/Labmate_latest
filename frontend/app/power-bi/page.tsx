@@ -7,6 +7,6 @@ export const metadata: Metadata = {
     "Interactive Power BI Desktop report-authoring replica for CSV dataset exploration and manual screenshots.",
 };
 
-export default function PowerBiReplicaPage() {
-  return <PowerBiWorkspace />;
+export default async function PowerBiReplicaPage({ searchParams }: { searchParams: Promise<{ capture?: string }> }) {
+  return <PowerBiWorkspace capture={(await searchParams).capture === "practical"} />;
 }
