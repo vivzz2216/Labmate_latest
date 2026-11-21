@@ -119,12 +119,15 @@ export function PowerBiWorkspace({ capture = false }: { capture?: boolean }) {
   const [reportFilters, setReportFilters] = useState<Record<string, string[]>>({});
   const [slicerFilters, setSlicerFilters] = useState<Record<string, string[]>>({});
   const [captureFrame, setCaptureFrame] = useState<PowerBiPracticalFrame | null>(null);
+  const captureDrawnToken = captureFrame
+    ? `${captureFrame.id}:${captureFrame.view}:${captureFrame.page.visuals.length}:${Boolean(captureFrame.steps)}`
+    : "";
   useStudioHook<Record<string, never>, PowerBiPracticalFrame>({
     load: () => {},
     show: (step) => {
       if (!capture) return;
       setTables(step.tables);
-      setActiveTableId(step.tables[0].id || step.tables[0].name);
+      setActiveTableId(step.tables[0]?.id || step.tables[0]?.name || "");
       setPages([step.page]);
       setActivePageId(step.page.id);
       setMeasures(step.measures);
@@ -134,9 +137,18 @@ export function PowerBiWorkspace({ capture = false }: { capture?: boolean }) {
       setShowDataPane(true);
       setShowVizPane(step.view === "report");
       setTransformOpen(Boolean(step.steps));
-      setCaptureFrame(step);
+      setGetDataOpen(false);
+      setEnterDataOpen(false);
+      setRelationshipsOpen(false);
+      setFormulaModal({ open: false, mode: "measure", tableId: "" });
+      setExcelNav({ open: false, fileName: "", sheets: [] });
+      setSelectedVisualId(null);
+      setFocusVisualId(null);
+      setReadingView(false);
+      setMobileLayoutPreview(false);
+      setCaptureFrame({ ...step });
     },
-  }, captureFrame?.id);
+  }, captureDrawnToken);
   useEffect(() => {
     if (!capture) return;
     window.__labmatePractical = powerBiPractical;

@@ -8,7 +8,8 @@ export const metadata: Metadata = {
     "Interactive DB Browser for SQLite database workbench with Northwind schema, SQL query execution, data browsing, and PRAGMA editing.",
 };
 
-export default async function DbBrowserPage({ searchParams }: { searchParams: Promise<{ muLab?: string; ide?: string; assignment?: string }> }) {
+export default async function DbBrowserPage({ searchParams }: { searchParams: Promise<{ muLab?: string; ide?: string; assignment?: string; capture?: string }> }) {
   const context = await searchParams;
+  if (context.capture === "report") return <DbBrowserWorkspace reportCapture />;
   return <><LabIdeSelector labId={context.muLab || ""} preferredIde={context.ide} assignment={context.assignment} /><DbBrowserWorkspace /></>;
 }

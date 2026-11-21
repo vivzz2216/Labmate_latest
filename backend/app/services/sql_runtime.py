@@ -118,7 +118,7 @@ def _resolve_mysql_admin_config(
     }
 
 
-def split_sql_statements(sql: str) -> list[dict[str, Any]]:
+def split_sql_statements(sql: str, *, sqlite: bool = False) -> list[dict[str, Any]]:
     """
     Split a SQL script into individual statements while tracking 1-based line ranges
     and any immediately preceding comment headers.
@@ -193,14 +193,14 @@ def split_sql_statements(sql: str) -> list[dict[str, Any]]:
             continue
 
         # Not inside string or comment
-        if (i == 0 or text[i - 1] == '\n') and stmt_start_line is None:
+        if not sqlite and (i == 0 or text[i - 1] == '\n') and stmt_start_line is None:
             directive = re.match(r'[ \t]*DELIMITER[ \t]+(\S+)[ \t]*(?:\n|$)', text[i:], re.I)
             if directive:
                 delimiter = directive.group(1)
                 line_num += directive.group(0).count('\n')
                 i += len(directive.group(0))
                 continue
-        if (ch == "-" and nxt == "-") or ch == "#":
+        if (ch == "-" and nxt == "-") or (ch == "#" and not sqlite):
             if comment_start_line is None and stmt_start_line is None:
                 comment_start_line = line_num
             in_line_comment = True
@@ -225,6 +225,13 @@ def split_sql_statements(sql: str) -> list[dict[str, Any]]:
 
         if text.startswith(delimiter, i):
             stmt_text = "".join(buf).strip()
+            if sqlite and stmt_text:
+                from sqlite3 import complete_statement
+                if not complete_statement(stmt_text + ";"):
+                    buf.append(";")
+                    stmt_last_non_ws_line = line_num
+                    i += 1
+                    continue
             if stmt_text:
                 s_line = stmt_start_line or line_num
                 e_line = max(s_line, stmt_last_non_ws_line)
@@ -1236,6 +1243,22 @@ def verify_sql_exercise(objective: str, code: str, execution_result: dict[str, A
 
     dialect = execution_result.get("dialect")
     server_version = execution_result.get("server_version") or ""
+    if dialect == "sqlite":
+        add_check("SQLite engine verification", bool(server_version), f"Executed on SQLite {server_version}")
+        add_check("SQL script execution", bool(execution_result.get("success")),
+                  execution_result.get("error") or "All statements executed as intended.")
+        statements = execution_result.get("statements") or []
+        add_check("Query result evidence", bool(execution_result.get("select_results")), "The script must produce query results.")
+        add_check("Complete query output", not any(step.get("truncated") for step in statements),
+                  "Result sets must fit the report capture limit.")
+        from .sql_result_checks import independent_checks, practical_table_checks
+        for check in independent_checks(statements) + practical_table_checks(statements):
+            add_check(check["name"], check["passed"], check["detail"])
+        if re.search(r'\b(?:stored\s+procedures?|GRANT|REVOKE|DCL)\b', objective or "", re.I):
+            add_check("SQLite compatibility", False,
+                      "This exercise requires database features unavailable in SQLite. Select a MySQL template.")
+        return {"verified": not failures, "checks": checks, "failures": failures,
+                "summary": "SQLite verification passed." if not failures else "SQLite verification failed."}
     add_check(
         "MySQL engine verification",
         dialect == "mysql" and bool(server_version),

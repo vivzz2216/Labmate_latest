@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useReportCapture, type SqlReportFrame } from "@/lib/ide/reportCapture";
 import {
   applyPragmaUpdate,
   createInitialDatabaseState,
@@ -96,23 +97,25 @@ function downloadTextFile(filename: string, content: string, mime = "text/plain;
   URL.revokeObjectURL(url);
 }
 
-export function DbBrowserWorkspace() {
-  const [dbState, setDbState] = useState<DatabaseState>(() => createInitialDatabaseState("northwind"));
+export function DbBrowserWorkspace({ reportCapture = false }: { reportCapture?: boolean } = {}) {
+  const [dbState, setDbState] = useState<DatabaseState>(() =>
+    reportCapture ? createInitialDatabaseState("blank", ":memory:") : createInitialDatabaseState("northwind"));
   // Statements run on the real SQLite engine (WebAssembly); until it has loaded, or if it cannot load, the built-in interpreter answers.
   useEffect(() => {
-    void loadRealSqlite();
-  }, []);
+    if (!reportCapture) void loadRealSqlite();
+  }, [reportCapture]);
   const [mainTab, setMainTab] = useState<MainWorkspaceTab>("Execute SQL");
   const [browseTable, setBrowseTable] = useState<string>("Shipper");
 
   const [sqlTabs, setSqlTabs] = useState<SqlQueryTab[]>(() => [
-    buildInitialSqlTab(createInitialDatabaseState("northwind")),
+    buildInitialSqlTab(createInitialDatabaseState(reportCapture ? "blank" : "northwind")),
   ]);
   const [activeSqlTabId, setActiveSqlTabId] = useState<string>("sql-tab-1");
   const nextSqlTabNumRef = useRef<number>(2);
 
   const [selectedCell, setSelectedCell] = useState<SelectedGridCell | null>(null);
   const [activeLine, setActiveLine] = useState<number>(1);
+  const [firstReportLine, setFirstReportLine] = useState(1);
   const [cursorOffset, setCursorOffset] = useState<number>(INITIAL_SQL.length);
 
   const [bottomDockTab, setBottomDockTab] = useState<BottomDockTabId>("DB Schema");
@@ -134,6 +137,16 @@ export function DbBrowserWorkspace() {
   const [sqlEditorPct, setSqlEditorPct] = useState<number>(40);
   const [sqlStatusHeight, setSqlStatusHeight] = useState<number>(54);
   const [editCellDockPct, setEditCellDockPct] = useState<number>(38);
+
+  useReportCapture<SqlReportFrame>(reportCapture, ({ filename, code, columns, rows, status, failed, activeLine, firstLine }) => {
+    setShowBottomDock(false);
+    setShowEditCellDock(false);
+    setSqlEditorPct(columns.length ? 50 : 70);
+    setActiveLine(activeLine);
+    setFirstReportLine(firstLine);
+    setSqlTabs([{ id: "sql-tab-1", title: filename, sql: code, hasExecuted: true,
+      statusText: status, statusIsError: failed, columns, rows }]);
+  });
 
   const workspaceRef = useRef<HTMLDivElement | null>(null);
   const leftSplitRef = useRef<HTMLDivElement | null>(null);
@@ -1424,6 +1437,7 @@ export function DbBrowserWorkspace() {
                       setCursorOffset(offset);
                     }}
                     activeLine={activeLine}
+                    lineNumberStart={firstReportLine}
                     heightStyle={{ flex: "0 0 " + sqlEditorPct + "%" }}
                   />
 

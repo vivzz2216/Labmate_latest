@@ -11,6 +11,7 @@ export interface PracticalFrame {
   device?: string;
   port?: string;
   settings?: boolean;
+  pdu?: { source: string; destination: string; success: boolean };
 }
 
 export function buildNetworkPractical(topic: string): PracticalFrame[] {
@@ -40,6 +41,8 @@ export function buildNetworkPractical(topic: string): PracticalFrame[] {
     const result = ping(project, source, destination);
     if (result.ok !== expected) throw new Error(title + ": " + result.message);
     frame(title, result.message, result.events);
+    const receiver = project.devices.find(item => Object.values(item.ports).some(port => port.ip === destination));
+    frames[frames.length - 1].pdu = { source, destination: receiver?.name ?? destination, success: result.ok };
   }
 
   switch (topic) {

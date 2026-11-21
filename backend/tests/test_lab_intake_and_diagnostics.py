@@ -20,6 +20,8 @@ def test_pdf_intake_requires_an_exercise():
             validate_lab_pdf(document)
     validate_lab_pdf("Write a Python program to reverse a string.")
     validate_lab_pdf("Experiment 4: Compare local and remote method invocation.")
+    validate_lab_pdf("Lab 1: Retail Sales Dashboard in Microsoft Power BI Desktop\nAim: Import Sales CSV and create SalesAmount.")
+    validate_lab_pdf("Practical Journal\nStep 1: Load Customers and Orders in Power BI Model View.")
 
 
 def test_running_margins_are_removed_but_experiments_are_preserved():

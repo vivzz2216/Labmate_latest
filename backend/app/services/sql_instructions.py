@@ -2,7 +2,18 @@
 import re
 
 
-def sql_instructions(question: str) -> str:
+def sql_instructions(question: str, *, dialect: str = "mysql") -> str:
+    if dialect == "sqlite":
+        return (
+            "\nSQLITE RUNTIME: Return a complete SQLite SQL script. It runs in a fresh private in-memory database. "
+            "Create and populate every required table. Use INTEGER PRIMARY KEY for automatic integer IDs, "
+            "and emit SELECT * for each populated table before the exercise queries. Include SELECTs showing "
+            "the before and after state of each required data change. Use SQLite syntax for joins, views and "
+            "triggers, including BEGIN … END for trigger bodies. Never use CREATE DATABASE, USE, ATTACH, "
+            "DELIMITER, system commands, or external files. For deliberately rejected constraint violations, "
+            "put -- EXPECTED ERROR: <reason> directly above the statement. Avoid more than 100 rows per result. "
+            "Use distinct result aliases, keep lines within 80 characters and implement only the requested tasks."
+        )
     text = question or ''
     instructions = (
         '\nMYSQL RUNTIME: Return a complete self-contained MySQL 8 script for THIS exercise only. '

@@ -74,16 +74,18 @@ class NotLabManualError(ValueError):
 
 _LAB_HEADING = re.compile(
     r"^\s*(?:\d+[.)]\s*)?(?:(?:[\w /&-]+\s+)?lab(?:oratory)?\s+manual\b|"
-    r"(?:pre[- ]?|post[- ]?)?lab(?:oratory)?\s+(?:exercise|assignment|questions?)\b|"
-    r"(?:experiment|practical|exercise)\s*(?:no\.?\s*)?[-–—:#]?\s*\d+\b|"
+    r"(?:[\w /&-]+\s+)?practical\s+(?:journal|examination|evaluation|sheet|manual|work)\b|"
+    r"(?:pre[- ]?|post[- ]?)?lab(?:oratory)?\s+(?:exercise|assignment|questions?|sheet)\b|"
+    r"(?:experiment|practical|exercise|lab)\s*(?:no\.?\s*)?[-–—:#]?\s*\d+\b|"
     # "Object Oriented Programming in C++ - List of Experiments" heads a manual whose tasks sit in an index table.
     r"[^\n]{0,80}\blist\s+of\s+(?:experiments|practicals|programs|assignments)\b)", re.I | re.M)
 _TASK_START = re.compile(
     # A table row reads "1 Write a C++ program ...": the number is followed by a space, not "." or ")".
-    r"^\s*(?:(?:q(?:uestion)?\s*)?\d+(?:\s*[.):–-]\s*|\s+)|[a-z][.)]\s*|(?:aim|task|objective)\s*:\s*)?"
+    r"^\s*(?:(?:q(?:uestion)?\s*)?\d+(?:\s*[.):–-]\s*|\s+)|step\s+\d+\s*[:.)–-]\s*|[a-z][.)]\s*|(?:aim|task|objective|problem\s+statement)\s*:\s*)?"
     r"(?:to\s+)?(?:write|wap|implement|create|develop|design|build|execute|run|compile|"
     r"demonstrate|perform|simulate|configure|train|calculate|find|display|define|explain|"
-    r"list|describe|compare|identify|count|plot|insert|select|use|solve|construct)\b", re.I | re.M)
+    r"list|describe|compare|identify|count|plot|insert|select|use|solve|construct|"
+    r"import|load|open|launch|transform|clean|filter|evaluate|inspect|verify|capture|connect|link|analyze|analyse)\b", re.I | re.M)
 
 
 def validate_lab_pdf(text):

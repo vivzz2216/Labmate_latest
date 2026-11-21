@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/BasicAuthContext'
 import LabMateLogo from '@/components/brand/LabMateLogo'
 import LoginModal from '@/components/auth/LoginModal'
 import { fetchAdminOverview, fetchAdminUsers, fetchAdminPayments, fetchAdminMessages, type AdminOverview, type StudentPage, type PaymentPage, type PaymentMode, type MessagePage } from '@/lib/adminApi'
+import UpdatesManager from '@/components/community/UpdatesManager'
 import styles from './admin.module.css'
 
 const money = (paise: number, currency = 'INR') => new Intl.NumberFormat('en-IN', { style: 'currency', currency, maximumFractionDigits: 2 }).format(paise / 100)
@@ -19,7 +20,7 @@ export default function AdminDashboardPage() {
   const [students, setStudents] = useState<StudentPage | null>(null)
   const [payments, setPayments] = useState<PaymentPage | null>(null)
   const [messages, setMessages] = useState<MessagePage | null>(null)
-  const [tab, setTab] = useState<'students' | 'payments' | 'messages'>('students')
+  const [tab, setTab] = useState<'students' | 'payments' | 'messages' | 'updates'>('students')
   const [search, setSearch] = useState('')
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState('all')
@@ -46,13 +47,13 @@ export default function AdminDashboardPage() {
     const detail = tab === 'students'
       ? fetchAdminUsers({ search: query, paid: filter === 'paid' ? true : filter === 'unpaid' ? false : undefined, active: filter === 'inactive' ? false : undefined, offset: page * 25, limit: 25 }, controller.signal)
       : tab === 'payments' ? fetchAdminPayments(mode, page * 25, controller.signal)
-      : fetchAdminMessages(controller.signal)
+      : tab === 'messages' ? fetchAdminMessages(controller.signal) : Promise.resolve(null)
     Promise.all([fetchAdminOverview(controller.signal), detail]).then(([summary, records]) => {
       if (controller.signal.aborted) return
       setOverview(summary)
       if (tab === 'students') setStudents(records as StudentPage)
       else if (tab === 'payments') setPayments(records as PaymentPage)
-      else setMessages(records as MessagePage)
+      else if (tab === 'messages') setMessages(records as MessagePage)
     }).catch((err) => {
       if (controller.signal.aborted) return
       if ([401, 403].includes(err?.response?.status)) { setDenied(true); setOverview(null) }
@@ -111,7 +112,9 @@ export default function AdminDashboardPage() {
             <button role="tab" aria-selected={tab === 'students'} aria-controls="owner-records" onClick={() => { setTab('students'); setPage(0) }}>Students {overview && <span>{number(overview.total_students)}</span>}</button>
             <button role="tab" aria-selected={tab === 'payments'} aria-controls="owner-records" onClick={() => { setTab('payments'); setPage(0) }}>Payments</button>
             <button role="tab" aria-selected={tab === 'messages'} aria-controls="owner-records" onClick={() => { setTab('messages'); setPage(0) }}>Messages</button>
+            <button role="tab" aria-selected={tab === 'updates'} aria-controls="owner-records" onClick={() => setTab('updates')}>Updates</button>
           </div>
+          {tab === 'updates' ? <div id="owner-records" role="tabpanel"><UpdatesManager embedded /></div> : <>
           <div className={styles.tools}>
             {tab === 'students' ? <>
               <label className={styles.search}><Search size={16} /><input aria-label="Search students" placeholder="Search students by name or email" value={search} maxLength={120} onChange={e => setSearch(e.target.value)} /></label>
@@ -155,6 +158,7 @@ export default function AdminDashboardPage() {
               </tbody></table>}
           </div>
           <footer className={styles.pagination}><span>{total ? `${page * 25 + 1}–${Math.min((page + 1) * 25, total)} of ${number(total)}` : '0 records'}</span><div><button aria-label="Previous page" disabled={page === 0 || loading} onClick={() => setPage(p => p - 1)}><ArrowLeft size={16} /> Previous</button><button aria-label="Next page" disabled={(page + 1) * 25 >= total || loading} onClick={() => setPage(p => p + 1)}>Next <ArrowRight size={16} /></button></div></footer>
+          </>}
         </section>
         <p className={styles.footnote}>Student totals exclude your owner account. Financial totals use captured INR payment records and recorded refunds. Activity is recorded usage, not a live online-user count. All times are IST.</p>
       </main>}

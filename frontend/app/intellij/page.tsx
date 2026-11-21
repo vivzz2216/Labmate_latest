@@ -7,7 +7,8 @@ export const metadata: Metadata = {
   description: "Interactive JetBrains IntelliJ IDEA New UI Dark replica with live Java execution, project explorer, and terminal.",
 };
 
-export default async function IntellijReplicaPage({ searchParams }: { searchParams: Promise<{ muLab?: string; ide?: string; assignment?: string }> }) {
+export default async function IntellijReplicaPage({ searchParams }: { searchParams: Promise<{ muLab?: string; ide?: string; assignment?: string; capture?: string }> }) {
   const context = await searchParams;
+  if (context.capture === "report") return <IntellijWorkspace reportCapture />;
   return <><LabIdeSelector labId={context.muLab || ""} preferredIde={context.ide} assignment={context.assignment} /><IntellijWorkspace /></>;
 }

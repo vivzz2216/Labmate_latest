@@ -89,17 +89,22 @@ async def launch_capture_browser(playwright):
     try:
         return await playwright.chromium.launch(headless=True, args=['--disable-dev-shm-usage'])
     except AsyncPlaywrightError as original:
-        for executable in (r"C:\Program Files\Google\Chrome\Application\chrome.exe", r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"):
+        for executable in (
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+            r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+        ):
             if os.path.isfile(executable):
                 try:
                     return await playwright.chromium.launch(executable_path=executable, headless=True, args=['--disable-dev-shm-usage'])
                 except AsyncPlaywrightError:
                     continue
         if os.name == "nt":
-            try:
-                return await playwright.chromium.launch(channel="chrome", headless=True, args=['--disable-dev-shm-usage'])
-            except AsyncPlaywrightError:
-                pass
+            for channel in ("msedge", "chrome"):
+                try:
+                    return await playwright.chromium.launch(channel=channel, headless=True, args=['--disable-dev-shm-usage'])
+                except AsyncPlaywrightError:
+                    pass
         raise _launch_failure(original) from original
 
 

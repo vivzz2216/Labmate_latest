@@ -2,29 +2,23 @@
 
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
+import { ArrowUpRight, CheckCircle2 } from "lucide-react";
 import api from "@/lib/api";
 import { useAuth } from "@/contexts/BasicAuthContext";
+import styles from "./contact.module.css";
 
-/** Sends a private (unrated) message to the team through POST /api/feedback, which needs a signed-in student. */
 export default function ContactForm() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const [message, setMessage] = useState("");
+  const [topic, setTopic] = useState("Lab execution & reports");
   const [state, setState] = useState<"idle" | "sending" | "sent" | "failed">("idle");
-
-  if (!user) {
-    return (
-      <p>
-        <Link href="/?login=1">Sign in</Link> to send us a message from here. We reply to the email address on your account.
-      </p>
-    );
-  }
 
   const send = async (event: FormEvent) => {
     event.preventDefault();
-    if (!message.trim()) return;
+    if (!user || !message.trim() || state === "sending") return;
     setState("sending");
     try {
-      await api.post("/api/feedback", { message: `[Contact] ${message.trim()}` });
+      await api.post("/api/feedback", { message: `[Contact] ${topic}\n\n${message.trim()}` });
       setState("sent");
       setMessage("");
     } catch {
@@ -33,32 +27,46 @@ export default function ContactForm() {
   };
 
   return (
-    <form onSubmit={send} className="space-y-3">
-      <label htmlFor="contact-message" className="block text-sm text-zinc-600">
-        Your message (we reply to {user.email})
-      </label>
-      <textarea
-        id="contact-message"
-        value={message}
-        onChange={(event) => setMessage(event.target.value)}
-        maxLength={4900}
-        rows={6}
-        required
-        className="w-full rounded-xl border border-zinc-300 bg-white p-3 text-zinc-900 shadow-sm outline-none focus:border-indigo-500"
-        placeholder="Tell us what happened. For payments, include the payment reference (starts with pay_)."
-      />
-      <div className="flex items-center gap-4">
-        <button
-          type="submit"
-          disabled={state === "sending" || !message.trim()}
-          className="rounded-xl bg-zinc-950 px-5 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-50"
-        >
-          {state === "sending" ? "Sending…" : "Send message"}
+    <form onSubmit={send} className={styles.form}>
+      <div className={styles.row}>
+        <div className={styles.field}>
+          <label htmlFor="contact-name">Your name</label>
+          <input id="contact-name" className={styles.input} value={user?.name || ""} readOnly placeholder="Your account name" autoComplete="name" />
+        </div>
+        <div className={styles.field}>
+          <label htmlFor="contact-email">Email address</label>
+          <input id="contact-email" className={styles.input} type="email" value={user?.email || ""} readOnly placeholder="Your account email" autoComplete="email" />
+        </div>
+      </div>
+      <div className={styles.field}>
+        <label htmlFor="contact-topic">What can we help with?</label>
+        <select id="contact-topic" className={styles.input} value={topic} onChange={event => { setTopic(event.target.value); setState("idle"); }} disabled={state === "sending"}>
+          <option>Lab execution &amp; reports</option>
+          <option>Payments &amp; refunds</option>
+          <option>Account &amp; privacy</option>
+          <option>Feedback &amp; partnerships</option>
+        </select>
+      </div>
+      <div className={styles.field}>
+        <label htmlFor="contact-message">Your message</label>
+        <textarea id="contact-message" className={styles.input} value={message}
+          onChange={event => { setMessage(event.target.value); if (state !== "sending") setState("idle"); }}
+          maxLength={4800} rows={5} required disabled={state === "sending"}
+          placeholder="Tell us a little about what you need help with." />
+        <p className={styles.hint}>{topic === "Payments & refunds" ? "Include your payment reference (starts with pay_)." : "For a lab issue, include the experiment name and what happened."}</p>
+      </div>
+      {user ? <>
+        <button type="submit" className={styles.submit} disabled={state === "sending" || !message.trim()}>
+          {state === "sending" ? "Sending..." : "Send message"} <ArrowUpRight size={16} />
         </button>
-        <span role="status" className="text-sm">
-          {state === "sent" && <span className="text-emerald-600">Sent. We will reply by email.</span>}
-          {state === "failed" && <span className="text-red-600">Could not send. Please try again.</span>}
-        </span>
+        <p className={styles.hint}>Your message is private. Replies go to the email on your account.</p>
+      </> : <>
+        <Link href="/?login=1" className={styles.submit}>{loading ? "Checking your account..." : "Sign in to send a message"} <ArrowUpRight size={16} /></Link>
+        <p className={styles.hint}>Sign in so we can connect your request to your account and reply by email.</p>
+      </>}
+      <div role="status" className={styles.status} aria-live="polite">
+        {state === "sent" && <span className={styles.success}><CheckCircle2 size={15} style={{ display: "inline", marginRight: 6 }} />Message sent. We will reply by email.</span>}
+        {state === "failed" && <span className={styles.error}>Could not send your message. Please try again.</span>}
       </div>
     </form>
   );

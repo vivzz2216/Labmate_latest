@@ -47,3 +47,37 @@ export function workspaceLocation(search: string, assignment?: number | null, pr
   }
   return '/code-execution' + (params.size ? '?' + params : '');
 }
+
+export function muLabCodeStudioHref(lab: { id: string; name: string; courseName?: string; domainTags?: string[] }): string {
+  const assoc = LAB_IDE_ASSOCIATIONS[lab.id];
+  if (assoc) {
+    return '/code-execution?' + new URLSearchParams({
+      muLab: lab.id,
+      ide: assoc.defaultIde,
+      language: assoc.language,
+    }).toString();
+  }
+  const text = `${lab.id} ${lab.name} ${lab.courseName || ''} ${(lab.domainTags || []).join(' ')}`.toLowerCase();
+  const params = new URLSearchParams();
+  if (/\b(?:sql|dbms|database|datawarehouse|mining)\b/.test(text)) {
+    params.set('lab', 'sql');
+    params.set('track', 'sql');
+  } else if (/\bjava\b/.test(text)) {
+    params.set('lab', 'java');
+    params.set('track', 'java');
+  } else if (/\bpython\b/.test(text)) {
+    params.set('lab', 'python');
+    params.set('track', 'python');
+  } else if (/\b(?:internet programming|web lab|web engineering|html|react|node)\b/.test(text)) {
+    params.set('lab', 'web-development');
+    params.set('track', 'web');
+  } else if (/\b(?:deep learning|neural|machine learning|soft computing|swarm|data analytics|data science|visualization|statistics|\bai\b|\bml\b)\b/.test(text)) {
+    params.set('lab', 'deep-learning');
+    params.set('track', 'deep_learning');
+  } else if (/\b(?:c programming|data structure|ads lab|algorithm|compiler|system programming|graphics)\b/.test(text)) {
+    params.set('lab', 'c-cpp');
+    params.set('track', 'cpp');
+  }
+  params.set('muLab', lab.id);
+  return '/code-execution?' + params.toString();
+}

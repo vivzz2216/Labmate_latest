@@ -36,7 +36,8 @@ import {
   Sparkles,
   Archive,
   Layers,
-  Info, Moon, Sun} from "lucide-react";
+  Info, Moon, Sun
+} from "lucide-react";
 import api, { apiService, type UploadResponse } from "@/lib/api";
 import { useDashboardTheme } from "@/components/dashboard/DashboardShell";
 import { useAuth } from "@/contexts/BasicAuthContext";
@@ -53,7 +54,11 @@ import {
   type BatchItem,
 } from "@/lib/workflow";
 import styles from "./processing.module.css";
-import { getLabCategory } from "@/lib/labCatalog";
+import { getLabCategory, type LabCategory } from "@/lib/labCatalog";
+import {
+  getAllowedLanguagesForTrack,
+  resolveTrackLanguage,
+} from "@/lib/labStudioLaunch";
 import { LAB_IDE_ASSOCIATIONS, resolveLabIde, labIdeHref } from "@/lib/mumbaiUniversity/labIdeAssociations";
 import LabIdeSelector from "@/components/catalogue/LabIdeSelector";
 
@@ -71,216 +76,6 @@ const languages: { value: LabLanguage; label: string }[] = [
   { value: "sql", label: "SQL (MySQL runtime)" },
   { value: "r", label: "R (RStudio)" },
 ];
-
-const TRACK_LANGUAGE_MAP: Record<string, LabLanguage[]> = {
-  deep_learning: ["auto", "colab", "python"],
-  "deep-learning": ["auto", "colab", "python"],
-  colab: ["auto", "colab", "python"],
-  distributed: ["distributed"],
-  "distributed-computing": ["distributed"],
-  python: ["auto", "python", "colab"],
-  java: ["auto", "java"],
-  cpp: ["auto", "cpp", "c"],
-  "c-cpp": ["auto", "cpp", "c"],
-  c: ["auto", "c", "cpp"],
-  web: ["auto", "html", "react", "node"],
-  "web-development": ["auto", "html", "react", "node"],
-  sql: ["auto", "sql"],
-  r: ["auto", "r"],
-  sma: ["auto", "colab", "python"],
-  "social-media-analytics": ["auto", "colab", "python"],
-};
-
-interface PlatformGuideRow {
-  platform: string;
-  usage: string;
-  support: string;
-  recommendation: string;
-  top?: boolean;
-  targetLanguage?: LabLanguage;
-  targetTemplate?: "idle" | "jupyter";
-}
-
-interface TrackPlatformGuide {
-  title: string;
-  supportHeading: string;
-  rows: PlatformGuideRow[];
-}
-
-const TRACK_PLATFORM_GUIDES: Record<string, TrackPlatformGuide> = {
-  deep_learning: {
-    title: "Deep Learning Platforms & IDEs",
-    supportHeading: "Deep Learning support",
-    rows: [
-      {
-        platform: "Google Colab",
-        usage: "Cloud-based notebooks",
-        support: "TensorFlow, PyTorch, Keras",
-        recommendation: "⭐ Excellent",
-        top: true,
-        targetLanguage: "colab",
-      },
-      {
-        platform: "Jupyter Notebook",
-        usage: "Interactive Python development",
-        support: "TensorFlow, PyTorch, Keras",
-        recommendation: "⭐ Excellent",
-        top: true,
-        targetLanguage: "python",
-        targetTemplate: "jupyter",
-      },
-      {
-        platform: "VS Code",
-        usage: "Full development environment",
-        support: "TensorFlow, PyTorch",
-        recommendation: "⭐ Excellent",
-        top: true,
-
-      },
-      {
-        platform: "Kaggle Notebooks",
-        usage: "Cloud-based ML/DL experiments",
-        support: "TensorFlow, PyTorch",
-        recommendation: "Excellent",
-
-      },
-      {
-        platform: "PyCharm",
-        usage: "Python development",
-        support: "TensorFlow, PyTorch",
-        recommendation: "Excellent",
-
-      },
-    ],
-  },
-  distributed: {
-    title: "Distributed Computing IDE",
-    supportHeading: "Java Runtime",
-    rows: [
-      {
-        platform: "VS Code",
-        usage: "Default IDE & integrated terminal",
-        support: "Java 17 · Sockets, RMI, Threads",
-        recommendation: "⭐ Default",
-        top: true,
-
-      },
-    ],
-  },
-  python: {
-    title: "Python Platforms & IDEs",
-    supportHeading: "Python support",
-    rows: [
-      {
-        platform: "Python IDLE",
-        usage: "Standard Windows lab environment",
-        support: "Python 3.11+ Stdlib",
-        recommendation: "⭐ Excellent",
-        top: true,
-        targetLanguage: "python",
-        targetTemplate: "idle",
-      },
-      {
-        platform: "Jupyter Notebook",
-        usage: "Interactive notebook cells",
-        support: "NumPy, Pandas, Matplotlib",
-        recommendation: "⭐ Excellent",
-        top: true,
-        targetLanguage: "python",
-        targetTemplate: "jupyter",
-      },
-      {
-        platform: "Google Colab",
-        usage: "Cloud-based notebooks",
-        support: "Data Science & ML Stack",
-        recommendation: "⭐ Excellent",
-        top: true,
-        targetLanguage: "colab",
-      },
-      {
-        platform: "VS Code / PyCharm",
-        usage: "Full Python IDE",
-        support: "Scripts, OOP, Modules",
-        recommendation: "Excellent",
-
-      },
-    ],
-  },
-  web: {
-    title: "Web Development Platforms",
-    supportHeading: "Web stack support",
-    rows: [
-      {
-        platform: "VS Code + Browser",
-        usage: "Live DOM & multi-file projects",
-        support: "HTML5, CSS3, JavaScript",
-        recommendation: "⭐ Excellent",
-        top: true,
-        targetLanguage: "html",
-      },
-      {
-        platform: "React Studio",
-        usage: "Component & SPA applications",
-        support: "React 18, JSX, Hooks",
-        recommendation: "⭐ Excellent",
-        top: true,
-        targetLanguage: "react",
-      },
-      {
-        platform: "Node.js Runtime",
-        usage: "Backend APIs & Express",
-        support: "Node.js, Express, REST",
-        recommendation: "⭐ Excellent",
-        top: true,
-        targetLanguage: "node",
-      },
-    ],
-  },
-  sql: {
-    title: "SQL Database Environments",
-    supportHeading: "SQL support",
-    rows: [
-      {
-        platform: "MySQL Workbench",
-        usage: "Visual queries & schema grids",
-        support: "MySQL 8.0, Joins, Views",
-        recommendation: "⭐ Excellent",
-        top: true,
-        targetLanguage: "sql",
-      },
-    ],
-  },
-};
-
-function getTrackPlatformGuide(track: string): TrackPlatformGuide | null {
-  if (!track) return null;
-  const key = track.toLowerCase().replace(/-/g, "_");
-  if (key === "distributed_computing") return TRACK_PLATFORM_GUIDES.distributed;
-  if (key === "web_development") return TRACK_PLATFORM_GUIDES.web;
-  if (key === "colab") return TRACK_PLATFORM_GUIDES.deep_learning;
-  return TRACK_PLATFORM_GUIDES[key] || null;
-}
-
-function getAllowedLanguages(track: string) {
-  if (!track) return languages;
-  const normalized = track.toLowerCase();
-  const allowed = TRACK_LANGUAGE_MAP[normalized] || TRACK_LANGUAGE_MAP[normalized.replace(/-/g, "_")];
-  if (!allowed) return languages;
-  return languages.filter((item) => allowed.includes(item.value));
-}
-// A lab page links here with its section's track (for example "web" or
-// "deep_learning"), which is not always a runtime language. Resolve the language
-// from the catalogue: the launched experiment's runtime, else the section default.
-const labLanguage = (track: string, experimentId: string): LabLanguage | null => {
-  if (!track) return null;
-  const category = getLabCategory(track);
-  if (category) {
-    return category.experiments.find((experiment) => experiment.id === experimentId)?.runtime || category.defaultLanguage;
-  }
-  return languages.some((item) => item.value === track) ? (track as LabLanguage) : null;
-};
-const labTitle = (track: string, experimentId: string) =>
-  getLabCategory(track)?.experiments.find((experiment) => experiment.id === experimentId)?.title || "Lab experiment";
 
 const stages = [
   {
@@ -337,38 +132,46 @@ function AssignmentContent() {
   const { theme, toggleTheme } = useDashboardTheme();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const labParam = searchParams.get("lab") || searchParams.get("category") || "";
   const trackParam = searchParams.get("track") || "";
-  const expParam = searchParams.get("exp") || "";
-  const promptParam = searchParams.get("prompt") || "";
+  const activeCategoryKey = labParam || trackParam;
   const assignmentParam = searchParams.get("assignment");
   const muLabId = searchParams.get("muLab") || "";
   const ideParam = searchParams.get("ide");
   const muAssociation = LAB_IDE_ASSOCIATIONS[muLabId];
-  const sourceIde = resolveLabIde(muLabId,ideParam);
-  useEffect(()=>{
-    const href=labIdeHref(muLabId,sourceIde);
-    if(href && !href.startsWith('/code-execution')){router.replace(href);return;}
-    if(muAssociation){
+  const sourceIde = resolveLabIde(muLabId, ideParam);
+  useEffect(() => {
+    const href = labIdeHref(muLabId, sourceIde);
+    if (href && !href.startsWith('/code-execution') && !assignmentParam) { router.replace(href); return; }
+    if (muAssociation) {
       setLanguage(muAssociation.language);
-      if(muAssociation.language === "python" && (sourceIde === "jupyter" || sourceIde === "vscode" || sourceIde === "idle")) setPythonTemplate(sourceIde);
-      if(muAssociation.language === "java" && (sourceIde === "notepad" || sourceIde === "vscode")) setJavaTemplate(sourceIde);
+      if (muAssociation.language === "python" && (sourceIde === "jupyter" || sourceIde === "vscode" || sourceIde === "idle")) setPythonTemplate(sourceIde);
+      if (muAssociation.language === "java" && (sourceIde === "notepad" || sourceIde === "vscode" || sourceIde === "eclipse" || sourceIde === "intellij")) setJavaTemplate(sourceIde);
+      if (muAssociation.language === "sql" && (sourceIde === "workbench" || sourceIde === "mysql-cli" || sourceIde === "sqlite")) setSqlTemplate(sourceIde);
     }
-  },[muLabId,muAssociation,sourceIde,router]);
+  }, [muLabId, muAssociation, sourceIde, router]);
   const inputRef = useRef<HTMLInputElement>(null);
-  const promptSeededRef = useRef("");
+  const startingRef = useRef<Promise<UploadResponse> | null>(null);
+  const lastCategoryKeyRef = useRef("");
+  const [loadedCategory, setLoadedCategory] = useState<LabCategory | null>(() =>
+    !assignmentParam && activeCategoryKey ? getLabCategory(activeCategoryKey) ?? null : null
+  );
   const [upload, setUpload] = useState<UploadResponse | null>(null);
   const [workflow, setWorkflow] = useState<LabWorkflow | null>(null);
   const [questions, setQuestions] = useState<LabQuestion[]>([]);
   const [language, setLanguage] = useState<LabLanguage>("auto");
-  const isDistributedMode = language === "distributed" || trackParam === "distributed" || trackParam === "distributed-computing";
+  const isDistributedMode = language === "distributed" || trackParam === "distributed" || trackParam === "distributed-computing" || loadedCategory?.track === "distributed";
+  const isNotebookTrack = ["deep_learning", "colab", "sma"].includes(loadedCategory?.track || trackParam);
   const [screenshotStyle, setScreenshotStyle] = useState<string>("style_1");
   const [colabTheme, setColabTheme] = useState<"light" | "dark">("dark");
   const [jupyterTheme, setJupyterTheme] = useState<"light" | "dark">("light");
   const [notebookJupyterTheme, setNotebookJupyterTheme] = useState<"light" | "dark">("light");
   const [pythonTemplate, setPythonTemplate] = useState<"idle" | "jupyter" | "vscode">("idle");
-  const [javaTemplate, setJavaTemplate] = useState<"notepad" | "vscode">("notepad");
-  const [sqlTemplate, setSqlTemplate] = useState<"workbench" | "mysql-cli">("workbench");
-  const [notebookTemplate, setNotebookTemplate] = useState<"colab" | "jupyter">("colab");
+  const [javaTemplate, setJavaTemplate] = useState<"notepad" | "vscode" | "eclipse" | "intellij">("notepad");
+  const [sqlTemplate, setSqlTemplate] = useState<"workbench" | "mysql-cli" | "sqlite">("workbench");
+  const [cppTemplate, setCppTemplate] = useState<"codeblocks" | "vscode">("codeblocks");
+  const [rstudioTheme, setRstudioTheme] = useState<"light" | "dark">("light");
+  const [notebookTemplate, setNotebookTemplate] = useState<"colab" | "jupyter" | "r">("colab");
   const [browserTheme, setBrowserTheme] = useState<"edge" | "chrome">("edge");
   const [instructions, setInstructions] = useState("");
   const [filename, setFilename] = useState("lab_report");
@@ -393,6 +196,8 @@ function AssignmentContent() {
   const detectedLanguages = Array.from(new Set(detectedQuestions.map(question => question.language)))
     .filter(value => value !== "theory" && value !== "auto");
   const selectedLanguages = language === "auto" || isBatchMode ? detectedLanguages : [language];
+  const showNotebookTemplate =
+    selectedLanguages.includes("colab") || notebookTemplate === "r" || isNotebookTrack;
   const detectedLabel = detectedLanguages.map(value =>
     value === "colab" ? "Colab / notebook" : languages.find(option => option.value === value)?.label ?? value,
   ).join(", ");
@@ -400,19 +205,51 @@ function AssignmentContent() {
   const withScreenshotTemplate = (question: LabQuestion, selectedLanguage: LabLanguage): LabQuestion => {
     const base = { ...question, track: question.track || trackParam || undefined };
     if (question.language === "theory" || question.kind === "evidence" || question.kind === "theory") return base;
-    switch (selectedLanguage === "auto" ? question.language : selectedLanguage) {
-      case "python":
-        return { ...base, source_ide: pythonTemplate === "vscode" ? "vscode" : undefined,
-          python_template: pythonTemplate === "jupyter" ? "jupyter" : "idle", jupyter_theme: jupyterTheme, browser_theme: browserTheme };
+    const targetLanguage: LabLanguage =
+      selectedLanguage !== "auto"
+        ? selectedLanguage
+        : notebookTemplate === "r" && (question.language === "colab" || isNotebookTrack)
+          ? "r"
+          : question.language;
+    const withLang = { ...base, language: targetLanguage };
+    switch (targetLanguage) {
+      case "python": {
+        const useJupyter = notebookTemplate === "jupyter" && isNotebookTrack;
+        return {
+          ...withLang,
+          source_ide: !useJupyter && pythonTemplate === "vscode" ? "vscode" : undefined,
+          python_template: useJupyter || pythonTemplate === "jupyter" ? "jupyter" : "idle",
+          jupyter_theme: useJupyter ? notebookJupyterTheme : jupyterTheme,
+          browser_theme: browserTheme,
+        };
+      }
       case "java":
-        return { ...base, source_ide: javaTemplate === "vscode" ? "vscode" : undefined };
+        return { ...withLang, source_ide: javaTemplate === "notepad" ? undefined : javaTemplate };
       case "sql":
-        return { ...base, source_ide: sqlTemplate === "mysql-cli" ? "mysql-cli" : undefined };
+        return { ...withLang, source_ide: sqlTemplate === "workbench" ? undefined : sqlTemplate };
       case "colab":
-        return { ...base, notebook_template: notebookTemplate, colab_theme: colabTheme, jupyter_theme: notebookJupyterTheme };
+        return {
+          ...withLang,
+          notebook_template: notebookTemplate === "jupyter" ? "jupyter" : "colab",
+          colab_theme: colabTheme,
+          jupyter_theme: notebookJupyterTheme,
+        };
+      case "r":
+        return { ...withLang, rstudio_theme: rstudioTheme };
+      case "c":
+      case "cpp":
+        return {
+          ...withLang,
+          source_ide:
+            muAssociation && (sourceIde === "codeblocks" || sourceIde === "vscode")
+              ? sourceIde
+              : cppTemplate,
+        };
       default:
-        return { ...base, browser_theme: browserTheme,
-          source_ide: muAssociation && (sourceIde === "codeblocks" || sourceIde === "vscode") ? sourceIde : question.source_ide };
+        return {
+          ...withLang, browser_theme: browserTheme,
+          source_ide: muAssociation && (sourceIde === "codeblocks" || sourceIde === "vscode") ? sourceIde : question.source_ide
+        };
     }
   };
 
@@ -434,68 +271,27 @@ function AssignmentContent() {
   }, []);
 
   useEffect(() => {
-    if (trackParam === "deep_learning" || trackParam === "deep-learning") {
-      setLanguage("colab");
-      setColabTheme("dark");
-    } else if (trackParam === "distributed" || trackParam === "distributed-computing") {
-      setLanguage("distributed");
-    } else if (trackParam && ["python", "java", "c", "cpp", "html", "react", "node", "sql", "colab"].includes(trackParam)) {
-      setLanguage(trackParam as LabLanguage);
-    }
-
-    // A multi-part experiment (Social Media Analytics) launches as one question per part: theory answers,
-    // notebook code, and evidence parts whose screenshots the student attaches.
-    const launched = trackParam && expParam ? getLabCategory(trackParam)?.experiments.find((item) => item.id === expParam) : undefined;
-    if (launched?.parts?.length) {
-      const seedKey = `exp:${trackParam}:${expParam}`;
-      if (promptSeededRef.current !== seedKey) {
-        promptSeededRef.current = seedKey;
-        setQuestions((prev) =>
-          prev.length > 0
-            ? prev
-            : launched.parts!.map((part, index) => ({
-                id: index + 1,
-                text: part.text,
-                language: part.kind === "code" ? "colab" : "theory",
-                track: trackParam,
-                kind: part.kind,
-                part_title: part.title,
-                experiment_no: launched.number,
-                ...(part.builtinDatasets?.length ? { builtin_datasets: part.builtinDatasets } : {}),
-                ...(part.evidenceSlots?.length ? { evidence_slots: part.evidenceSlots } : {}),
-                ...(part.studio ? { studio: part.studio, studio_args: part.studioArgs ?? {} } : {}),
-              })),
-        );
-        setManualMode(launched.parts.some((part) => part.kind !== "code") ? "theory_and_code" : "code_only");
-        setFilename(sanitizeOutputName(launched.title, "lab_report"));
-        setShowQuestions(true);
+    if (assignmentParam) return;
+    const category = activeCategoryKey ? getLabCategory(activeCategoryKey) ?? null : null;
+    setLoadedCategory(category);
+    if (lastCategoryKeyRef.current === activeCategoryKey) return;
+    lastCategoryKeyRef.current = activeCategoryKey;
+    if (!upload) {
+      setQuestions([]);
+      setShowQuestions(false);
+      const nextLang = category ? resolveTrackLanguage(category.slug, [category]) : "auto";
+      setLanguage(nextLang);
+      if (nextLang === "r") {
+        setNotebookTemplate("r");
+      } else if (["deep_learning", "colab", "sma"].includes(category?.track || "")) {
+        setNotebookTemplate("colab");
       }
-      return;
     }
-
-    const trackLanguage = labLanguage(trackParam, expParam);
-    if (promptParam && promptSeededRef.current !== promptParam) {
-      promptSeededRef.current = promptParam;
-      setQuestions((prev) =>
-        prev.length > 0
-          ? prev
-          : [
-              {
-                id: 1,
-                text: promptParam,
-                language: trackLanguage || "python",
-                track: trackParam || undefined,
-              },
-            ],
-      );
-      setFilename(sanitizeOutputName(labTitle(trackParam, expParam), "lab_report"));
-      setShowQuestions(true);
-    }
-  }, [trackParam, expParam, promptParam]);
+  }, [activeCategoryKey, assignmentParam, upload]);
 
   const applyWorkflow = (data: LabWorkflow, restoreFields = false) => {
     setWorkflow(data);
-    if(!['queued','extracting','processing'].includes(data.status))setProcessingTriggered(false);
+    if (!['queued', 'extracting', 'processing'].includes(data.status)) setProcessingTriggered(false);
     if (data.status === "ready" || restoreFields) setQuestions(data.questions);
     if (restoreFields) {
       setLanguage(muAssociation?.language || data.language);
@@ -509,9 +305,16 @@ function AssignmentContent() {
       setNotebookJupyterTheme(notebook?.jupyter_theme || "light");
       setPythonTemplate(python?.source_ide === "vscode" ? "vscode" : python?.python_template ||
         (sourceIde === "vscode" || sourceIde === "jupyter" ? sourceIde : "idle"));
-      setJavaTemplate(savedQuestion("java")?.source_ide === "vscode" || (muAssociation?.language === "java" && sourceIde === "vscode") ? "vscode" : "notepad");
-      setSqlTemplate(savedQuestion("sql")?.source_ide === "mysql-cli" ? "mysql-cli" : "workbench");
-      setNotebookTemplate(notebook?.notebook_template || "colab");
+      const java = savedQuestion("java")?.source_ide;
+      const sql = savedQuestion("sql")?.source_ide;
+      setJavaTemplate(java === "vscode" || java === "eclipse" || java === "intellij" ? java : "notepad");
+      setSqlTemplate(sql === "mysql-cli" || sql === "sqlite" ? sql : "workbench");
+      setRstudioTheme(savedQuestion("r")?.rstudio_theme || "light");
+      setNotebookTemplate(
+        data.language === "r" || (savedQuestion("r") && !notebook)
+          ? "r"
+          : (notebook?.notebook_template || "colab"),
+      );
       setScreenshotStyle(data.screenshot_style || "style_1");
       setManualMode(data.mode || "code_only");
       setBrowserTheme(data.questions.find((question) => question.browser_theme)?.browser_theme || "edge");
@@ -765,10 +568,12 @@ function AssignmentContent() {
             )
           );
 
+          const batchLanguage: LabLanguage =
+            notebookTemplate === "r" && isNotebookTrack ? "r" : language;
           // Process with selected manualMode
           let runWf = await workflowApi.process(uploadId, {
-            questions: wf.questions.map(question => withScreenshotTemplate(question, "auto")),
-            language: "auto",
+            questions: wf.questions.map(question => withScreenshotTemplate(question, batchLanguage)),
+            language: batchLanguage,
             instructions: "",
             output_name: outputName(item.file.name),
             screenshot_style: screenshotStyle,
@@ -789,30 +594,30 @@ function AssignmentContent() {
               prev.map((it, idx) =>
                 idx === i
                   ? {
-                      ...it,
-                      stage: runWf.stage || "Capturing IDE screenshots",
-                      progress: Math.max(50, runWf.progress || 60),
-                    }
+                    ...it,
+                    stage: runWf.stage || "Capturing IDE screenshots",
+                    progress: Math.max(50, runWf.progress || 60),
+                  }
                   : it
               )
             );
           }
 
-          if(runWf.status==='awaiting_clarification') {
-            setBatchItems(prev=>prev.map((it,idx)=>idx===i?{...it,status:'awaiting_clarification',stage:'Needs your answers',workflow:runWf}:it));
+          if (runWf.status === 'awaiting_clarification') {
+            setBatchItems(prev => prev.map((it, idx) => idx === i ? { ...it, status: 'awaiting_clarification', stage: 'Needs your answers', workflow: runWf } : it));
           } else if (runWf.status === "completed" && runWf.report) {
             setBatchItems((prev) =>
               prev.map((it, idx) =>
                 idx === i
                   ? {
-                      ...it,
-                      status: "completed",
-                      stage: "Manual Ready",
-                      progress: 100,
-                      reportId: runWf.report!.id,
-                      reportFilename: runWf.report!.filename,
-                      workflow: runWf,
-                    }
+                    ...it,
+                    status: "completed",
+                    stage: "Manual Ready",
+                    progress: 100,
+                    reportId: runWf.report!.id,
+                    reportFilename: runWf.report!.filename,
+                    workflow: runWf,
+                  }
                   : it
               )
             );
@@ -821,15 +626,15 @@ function AssignmentContent() {
               prev.map((it, idx) =>
                 idx === i
                   ? {
-                      ...it,
-                      status: "failed",
-                      stage: runWf.error || "Failed",
-                      progress: 100,
-                      error: runWf.error || "Execution warning",
-                      reportId: runWf.report?.id,
-                      reportFilename: runWf.report?.filename,
-                      workflow: runWf,
-                    }
+                    ...it,
+                    status: "failed",
+                    stage: runWf.error || "Failed",
+                    progress: 100,
+                    error: runWf.error || "Execution warning",
+                    reportId: runWf.report?.id,
+                    reportFilename: runWf.report?.filename,
+                    workflow: runWf,
+                  }
                   : it
               )
             );
@@ -857,41 +662,8 @@ function AssignmentContent() {
     }
   };
 
-  // Launched from a lab page there is no manual, so the typed experiment becomes one. This runs before the
-  // first run, or earlier when the student attaches a screenshot to an evidence part.
-  const startingRef = useRef<Promise<UploadResponse> | null>(null);
-  const startFromLab = (): Promise<UploadResponse> => {
-    if (!startingRef.current) {
-      startingRef.current = (async () => {
-        const started = await workflowApi.startFromPrompt(
-          questions.map(({ id, text, language: questionLanguage, track, kind, part_title, experiment_no, builtin_datasets, evidence_slots, studio, studio_args }) => ({
-            id,
-            text,
-            language: isDistributedMode && questionLanguage !== "theory" ? "distributed" : questionLanguage,
-            track: track || trackParam || undefined,
-            ...(kind ? { kind } : {}),
-            ...(part_title ? { part_title } : {}),
-            ...(experiment_no ? { experiment_no } : {}),
-            ...(builtin_datasets?.length ? { builtin_datasets } : {}),
-            ...(evidence_slots?.length ? { evidence_slots } : {}),
-            ...(studio ? { studio, studio_args: studio_args ?? {} } : {}),
-          })),
-          labTitle(trackParam, expParam),
-        );
-        setUpload(started.upload);
-        const trackQuery = trackParam ? `&track=${encodeURIComponent(trackParam)}` : "";
-        router.replace(`/code-execution?assignment=${started.upload.id}${trackQuery}`, { scroll: false });
-        return started.upload;
-      })().catch((startError) => {
-        startingRef.current = null;
-        throw startError;
-      });
-    }
-    return startingRef.current;
-  };
-
   const process = async () => {
-    if (!questions.length || busy || running) return;
+    if (!upload || !questions.length || busy || running) return;
     if (questions.some((question) => !question.text.trim())) {
       setError("Every question needs some text.");
       setShowQuestions(true);
@@ -905,8 +677,12 @@ function AssignmentContent() {
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
     try {
-      const target = upload ?? (await startFromLab());
-      const effectiveLanguage: LabLanguage = isDistributedMode ? "distributed" : language;
+      const target = upload;
+      const effectiveLanguage: LabLanguage = isDistributedMode
+        ? "distributed"
+        : language === "auto" && notebookTemplate === "r" && isNotebookTrack
+          ? "r"
+          : language;
       applyWorkflow(
         await workflowApi.process(target.id, {
           questions: questions.map(question => withScreenshotTemplate(question, effectiveLanguage)),
@@ -952,9 +728,12 @@ function AssignmentContent() {
   };
 
   const reset = () => {
+    startingRef.current = null;
+    lastCategoryKeyRef.current = "";
     setProcessingTriggered(false);
     setUpload(null);
     setWorkflow(null);
+    setLoadedCategory(null);
     setQuestions([]);
     setPreview("");
     if (typeof window !== "undefined" && window.innerWidth <= 1024) {
@@ -978,16 +757,16 @@ function AssignmentContent() {
       ? "Processing needs attention"
       : workflow?.status === "queued"
         ? `Waiting in the queue${workflow.queue_position ? ` · position ${workflow.queue_position}` : ""}`
-      : workflow?.status === "ready"
-        ? `${total} questions ready to review`
-        : running
-          ? "Processing in progress"
-          : busy
-            ? "Uploading document"
-            : "Ready for your assignment";
+        : workflow?.status === "ready"
+          ? `${total} questions ready to review`
+          : running
+            ? "Processing in progress"
+            : busy
+              ? "Uploading document"
+              : "Ready for your assignment";
 
   const getActionLabel = () => {
-    if(workflow?.status==='awaiting_clarification')return 'A few decisions need your answer';
+    if (workflow?.status === 'awaiting_clarification') return 'A few decisions need your answer';
     if (complete) return "Word report ready";
     if (failed) return workflow?.error || "Processing failed";
     if (workflow?.status === "ready") return `${total} questions ready to review`;
@@ -1000,7 +779,7 @@ function AssignmentContent() {
     }
     if (isProcessingActive) {
       if (busy && !running) return "Initializing sandbox execution pipeline...";
-      if (workflow?.status === "extracting") return "Decomposing syllabus & testcases...";
+      if (workflow?.status === "extracting") return "Reading your uploaded lab manual & extracting questions...";
       if (workflow?.status === "queued") {
         return workflow.queue_position
           ? `Queued in sandbox pipeline (position ${workflow.queue_position})...`
@@ -1020,675 +799,776 @@ function AssignmentContent() {
       }
       return "Initializing sandbox execution pipeline...";
     }
+
     return "Waiting for assignment document";
   };
 
   return (
     <div data-theme={theme} style={{ display: "contents" }}>
-    <div className={styles.page}>
-      {/* Background DotGrid: pure CSS dot matrix, instant 0ms load */}
-      <div className={styles.pageDotsContainer} />
+      <div className={styles.page}>
+        {/* Background DotGrid: pure CSS dot matrix, instant 0ms load */}
+        <div className={styles.pageDotsContainer} />
 
-      <StudentProfileModal
-        isOpen={showProfileModal}
-        onClose={() => setShowProfileModal(false)}
-      />
-      <section className={styles.content}>
-        <header className={styles.header}>
-          <div className={styles.headerLead}>
-            <Link href="/" className={styles.brand} aria-label="LabMate home">
-              <LabMateLogo size="sm" theme={theme === "light" ? "light" : "dark"} />
-            </Link>
-            <div className={styles.headerCopy}>
-              <h1>Code Execution</h1>
-              <p>Run, verify and generate submission-ready lab reports.</p>
+        <StudentProfileModal
+          isOpen={showProfileModal}
+          onClose={() => setShowProfileModal(false)}
+        />
+        <section className={styles.content}>
+          <header className={styles.header}>
+            <div className={styles.headerLead}>
+              <Link href="/" className={styles.brand} aria-label="LabMate home">
+                <LabMateLogo size="sm" theme={theme === "light" ? "light" : "dark"} />
+              </Link>
+              <div className={styles.headerCopy}>
+                <h1>Code Execution</h1>
+                <p>Run, verify and generate submission-ready lab reports.</p>
+              </div>
             </div>
-          </div>
-          <div className={styles.account}>
-            <button type="button" className={styles.themeSwitch} onClick={toggleTheme}
-              aria-label={theme === "light" ? "Switch to dark theme" : "Switch to light theme"}>
-              {theme === "light" ? <Moon size={14} aria-hidden="true" /> : <Sun size={14} aria-hidden="true" />}
-              {theme === "light" ? "Dark" : "Light"}
-            </button>
-            <span className={styles.topAvatar}>{user?.name?.charAt(0).toUpperCase() || "L"}</span>
-            <strong>{user?.name || "LabMate"}</strong>
-          </div>
-        </header>
+            <div className={styles.account}>
+              <button type="button" className={styles.themeSwitch} onClick={toggleTheme}
+                aria-label={theme === "light" ? "Switch to dark theme" : "Switch to light theme"}>
+                {theme === "light" ? <Moon size={14} aria-hidden="true" /> : <Sun size={14} aria-hidden="true" />}
+                {theme === "light" ? "Dark" : "Light"}
+              </button>
+              <span className={styles.topAvatar}>{user?.name?.charAt(0).toUpperCase() || "L"}</span>
+              <strong>{user?.name || "LabMate"}</strong>
+            </div>
+          </header>
 
-        <main className={`${styles.layout} ${workflow || isProcessingActive ? styles.layoutActiveWorkflow : ""}`}>
-        <aside className={styles.setupPanel} id="assignment-setup">
-          <h2 className={styles.panelTitle}>Build your lab report</h2>
-          <CreditStatus refreshKey={`${workflow?.status}-${workflow?.progress}`} />
-          {trackParam && (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                padding: "8px 12px",
-                borderRadius: "8px",
-                marginTop: "10px",
-                marginBottom: "10px",
-                fontSize: "0.8rem",
-                fontWeight: 500,
-                background:
-                  trackParam.includes("deep")
-                    ? "rgba(168, 85, 247, 0.15)"
-                    : trackParam.includes("distrib")
-                    ? "rgba(14, 165, 233, 0.15)"
-                    : "rgba(59, 130, 246, 0.15)",
-                border: `1px solid ${
-                  trackParam.includes("deep")
-                    ? "rgba(168, 85, 247, 0.35)"
-                    : trackParam.includes("distrib")
-                    ? "rgba(14, 165, 233, 0.35)"
-                    : "rgba(59, 130, 246, 0.35)"
-                }`,
-                color:
-                  trackParam.includes("deep")
-                    ? "#c084fc"
-                    : trackParam.includes("distrib")
-                    ? "#38bdf8"
-                    : "#93c5fd",
-              }}
-            >
-              <Sparkles size={14} className="shrink-0" />
-              <span>
-                Active Track:{" "}
-                <strong>
-                  {trackParam === "deep_learning" || trackParam === "deep-learning"
-                    ? "Deep Learning Labs"
-                    : trackParam === "distributed" || trackParam === "distributed-computing"
-                    ? "Distributed Computing Labs"
-                    : trackParam.toUpperCase()}
-                </strong>
-              </span>
-            </div>
-          )}
-          {language !== "sql" && (language !== "auto" || questions.length === 0 ||
-            questions.some((question) => question.language !== "sql" && question.language !== "theory")) && <ExecutionStatus />}
-          <p className={styles.setupIntro}>
-            Configure the source, review the extracted questions, then run the execution and evidence checks.
-          </p>
-          {workflow&&<AgentPlanPanel key={`${workflow.id}:${workflow.agent_plan?.revision||0}`} workflow={workflow} busy={busy} onAnswer={async answers=>{
-            if(!upload||!workflow.agent_plan?.revision)return;
-            setBusy(true);setError('');
-            try{applyWorkflow(await workflowApi.clarify(upload.id,workflow.agent_plan.revision,answers));}
-            catch(error){setError(errorMessage(error));}
-            finally{setBusy(false);}
-          }}/>}
-          <div className={styles.step}>
-            <span className={styles.stepNumber}>1</span>
-            <div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
-                <h2>Upload assignment</h2>
-                <button
-                  type="button"
-                  className={styles.personalizeBtn}
-                  onClick={() => setShowProfileModal(true)}
-                  title="Configure real student name and USN for code outputs"
+          <main className={`${styles.layout} ${workflow || isProcessingActive ? styles.layoutActiveWorkflow : ""}`}>
+            <aside className={styles.setupPanel} id="assignment-setup">
+              <h2 className={styles.panelTitle}>Build your lab report</h2>
+              <CreditStatus refreshKey={`${workflow?.status}-${workflow?.progress}`} />
+              {trackParam && !loadedCategory && (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    padding: "8px 12px",
+                    borderRadius: "8px",
+                    marginTop: "10px",
+                    marginBottom: "10px",
+                    fontSize: "0.8rem",
+                    fontWeight: 500,
+                    background:
+                      trackParam.includes("deep")
+                        ? "rgba(168, 85, 247, 0.15)"
+                        : trackParam.includes("distrib")
+                          ? "rgba(14, 165, 233, 0.15)"
+                          : "rgba(59, 130, 246, 0.15)",
+                    border: `1px solid ${trackParam.includes("deep")
+                      ? "rgba(168, 85, 247, 0.35)"
+                      : trackParam.includes("distrib")
+                        ? "rgba(14, 165, 233, 0.35)"
+                        : "rgba(59, 130, 246, 0.35)"
+                      }`,
+                    color:
+                      trackParam.includes("deep")
+                        ? "#c084fc"
+                        : trackParam.includes("distrib")
+                          ? "#38bdf8"
+                          : "#93c5fd",
+                  }}
                 >
-                  <Sparkles size={13} color="#16a34a" /> Personalize
-                </button>
-              </div>
-              <p>PDF or DOCX · up to 10 documents</p>
-
-              {/* Mode Toggle: Code Only vs Theory & Code */}
-              <div style={{ marginTop: "8px", marginBottom: "12px" }}>
-                <div className={styles.modeSelector}>
-                  <button
-                    type="button"
-                    className={`${styles.modeButton} ${manualMode === "code_only" ? styles.modeButtonActive : ""}`}
-                    onClick={() => setManualMode("code_only")}
-                    disabled={running || busy || batchProcessing}
-                  >
-                    <Code2 size={14} /> Code Only
-                  </button>
-                  <button
-                    type="button"
-                    className={`${styles.modeButton} ${manualMode === "theory_and_code" ? styles.modeButtonActive : ""}`}
-                    onClick={() => setManualMode("theory_and_code")}
-                    disabled={running || busy || batchProcessing}
-                  >
-                    <BookOpen size={14} /> Theory &amp; Code
-                  </button>
-                </div>
-                {manualMode === "theory_and_code" && (
-                  <div className={styles.handwrittenNotice}>
-                    <Info size={13} style={{ flexShrink: 0, marginTop: "2px" }} />
-                    <span>Theory answers will be included. Handwritten questions are automatically detected and excluded.</span>
-                  </div>
-                )}
-              </div>
-
-              <input
-                ref={inputRef}
-                type="file"
-                accept=".pdf,.docx"
-                multiple
-                hidden
-                onChange={(event) => handleFiles(event.target.files)}
-              />
-
-              {isBatchMode && batchItems.length > 0 ? (
-                <div className={styles.batchSection}>
-                  <div className={styles.batchHeader}>
+                  <Sparkles size={14} className="shrink-0" />
+                  <span>
+                    Active Track:{" "}
                     <strong>
-                      Batch Progress: {batchItems.filter((b) => b.status === "completed").length} / {batchItems.length} Completed
+                      {trackParam === "deep_learning" || trackParam === "deep-learning"
+                        ? "Deep Learning Labs"
+                        : trackParam === "distributed" || trackParam === "distributed-computing"
+                          ? "Distributed Computing Labs"
+                          : trackParam.toUpperCase()}
                     </strong>
-                    {batchItems.some((b) => b.reportId) && (
-                      <button className={styles.batchZipButton} onClick={downloadAllBatch} title="Download all generated reports, including diagnostics">
-                        <Archive size={14} /> Download All
+                  </span>
+                </div>
+              )}
+              {language !== "sql" && (language !== "auto" || questions.length === 0 ||
+                questions.some((question) => question.language !== "sql" && question.language !== "theory")) && <ExecutionStatus />}
+              <p className={styles.setupIntro}>
+                Configure the source, review the extracted questions, then run the execution and evidence checks.
+              </p>
+              {workflow && <AgentPlanPanel key={`${workflow.id}:${workflow.agent_plan?.revision || 0}`} workflow={workflow} busy={busy} onAnswer={async answers => {
+                if (!upload || !workflow.agent_plan?.revision) return;
+                setBusy(true); setError('');
+                try { applyWorkflow(await workflowApi.clarify(upload.id, workflow.agent_plan.revision, answers)); }
+                catch (error) { setError(errorMessage(error)); }
+                finally { setBusy(false); }
+              }} />}
+              <div className={styles.step}>
+                <span className={styles.stepNumber}>1</span>
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
+                    <h2>{"Upload your lab manual"}</h2>
+                    <button
+                      type="button"
+                      className={styles.personalizeBtn}
+                      onClick={() => setShowProfileModal(true)}
+                      title="Configure real student name and USN for code outputs"
+                    >
+                      <Sparkles size={13} color="#16a34a" /> Personalize
+                    </button>
+                  </div>
+                  <p>PDF or DOCX · up to 10 documents</p>
+
+                  {/* Mode Toggle: Code Only vs Theory & Code */}
+                  <div style={{ marginTop: "8px", marginBottom: "12px" }}>
+                    <div className={styles.modeSelector}>
+                      <button
+                        type="button"
+                        className={`${styles.modeButton} ${manualMode === "code_only" ? styles.modeButtonActive : ""}`}
+                        onClick={() => setManualMode("code_only")}
+                        disabled={running || busy || batchProcessing}
+                      >
+                        <Code2 size={14} /> Code Only
                       </button>
+                      <button
+                        type="button"
+                        className={`${styles.modeButton} ${manualMode === "theory_and_code" ? styles.modeButtonActive : ""}`}
+                        onClick={() => setManualMode("theory_and_code")}
+                        disabled={running || busy || batchProcessing}
+                      >
+                        <BookOpen size={14} /> Theory &amp; Code
+                      </button>
+                    </div>
+                    {manualMode === "theory_and_code" && (
+                      <div className={styles.handwrittenNotice}>
+                        <Info size={13} style={{ flexShrink: 0, marginTop: "2px" }} />
+                        <span>Theory answers will be included. Handwritten questions are automatically detected and excluded.</span>
+                      </div>
                     )}
                   </div>
-                  {batchItems.map((item) => (
-                    <div key={item.id} className={styles.batchItemCard}>
-                      <FileText size={20} className={styles.batchFileIcon} />
-                      <div className={styles.batchItemInfo}>
-                        <span className={styles.batchItemName}>{item.file.name}</span>
-                        <div className={styles.batchItemMeta}>
-                          <span>{(item.file.size / 1024 / 1024).toFixed(1)} MB</span>
-                          <span>·</span>
-                          <span>{item.stage}</span>
-                        </div>
-                        {item.status !== "completed" && item.status !== "failed" && (
-                          <div className={styles.batchItemProgress}>
-                            <div className={styles.batchItemProgressBar} style={{ width: `${item.progress}%` }} />
+
+                  <input
+                    ref={inputRef}
+                    type="file"
+                    accept=".pdf,.docx"
+                    multiple
+                    hidden
+                    onChange={(event) => handleFiles(event.target.files)}
+                  />
+
+                  {loadedCategory && !upload && !isBatchMode && (
+                    <div className={styles.loadedCategoryCard} data-testid="loaded-lab-category">
+                      <div className={styles.loadedCategoryHeader}>
+                        <div>
+                          <h3 className={styles.loadedCategoryTitle}>{loadedCategory.title}</h3>
+                          <div className={styles.loadedCategoryMeta}>
+                            {loadedCategory.tagline}
                           </div>
+                        </div>
+                        <Link href="/labs" className={styles.changeLabLink}>
+                          Change lab
+                        </Link>
+                      </div>
+
+                    </div>
+                  )}
+
+                  {isBatchMode && batchItems.length > 0 ? (
+                    <div className={styles.batchSection}>
+                      <div className={styles.batchHeader}>
+                        <strong>
+                          Batch Progress: {batchItems.filter((b) => b.status === "completed").length} / {batchItems.length} Completed
+                        </strong>
+                        {batchItems.some((b) => b.reportId) && (
+                          <button className={styles.batchZipButton} onClick={downloadAllBatch} title="Download all generated reports, including diagnostics">
+                            <Archive size={14} /> Download All
+                          </button>
                         )}
                       </div>
-                      <span
-                        className={`${styles.badgeStatus} ${
-                          item.status === "completed"
-                            ? styles.badgeCompleted
-                            : item.status === "processing" || item.status === "extracting"
-                              ? styles.badgeProcessing
-                              : item.status === "failed"
-                                ? styles.badgeFailed
-                                : styles.badgePending
-                        }`}
+                      {batchItems.map((item) => (
+                        <div key={item.id} className={styles.batchItemCard}>
+                          <FileText size={20} className={styles.batchFileIcon} />
+                          <div className={styles.batchItemInfo}>
+                            <span className={styles.batchItemName}>{item.file.name}</span>
+                            <div className={styles.batchItemMeta}>
+                              <span>{(item.file.size / 1024 / 1024).toFixed(1)} MB</span>
+                              <span>·</span>
+                              <span>{item.stage}</span>
+                            </div>
+                            {item.status !== "completed" && item.status !== "failed" && (
+                              <div className={styles.batchItemProgress}>
+                                <div className={styles.batchItemProgressBar} style={{ width: `${item.progress}%` }} />
+                              </div>
+                            )}
+                          </div>
+                          <span
+                            className={`${styles.badgeStatus} ${item.status === "completed"
+                              ? styles.badgeCompleted
+                              : item.status === "processing" || item.status === "extracting"
+                                ? styles.badgeProcessing
+                                : item.status === "failed"
+                                  ? styles.badgeFailed
+                                  : styles.badgePending
+                              }`}
+                          >
+                            {item.status}
+                          </span>
+                          {item.status === "awaiting_clarification" && item.uploadId && (
+                            <Link href={`/code-execution?assignment=${item.uploadId}`} onClick={() => setIsBatchMode(false)}>Answer questions</Link>
+                          )}
+                          {item.reportId && (
+                            <button
+                              onClick={() => saveReport(item.reportId!, item.reportFilename || "lab_manual.docx")}
+                              className={styles.batchDownloadButton}
+                              title={item.status === "failed" ? "Download diagnostic report" : "Download document"}
+                              aria-label={item.status === "failed" ? `Download diagnostic report for ${item.file.name}` : `Download report for ${item.file.name}`}
+                            >
+                              <Download size={16} />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                      <button
+                        onClick={() => {
+                          setIsBatchMode(false);
+                          setBatchItems([]);
+                          reset();
+                        }}
+                        className={styles.clearBatchButton}
+                        disabled={batchProcessing}
                       >
-                        {item.status}
-                      </span>
-                      {item.status === "awaiting_clarification" && item.uploadId && (
-                        <Link href={`/code-execution?assignment=${item.uploadId}`} onClick={() => setIsBatchMode(false)}>Answer questions</Link>
-                      )}
-                      {item.reportId && (
-                        <button
-                          onClick={() => saveReport(item.reportId!, item.reportFilename || "lab_manual.docx")}
-                          className={styles.batchDownloadButton}
-                          title={item.status === "failed" ? "Download diagnostic report" : "Download document"}
-                          aria-label={item.status === "failed" ? `Download diagnostic report for ${item.file.name}` : `Download report for ${item.file.name}`}
-                        >
-                          <Download size={16} />
-                        </button>
+                        Clear Batch &amp; Upload New
+                      </button>
+                    </div>
+                  ) : upload ? (
+                    <div className={styles.fileCard}>
+                      <FileText size={26} />
+                      <div>
+                        <strong>{upload.original_filename}</strong>
+                        <small>
+                          {upload.file_size
+                            ? `${(upload.file_size / 1024 / 1024).toFixed(2)} MB · `
+                            : ""}
+                          Uploaded
+                        </small>
+                      </div>
+                      <CheckCircle2 className={styles.fileCheck} size={19} />
+                      <button
+                        onClick={reset}
+                        disabled={running || busy}
+                        aria-label="Choose another document"
+                      >
+                        <Trash2 size={17} />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      className={`${styles.dropZone} ${dragging ? styles.dragging : ""}`}
+                      onClick={() => inputRef.current?.click()}
+                      disabled={busy || batchProcessing}
+                      onDragOver={(event) => {
+                        event.preventDefault();
+                        setDragging(true);
+                      }}
+                      onDragLeave={() => setDragging(false)}
+                      onDrop={(event) => {
+                        event.preventDefault();
+                        setDragging(false);
+                        handleFiles(event.dataTransfer.files);
+                      }}
+                    >
+                      <Upload size={27} />
+                      <strong>
+                        {busy || batchProcessing
+                          ? "Uploading..."
+                          : "Choose or drop up to 10 manuals"}
+                      </strong>
+                      <small>PDF or Word documents · Max 10 files</small>
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className={styles.step}>
+                <span className={styles.stepNumber}>2</span>
+                <div>
+                  <h2>{"Extract & analyze"}</h2>
+                  <p>
+                    Find questions in your document.
+                  </p>
+                  <div className={styles.statusRow}>
+                    {workflow?.status === "extracting" || (workflow?.status === "queued" && workflow.stage === "extract") ? (
+                      <Loader2 className={styles.spin} size={18} />
+                    ) : (
+                      <ListChecks size={19} />
+                    )}
+                    <span>
+                      {workflow?.status === "extracting"
+                        ? "Reading and extracting..."
+                        : workflow?.status === "queued" && workflow.stage === "extract"
+                          ? "Queued for question extraction"
+                          : questions.length
+                            ? `${questions.length} questions extracted`
+                            : "Waiting for a document"}
+                    </span>
+                  </div>
+                  {upload && !running && !questions.length && (
+                    <button
+                      className={styles.textButton}
+                      disabled={busy}
+                      onClick={retryExtraction}
+                    >
+                      Extract questions <ArrowRight size={14} />
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className={styles.step}>
+                <span className={styles.stepNumber}>3</span>
+                <div>
+                  <h2>{loadedCategory && !upload ? "Studio template & settings" : "Programming language"}</h2>
+                  {muAssociation && <LabIdeSelector labId={muLabId} preferredIde={sourceIde} disabled={running || busy || batchProcessing}
+                    onSelect={ide => {
+                      let href = labIdeHref(muLabId, ide)!;
+                      if (href.startsWith('/code-execution') && searchParams.get('assignment')) href += '&assignment=' + encodeURIComponent(searchParams.get('assignment')!);
+                      router.push(href);
+                    }} />}
+                  <p role="status">{detectedLabel ? `Detected: ${detectedLabel}` : detectedQuestions.length ? "No programming language detected." : "LabMate detects the language after reading your manual."}</p>
+                  {!isBatchMode && !muAssociation && (() => {
+                    const scopedCodes = loadedCategory && !upload ? getAllowedLanguagesForTrack(loadedCategory.slug) : [];
+                    if (scopedCodes.length === 1) {
+                      const lockedLabel =
+                        languages.find((option) => option.value === scopedCodes[0])?.label ||
+                        loadedCategory?.title ||
+                        scopedCodes[0];
+                      return (
+                        <div className={styles.lockedRuntimeBadge} data-testid="preselected-runtime-badge">
+                          <span>Studio runtime</span>
+                          <strong>{lockedLabel}</strong>
+                        </div>
+                      );
+                    }
+                    const options =
+                      scopedCodes.length > 1
+                        ? languages.filter((option) => scopedCodes.includes(option.value))
+                        : languages;
+                    return (
+                      <select
+                        aria-label={scopedCodes.length > 1 ? "Studio runtime variant" : "Programming language"}
+                        value={language}
+                        disabled={running || busy}
+                        onChange={(event) => {
+                          const nextLang = event.target.value as LabLanguage;
+                          setLanguage(nextLang);
+                          if (nextLang === "r") {
+                            setNotebookTemplate("r");
+                          } else if (nextLang === "colab" && notebookTemplate === "r") {
+                            setNotebookTemplate("colab");
+                          }
+                        }}
+                      >
+                        {options.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    );
+                  })()}
+                  {showNotebookTemplate && (
+                    <div className={styles.colabThemeField}>
+                      <label className={styles.screenshotLabel} htmlFor="notebook-template">Notebook / analytics environment</label>
+                      <select
+                        id="notebook-template"
+                        value={notebookTemplate}
+                        disabled={running || busy || batchProcessing}
+                        onChange={event => {
+                          const nextTemplate = event.target.value as "colab" | "jupyter" | "r";
+                          setNotebookTemplate(nextTemplate);
+                          if (nextTemplate === "r") {
+                            setLanguage("r");
+                          } else if (language === "r") {
+                            setLanguage("auto");
+                          }
+                        }}
+                      >
+                        <option value="colab">Google Colab</option>
+                        <option value="jupyter">Jupyter Notebook</option>
+                        <option value="r">R / RStudio</option>
+                      </select>
+                      {notebookTemplate === "r" ? (
+                        <>
+                          <label className={styles.screenshotLabel} htmlFor="colab-theme">RStudio theme</label>
+                          <select
+                            id="colab-theme"
+                            value={rstudioTheme}
+                            disabled={running || busy || batchProcessing}
+                            onChange={(event) => setRstudioTheme(event.target.value as "light" | "dark")}
+                          >
+                            <option value="light">Light</option>
+                            <option value="dark">Dark</option>
+                          </select>
+                        </>
+                      ) : (
+                        <>
+                          <label className={styles.screenshotLabel} htmlFor="colab-theme">Notebook theme</label>
+                          <select
+                            id="colab-theme"
+                            value={notebookTemplate === "jupyter" ? notebookJupyterTheme : colabTheme}
+                            disabled={running || busy || batchProcessing}
+                            onChange={(event) => (notebookTemplate === "jupyter" ? setNotebookJupyterTheme : setColabTheme)(event.target.value as "light" | "dark")}
+                          >
+                            <option value="dark">Dark</option>
+                            <option value="light">Light</option>
+                          </select>
+                        </>
                       )}
                     </div>
-                  ))}
-                  <button
-                    onClick={() => {
-                      setIsBatchMode(false);
-                      setBatchItems([]);
-                      reset();
-                    }}
-                    className={styles.clearBatchButton}
-                    disabled={batchProcessing}
-                  >
-                    Clear Batch &amp; Upload New
-                  </button>
+                  )}
+                  {(selectedLanguages.some(value => ['html', 'react', 'node'].includes(value)) || detectedQuestions.some(question => /\bflask\b/i.test(question.text))) && (
+                    <div className={styles.colabThemeField}>
+                      <label className={styles.screenshotLabel} htmlFor="browser-theme">Web output browser</label>
+                      <select id="browser-theme" value={browserTheme} disabled={running || busy || batchProcessing}
+                        onChange={event => setBrowserTheme(event.target.value as 'edge' | 'chrome')}>
+                        <option value="edge">Microsoft Edge (Windows)</option>
+                        <option value="chrome">Google Chrome (Windows)</option>
+                      </select>
+                      <p>The frame surrounds the captured page without changing its contents.</p>
+                    </div>
+                  )}
+                  {selectedLanguages.includes("python") && (
+                    <div style={{ marginTop: "12px" }}>
+                      <label className={styles.screenshotLabel} htmlFor="python-template">Python screenshot template</label>
+                      <select id="python-template" value={pythonTemplate} disabled={running || busy || batchProcessing}
+                        onChange={event => setPythonTemplate(event.target.value as typeof pythonTemplate)}>
+                        <option value="idle">Python IDLE (Windows)</option>
+                        <option value="jupyter">Jupyter Notebook</option>
+                        <option value="vscode">VS Code</option>
+                      </select>
+                      <p style={{ fontSize: "12px", color: "#a1a1aa", marginTop: "8px" }}>Choose the look of your Python code and output screenshots.</p>
+                      {pythonTemplate === "jupyter" && <>
+                        <label className={styles.screenshotLabel} htmlFor="jupyter-theme">Jupyter theme</label>
+                        <select id="jupyter-theme" value={jupyterTheme} disabled={running || busy || batchProcessing}
+                          onChange={event => setJupyterTheme(event.target.value as "light" | "dark")}>
+                          <option value="light">Light</option><option value="dark">Dark</option>
+                        </select>
+                      </>}
+                      {pythonTemplate === "idle" && <>
+                        <label className={styles.screenshotLabel}>Python IDLE screenshot layout</label>
+                        <select
+                          aria-label="Python screenshot layout style"
+                          value={screenshotStyle}
+                          disabled={running || busy || batchProcessing}
+                          onChange={(event) => setScreenshotStyle(event.target.value)}
+                        >
+                          <option value="style_1">Style 1: Output Down (Editor on Top, Shell Below)</option>
+                          <option value="style_2">Style 2: Output Side (Editor Left, Shell on Side)</option>
+                          <option value="style_3">Style 3: Two Different Windows (Side by Side)</option>
+                        </select>
+                      </>}
+                    </div>
+                  )}
+                  {selectedLanguages.includes("java") && (
+                    <div className={styles.colabThemeField}>
+                      <label className={styles.screenshotLabel} htmlFor="java-template">Java screenshot template</label>
+                      <select id="java-template" value={javaTemplate} disabled={running || busy || batchProcessing}
+                        onChange={event => setJavaTemplate(event.target.value as typeof javaTemplate)}>
+                        <option value="notepad">Notepad + Command Prompt</option>
+                        <option value="eclipse">Eclipse</option>
+                        <option value="intellij">IntelliJ IDEA</option>
+                        <option value="vscode">VS Code</option>
+                      </select>
+                    </div>
+                  )}
+                  {selectedLanguages.includes("sql") && (
+                    <div className={styles.colabThemeField}>
+                      <label className={styles.screenshotLabel} htmlFor="sql-template">SQL screenshot template</label>
+                      <select id="sql-template" value={sqlTemplate} disabled={running || busy || batchProcessing}
+                        onChange={event => setSqlTemplate(event.target.value as typeof sqlTemplate)}>
+                        <option value="workbench">MySQL Workbench</option>
+                        <option value="mysql-cli">MySQL Command Line Client</option>
+                        <option value="sqlite">DB Browser for SQLite</option>
+                      </select>
+                      {sqlTemplate === "sqlite" && <p>Runs this exercise in SQLite.</p>}
+                    </div>
+                  )}
+                  {selectedLanguages.includes("r") && !showNotebookTemplate && (
+                    <div className={styles.colabThemeField}>
+                      <label className={styles.screenshotLabel} htmlFor="rstudio-theme">RStudio screenshot theme</label>
+                      <select id="rstudio-theme" value={rstudioTheme} disabled={running || busy || batchProcessing}
+                        onChange={event => setRstudioTheme(event.target.value as typeof rstudioTheme)}>
+                        <option value="light">Light</option>
+                        <option value="dark">Dark</option>
+                      </select>
+                    </div>
+                  )}
+                  {(selectedLanguages.includes("c") || selectedLanguages.includes("cpp")) && (
+                    <div className={styles.colabThemeField}>
+                      <label className={styles.screenshotLabel} htmlFor="cpp-template">C / C++ IDE template</label>
+                      <select id="cpp-template" value={cppTemplate} disabled={running || busy || batchProcessing}
+                        onChange={event => setCppTemplate(event.target.value as "codeblocks" | "vscode")}>
+                        <option value="codeblocks">Code::Blocks</option>
+                        <option value="vscode">VS Code</option>
+                      </select>
+                    </div>
+                  )}
                 </div>
-              ) : upload ? (
-                <div className={styles.fileCard}>
-                  <FileText size={26} />
-                  <div>
-                    <strong>{upload.original_filename}</strong>
-                    <small>
-                      {upload.file_size
-                        ? `${(upload.file_size / 1024 / 1024).toFixed(2)} MB · `
-                        : ""}
-                      Uploaded
-                    </small>
-                  </div>
-                  <CheckCircle2 className={styles.fileCheck} size={19} />
-                  <button
-                    onClick={reset}
-                    disabled={running || busy}
-                    aria-label="Choose another document"
-                  >
-                    <Trash2 size={17} />
-                  </button>
-                </div>
-              ) : (
-                <button
-                  className={`${styles.dropZone} ${dragging ? styles.dragging : ""}`}
-                  onClick={() => inputRef.current?.click()}
-                  disabled={busy || batchProcessing}
-                  onDragOver={(event) => {
-                    event.preventDefault();
-                    setDragging(true);
-                  }}
-                  onDragLeave={() => setDragging(false)}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    setDragging(false);
-                    handleFiles(event.dataTransfer.files);
-                  }}
-                >
-                  <Upload size={27} />
-                  <strong>
-                    {busy || batchProcessing
-                      ? "Uploading..."
-                      : "Choose or drop up to 10 manuals"}
-                  </strong>
-                  <small>PDF or Word documents · Max 10 files</small>
-                </button>
-              )}
-            </div>
-          </div>
-          <div className={styles.step}>
-            <span className={styles.stepNumber}>2</span>
-            <div>
-              <h2>Extract &amp; analyze</h2>
-              <p>Find questions in your document.</p>
-              <div className={styles.statusRow}>
-                {workflow?.status === "extracting" || (workflow?.status === "queued" && workflow.stage === "extract") ? (
-                  <Loader2 className={styles.spin} size={18} />
-                ) : (
-                  <ListChecks size={19} />
-                )}
-                <span>
-                  {workflow?.status === "extracting"
-                    ? "Reading and extracting..."
-                    : workflow?.status === "queued" && workflow.stage === "extract"
-                      ? "Queued for question extraction"
-                    : questions.length
-                      ? `${questions.length} questions extracted`
-                      : "Waiting for a document"}
-                </span>
               </div>
-              {upload && !running && !questions.length && (
-                <button
-                  className={styles.textButton}
-                  disabled={busy}
-                  onClick={retryExtraction}
-                >
-                  Extract questions <ArrowRight size={14} />
-                </button>
-              )}
-            </div>
-          </div>
-          <div className={styles.step}>
-            <span className={styles.stepNumber}>3</span>
-            <div>
-              <h2>Programming language</h2>
-              {muAssociation && <LabIdeSelector labId={muLabId} preferredIde={sourceIde} disabled={running || busy || batchProcessing}
-                onSelect={ide=>{
-                  let href=labIdeHref(muLabId,ide)!;
-                  if(href.startsWith('/code-execution') && searchParams.get('assignment'))href+='&assignment='+encodeURIComponent(searchParams.get('assignment')!);
-                  router.push(href);
-                }} />}
-              <p role="status">{detectedLabel ? `Detected: ${detectedLabel}` : detectedQuestions.length ? "No programming language detected." : "LabMate detects the language after reading your manual."}</p>
-              {!isBatchMode && !muAssociation && (
-              <select
-                aria-label="Programming language"
-                value={language}
-                disabled={running || busy}
-                onChange={(event) =>
-                  setLanguage(event.target.value as LabLanguage)
-                }
-              >
-                {languages.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-              )}
-              {selectedLanguages.includes("colab") && (
-                <div className={styles.colabThemeField}>
-                  <label className={styles.screenshotLabel} htmlFor="notebook-template">Notebook screenshot template</label>
-                  <select id="notebook-template" value={notebookTemplate} disabled={running || busy || batchProcessing}
-                    onChange={event => setNotebookTemplate(event.target.value as typeof notebookTemplate)}>
-                    <option value="colab">Google Colab</option>
-                    <option value="jupyter">Jupyter Notebook</option>
-                  </select>
-                  <label className={styles.screenshotLabel} htmlFor="colab-theme">Notebook theme</label>
-                  <select id="colab-theme" value={notebookTemplate === "jupyter" ? notebookJupyterTheme : colabTheme} disabled={running || busy || batchProcessing}
-                    onChange={(event) => (notebookTemplate === "jupyter" ? setNotebookJupyterTheme : setColabTheme)(event.target.value as "light" | "dark")}>
-                    <option value="dark">Dark</option>
-                    <option value="light">Light</option>
-                  </select>
-                </div>
-              )}
-              {(selectedLanguages.some(value => ['html', 'react', 'node'].includes(value)) || detectedQuestions.some(question => /\bflask\b/i.test(question.text))) && (
-                <div className={styles.colabThemeField}>
-                  <label className={styles.screenshotLabel} htmlFor="browser-theme">Web output browser</label>
-                  <select id="browser-theme" value={browserTheme} disabled={running || busy || batchProcessing}
-                    onChange={event => setBrowserTheme(event.target.value as 'edge' | 'chrome')}>
-                    <option value="edge">Microsoft Edge (Windows)</option>
-                    <option value="chrome">Google Chrome (Windows)</option>
-                  </select>
-                  <p>The frame surrounds the captured page without changing its contents.</p>
-                </div>
-              )}
-              {selectedLanguages.includes("python") && (
-                <div style={{ marginTop: "12px" }}>
-                  <label className={styles.screenshotLabel} htmlFor="python-template">Python screenshot template</label>
-                  <select id="python-template" value={pythonTemplate} disabled={running || busy || batchProcessing}
-                    onChange={event => setPythonTemplate(event.target.value as typeof pythonTemplate)}>
-                    <option value="idle">Python IDLE (Windows)</option>
-                    <option value="jupyter">Jupyter Notebook</option>
-                    <option value="vscode">VS Code</option>
-                  </select>
-                  <p style={{fontSize: "12px", color: "#a1a1aa", marginTop: "8px"}}>Choose the look of your Python code and output screenshots.</p>
-                  {pythonTemplate === "jupyter" && <>
-                    <label className={styles.screenshotLabel} htmlFor="jupyter-theme">Jupyter theme</label>
-                    <select id="jupyter-theme" value={jupyterTheme} disabled={running || busy || batchProcessing}
-                      onChange={event => setJupyterTheme(event.target.value as "light" | "dark")}>
-                      <option value="light">Light</option><option value="dark">Dark</option>
-                    </select>
-                  </>}
-                  {pythonTemplate === "idle" && <>
-                  <label className={styles.screenshotLabel}>Python IDLE screenshot layout</label>
-                  <select
-                    aria-label="Python screenshot layout style"
-                    value={screenshotStyle}
-                    disabled={running || busy || batchProcessing}
-                    onChange={(event) => setScreenshotStyle(event.target.value)}
+              <div className={styles.step}>
+                <span className={styles.stepNumber}>4</span>
+                <div>
+                  <h2>Extracted questions</h2>
+                  <p>Review and edit before processing.</p>
+                  <button
+                    className={styles.questionsButton}
+                    onClick={() => setShowQuestions(!showQuestions)}
+                    disabled={!questions.length || running}
                   >
-                    <option value="style_1">Style 1: Output Down (Editor on Top, Shell Below)</option>
-                    <option value="style_2">Style 2: Output Side (Editor Left, Shell on Side)</option>
-                    <option value="style_3">Style 3: Two Different Windows (Side by Side)</option>
-                  </select>
-                  </>}
+                    <FileText size={19} />
+                    <span>{questions.length} questions detected</span>
+                    <span>
+                      {showQuestions ? "Hide" : "Review"} <ChevronDown size={14} />
+                    </span>
+                  </button>
+                  {showQuestions && (
+                    <div className={styles.questionEditor}>
+                      {questions.map((question, index) => {
+                        // An evidence part holds its own file inputs, which must not sit inside a <label>.
+                        const Wrapper = question.kind === "evidence" ? "div" : "label";
+                        return (
+                          <Wrapper key={question.id}>
+                            <strong>
+                              {question.part_title ? `Part ${index + 1} · ${question.part_title} · ` : `Question ${index + 1} · `}
+                              {question.kind === "evidence"
+                                ? "your screenshots"
+                                : isDistributedMode && question.language !== "theory"
+                                  ? "Java (VS Code)"
+                                  : question.language}
+                            </strong>
+                            {question.kind === "evidence" && (
+                              <EvidenceSlots
+                                question={question}
+                                uploadId={upload?.id ?? null}
+                                ensureUpload={async () => { if (!upload) throw new Error("Upload your lab manual first."); return upload.id; }}
+                                onReportOutdated={(id) => {
+                                  workflowApi.status(id).then((fresh) => applyWorkflow(fresh)).catch(() => undefined);
+                                }}
+                                disabled={running || busy}
+                              />
+                            )}
+                            <textarea
+                              value={question.text}
+                              onChange={(event) =>
+                                setQuestions(
+                                  questions.map((q) =>
+                                    q.id === question.id
+                                      ? { ...q, text: event.target.value }
+                                      : q,
+                                  ),
+                                )
+                              }
+                            />
+                          </Wrapper>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
-              )}
-              {selectedLanguages.includes("java") && (
-                <div className={styles.colabThemeField}>
-                  <label className={styles.screenshotLabel} htmlFor="java-template">Java screenshot template</label>
-                  <select id="java-template" value={javaTemplate} disabled={running || busy || batchProcessing}
-                    onChange={event => setJavaTemplate(event.target.value as typeof javaTemplate)}>
-                    <option value="notepad">Notepad + Command Prompt</option>
-                    <option value="vscode">VS Code</option>
-                  </select>
+              </div>
+              <div className={styles.step}>
+                <span className={styles.stepNumber}>5</span>
+                <div>
+                  <h2>
+                    Additional instructions <span>(optional)</span>
+                  </h2>
+                  <p>Add requirements, constraints, or notes.</p>
+                  <textarea
+                    aria-label="Additional instructions"
+                    value={instructions}
+                    maxLength={5000}
+                    disabled={running || busy}
+                    onChange={(event) => setInstructions(event.target.value)}
+                    placeholder="e.g. Use functions, follow the manual format, and explain the sample inputs."
+                  />
                 </div>
-              )}
-              {selectedLanguages.includes("sql") && (
-                <div className={styles.colabThemeField}>
-                  <label className={styles.screenshotLabel} htmlFor="sql-template">SQL screenshot template</label>
-                  <select id="sql-template" value={sqlTemplate} disabled={running || busy || batchProcessing}
-                    onChange={event => setSqlTemplate(event.target.value as typeof sqlTemplate)}>
-                    <option value="workbench">MySQL Workbench</option>
-                    <option value="mysql-cli">MySQL Command Line Client</option>
-                  </select>
-                </div>
-              )}
-            </div>
-          </div>
-          <div className={styles.step}>
-            <span className={styles.stepNumber}>4</span>
-            <div>
-              <h2>Extracted questions</h2>
-              <p>Review and edit before processing.</p>
-              <button
-                className={styles.questionsButton}
-                onClick={() => setShowQuestions(!showQuestions)}
-                disabled={!questions.length || running}
-              >
-                <FileText size={19} />
-                <span>{questions.length} questions detected</span>
-                <span>
-                  {showQuestions ? "Hide" : "Review"} <ChevronDown size={14} />
-                </span>
-              </button>
-              {showQuestions && (
-                <div className={styles.questionEditor}>
-                  {questions.map((question, index) => {
-                    // An evidence part holds its own file inputs, which must not sit inside a <label>.
-                    const Wrapper = question.kind === "evidence" ? "div" : "label";
-                    return (
-                    <Wrapper key={question.id}>
-                      <strong>
-                        {question.part_title ? `Part ${index + 1} · ${question.part_title} · ` : `Question ${index + 1} · `}
-                        {question.kind === "evidence"
-                          ? "your screenshots"
-                          : isDistributedMode && question.language !== "theory"
-                            ? "Java (VS Code)"
-                            : question.language}
-                      </strong>
-                      {question.kind === "evidence" && (
-                        <EvidenceSlots
-                          question={question}
-                          uploadId={upload?.id ?? null}
-                          ensureUpload={async () => (await startFromLab()).id}
-                          onReportOutdated={(id) => {
-                            workflowApi.status(id).then((fresh) => applyWorkflow(fresh)).catch(() => undefined);
-                          }}
-                          disabled={running || busy}
-                        />
-                      )}
-                      <textarea
-                        value={question.text}
+              </div>
+              <div className={`${styles.step} ${styles.lastStep}`}>
+                <span className={styles.stepNumber}>6</span>
+                <div>
+                  <h2>File settings</h2>
+                  <p>Question headings, screenshots and short captions.</p>
+                  <label className={styles.filenameLabel}>
+                    File name
+                    <div>
+                      <input
+                        aria-label="Output file name"
+                        value={filename}
+                        maxLength={80}
+                        disabled={running || busy}
                         onChange={(event) =>
-                          setQuestions(
-                            questions.map((q) =>
-                              q.id === question.id
-                                ? { ...q, text: event.target.value }
-                                : q,
-                            ),
+                          setFilename(
+                            event.target.value.replace(/[^A-Za-z0-9_-]/g, "_"),
                           )
                         }
                       />
-                    </Wrapper>
-                    );
-                  })}
+                      <span>.docx</span>
+                    </div>
+                  </label>
+                  <div className={styles.formatRow}>
+                    <span>Output format</span>
+                    <strong>Word document (.docx)</strong>
+                  </div>
                 </div>
-              )}
-            </div>
-          </div>
-          <div className={styles.step}>
-            <span className={styles.stepNumber}>5</span>
-            <div>
-              <h2>
-                Additional instructions <span>(optional)</span>
-              </h2>
-              <p>Add requirements, constraints, or notes.</p>
-              <textarea
-                aria-label="Additional instructions"
-                value={instructions}
-                maxLength={5000}
-                disabled={running || busy}
-                onChange={(event) => setInstructions(event.target.value)}
-                placeholder="e.g. Use functions, follow the manual format, and explain the sample inputs."
-              />
-            </div>
-          </div>
-          <div className={`${styles.step} ${styles.lastStep}`}>
-            <span className={styles.stepNumber}>6</span>
-            <div>
-              <h2>File settings</h2>
-              <p>Question headings, screenshots and short captions.</p>
-              <label className={styles.filenameLabel}>
-                File name
-                <div>
-                  <input
-                    aria-label="Output file name"
-                    value={filename}
-                    maxLength={80}
-                    disabled={running || busy}
-                    onChange={(event) =>
-                      setFilename(
-                        event.target.value.replace(/[^A-Za-z0-9_-]/g, "_"),
-                      )
-                    }
-                  />
-                  <span>.docx</span>
-                </div>
-              </label>
-              <div className={styles.formatRow}>
-                <span>Output format</span>
-                <strong>Word document (.docx)</strong>
               </div>
-            </div>
-          </div>
-          {error && (
-            <div className={styles.errorBox} role="alert">
-              {error}
-              {error.toLowerCase().includes('credit')&&<Link href="/#pricing"> View student packs →</Link>}
-            </div>
-          )}
-          <button
-            className={styles.startButton}
-            disabled={isBatchMode
-              ? batchProcessing || !batchItems.some(item => item.status === "ready")
-              : !questions.length || running || busy || complete || workflow?.status === "awaiting_clarification"}
-            onClick={isBatchMode ? processBatch : process}
-          >
-            {running || busy || batchProcessing ? (
-              <Loader2 className={styles.spin} size={18} />
-            ) : (
-              <Code2 size={19} />
-            )}
-            {isBatchMode ? (batchProcessing ? "Working on batch…" : "Process batch") : complete
-              ? "Report completed"
-              : running
-                ? "Processing..."
-                : "Start processing"}
-            <ArrowRight size={18} />
-          </button>
-        </aside>
-        <section className={styles.workspaceBox}>
-          {/* Dedicated Dot UI for right-hand workspace */}
-          <DotGrid
-            dotColor="#ffffff"
-            backgroundColor="transparent"
-            spacing={22}
-            dotSize={1.6}
-            baseOpacity={0.22}
-            isProcessing={isProcessingActive}
-          />
-
-          {/* Floating top bar with logs button */}
-          <div className={styles.workspaceOverlayTop}>
-            <button
-              className={styles.darkLogsBtn}
-              onClick={() => setShowLogs(!showLogs)}
-            >
-              <Terminal size={14} />
-              {showLogs ? "Hide logs" : "View logs"}
-            </button>
-          </div>
-
-          {/* Center of the right box: LatticeLoader listing what it is doing */}
-          <div className={`${styles.centerStageBox} ${showPreview ? styles.previewStage : ''}`}>
-            <div className={`${styles.loaderGlassCard} ${showPreview ? styles.previewCard : ''}`}>
-              <LatticeLoader
-                status={complete ? "done" : failed ? "error" : "working"}
-                label={getActionLabel()}
-                doneLabel="Completed in"
-                errorLabel={workflow?.status === "paused" ? "Processing paused" : "Processing failed"}
-                pattern="orbit"
-                grid={3}
-                shape="round"
-                color={isProcessingActive ? (theme === "light" ? "#18181b" : "#ffffff") : "#94a3b8"}
-                doneColor="#22c55e"
-                errorColor="#ef4444"
-                cellSize={7}
-                gap={3}
-                fontSize={16}
-                step={90}
-                idleOpacity={isProcessingActive ? 0.25 : 0.15}
-                glow={isProcessingActive}
-                glowColor="#d4d4d8"
-                showTimer={isProcessingActive || complete}
-                elapsed={workflow?.elapsed_seconds ?? (!isProcessingActive && !complete ? 0 : undefined)}
+              {error && (
+                <div className={styles.errorBox} role="alert">
+                  {error}
+                  {error.toLowerCase().includes('credit') && <Link href="/#pricing"> View student packs →</Link>}
+                </div>
+              )}
+              <button
+                className={styles.startButton}
+                disabled={isBatchMode
+                  ? batchProcessing || !batchItems.some(item => item.status === "ready")
+                  : !questions.length || running || busy || complete || workflow?.status === "awaiting_clarification"}
+                onClick={isBatchMode ? processBatch : process}
+              >
+                {running || busy || batchProcessing ? (
+                  <Loader2 className={styles.spin} size={18} />
+                ) : (
+                  <Code2 size={19} />
+                )}
+                {isBatchMode ? (batchProcessing ? "Working on batch…" : "Process batch") : complete
+                  ? "Report completed"
+                  : running
+                    ? "Processing..."
+                    : "Start processing"}
+                <ArrowRight size={18} />
+              </button>
+            </aside>
+            <section className={styles.workspaceBox}>
+              {/* Dedicated Dot UI for right-hand workspace */}
+              <DotGrid
+                dotColor="#ffffff"
+                backgroundColor="transparent"
+                spacing={22}
+                dotSize={1.6}
+                baseOpacity={0.22}
+                isProcessing={isProcessingActive}
               />
 
-              {complete && (
-                <>
-                  <button
-                    className={styles.downloadDoneBtn}
-                    onClick={download}
-                    disabled={downloading}
-                  >
-                    {downloading ? (
-                      <Loader2 className={styles.spin} size={16} />
-                    ) : (
-                      <Download size={16} />
-                    )}
-                    Download Word Report (.docx)
-                  </button>
-                  <a href="#assignment-setup" className={styles.mobileJumpLink}>
-                    View assignment details ↓
-                  </a>
-                </>
-              )}
-
-              {failed && (
-                <div className={styles.failedActions}>
-                  <p className={styles.failedText}>
-                    {workflow?.error || "Processing encountered an issue."}
-                  </p>
-                  {workflow?.report && (
-                    <button
-                      className={styles.downloadDoneBtn}
-                      onClick={download}
-                      disabled={downloading}
-                    >
-                      {downloading ? <Loader2 className={styles.spin} size={16} /> : <Download size={16} />}
-                      Download Diagnostic Word Report (.docx)
-                    </button>
-                  )}
-                  <button
-                    className={styles.retryBtn}
-                    onClick={questions.length ? process : retryExtraction}
-                    disabled={busy}
-                  >
-                    <RefreshCw size={15} />
-                    Retry {questions.length ? "processing" : "extraction"}
-                  </button>
-                </div>
-              )}
-              {workflow?.report && (
-                <div className={styles.reportPreview}>
-                  <button type="button" className={styles.retryBtn} onClick={() => setShowPreview(value => !value)}>
-                    <FileText size={15} /> {showPreview ? 'Hide Word preview' : 'Preview Word report'}
-                  </button>
-                  {showPreview && (previewLoading ? <p role="status">Loading report…</p> :
-                    <iframe title="Word report preview" sandbox="" referrerPolicy="no-referrer" srcDoc={preview} />)}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Floating log drawer when user views logs */}
-          {showLogs && (
-            <div className={styles.floatingLogPanel}>
-              <div className={styles.logPanelHeader}>
-                <span>Execution Logs</span>
-                <button onClick={() => setShowLogs(false)} aria-label="Close logs">
-                  <X size={15} />
+              {/* Floating top bar with logs button */}
+              <div className={styles.workspaceOverlayTop}>
+                <button
+                  className={styles.darkLogsBtn}
+                  onClick={() => setShowLogs(!showLogs)}
+                >
+                  <Terminal size={14} />
+                  {showLogs ? "Hide logs" : "View logs"}
                 </button>
               </div>
-              <div className={styles.logList}>
-                {workflow?.logs?.length ? (
-                  workflow.logs.map((log, index) => (
-                    <div key={index} className={styles.logEntry}>
-                      <time>{new Date(log.time).toLocaleTimeString()}</time>
-                      <span>{log.message}</span>
+
+              {/* Center of the right box: LatticeLoader listing what it is doing */}
+              <div className={`${styles.centerStageBox} ${showPreview ? styles.previewStage : ''}`}>
+                <div className={`${styles.loaderGlassCard} ${showPreview ? styles.previewCard : ''}`}>
+                  <LatticeLoader
+                    status={complete ? "done" : failed ? "error" : "working"}
+                    label={getActionLabel()}
+                    doneLabel="Completed in"
+                    errorLabel={workflow?.status === "paused" ? "Processing paused" : "Processing failed"}
+                    pattern="orbit"
+                    grid={3}
+                    shape="round"
+                    color={isProcessingActive ? (theme === "light" ? "#18181b" : "#ffffff") : "#94a3b8"}
+                    doneColor="#22c55e"
+                    errorColor="#ef4444"
+                    cellSize={7}
+                    gap={3}
+                    fontSize={16}
+                    step={90}
+                    idleOpacity={isProcessingActive ? 0.25 : 0.15}
+                    glow={isProcessingActive}
+                    glowColor="#d4d4d8"
+                    showTimer={isProcessingActive || complete}
+                    elapsed={workflow?.elapsed_seconds ?? (!isProcessingActive && !complete ? 0 : undefined)}
+                  />
+
+                  {complete && (
+                    <>
+                      <button
+                        className={styles.downloadDoneBtn}
+                        onClick={download}
+                        disabled={downloading}
+                      >
+                        {downloading ? (
+                          <Loader2 className={styles.spin} size={16} />
+                        ) : (
+                          <Download size={16} />
+                        )}
+                        Download Word Report (.docx)
+                      </button>
+                      <a href="#assignment-setup" className={styles.mobileJumpLink}>
+                        View assignment details ↓
+                      </a>
+                    </>
+                  )}
+
+                  {failed && (
+                    <div className={styles.failedActions}>
+                      <p className={styles.failedText}>
+                        {workflow?.error || "Processing encountered an issue."}
+                      </p>
+                      {workflow?.report && (
+                        <button
+                          className={styles.downloadDoneBtn}
+                          onClick={download}
+                          disabled={downloading}
+                        >
+                          {downloading ? <Loader2 className={styles.spin} size={16} /> : <Download size={16} />}
+                          Download Diagnostic Word Report (.docx)
+                        </button>
+                      )}
+                      <button
+                        className={styles.retryBtn}
+                        onClick={questions.length ? process : retryExtraction}
+                        disabled={busy}
+                      >
+                        <RefreshCw size={15} />
+                        Retry {questions.length ? "processing" : "extraction"}
+                      </button>
                     </div>
-                  ))
-                ) : (
-                  <p className={styles.logEmpty}>No events logged yet.</p>
-                )}
+                  )}
+                  {workflow?.report && (
+                    <div className={styles.reportPreview}>
+                      <button type="button" className={styles.retryBtn} onClick={() => setShowPreview(value => !value)}>
+                        <FileText size={15} /> {showPreview ? 'Hide Word preview' : 'Preview Word report'}
+                      </button>
+                      {showPreview && (previewLoading ? <p role="status">Loading report…</p> :
+                        <iframe title="Word report preview" sandbox="" referrerPolicy="no-referrer" srcDoc={preview} />)}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+
+              {/* Floating log drawer when user views logs */}
+              {showLogs && (
+                <div className={styles.floatingLogPanel}>
+                  <div className={styles.logPanelHeader}>
+                    <span>Execution Logs</span>
+                    <button onClick={() => setShowLogs(false)} aria-label="Close logs">
+                      <X size={15} />
+                    </button>
+                  </div>
+                  <div className={styles.logList}>
+                    {workflow?.logs?.length ? (
+                      workflow.logs.map((log, index) => (
+                        <div key={index} className={styles.logEntry}>
+                          <time>{new Date(log.time).toLocaleTimeString()}</time>
+                          <span>{log.message}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <p className={styles.logEmpty}>No events logged yet.</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </section>
+          </main>
         </section>
-        </main>
-      </section>
-    </div>
+      </div>
     </div>
   );
 }

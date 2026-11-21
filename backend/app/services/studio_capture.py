@@ -62,19 +62,30 @@ async def _capture(tool, state, steps, out_dir, practical=None):
                     await route.abort()
             await context.route("**/*", only_studio_origin)
             page = await context.new_page()
-            try:
-                response = await page.goto(url, wait_until="domcontentloaded", timeout=30000)
-            except PlaywrightError as error:
-                raise StudioCaptureUnavailable("The studio page could not be reached.") from error
+            response = None
+            for attempt in range(2):
+                try:
+                    response = await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+                except PlaywrightError as error:
+                    if attempt == 0:
+                        await asyncio.sleep(0.6)
+                        continue
+                    raise StudioCaptureUnavailable("The studio page could not be reached.") from error
+                if response is not None and response.status < 400:
+                    break
+                logger.warning("Studio page %s returned HTTP %s (attempt %d)", url, getattr(response, "status", None), attempt + 1)
+                if attempt == 0:
+                    await asyncio.sleep(0.8)
             if response is None or response.status >= 400:
-                raise StudioCaptureUnavailable("The studio page returned an error.")
+                raise StudioCaptureUnavailable(f"The studio page returned HTTP {getattr(response, 'status', 'none')}.")
             try:
                 # The hook appears once React has attached; evaluate again until it does.
-                await page.wait_for_function("() => window.__labmate && window.__labmate.ready === true", timeout=30000)
-                await page.evaluate("state => window.__labmate.load(state)", state)
+                await page.wait_for_function("() => window.__labmate && window.__labmate.ready === true", timeout=45000)
                 if practical is not None:
-                    await page.wait_for_function("() => typeof window.__labmatePractical === 'function'", timeout=10000)
+                    await page.wait_for_function("() => typeof window.__labmatePractical === 'function'", timeout=20000)
                     steps = await page.evaluate("topic => window.__labmatePractical(topic)", practical)
+                else:
+                    await page.evaluate("state => window.__labmate.load(state)", state)
             except PlaywrightError as error:
                 raise StudioCaptureUnavailable("The studio did not become ready.") from error
             await page.add_style_tag(content=HIDE_DEV_OVERLAY)

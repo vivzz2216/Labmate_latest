@@ -2,8 +2,9 @@
 
 import React from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { ArrowRight, CheckCircle2, XCircle } from "lucide-react";
-import { LAB_IDE_ASSOCIATIONS } from "@/lib/mumbaiUniversity/labIdeAssociations";
+import { LAB_IDE_ASSOCIATIONS, muLabCodeStudioHref } from "@/lib/mumbaiUniversity/labIdeAssociations";
 import type {
   UniversityLabEntry,
   DepartmentCode,
@@ -18,7 +19,7 @@ import styles from "./catalogue.module.css";
 interface LabCardProps {
   lab: UniversityLabEntry;
   activeDepartment: DepartmentCode | "all";
-  onOpenDetails: (lab: UniversityLabEntry) => void;
+  onOpenDetails?: (lab: UniversityLabEntry) => void;
 }
 
 function formatBranchLabel(dept: DepartmentCode): string {
@@ -98,15 +99,14 @@ export default function LabCard({
             ? `${lab.detailedOutlines?.length} Modules · ${lab.scheme}`
             : lab.scheme}
         </span>
-        <button
-          type="button"
+        <Link
+          href={muLabCodeStudioHref(lab)}
           className={styles.viewDetailsBtn}
-          onClick={() => onOpenDetails(lab)}
-          aria-label={`View syllabus and experiment outline for ${displayName}`}
+          aria-label={`Open Code Studio for ${displayName}`}
         >
-          <span>Syllabus &amp; Outlines</span>
+          <span>Open Code Studio</span>
           <ArrowRight size={13} aria-hidden="true" />
-        </button>
+        </Link>
       </div>
     </article>
   );

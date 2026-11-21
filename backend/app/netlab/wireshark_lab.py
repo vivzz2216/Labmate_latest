@@ -17,9 +17,13 @@ PRACTICE_NOTE = "LabMate practice environment (not Wireshark)"
 def load(capture_bytes=None):
     """(session, source, facts): the student's capture, or the built-in scenario when they supply none."""
     if capture_bytes:
-        return open_session(capture_bytes), "uploaded", {}
+        session = open_session(capture_bytes)
+        session.original_capture = capture_bytes
+        return session, "uploaded", {}
     data, facts = build_scenario()
-    return open_session(data), "scenario", facts
+    session = open_session(data)
+    session.original_capture = data
+    return session, "scenario", facts
 
 
 def key_packets(session):

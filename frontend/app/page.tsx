@@ -288,8 +288,8 @@ export default function HomePage() {
           <div>
             <div className={styles.footerColTitle}>Supported Runtimes</div>
             <ul className={styles.footerNavList}>
-              <li><Link href="/labs/deep-learning" className={styles.footerLink}>Deep Learning (PyTorch/TF)</Link></li>
-              <li><Link href="/labs/distributed-computing" className={styles.footerLink}>Distributed Computing (Java)</Link></li>
+              <li><Link href="/code-execution?lab=deep-learning&track=deep_learning" className={styles.footerLink}>Deep Learning (Colab/Jupyter/R)</Link></li>
+              <li><Link href="/code-execution?lab=distributed-computing&track=distributed" className={styles.footerLink}>Distributed Computing (Java)</Link></li>
               <li><Link href="/labs" className={styles.footerLink}>Python, Java &amp; C/C++</Link></li>
               <li><Link href="/labs" className={styles.footerLink}>Web, SQL &amp; Colab</Link></li>
             </ul>

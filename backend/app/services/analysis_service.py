@@ -49,7 +49,7 @@ def normalize_generated_code(code: str) -> str:
     return "".join(output)
 
 
-async def repair_generated_code(question: str, language: str, code: str, error: str, additional_instructions: str = "") -> str:
+async def repair_generated_code(question: str, language: str, code: str, error: str, additional_instructions: str = "", *, sql_dialect: str = "mysql") -> str:
     """Ask the selected model to fix a concrete execution failure, at most once per call."""
     from .generation_service import generation_service
     from .instruction_policy import clean_instructions
@@ -76,7 +76,7 @@ async def repair_generated_code(question: str, language: str, code: str, error: 
 
     schema = {"type": "OBJECT", "properties": {"code": {"type": "STRING"}}, "required": ["code"]}
     from .sql_instructions import sql_instructions
-    sql_guidance = sql_instructions(question) if language == 'sql' else ''
+    sql_guidance = sql_instructions(question, dialect=sql_dialect) if language == 'sql' else ''
     if language == 'ubuntu':
         from .ubuntu_runtime import ubuntu_instructions
         sql_guidance = ubuntu_instructions()
@@ -98,7 +98,7 @@ async def repair_generated_code(question: str, language: str, code: str, error: 
         "input or a bounded prompt flow. In Python, every open() call must use a literal basename string as its "
         "first argument, for example open('sample.txt', 'w'); never a filename variable or input(). "
         "For HTML and React, all images must be inline data URLs or omitted; remote images are blocked by the lab browser. "
-        "For SQL, write MySQL 8 syntax and implement only the operations and tables requested. Preserve exact identifier capitalization. "
+        "For SQL, use the specified SQL dialect and implement only the operations and tables requested. Preserve exact identifier capitalization. "
         "Use native RIGHT JOIN when required, retaining unmatched right rows, and query only views actually created. "
         "For Colab/Notebook, the runtime is strictly offline with no network access and no subprocess/pip. "
         "Never download remote datasets or models (e.g. avoid fetch_20newsgroups(), nltk.download()). "

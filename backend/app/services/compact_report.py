@@ -72,7 +72,8 @@ def diagnostic_text(result):
     verification=result.get('verification') or {}
     kind=verification.get('kind') or ('browser' if result.get('language') in {'html','react'} else 'console')
     if verification.get('status')=='failed':
-        label={'rstudio':'R / RStudio verification','notebook':'Python notebook verification','database':'MySQL verification',
+        database_label = 'SQLite verification' if verification.get('dialect') == 'sqlite' else 'MySQL verification'
+        label={'rstudio':'R / RStudio verification','notebook':'Python notebook verification','database':database_label,
             'gui':'Java UI interaction verification','http':'HTTP request verification'}.get(kind,'Browser interaction verification')
         lines.append(label+': FAILED')
         for test in verification.get('tests',[]):
@@ -264,6 +265,25 @@ def build_compact_report(upload,workflow):
         if can_paste_inline and source_is_docx and not appended_started:
             document.add_section(WD_SECTION.NEW_PAGE)
         appended_started = True
+
+        if result.get('kind') == 'evidence':
+            from .docx_layout import embed_evidence_block
+            embed_evidence_block(
+                document,
+                result.get('part_title') or question or f"Part {result.get('id', index + 1)}",
+                result.get('answer') or '',
+                result.get('id', index + 1),
+                paths,
+                resolved_captions,
+                result.get('evidence_missing') or [],
+                table=result.get('table'),
+                tables_before=result.get('tables_before') or (),
+                explanations=result.get('screenshot_explanations') or (),
+                observations=result.get('observations') or (),
+                notes=result.get('notes') or (),
+                tables_after=result.get('tables_after') or (),
+            )
+            continue
 
         heading=document.add_paragraph(short_text(question or f"Program {result['id']}",240),style='Heading 2')
         heading.paragraph_format.keep_with_next=True

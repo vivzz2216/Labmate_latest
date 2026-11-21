@@ -301,6 +301,54 @@ class PaymentWebhookEvent(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
+class Poll(Base):
+    """A question the owner asks all students (shown under Polls in the account menu)."""
+    __tablename__ = "polls"
+
+    id = Column(Integer, primary_key=True, index=True)
+    question = Column(String(300), nullable=False)
+    description = Column(Text, nullable=True)
+    is_open = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    closes_at = Column(DateTime(timezone=True), nullable=True)
+
+    options = relationship("PollOption", back_populates="poll", cascade="all, delete-orphan", order_by="PollOption.position")
+
+
+class PollOption(Base):
+    __tablename__ = "poll_options"
+
+    id = Column(Integer, primary_key=True, index=True)
+    poll_id = Column(Integer, ForeignKey("polls.id", ondelete="CASCADE"), nullable=False, index=True)
+    label = Column(String(200), nullable=False)
+    position = Column(Integer, nullable=False, default=0)
+
+    poll = relationship("Poll", back_populates="options")
+
+
+class PollVote(Base):
+    """One vote per student per poll (changing the vote replaces it while the poll is open)."""
+    __tablename__ = "poll_votes"
+    __table_args__ = (UniqueConstraint("poll_id", "user_id", name="uq_poll_vote_user"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    poll_id = Column(Integer, ForeignKey("polls.id", ondelete="CASCADE"), nullable=False, index=True)
+    option_id = Column(Integer, ForeignKey("poll_options.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class FeatureUpdate(Base):
+    """A 'What's new' entry written by the owner."""
+    __tablename__ = "feature_updates"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(200), nullable=False)
+    body = Column(Text, nullable=False)
+    tag = Column(String(40), nullable=True)  # New / Improved / Fixed
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
 class StudentFeedback(Base):
     __tablename__ = "student_feedback"
 

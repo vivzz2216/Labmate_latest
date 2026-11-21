@@ -75,6 +75,7 @@ export function powerBiPractical(topic: string): PowerBiPracticalFrame[] {
       const result = evaluateMeasure(measure.formula, salesTable.rows, salesTable.columns, measures);
       if (result.error || result.value !== [3600, 10, 900][i]) throw new Error(measure.name + " failed verification: " + (result.error || result.value));
     });
+    add("Data model table with SalesAmount and explicit DAX measures", "Verified SalesAmount = [Quantity] * [UnitPrice] column and attached Total Sales, Total Units, and Average Sale measures to the sales table.", [salesTable], "table", [], { measures });
     add("Calculated measure values", "SalesAmount = [Quantity] * [UnitPrice]. " + measures.map((m) => m.name + " = " + m.formula).join(". "), [salesTable], "report",
       measures.map((m, i) => visual(m.id, "card", m.name, "sales", undefined, [m.name], 24 + 385 * i, 26, 350, 165)), { measures });
   } else if (topic === "region-slicer") {

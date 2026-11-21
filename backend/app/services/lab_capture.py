@@ -198,19 +198,24 @@ async def capture_sql(
     src_filename = Path(filename or "solution.sql").name
 
     session: SQLSession | None = None
-    browser = None
+    sqlite = template == "sqlite"
+    dialect = "sqlite" if sqlite else "mysql"
     try:
-        session = await asyncio.to_thread(SQLSession, allow_dcl=bool(re.search(r'\b(?:GRANT|REVOKE|DCL|authorization)\b', objective, re.I)))
-        receipt = await asyncio.to_thread(session.execute_script, code)
+        if sqlite:
+            from .sqlite_runtime import execute_sqlite_script
+            receipt = await asyncio.to_thread(execute_sqlite_script, code)
+        else:
+            session = await asyncio.to_thread(SQLSession, allow_dcl=bool(re.search(r'\b(?:GRANT|REVOKE|DCL|authorization)\b', objective, re.I)))
+            receipt = await asyncio.to_thread(session.execute_script, code)
         sem_verification = verify_sql_exercise(objective or "", code, receipt)
 
         statements: list[dict[str, Any]] = receipt.get("statements") or []
         select_results: list[dict[str, Any]] = receipt.get("select_results") or []
-        server_version = receipt.get("server_version") or session.server_version or "8.0"
-        engine_label = f"MySQL {server_version}"
+        server_version = receipt.get("server_version") or (session.server_version if session else "")
+        engine_label = f"{'SQLite' if sqlite else 'MySQL'} {server_version}"
         cli = template == "mysql-cli"
-        interface = "MySQL CLI" if cli else "MySQL Workbench"
-        conn_title = f"MySQL {server_version} — Localhost (Isolated Lab)"
+        interface = "DB Browser for SQLite" if sqlite else "MySQL CLI" if cli else "MySQL Workbench"
+        conn_title = f"{engine_label} — Localhost (Isolated Lab)"
         time_str = datetime.now().strftime("%H:%M:%S")
 
         normalized_code = str(code or "").replace("\r\n", "\n").replace("\r", "\n")
@@ -270,20 +275,38 @@ async def capture_sql(
                 else:
                     await route.abort()
 
-            await context.route("**/*", guard)
-            page = await context.new_page()
-            if cli:
+            if sqlite:
+                from .ide_report_capture import open_report_workspace, render_report_frame
+                page = await open_report_workspace(context, "sqlite")
+            else:
+                await context.route("**/*", guard)
+                page = await context.new_page()
+            if not sqlite and cli:
                 await page.set_content("""<!doctype html><html lang="en"><meta charset="utf-8">
                     <title>MySQL Command Line Client</title><style>
                     body{margin:0;background:#101010;color:#e4e4e4;font:17px/1.4 Consolas,monospace}
                     header{background:#292929;padding:10px 18px;color:#fff;font:600 15px system-ui}
                     pre{margin:0;padding:18px;white-space:pre-wrap;overflow-wrap:anywhere;font:inherit}
                     </style><header>MySQL Command Line Client</header><main><pre></pre></main></html>""")
-            else:
+            elif not sqlite:
                 await page.goto(html.as_uri(), wait_until="domcontentloaded", timeout=15000)
                 await page.wait_for_function("!!window.MySQLWorkbench && typeof window.MySQLWorkbench.renderFrame === 'function'", timeout=5000)
 
             async def render_frame(config, path):
+                if sqlite:
+                    tabs = config["resultSets"]
+                    index = config["activeResultIndex"]
+                    active = tabs[index] if tabs and index >= 0 else {}
+                    columns = active.get("columns", [])
+                    last_step = config["actionLogs"][-1] if config["actionLogs"] else None
+                    await render_report_frame(page, {
+                        "filename": config["tabTitle"], "code": config["editorSql"], "columns": columns,
+                        "rows": [[row.get(column) for column in columns] for row in active.get("rows", [])],
+                        "status": last_step["message"] if last_step else "", "failed": bool(last_step and not last_step["success"]),
+                        "activeLine": (config["highlightRange"][0] - config["startLine"] + 1) if config["highlightRange"] else 0,
+                        "firstLine": config["startLine"],
+                    }, path, fit_selectors=('[class*="sqlTextarea"]', '[class*="gridFrame"]'))
+                    return
                 if not cli:
                     await page.evaluate("(cfg) => window.MySQLWorkbench.renderFrame(cfg)", config)
                     await capture_sql_frame(page, path)
@@ -576,11 +599,12 @@ async def capture_sql(
 
         verification_payload = {
             "kind": "database",
-            "dialect": "mysql",
+            "dialect": dialect,
             "engine": engine_label,
             "server_version": server_version,
             "isolated_schema": receipt.get("isolated_schema", ""),
-            "interface": f"{interface}-style rendered interface connected to real MySQL",
+            "interface": (f"{interface} evidence rendered from real {engine_label} execution" if sqlite
+                          else f"{interface}-style rendered interface connected to real MySQL"),
             "status": "passed" if overall_ok else "failed",
             "verified": overall_ok,
             "statements": statements,
@@ -607,7 +631,7 @@ async def capture_sql(
             stages={'capture': 'unavailable'} if isinstance(error, CaptureBrowserUnavailable) else {},
             verification={
                 "kind": "database",
-                "dialect": "mysql",
+                "dialect": dialect,
                 "status": "failed",
                 "verified": False,
                 "failures": [str(error)],

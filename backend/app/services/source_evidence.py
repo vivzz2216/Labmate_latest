@@ -83,21 +83,24 @@ async def capture_source_evidence(project_files,code,filename,*,theme,group,user
         digest=hashlib.sha256(text.encode('utf-8')).hexdigest()
         web=language in {'html','react','node','flask','distributed'}
         vs=web or theme=='vscode'
+        java_workspace = theme in {'eclipse', 'intellij'}
         ide=language in {'python','java','java_gui','c','cpp'}
         count=len(text.splitlines())
-        pages=[[[start,min(start+31,count)]] for start in range(1,count+1,32)] if policy=='complete' and count else [excerpt_ranges(text) if web else []]
+        pages=[[[start,min(start+31,count)]] for start in range(1,count+1,32)] if (policy=='complete' or java_workspace) and count else [excerpt_ranges(text) if web else []]
         for page_index,ranges in enumerate(pages,1):
             excerpt=''.join(''.join(text.splitlines(keepends=True)[start-1:end]) for start,end in ranges) if ranges else text
             ok,path,width,height=await screenshot_service.generate_screenshot(
-                text,'','notepad' if language=='java_gui' and not vs else theme,group,username,name,view_mode='editor',presentation='vscode_evidence' if vs else 'ide_evidence' if ide else 'evidence',
+                text,'','notepad' if language=='java_gui' and not (vs or java_workspace) else theme,group,username,name,view_mode='editor',presentation='vscode_evidence' if vs else 'ide_evidence' if ide else 'evidence',
                 language=language,screenshot_style=screenshot_style,
                 palette=jupyter_theme if theme=='jupyter' else 'dark' if web or screenshot_style=='style_2' else 'light',
-                source_ranges=ranges if web or policy=='complete' else None,project_files=project_files)
+                source_ranges=ranges if web or policy=='complete' or java_workspace else None,project_files=project_files)
             if not ok:
                 failures.append(f'Source screenshot could not be captured completely: {name}'+(f', page {page_index}' if policy=='complete' else ''))
                 continue
             label='VS Code source preview' if vs else 'Rendered Jupyter Notebook source preview' if theme=='jupyter' else 'Rendered IDLE source preview' if language=='python' else 'Rendered Notepad source preview' if language in {'java','java_gui'} else 'Rendered Code::Blocks source preview' if language in {'c','cpp'} else 'Rendered source preview'
-            if policy=='complete':
+            if java_workspace:
+                label = ("Eclipse" if theme == "eclipse" else "IntelliJ IDEA") + " source preview"
+            if policy=='complete' or java_workspace:
                 label=f'Complete source — {name} — lines {ranges[0][0]}–{ranges[-1][1]}, part {page_index}/{len(pages)}' if ranges else 'Complete source — '+name+' (empty file)'
             else:
                 label+=' — '+name

@@ -188,7 +188,7 @@ export function PacketTracerStudio({ capturePractical = false }: { capturePracti
   const [constantDelay, setConstantDelay] = useState(true);
   const [selectedEventModal, setSelectedEventModal] = useState<PtEvent | null>(null);
   const [openDeviceModal, setOpenDeviceModal] = useState<string | null>(null);
-  const [modalInit, setModalInit] = useState<{ tab?: ModalTab; section?: string }>({});
+  const [modalInit, setModalInit] = useState<{ tab?: ModalTab; section?: string; desktopApp?: "grid" | "ipconfig" | "cmd" | "terminal" | "browser" | "wireless" }>({});
   const [copiedDevice, setCopiedDevice] = useState<PtDevice | null>(null);
   const [selectedDeviceName, setSelectedDeviceName] = useState<string | null>(null);
   const [openMenu, setOpenMenu] = useState<string | null>(null);
@@ -250,12 +250,18 @@ export function PacketTracerStudio({ capturePractical = false }: { capturePracti
           setSimCursor(adapted.events.length > 0 ? adapted.events.length - 1 : null);
           if (adapted.openDeviceName) {
             const devObj = adapted.spec.devices.find((d) => d.name === adapted.openDeviceName);
-            const sec = adapted.openPort
-              ? `iface:${adapted.openPort}`
-              : devObj?.type === "router" && adapted.openSettings
-                ? "Static"
-                : "Settings";
-            setModalInit({ tab: "Config", section: sec });
+            if (devObj?.type === "server" && adapted.openSettings) {
+              setModalInit({ tab: "Services" });
+            } else if ((devObj?.type === "laptop" || devObj?.type === "tablet" || devObj?.type === "smartphone") && adapted.openSettings) {
+              setModalInit({ tab: "Desktop", desktopApp: "wireless" });
+            } else {
+              const sec = adapted.openPort
+                ? `iface:${adapted.openPort}`
+                : devObj?.type === "router" && adapted.openSettings
+                  ? "Static"
+                  : "Settings";
+              setModalInit({ tab: "Config", section: sec });
+            }
             setOpenDeviceModal(adapted.openDeviceName);
           } else {
             setOpenDeviceModal(null);
@@ -263,12 +269,14 @@ export function PacketTracerStudio({ capturePractical = false }: { capturePracti
           setTick((n) => n + 1);
           return;
         }
+        setOpenDeviceModal(null);
+        setSimCursor(null);
         setFrame(next);
         setMode("guided");
         setTick((n) => n + 1);
       },
     },
-    `${tick}:${frame?.id}:${openDeviceModal ?? ""}`,
+    `${tick}:${frame?.id}:${openDeviceModal ?? ""}:${modalInit.tab ?? ""}:${modalInit.section ?? ""}:${modalInit.desktopApp ?? ""}`,
   );
 
   // Register headless capture helper when opened with ?capture=practical
@@ -2700,10 +2708,12 @@ export function PacketTracerStudio({ capturePractical = false }: { capturePracti
       {/* Interactive Device Configuration Window */}
       {activeDeviceObj && spec && (
         <PtDeviceModal
+          key={`${activeDeviceObj.name}:${modalInit.tab ?? ""}:${modalInit.section ?? ""}:${modalInit.desktopApp ?? ""}`}
           spec={spec}
           device={activeDeviceObj}
           initialTab={modalInit.tab}
           initialConfigSection={modalInit.section}
+          initialDesktopApp={modalInit.desktopApp}
           onUpdateDevice={(updated) => {
             setSpec({
               ...spec,

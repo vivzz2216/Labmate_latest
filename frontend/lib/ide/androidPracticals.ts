@@ -169,7 +169,12 @@ export function androidPractical(topic: string): AndroidPracticalFrame[] {
     click("increment", "1"); click("increment", "2");
     add("Counter before relaunch", "Two increments wrote 2 to SharedPreferences.");
     session = launchAndroidRuntimeSession(project.files, PACKAGE, session.integerPreferences).session;
+    session = {
+      ...session,
+      toasts: [{ id: "relaunch-1", message: "Relaunched MainActivity: restored 2 from SharedPreferences", timestamp: session.lastLaunchTimeMs }],
+    };
     expectValue("2"); add("Counter after relaunch", "A new activity instance read the saved value 2.");
+    session = { ...session, toasts: [] };
     click("reset", "0"); add("Reset counter", "Reset saved 0 and updated the label.");
   }
   return frames;

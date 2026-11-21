@@ -12,10 +12,12 @@ def load_catalog():
     data=json.loads((packaged if packaged.is_file() else development).read_text(encoding='utf-8-sig'))
     keys={'slug':'slug','track':'track','title':'title','short_title':'shortTitle','tagline':'tagline',
           'description':'description','default_language':'defaultLanguage','badge':'badge',
-          'accent_color':'accentColor','features':'features'}
+          'accent_color':'accentColor','features':'features','environment_specs':'environmentSpecs',
+          'experiments':'experiments'}
     return [{**{dest:c[src] for dest,src in keys.items() if src in c},'experiment_count':len(c['experiments'])} for c in data]
 
 LAB_CATALOG_DATA=load_catalog()
+_LIST_EXCLUDE={'experiments','environment_specs'}
 
 
 @router.get('/datasets/{name}')
@@ -30,7 +32,7 @@ async def download_practice_dataset(name: str):
 
 @router.get('')
 async def list_labs():
-    return LAB_CATALOG_DATA
+    return [{k:v for k,v in category.items() if k not in _LIST_EXCLUDE} for category in LAB_CATALOG_DATA]
 
 @router.get('/{slug}')
 async def get_lab_detail(slug:str):

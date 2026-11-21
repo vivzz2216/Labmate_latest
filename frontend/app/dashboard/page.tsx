@@ -343,18 +343,18 @@ export default function DashboardPage() {
               </div>
 
               <div className={styles.trackList}>
-                <Link href="/labs/deep-learning" className={styles.trackItem}>
+                <Link href="/code-execution?lab=deep-learning&track=deep_learning" className={styles.trackItem}>
                   <span className={styles.trackIcon} aria-hidden="true">
                     <Cpu size={15} strokeWidth={1.9} />
                   </span>
                   <span className={styles.trackText}>
                     <strong>Deep Learning</strong>
-                    <small>PyTorch, TensorFlow &amp; Colab</small>
+                    <small>Colab, Jupyter &amp; R / RStudio</small>
                   </span>
                   <ChevronRight size={14} className={styles.trackChevron} />
                 </Link>
 
-                <Link href="/labs/distributed-computing" className={styles.trackItem}>
+                <Link href="/code-execution?lab=distributed-computing&track=distributed" className={styles.trackItem}>
                   <span className={styles.trackIcon} aria-hidden="true">
                     <Network size={15} strokeWidth={1.9} />
                   </span>

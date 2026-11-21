@@ -226,20 +226,23 @@ export const AndroidStudioWorkspace: React.FC<{ capture?: boolean }> = ({ captur
   }));
   const [captureFrame, setCaptureFrame] = useState("");
   useStudioHook<Record<string, never>, AndroidPracticalFrame>({
-    load: () => {},
+    load: () => { },
     show: (step) => {
       if (!capture) return;
       const opened = step.project.files.find((file) => file.name === step.file);
+      const keyTabs = step.project.files.filter((file) =>
+        ["MainActivity.java", "activity_main.xml", "SecondActivity.java"].includes(file.name) || file.id === opened?.id,
+      );
       setProjects([step.project]);
       setActivePresetId(step.project.id);
-      setOpenTabIds(opened ? [opened.id] : []);
-      setActiveFileId(opened?.id || "");
-      setSplitMode("Code");
+      setOpenTabIds(keyTabs.length ? keyTabs.map((file) => file.id) : (opened ? [opened.id] : []));
+      setActiveFileId(opened?.id || keyTabs[0]?.id || "");
+      setSplitMode(step.file.endsWith(".xml") ? "Split" : "Code");
       setRuntimeSession(step.session);
       setIsRunning(true);
       setRightTab("runningDevices");
       setBottomTab(null);
-      setStatusMessage("Verified in LabMate's interactive Android runtime");
+      setStatusMessage(`${step.title} — ${step.explain} (Verified in LabMate's interactive Android runtime)`);
       setCaptureFrame(step.id);
     },
   }, captureFrame);
@@ -440,9 +443,9 @@ export const AndroidStudioWorkspace: React.FC<{ capture?: boolean }> = ({ captur
         const next = prev.map((p) =>
           p.id === activePresetId
             ? {
-                ...p,
-                files: p.files.map((f) => (f.id === fileId ? { ...f, content: newContent } : f)),
-              }
+              ...p,
+              files: p.files.map((f) => (f.id === fileId ? { ...f, content: newContent } : f)),
+            }
             : p
         );
         persistWorkspace(next, activePresetId);
@@ -614,17 +617,17 @@ export const AndroidStudioWorkspace: React.FC<{ capture?: boolean }> = ({ captur
       const debugExtra: LogcatEntry[] =
         mode === "debug"
           ? [
-              {
-                id: `dbg-${Date.now()}`,
-                timestamp: step.logs[0]?.timestamp || "00:00:00.000",
-                pid: 6410,
-                tid: 6410,
-                tag: "DebuggerTrace",
-                packageName: activePreset.packageName,
-                level: "D",
-                message: `Debug trace enabled on ${activeDevice.name}; watching lifecycle, Intent & View events.`,
-              },
-            ]
+            {
+              id: `dbg-${Date.now()}`,
+              timestamp: step.logs[0]?.timestamp || "00:00:00.000",
+              pid: 6410,
+              tid: 6410,
+              tag: "DebuggerTrace",
+              packageName: activePreset.packageName,
+              level: "D",
+              message: `Debug trace enabled on ${activeDevice.name}; watching lifecycle, Intent & View events.`,
+            },
+          ]
           : [];
 
       setLogcatEntries((prev) => [...prev, ...debugExtra, ...step.logs]);
@@ -717,10 +720,10 @@ export const AndroidStudioWorkspace: React.FC<{ capture?: boolean }> = ({ captur
           lower.indexOf("assemble") >= 0
             ? "assembleDebug"
             : lower.indexOf("test") >= 0
-            ? "test"
-            : lower.indexOf("clean") >= 0
-            ? "clean"
-            : "compile";
+              ? "test"
+              : lower.indexOf("clean") >= 0
+                ? "clean"
+                : "compile";
         const outLines = await handleBuildTask(task);
         setBottomTab("terminal");
         setTerminalHistory((prev) => [
@@ -816,8 +819,8 @@ export const AndroidStudioWorkspace: React.FC<{ capture?: boolean }> = ({ captur
             kind === "manifest"
               ? files.find((f) => f.kind === "manifest")
               : kind === "layout"
-              ? files.find((f) => f.isLayoutXml)
-              : files.find((f) => f.id === "main-activity" || /MainActivity\.(java|kt)$/.test(f.name));
+                ? files.find((f) => f.isLayoutXml)
+                : files.find((f) => f.id === "main-activity" || /MainActivity\.(java|kt)$/.test(f.name));
           if (target) handleSelectFile(target.id);
         }}
         onRunApp={handleRunApp}
@@ -1052,7 +1055,7 @@ export const AndroidStudioWorkspace: React.FC<{ capture?: boolean }> = ({ captur
           onWidgetClick={(widgetId, onClickMethodName) => {
             const step = dispatchRuntimeWidgetClick(runtimeSession, files, widgetId, onClickMethodName);
             if (!capture && step.session.integerPreferences && !step.error) {
-              try { localStorage.setItem(preferencesKey(activePreset), JSON.stringify(step.session.integerPreferences)); } catch {}
+              try { localStorage.setItem(preferencesKey(activePreset), JSON.stringify(step.session.integerPreferences)); } catch { }
             }
             setRuntimeSession(step.session);
             if (step.logs.length > 0) {

@@ -376,6 +376,8 @@ export function WiresharkStudio() {
         if (!state) return;
         setView(step.view);
         setFollow(null);
+        setFollowDirection("entire");
+        setFollowFind("");
         setFilterError("");
         if (step.view === "main" || step.view === "follow") {
           const expression = step.view === "follow" ? `tcp.stream eq ${step.stream}` : step.filter ?? "";
@@ -390,7 +392,7 @@ export function WiresharkStudio() {
         setTick((n) => n + 1);
       },
     },
-    `${tick}:${view}:${selected}:${applied}:${detail?.no}`,
+    `${tick}:${view}:${selected}:${applied}:${detail?.no}:${Array.from(open).join(",")}:${pickedNode ?? ""}:${follow?.stream ?? ""}`,
   );
 
   useEffect(() => {
@@ -519,6 +521,25 @@ export function WiresharkStudio() {
   const filterClass = filterError ? styles.filterInvalid : applied ? styles.filterValid : "";
   const pct = rows.length ? ((shown.length / rows.length) * 100).toFixed(1) : "0.0";
   const inCaptureView = view === "main" || view === "follow";
+  const canSaveCapture = inCaptureView && Boolean(token.current) && !localSampleMode;
+
+  async function saveCapture() {
+    const id = token.current;
+    if (!id) return;
+    try {
+      const response = await api.get<Blob>(`/api/netlab/wireshark/${id}/download`, { responseType: "blob" });
+      const disposition = String(response.headers["content-disposition"] || "");
+      const filename = /filename="(capture\.pcap(?:ng)?)"/.exec(disposition)?.[1] || "capture.pcap";
+      const url = URL.createObjectURL(response.data);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch {
+      setMessage("Could not save this capture. Reopen it and try again.");
+    }
+  }
 
   const getMenuEntries = (
     name: string,
@@ -526,6 +547,7 @@ export function WiresharkStudio() {
     if (name === "File")
       return [
         { label: "Open...", shortcut: "Ctrl+O", action: () => upload.current?.click() },
+        { label: "Save capture", disabled: !canSaveCapture, action: () => void saveCapture() },
         { label: "Open Practice Capture (HTTP/ARP)", shortcut: "", action: () => void openCapture() },
         { label: "Open Sample: DNS (google.com) + TLS :443", shortcut: "", action: openGoogleDnsSample },
         { divider: true },
@@ -572,7 +594,7 @@ export function WiresharkStudio() {
         { divider: true },
         { label: "Follow > TCP Stream", shortcut: "Ctrl+Alt+Shift+T", disabled: !canFollowStream, action: () => detail && void followStream(detail.row.stream) },
       ];
-    return [{ label: `${name} options (practice workspace)`, disabled: true, action: () => {} }];
+    return [{ label: `${name} options (practice workspace)`, disabled: true, action: () => { } }];
   };
 
   return (
@@ -663,7 +685,7 @@ export function WiresharkStudio() {
             <button className={styles.toolBtn} title="Open a capture file" aria-label="Open a capture file" onClick={() => upload.current?.click()}>
               <WsOpenFolderIcon size={18} />
             </button>
-            <button className={styles.toolBtn} title="Save this capture file" aria-label="Save capture file" disabled={!rows.length}>
+            <button className={styles.toolBtn} title="Save this capture file" aria-label="Save capture file" disabled={!canSaveCapture} onClick={() => void saveCapture()}>
               <WsSaveIcon size={17} />
             </button>
             <button className={styles.toolBtn} title="Close this capture file" aria-label="Close capture file" disabled={!inCaptureView} onClick={closeCapture}>

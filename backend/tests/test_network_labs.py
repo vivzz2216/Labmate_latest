@@ -352,3 +352,240 @@ def test_malformed_topologies_and_actions_are_refused_cleanly(env):
         assert reply.status_code == 422, (action, reply.status_code, reply.text)
     ok = env.client.post("/api/netlab/packettracer/replay", json={"spec": good, "actions": [{"type": "ping", "from": "A", "to": "10.0.0.2"}]})
     assert ok.status_code == 200 and ok.json()["results"][0]["success"] is True
+
+
+# ----------------------------------------------------------------------------------------------- realistic diverse manuals & rich reports
+def test_diverse_university_manuals_detect_all_cisco_and_wireshark_practicals():
+    pt_single_cases = [
+        ("Practical 1: Switched IPv4 LAN Configuration in Cisco Packet Tracer\nConfigure PC1 (192.168.10.10/24) and PC2 (192.168.10.20/24) through a switch and test ICMP ping.", "switched-lan"),
+        ("Lab Worksheet: VLAN Segmentation and Access Port Isolation using Packet Tracer\nConfigure Fa0/1 in VLAN 10 and Fa0/2 in VLAN 20, verify ping fails, then move Fa0/2 to VLAN 10.", "vlan-isolation"),
+        ("Routing Practical: Static Routing Across Two Routers R1 and R2 in Packet Tracer\nAdd static routes on R1 and R2 across 10.0.0.0/30 and ping from PC1 to PC2.", "static-routing"),
+        ("Enterprise Network Lab: DHCP Address Assignment Pool in Packet Tracer\nConfigure DHCP Server pool 192.168.30.10 and lease IPv4 addresses dynamically to PC1 and PC2.", "dhcp-lan"),
+        ("WLAN Lab: Wireless Access Point SSID Association in Packet Tracer\nAssociate Laptop1 with AP1 SSID LabMate Wi-Fi, ping server, then change SSID to test mismatch drop.", "wireless-ssid"),
+    ]
+    for manual_text, expected_exp in pt_single_cases:
+        parts = network_labs.detect_network_lab(manual_text)
+        assert parts and [p["studio_args"]["experiment"] for p in parts] == [expected_exp], manual_text
+
+    pt_multi = """Department of Computer Engineering — Networks Practical
+Experiment 1: DHCP Address Assignment in Cisco Packet Tracer
+Configure a DHCP Server pool 192.168.30.10/24 and verify dynamic leases on PC1 and PC2 via DORA.
+Experiment 2: Wireless Access Point SSID Configuration in Cisco Packet Tracer
+Configure Laptop1 and AP1 with matching SSID first, verify ICMP ping, then test mismatched SSID."""
+    multi_parts = network_labs.detect_network_lab(pt_multi)
+    assert [p["studio_args"]["experiment"] for p in multi_parts] == ["dhcp-lan", "wireless-ssid"]
+
+    pt_routing_multi = """Honours Computer Networks Lab Assessment
+Experiment 1: Inter-Subnet Static Routing Across Two Routers in Cisco Packet Tracer
+Configure static routes on R1 and R2 to reach 192.168.20.0/24 and verify with ping.
+Experiment 2: Three-Router Dynamic Routing using RIPv2 in Cisco Packet Tracer
+Design three routers Router0, Router1, Router2 in a triangle, enable RIP, inspect routing tables, disable one link and verify failover."""
+    routing_parts = network_labs.detect_network_lab(pt_routing_multi)
+    assert [p["studio_args"]["experiment"] for p in routing_parts] == ["static-routing", "exp9"]
+
+    ws_cases = [
+        ("Lab 1: ARP and ICMP Packet Capture Analysis using Wireshark\nAim: Use Wireshark display filters (arp.opcode == 1, arp.opcode == 2, icmp.type == 8, icmp.type == 0) in Wireshark.", ["arp-icmp"]),
+        ("Lab 2: TCP Three-Way Handshake (SYN, SYN-ACK, ACK) Analysis in Wireshark\nInspect sequence and acknowledgment numbers.", ["tcp-handshake"]),
+        ("Lab 3: HTTP GET/POST Request and Follow TCP Stream Inspection in Wireshark\nFilter http.request and http.response and reassemble the TCP stream.", ["http"]),
+    ]
+    for manual_text, expected_exps in ws_cases:
+        parts = network_labs.detect_network_lab(manual_text)
+        assert parts and [p["studio_args"].get("experiment") for p in parts] == expected_exps, manual_text
+
+    ws_multi = """Network Protocol Analysis Assignment (Wireshark)
+Experiment 1: DNS Query and Response Resolution Analysis using Wireshark
+Apply dns.flags.response == 0 and dns.flags.response == 1 filters to trace A-record resolution.
+Experiment 2: UDP vs TCP Transport Header Comparison in Wireshark
+Compare User Datagram Protocol and Transmission Control Protocol headers."""
+    ws_multi_parts = network_labs.detect_network_lab(ws_multi)
+    assert [p["studio_args"].get("experiment") for p in ws_multi_parts] == ["dns", "tcp-udp"]
+
+
+def test_focused_practicals_produce_procedures_tables_and_observations(monkeypatch, tmp_path):
+    from app.services import studio_capture
+
+    async def fake_capture_studio(tool, state, steps, out_dir, *, practical=None):
+        if practical is not None:
+            out = []
+            for idx in range(1, 5):
+                p = tmp_path / f"{tool}_{practical}_{idx}.png"
+                Image.new("RGB", (320, 180), (220 + idx * 5, 230, 240)).save(p)
+                out.append({"id": f"step{idx}", "path": str(p), "title": f"{practical} step {idx}", "explain": f"Step {idx} explanation for {practical}."})
+            return out
+        out = []
+        for idx, step in enumerate(steps, 1):
+            p = tmp_path / f"{tool}_{step['id']}_{idx}.png"
+            Image.new("RGB", (320, 180), (210 + idx * 5, 225, 245)).save(p)
+            out.append({"id": step["id"], "path": str(p)})
+        return out
+
+    monkeypatch.setattr(studio_capture, "capture_studio", fake_capture_studio)
+    async def none(*_):
+        return None
+    monkeypatch.setattr(network_labs, "_stored_capture", none)
+
+    for exp in ("switched-lan", "static-routing", "vlan-isolation", "dhcp-lan", "wireless-ssid"):
+        part = {"id": 1, "text": exp, "studio": "packettracer", "studio_args": {"experiment": exp}, "part_title": exp}
+        res = run(network_labs.run_studio_part(SimpleNamespace(id=10, instructions=""), None, part))
+        assert res["status"] == "completed"
+        assert res["answer"].startswith("1. "), (exp, res["answer"])
+        assert len(res.get("tables_before") or []) >= 1, (exp, res.get("tables_before"))
+        assert len(res.get("observations") or []) >= 1, (exp, res.get("observations"))
+        assert len(res.get("auto_evidence") or []) == 4
+
+    for topic in ("arp-icmp", "tcp-handshake", "dns", "http", "tcp-udp"):
+        part = {"id": 1, "text": topic, "studio": "wireshark", "studio_args": {"experiment": topic}, "part_title": topic,
+                "evidence_slots": [{"id": network_labs.CAPTURE_SLOT, "label": network_labs.CAPTURE_LABEL}]}
+        res = run(network_labs.run_studio_part(SimpleNamespace(id=11, instructions=""), None, part))
+        assert res["status"] == "completed"
+        assert res["answer"].startswith("1. "), (topic, res["answer"])
+        assert len(res.get("tables_before") or []) >= 1, (topic, res.get("tables_before"))
+        assert len(res.get("observations") or []) >= 1, (topic, res.get("observations"))
+        assert len(res.get("auto_evidence") or []) >= 2
+
+
+def test_compact_report_and_word_report_render_evidence_tables_and_all_screenshots(tmp_path, monkeypatch):
+    from app.config import settings
+    from app.services.compact_report import build_compact_report
+
+    monkeypatch.setattr(settings, "REPORT_DIR", str(tmp_path / "reports"))
+    img1 = tmp_path / "shot1.png"
+    img2 = tmp_path / "shot2.png"
+    Image.new("RGB", (400, 220), (235, 240, 248)).save(img1)
+    Image.new("RGB", (400, 220), (225, 245, 235)).save(img2)
+    raw_result = {
+        "id": 1,
+        "question": "Practical 1: Switched IPv4 LAN",
+        "part_title": "Switched IPv4 LAN",
+        "language": "theory",
+        "is_theory": True,
+        "kind": "evidence",
+        "status": "completed",
+        "answer": "1. Configured PC1 and PC2 IPv4 settings.\n2. Sent ICMP ping via Switch1.",
+        "tables_before": [{"title": "Device Addressing", "headers": ["Device", "IP"], "rows": [["PC1", "192.168.10.10"], ["PC2", "192.168.10.20"]]}],
+        "observations": ["Switch1 learned both MAC addresses and forwarded ICMP echo cleanly."],
+        "auto_evidence": [
+            {"slot": None, "path": str(img1), "caption": "PC1 IPv4 Configuration (LabMate practice environment)", "explain": "PC1 configured at 192.168.10.10."},
+            {"slot": None, "path": str(img2), "caption": "Ping simulation (LabMate practice environment)", "explain": "ICMP Echo Request/Reply succeeded."},
+        ],
+    }
+    attached = attach_evidence([raw_result], [{"id": 1, "evidence_slots": []}], [])
+    upload = SimpleNamespace(original_filename="manual.pdf", file_type="pdf", file_path="")
+    wf = SimpleNamespace(id=99, mode="code_only", instructions="", results=attached, output_name="pt_compact", student_name="QA Student")
+    out_path, _ = build_compact_report(upload, wf)
+    doc = Document(out_path)
+    assert len(doc.inline_shapes) == 2
+    full_text = "\n".join(p.text for p in doc.paragraphs)
+    assert "Device Addressing" in full_text
+    assert "Explanation: PC1 configured at 192.168.10.10." in full_text
+    assert "Observation: Switch1 learned both MAC addresses and forwarded ICMP echo cleanly." in full_text
+    assert len(doc.tables) == 1
+
+
+def test_mixed_manual_does_not_hijack_non_network_experiments_in_whole_doc_detection():
+    mixed = """Department Lab Manual
+Experiment 1: Write a Python program to compute factorial using recursion.
+Aim: Implement recursive factorial in Python and print factorial of 5.
+Experiment 2: Switched IPv4 LAN Configuration in Cisco Packet Tracer
+Configure PC1 and PC2 connected via Switch1 and ping between them."""
+    heading_total = network_labs.experiment_heading_count(mixed)
+    detected = network_labs.detect_network_lab(mixed)
+    assert heading_total == 2
+    assert len(detected) == 1
+    assert len(detected) < heading_total
+
+
+def test_substeps_inside_multi_experiment_manual_do_not_split_extra_parts():
+    manual = """Advanced Routing Lab
+Experiment 1: Static Routing Across Two Routers in Cisco Packet Tracer
+Part I.1: Configure R1 static route.
+Part I.2: Configure R2 static route.
+Part I.3: Ping across routers.
+Experiment 2: Three-Router Dynamic Routing using RIPv2 in Cisco Packet Tracer
+Part II.1: Design 3-router triangle with Router0, Router1, Router2.
+Part II.2: Inspect Router0, Router1, Router2 routing tables.
+Part II.3: Disable Router0-Router1 link and ping PC0 to PC1."""
+    parts = network_labs.detect_network_lab(manual)
+    assert [p["studio_args"]["experiment"] for p in parts] == ["static-routing", "exp9"]
+
+
+def test_diverse_university_manuals_detect_all_powerbi_and_android_practicals():
+    pbi_cases = [
+        ("Lab 1: Retail Sales Dashboard and Calculated Column in Microsoft Power BI Desktop\nImport Sales CSV, create SalesAmount = [Units] * [UnitPrice], and build KPI Card plus Clustered Bar Chart.", "sales-dashboard"),
+        ("Experiment 2: Data Cleaning & Power Query Transformations in Power BI\nDrop blank Quantity rows, set Quantity to number, trim Region names, and remove duplicates.", "clean-sales"),
+        ("BI Modeling Worksheet: One-to-Many Table Relationships in Power BI Desktop\nLink Customers[CustomerID] to Orders[CustomerID] in Model View and verify customer filter propagation.", "relationships"),
+        ("Practical 4: Authoring Explicit DAX Measures and KPIs in Power BI\nEvaluate SUM([SalesAmount]), SUM([Quantity]), and AVERAGE([SalesAmount]) across Sales rows.", "dax-measures"),
+        ("Enterprise Reporting Lab: Interactive Region Slicer and Line Chart in Power BI\nFilter SalesAmount across Months using an interactive Region slicer for North.", "region-slicer"),
+    ]
+    for manual_text, expected_exp in pbi_cases:
+        parts = network_labs.detect_network_lab(manual_text)
+        assert parts and [p["studio_args"]["experiment"] for p in parts] == [expected_exp], manual_text
+        assert all(p["studio"] == "powerbi" for p in parts)
+
+    pbi_multi = """Business Intelligence Practical Suite — Power BI Desktop
+Experiment 1: Data Cleaning in Power Query Editor using Power BI
+Remove blank quantities, change column types, standardize region names, and deduplicate rows.
+Experiment 2: Interactive Slicer Report Filtering in Power BI
+Build Total Sales KPI, Sales by Region, Sales by Month line chart, and filter dynamically using a Region slicer."""
+    pbi_multi_parts = network_labs.detect_network_lab(pbi_multi)
+    assert [p["studio_args"]["experiment"] for p in pbi_multi_parts] == ["clean-sales", "region-slicer"]
+
+    # Outside SMA manual with ParseHub/Social Media must NOT be hijacked into sample Power BI practicals.
+    sma_external = "Create a dashboard in Power BI using scraped Social Media followers data exported from ParseHub and attach screenshots."
+    assert network_labs.detect_network_lab(sma_external) is None
+
+    android_cases = [
+        ("Practical 1: Greeting Application using EditText and Button in Android Studio\nBuild activity_main.xml with EditText and Show greeting button to display Hello <name>.", "greeting"),
+        ("Experiment 2: Two-Activity Explicit Intent Navigation in Android Studio\nPass student extra via Intent from MainActivity to SecondActivity using putExtra and getStringExtra.", "navigation"),
+        ("Mobile App Lab 3: Arithmetic Calculator with Input Validation in Android Studio\nRead two numbers, handle blank validation, and implement Add and Subtract OnClickListeners.", "calculator"),
+        ("UI Practical 4: Student Registration Form Validation in Android Studio\nValidate name, email, and course EditText inputs and show Registered confirmation.", "registration"),
+        ("Experiment 5: Persistent Counter using SharedPreferences in Android Studio\nStore integer count on Increment, preserve value across relaunch, and Reset to 0.", "counter"),
+    ]
+    for manual_text, expected_exp in android_cases:
+        parts = network_labs.detect_network_lab(manual_text)
+        assert parts and [p["studio_args"]["experiment"] for p in parts] == [expected_exp], manual_text
+        assert all(p["studio"] == "android" for p in parts)
+
+    android_multi = """Mobile Application Development Assessment — Android Studio
+Experiment 1: Persistent Counter with SharedPreferences in Android Studio
+Implement Increment and Reset backed by getSharedPreferences and verify value persists across relaunch.
+Experiment 2: Two Activity Intent Navigation in Android Studio
+Send student name extra from MainActivity to SecondActivity via startActivity(intent)."""
+    android_multi_parts = network_labs.detect_network_lab(android_multi)
+    assert [p["studio_args"]["experiment"] for p in android_multi_parts] == ["counter", "navigation"]
+
+
+def test_powerbi_and_android_practicals_produce_rich_procedures_tables_and_observations(monkeypatch, tmp_path):
+    from app.services import studio_capture
+
+    async def fake_capture_studio(tool, state, steps, out_dir, *, practical=None):
+        out = []
+        for idx in (1, 2):
+            p = tmp_path / f"{tool}_{practical}_{idx}.png"
+            Image.new("RGB", (320, 180), (210 + idx * 10, 225, 240)).save(p)
+            out.append({"id": f"step{idx}", "path": str(p), "title": f"{practical} step {idx}", "explain": f"Step {idx} for {practical}."})
+        return out
+
+    monkeypatch.setattr(studio_capture, "capture_studio", fake_capture_studio)
+
+    for exp in ("sales-dashboard", "clean-sales", "relationships", "dax-measures", "region-slicer"):
+        part = {"id": 1, "text": exp, "studio": "powerbi", "studio_args": {"experiment": exp}, "part_title": exp}
+        res = run(network_labs.run_studio_part(SimpleNamespace(id=21, instructions=""), None, part))
+        assert res["status"] == "completed"
+        assert res["answer"].startswith("1. "), (exp, res["answer"])
+        assert len(res.get("tables_before") or []) >= 1, (exp, res.get("tables_before"))
+        assert len(res.get("observations") or []) >= 1, (exp, res.get("observations"))
+        assert len(res.get("auto_evidence") or []) == 2
+
+    for exp in ("greeting", "navigation", "calculator", "registration", "counter"):
+        part = {"id": 1, "text": exp, "studio": "android", "studio_args": {"experiment": exp}, "part_title": exp}
+        res = run(network_labs.run_studio_part(SimpleNamespace(id=22, instructions=""), None, part))
+        assert res["status"] == "completed"
+        assert res["answer"].startswith("1. "), (exp, res["answer"])
+        assert len(res.get("tables_before") or []) >= 1, (exp, res.get("tables_before"))
+        assert len(res.get("observations") or []) >= 1, (exp, res.get("observations"))
+        assert len(res.get("auto_evidence") or []) == 2
+
+
+
+

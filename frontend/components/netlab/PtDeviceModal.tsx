@@ -29,6 +29,7 @@ interface PtDeviceModalProps {
   device: PtDevice;
   initialTab?: ModalTab;
   initialConfigSection?: string;
+  initialDesktopApp?: DesktopApp;
   onUpdateDevice: (updated: PtDevice) => void;
   onUpdatePeerDevice?: (updated: PtDevice) => void;
   onClose: () => void;
@@ -62,6 +63,7 @@ export function PtDeviceModal({
   device,
   initialTab,
   initialConfigSection,
+  initialDesktopApp,
   onUpdateDevice,
   onUpdatePeerDevice,
   onClose,
@@ -114,7 +116,7 @@ export function PtDeviceModal({
   }, []);
 
   // Desktop apps state
-  const [desktopApp, setDesktopApp] = useState<DesktopApp>("grid");
+  const [desktopApp, setDesktopApp] = useState<DesktopApp>(initialDesktopApp || "grid");
   const [cmdLines, setCmdLines] = useState<string[]>(["Cisco Packet Tracer PC Command Line 1.0", ""]);
   const [cmdInput, setCmdInput] = useState("");
   const [cmdHistory, setCmdHistory] = useState<string[]>([]);
@@ -785,7 +787,7 @@ export function PtDeviceModal({
                           />
                         </label>
                       )}
-                      {device.type === "wireless" && (
+                      {(device.type === "wireless" || isWirelessClient) && (
                         <label style={{ display: "grid", gridTemplateColumns: "130px 1fr", alignItems: "center", gap: 8 }}>
                           <span>Wireless SSID</span>
                           <input
@@ -1025,6 +1027,16 @@ export function PtDeviceModal({
                               style={{ height: 24, border: "1px solid #94a3b8", padding: "0 6px" }}
                             />
                           </label>
+                          {isEnd && device.gateway && (
+                            <label style={{ display: "grid", gridTemplateColumns: "110px 1fr", alignItems: "center", gap: 8 }}>
+                              <span>Default Gateway</span>
+                              <input
+                                value={device.gateway}
+                                onChange={(e) => onUpdateDevice({ ...device, gateway: e.target.value })}
+                                style={{ height: 24, border: "1px solid #94a3b8", padding: "0 6px" }}
+                              />
+                            </label>
+                          )}
                         </>
                       )}
                     </div>

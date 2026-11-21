@@ -123,6 +123,22 @@ class ScreenshotService:
             # Ensure screenshot directory exists
             screenshot_dir = os.path.join(settings.SCREENSHOT_DIR, str(job_id) if job_id else "temp")
             os.makedirs(screenshot_dir, exist_ok=True)
+            if raw_theme in {"eclipse", "intellij"}:
+                from .ide_report_capture import capture_java_report
+                from .storage_service import storage_service
+                path = os.path.join(screenshot_dir, f"{raw_theme}_{uuid.uuid4().hex}.png")
+                ranges = kwargs.get("source_ranges")
+                visible_code = code
+                if ranges:
+                    start, end = ranges[0]
+                    visible_code = "\n".join(code.splitlines()[start - 1:end])
+                show_output = view_mode == "output"
+                if show_output:
+                    visible_code = "\n".join(code.splitlines()[:16])
+                width, height = await capture_java_report(
+                    raw_theme, visible_code, output, filename, show_output, path)
+                storage_service.sync_file(path)
+                return True, path, width, height
             
             if theme == 'workbench':
                 screenshot_path = os.path.join(
@@ -1146,7 +1162,28 @@ class ScreenshotService:
                 if height > 16000:
                     raise ValueError("Screenshot content is too tall to capture completely.")
                 await page.set_viewport_size({"width": width, "height": height})
-                await page.screenshot(path=output_path, full_page=True, timeout=15000)
+                windows = page.locator(".idle-workspace .win-window, .java-workspace .win-window, .java-workspace .cmd-window, .notepad-window")
+                if await windows.count():
+                    # Capture the application bounds and keep gaps between windows transparent.
+                    # The white editor canvas belongs to the IDE and stays opaque.
+                    await page.evaluate("""() => {
+                        document.documentElement.style.setProperty("background", "transparent", "important");
+                        document.body.style.setProperty("background", "transparent", "important");
+                    }""")
+                    bounds = [await window.bounding_box() for window in await windows.all()]
+                    bounds = [box for box in bounds if box]
+                    if not bounds:
+                        raise ValueError("IDE windows are not visible.")
+                    import math
+                    left = math.floor(min(box["x"] for box in bounds))
+                    top = math.floor(min(box["y"] for box in bounds))
+                    right = math.ceil(max(box["x"] + box["width"] for box in bounds))
+                    bottom = math.ceil(max(box["y"] + box["height"] for box in bounds))
+                    width, height = right - left, bottom - top
+                    await page.screenshot(path=output_path, clip={"x": left, "y": top, "width": width, "height": height},
+                                          omit_background=True, timeout=15000)
+                else:
+                    await page.screenshot(path=output_path, full_page=True, timeout=15000)
                 from PIL import Image
                 with Image.open(output_path) as capture:
                     if capture.width != width or capture.height < height:

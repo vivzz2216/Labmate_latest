@@ -30,7 +30,7 @@ export interface LabQuestion {
   studio?: "wireshark" | "packettracer" | "powerbi" | "android";
   studio_args?: Record<string, string>;
   datasets?: Record<string, string>;
-  source_ide?: "codeblocks" | "vscode" | "notepad" | "workbench" | "mysql-cli";
+  source_ide?: "codeblocks" | "vscode" | "notepad" | "eclipse" | "intellij" | "workbench" | "mysql-cli" | "sqlite";
   notebook_template?: "colab" | "jupyter";
   python_template?: "idle" | "jupyter";
   jupyter_theme?: "light" | "dark";

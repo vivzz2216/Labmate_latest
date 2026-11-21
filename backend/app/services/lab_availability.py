@@ -42,8 +42,11 @@ def _title(question):
 
 def question_track(question):
     """The restricted track an experiment belongs to, or None."""
-    if question.get("studio") in {"wireshark", "packettracer"}:
+    studio = question.get("studio")
+    if studio in {"wireshark", "packettracer"}:
         return "networks"
+    if studio in {"powerbi", "android"}:
+        return studio
     if question.get("kind") == "evidence" and question.get("evidence_slots"):
         return None  # the student's own screenshots of an outside tool
     if str(question.get("language") or "").lower() in {"ubuntu", "unix", "bash", "shell"}:

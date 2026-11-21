@@ -10,7 +10,7 @@ export default function ProfileGate({children}: {children: ReactNode}) {
   const pathname = usePathname()
   const {user, loading, checkProfileComplete} = useAuth()
   const {theme} = useDashboardTheme()
-  const protectedPage = ['/dashboard', '/workspace', '/code-execution'].some(path => pathname === path || pathname.startsWith(path + '/'))
+  const protectedPage = ['/dashboard', '/workspace', '/code-execution', '/python-idle'].some(path => pathname === path || pathname.startsWith(path + '/'))
   const [checked, setChecked] = useState('')
   const [complete, setComplete] = useState(false)
   const userId = user?.id

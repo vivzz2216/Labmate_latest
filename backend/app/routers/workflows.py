@@ -57,7 +57,7 @@ class QuestionInput(BaseModel):
     rstudio_theme: Literal["light", "dark"] = "light"
     browser_theme: Literal["edge", "chrome"] = "edge"
     python_template: Literal["idle", "jupyter"] = "idle"
-    source_ide: Optional[Literal["codeblocks", "vscode", "notepad", "workbench", "mysql-cli"]] = None
+    source_ide: Optional[Literal["codeblocks", "vscode", "notepad", "eclipse", "intellij", "workbench", "mysql-cli", "sqlite"]] = None
     notebook_template: Literal["colab", "jupyter"] = "colab"
     jupyter_theme: Literal["light", "dark"] = "light"
 
@@ -497,16 +497,27 @@ async def process(upload_id: int, data: ProcessInput, request: Request, backgrou
     check_queue_capacity(db, user.id)
     if len({q.id for q in data.questions}) != len(data.questions):
         raise HTTPException(400, 'Question IDs must be unique; original experiment numbers are preserved.')
-    questions = [{"id": q.id, "text": q.text.strip(), "language": "python" if q.language == "auto" else q.language,
-                  **({'track': q.track or data.track} if (q.track or data.track) else {}),
-                  **multi_part_fields(q, data),
-                  **({'datasets':q.datasets} if q.datasets else {}),
-                  **({'source_ide':q.source_ide} if q.source_ide else {}),
-                  **({'python_template':q.python_template, 'jupyter_theme':q.jupyter_theme} if q.language in {'python','auto'} or data.language in {'python','auto'} else {}),
-                  **({'colab_theme':q.colab_theme, 'notebook_template':q.notebook_template, 'jupyter_theme':q.jupyter_theme}
-                     if (q.language if data.language == 'auto' else data.language) == 'colab' else {}),
-                  **({'rstudio_theme':q.rstudio_theme} if q.language=='r' or data.language=='r' else {}),
-                  **({'browser_theme':q.browser_theme} if q.browser_theme == 'chrome' or q.language in {'html','react','node'} or data.language in {'html','react','node'} else {})} for q in data.questions]
+    questions = []
+    for q in data.questions:
+        eff_lang = (
+            ("python" if q.language == "auto" else q.language)
+            if (data.language in {"auto", "theory"} or q.language == "theory" or q.kind in {"theory", "evidence"})
+            else data.language
+        )
+        questions.append({
+            "id": q.id,
+            "text": q.text.strip(),
+            "language": eff_lang,
+            **({'track': q.track or data.track} if (q.track or data.track) else {}),
+            **multi_part_fields(q, data),
+            **({'datasets': q.datasets} if q.datasets else {}),
+            **({'source_ide': q.source_ide} if q.source_ide else {}),
+            **({'python_template': q.python_template, 'jupyter_theme': q.jupyter_theme} if eff_lang == 'python' or q.language == 'python' else {}),
+            **({'colab_theme': q.colab_theme, 'notebook_template': q.notebook_template, 'jupyter_theme': q.jupyter_theme}
+               if eff_lang == 'colab' else {}),
+            **({'rstudio_theme': q.rstudio_theme} if eff_lang == 'r' else {}),
+            **({'browser_theme': q.browser_theme} if q.browser_theme == 'chrome' or eff_lang in {'html', 'react', 'node'} else {}),
+        })
     if sum(sum(len(name)+len(content) for name,content in q.datasets.items()) for q in data.questions)>8*1024*1024:
         raise HTTPException(400,'Dataset upload exceeds 8 MiB.')
     from ..services.lab_availability import blocked_message
@@ -533,7 +544,7 @@ async def process(upload_id: int, data: ProcessInput, request: Request, backgrou
         if data.mode == "theory_and_code" and classified.get("is_theory"):
             question["language"] = "theory"
             question["is_theory"] = True
-        elif question.get("track") == "sma" and question["language"] in {"python", "colab"}:
+        elif question.get("track") == "sma" and question["language"] in {"python", "colab"} and data.language != "r":
             # A Social Media Analytics manual uploaded by the student: run its code tasks as notebooks on the practice
             # data that fits each task, as the catalogue launch does, instead of on data the model would invent.
             from ..services.sma_datasets import suggest_datasets

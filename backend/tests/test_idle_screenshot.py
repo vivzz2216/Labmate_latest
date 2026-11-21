@@ -64,11 +64,14 @@ class IdleScreenshotTests(unittest.IsolatedAsyncioTestCase):
                 job_id="idle-preview", filename="sum.py", stdin_data="25\n", view_mode="shell",
             )
             self.assertTrue(success, path)
-            self.assertEqual(width, 840)
+            self.assertLess(width, 840)
             self.assertTrue(Path(path).is_file())
             with Image.open(path).convert("RGB") as image:
-                self.assertEqual(image.getpixel((0, 0)), (255, 255, 255))
                 self.assertEqual(image.getpixel((500, 200)), (255, 255, 255))
+            with Image.open(path) as image:
+                self.assertEqual(image.size, (width, height))
+                # The first pixel now belongs to the window border.
+                self.assertNotEqual(image.convert("RGB").getpixel((0, 0)), (255, 255, 255))
 
     async def test_idle_echoed_output_does_not_double_interleave_or_match_inside_stdout(self):
         code = (

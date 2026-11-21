@@ -11,12 +11,12 @@ import time
 from collections import OrderedDict
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile
 from pydantic import BaseModel, Field
 
 from ..netlab import pkttracer, pt_lab, wireshark_lab
 from ..netlab.dfilter import FilterError, apply_filter
-from ..netlab.pcap import CaptureError
+from ..netlab.pcap import CaptureError, PCAPNG_MAGIC
 
 
 def networks_available():
@@ -88,9 +88,20 @@ async def open_capture(file: Optional[UploadFile] = File(None), scenario: bool =
         steps, missing = await asyncio.to_thread(wireshark_lab.plan, session)
     finally:
         _parse_slots.release()
-    return {"token": _remember(session, source, len(data or b"")), "source": source, "total": len(session.packets), "rows": session.rows(), "steps": steps,
+    return {"token": _remember(session, source, len(session.original_capture) * 2), "source": source, "total": len(session.packets), "rows": session.rows(), "steps": steps,
             "missing": missing, "interfaces": wireshark_lab.INTERFACES,
             "file": (file.filename if file is not None and not scenario else "practice-capture.pcap")}
+
+
+@router.get("/wireshark/{token}/download")
+def download_capture(token: str):
+    session, _ = _recall(token)
+    data = session.original_capture
+    extension = "pcapng" if data.startswith(PCAPNG_MAGIC) else "pcap"
+    return Response(data, media_type="application/octet-stream", headers={
+        "Content-Disposition": f'attachment; filename="capture.{extension}"',
+        "Cache-Control": "private, no-store",
+    })
 
 
 @router.get("/wireshark/{token}/packet/{number}")

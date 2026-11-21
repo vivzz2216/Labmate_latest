@@ -21,13 +21,14 @@ import {
 } from "react-icons/si";
 import styles from "./HomepageSections.module.css";
 
-type Template = { name: string; image: string; caption: string };
+type Template = { name: string; image: string; outputImage?: string; caption: string };
 type Lab = {
   id: string;
   name: string;
   icon: IconType;
   color: string;
   href?: string;
+  workspaceHref?: string;
   status: "available" | "studio" | "soon" | "planned";
   description: string;
   templates: Template[];
@@ -38,15 +39,15 @@ const L = "/images/labs/";
 // Paired images show the source and output of the same run.
 const labs: Lab[] = [
   {
-    id: "deep-learning", name: "Deep Learning", icon: SiPytorch, color: "#EE4C2C", href: "/labs/deep-learning", status: "available",
-    description: "Neural networks with PyTorch, TensorFlow and Keras. Training output and plots appear in a Colab-style notebook.",
+    id: "deep-learning", name: "Deep Learning", icon: SiPytorch, color: "#EE4C2C", href: "/code-execution?lab=deep-learning&track=deep_learning", status: "available",
+    description: "Neural networks with PyTorch, TensorFlow and Keras. Execute and capture in Google Colab, Jupyter Notebook, or R / RStudio.",
     templates: [
       { name: "Model results", image: "showcase-deep-learning-plots.webp", caption: "PyTorch digit classifier · training loss and the test confusion matrix" },
       { name: "Training log", image: "showcase-deep-learning-training.webp", caption: "CPU training and evaluation · 96.39% accuracy on 360 held-out digits" },
     ]
   },
   {
-    id: "distributed", name: "Distributed Computing", icon: FaJava, color: "#E76F00", href: "/labs/distributed-computing", status: "available",
+    id: "distributed", name: "Distributed Computing", icon: FaJava, color: "#E76F00", href: "/code-execution?lab=distributed-computing&track=distributed", status: "available",
     description: "Multi-process Java: TCP and UDP sockets, Java RMI and consensus algorithms, captured in VS Code.",
     templates: [
       { name: "Server code", image: "showcase-distributed-source.webp", caption: "Java TCP server source · listens for and replies to local clients" },
@@ -54,17 +55,16 @@ const labs: Lab[] = [
     ]
   },
   {
-    id: "python", name: "Python", icon: SiPython, color: "#3776AB", href: "/labs/python", status: "available",
-    description: "Functions, OOP and programming practicals. Choose the editor your college uses.",
+    id: "python", name: "Python", icon: SiPython, color: "#3776AB", href: "/code-execution?lab=python&track=python", status: "available",
+    description: "Python source and execution output in LabMate’s IDLE editor and shell templates. Jupyter templates are also available.",
     templates: [
-      { name: "IDLE editor", image: "showcase-python-idle-editor.webp", caption: "Python IDLE editor · a function that squares its input" },
-      { name: "IDLE shell", image: "showcase-python-idle-shell.webp", caption: "Python IDLE shell · result from the same function" },
+      { name: "IDLE Editor + Shell", image: "showcase-python-idle-editor.webp", outputImage: "showcase-python-idle-shell.webp", caption: "LabMate IDLE editor and shell · square(5) produces Square: 25" },
       { name: "Jupyter · Light", image: "showcase-python-jupyter-light.webp", caption: "Jupyter notebook in light mode · a function and its executed output" },
       { name: "Jupyter · Dark", image: "showcase-python-jupyter-dark.webp", caption: "Jupyter notebook in dark mode · attendance statistics from an executed cell" },
     ]
   },
   {
-    id: "java", name: "Java", icon: FaJava, color: "#E76F00", href: "/labs/java", status: "available",
+    id: "java", name: "Java", icon: FaJava, color: "#E76F00", href: "/code-execution?lab=java&track=java", status: "available",
     description: "Java source and output in the IDE your lab uses: Eclipse, IntelliJ IDEA, or Notepad with a command prompt.",
     templates: [
       { name: "Eclipse", image: "showcase-java-eclipse.webp", caption: "Eclipse workspace · student records sorted by marks and name" },
@@ -73,7 +73,7 @@ const labs: Lab[] = [
     ]
   },
   {
-    id: "c-cpp", name: "C / C++", icon: SiCplusplus, color: "#00599C", href: "/labs/c-cpp", status: "available",
+    id: "c-cpp", name: "C / C++", icon: SiCplusplus, color: "#00599C", href: "/code-execution?lab=c-cpp&track=cpp", status: "available",
     description: "Programming and data-structure exercises, with Code::Blocks source and Windows-style output.",
     templates: [
       { name: "C · Code::Blocks", image: "showcase-c-marks.webp", caption: "C arrays in Code::Blocks · marks, average, and highest score" },
@@ -81,7 +81,7 @@ const labs: Lab[] = [
     ]
   },
   {
-    id: "web", name: "Web Development", icon: SiHtml5, color: "#E34F26", href: "/labs/web-development", status: "available",
+    id: "web", name: "Web Development", icon: SiHtml5, color: "#E34F26", href: "/code-execution?lab=web-development&track=web", status: "available",
     description: "HTML, CSS, JavaScript, React and Node.js. Source in VS Code; web output in a browser frame.",
     templates: [
       { name: "React in browser", image: "showcase-react-browser.webp", caption: "Running React experiment tracker · filter narrowed the list to two practicals" },
@@ -90,7 +90,7 @@ const labs: Lab[] = [
     ]
   },
   {
-    id: "sql", name: "SQL", icon: SiMysql, color: "#00618A", href: "/labs/sql", status: "available",
+    id: "sql", name: "SQL", icon: SiMysql, color: "#00618A", href: "/code-execution?lab=sql&track=sql", status: "available",
     description: "Compare a SQLite shell session, a MySQL Workbench report, and the DB Browser for SQLite workspace.",
     templates: [
       { name: "MySQL Workbench", image: "showcase-sql-workbench.webp", caption: "MySQL Workbench report · executing a GROUP BY query and inspecting its result grid" },
@@ -99,7 +99,7 @@ const labs: Lab[] = [
     ]
   },
   {
-    id: "colab", name: "Google Colab", icon: SiGooglecolab, color: "#F9AB00", href: "/labs/colab", status: "available",
+    id: "colab", name: "Google Colab", icon: SiGooglecolab, color: "#F9AB00", href: "/code-execution?lab=colab&track=colab", status: "available",
     description: "Python data science practicals with executed notebook cells, calculated results, and plots.",
     templates: [
       { name: "Clean and summarise data", image: "showcase-colab-cleaning.webp", caption: "Colab notebook · Pandas cleaning code, grouped marks, and the resulting chart" },
@@ -109,7 +109,10 @@ const labs: Lab[] = [
   {
     id: "android-studio", name: "Android Studio", icon: SiAndroidstudio, color: "#3DDC84", href: "/android-studio", status: "available",
     description: "Interactive Android Studio workspace for Java/Kotlin apps, XML layouts, Logcat, and live activity preview.",
-    templates: []
+    templates: [
+      { name: "Calculator preview", image: "showcase-android-studio.webp", caption: "LabMate Android workspace · Java activity code and the running calculator preview" },
+      { name: "Activity navigation", image: "showcase-android-navigation.webp", caption: "LabMate Android workspace · the second activity displays the name passed from the first" },
+    ]
   },
   {
     id: "docker", name: "Docker", icon: SiDocker, color: "#2496ED", status: "soon",
@@ -122,13 +125,16 @@ const labs: Lab[] = [
   {
     id: "power-bi", name: "Power BI", icon: BarChart3, color: "#E9BA13", href: "/power-bi", status: "available",
     description: "A Power BI Desktop workspace for CSV/Excel data import, interactive charts, DAX measures, and reports.",
-    templates: []
+    templates: [
+      { name: "Sales dashboard", image: "showcase-power-bi.webp", caption: "LabMate Power BI workspace · total sales and sales by region" },
+      { name: "DAX measures", image: "showcase-power-bi-measures.webp", caption: "LabMate Power BI workspace · total sales, quantity and average sale calculated from a sample dataset" },
+    ]
   },
   {
     id: "packet-tracer", name: "Cisco Packet Tracer", icon: Network, color: "#049FD9", href: "/networks/packet-tracer", status: "available",
     description: "Network topology workspace: place routers, switches, and workstations, configure interfaces, and inspect packet transmissions in simulation mode.",
     templates: [
-      { name: "Network topology", image: "showcase-packet-tracer.webp", caption: "Cisco Packet Tracer · three PCs connected in a star topology through a hub" },
+      { name: "Network topology", image: "showcase-packet-tracer.webp", caption: "LabMate Packet Tracer · a switched LAN with ARP and ICMP simulation events" },
       { name: "Device configuration", image: "showcase-packet-tracer-config.webp", caption: "Cisco Packet Tracer · inspecting a PC's network configuration" },
     ]
   },
@@ -188,6 +194,7 @@ export default function LabShowcase() {
             <h3>{lab.name}</h3>
             <span className={`${styles.status} ${styles[`status_${lab.status}`]}`}>{STATUS_LABEL[lab.status]}</span>
             {lab.href && lab.status !== "planned" && <Link href={lab.href} className={styles.openLab}>Open lab →</Link>}
+            {lab.workspaceHref && <Link href={lab.workspaceHref} className={styles.openLab}>Open IDLE workspace →</Link>}
           </div>
           <p className={styles.labDescription}>{lab.description}</p>
           {lab.status === "planned" && (
@@ -204,12 +211,18 @@ export default function LabShowcase() {
                 </div>
               )}
               <figure className={styles.preview}>
-                <div className={styles.frame}>
+                {template.outputImage ? (
+                  <Image src={src} alt={template.caption} width={952} height={248} style={{ display: "block", width: "100%", height: "auto" }} unoptimized />
+                ) : <div className={styles.frame}>
                   <Image key={src} src={src} alt={template.caption} fill sizes="(max-width: 900px) 100vw, 880px" className={styles.frameImage} unoptimized />
-                </div>
+                </div>}
+                {template.outputImage && (
+                  <Image src={L + template.outputImage} alt="LabMate IDLE Shell showing Square: 25 from functions.py" width={952} height={353} style={{ display: "block", width: "100%", height: "auto" }} unoptimized />
+                )}
                 <figcaption>
                   <span>{template.caption}</span>
                   <a href={src} target="_blank" rel="noreferrer">View full size ↗</a>
+                  {template.outputImage && <a href={L + template.outputImage} target="_blank" rel="noreferrer">View shell output ↗</a>}
                 </figcaption>
               </figure>
             </>
