@@ -63,6 +63,15 @@ def admit(user_id):
     window.append(now)
 
 
+async def run_editor_program(user_id, code, language, stdin):
+    admit(user_id)
+    lock = _busy.setdefault(user_id, asyncio.Lock())
+    if lock.locked():
+        raise HTTPException(409, "A program is already running. Wait for it to finish.")
+    async with lock, ide_sessions.use(user_id):
+        return await _engine.execute(code, language=language, stdin=stdin)
+
+
 @router.post("/run")
 async def run_java(body: JavaRunInput, user=Depends(execution_user), csrf: bool = Depends(require_csrf_token)):
     """Compile and run one Java source file; stdout and stderr stay separate, and a program's output before an exception is kept."""
@@ -70,13 +79,8 @@ async def run_java(body: JavaRunInput, user=Depends(execution_user), csrf: bool 
     if not name:
         return {"phase": "compile", "success": False, "stdout": "", "stderr": "error: no class declaration found", "exit_code": 1,
                 "class_name": "", "duration_ms": 0}
-    admit(user.id)
-    lock = _busy.setdefault(user.id, asyncio.Lock())
-    if lock.locked():
-        raise HTTPException(409, "A program is already running. Wait for it to finish.")
     started = time.monotonic()
-    async with lock, ide_sessions.use(user.id):
-        result = await _engine.execute(body.code, language="java", stdin=body.stdin)
+    result = await run_editor_program(user.id, body.code, "java", body.stdin)
     stages = result.stages or {}
     compile_failed = stages.get("compile") == "failed" or str(result.error).startswith("Compilation error")
     return {"phase": "compile" if compile_failed else "run", "success": bool(result.success), "stdout": clip(result.output),

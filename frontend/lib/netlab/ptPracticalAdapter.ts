@@ -138,9 +138,9 @@ export function adaptPracticalFrame(step: PracticalFrame): AdaptedPracticalFrame
       ? [
           {
             pdu: 1,
-            source: events[0].last || events[0].at,
-            destination: events[events.length - 1].at,
-            status: events.some((ev) => ev.action === "dropped") ? "Failed" : "Successful",
+            source: step.pdu?.source ?? (events[0].last || events[0].at),
+            destination: step.pdu?.destination ?? events[events.length - 1].at,
+            status: (step.pdu?.success ?? !events.some((ev) => ev.action === "dropped")) ? "Successful" : "Failed",
             type: events.find((ev) => ev.type === "ICMP")?.type ?? events[0].type,
           },
         ]

@@ -167,6 +167,11 @@ export default function LabSectionDetailPage() {
 
           {/* Action CTAs */}
           <div className={styles.actionsBar}>
+            {category.track === "python" && (
+              <Link href="/python-idle" className={styles.secondaryBtn}>
+                <Terminal size={16} /> Open IDLE Editor + Shell
+              </Link>
+            )}
             <Link
               href={`/code-execution?track=${category.track}`}
               className={styles.primaryBtn}

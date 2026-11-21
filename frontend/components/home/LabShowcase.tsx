@@ -28,6 +28,7 @@ type Lab = {
   icon: IconType;
   color: string;
   href?: string;
+  workspaceHref?: string;
   status: "available" | "studio" | "soon" | "planned";
   description: string;
   templates: Template[];
@@ -54,11 +55,10 @@ const labs: Lab[] = [
     ]
   },
   {
-    id: "python", name: "Python", icon: SiPython, color: "#3776AB", href: "/labs/python", status: "available",
-    description: "Functions, OOP and programming practicals. Choose the editor your college uses.",
+    id: "python", name: "Python", icon: SiPython, color: "#3776AB", href: "/labs/python", workspaceHref: "/python-idle", status: "available",
+    description: "Write and run Python in one workspace with both the IDLE editor and shell. Jupyter report templates are also available.",
     templates: [
-      { name: "IDLE editor", image: "showcase-python-idle-editor.webp", caption: "Python IDLE editor · a function that squares its input" },
-      { name: "IDLE shell", image: "showcase-python-idle-shell.webp", caption: "Python IDLE shell · result from the same function" },
+      { name: "IDLE Editor + Shell", image: "showcase-python-idle-workspace.webp", caption: "LabMate Python workspace · editor and shell showing the result of the same function" },
       { name: "Jupyter · Light", image: "showcase-python-jupyter-light.webp", caption: "Jupyter notebook in light mode · a function and its executed output" },
       { name: "Jupyter · Dark", image: "showcase-python-jupyter-dark.webp", caption: "Jupyter notebook in dark mode · attendance statistics from an executed cell" },
     ]
@@ -109,7 +109,10 @@ const labs: Lab[] = [
   {
     id: "android-studio", name: "Android Studio", icon: SiAndroidstudio, color: "#3DDC84", href: "/android-studio", status: "available",
     description: "Interactive Android Studio workspace for Java/Kotlin apps, XML layouts, Logcat, and live activity preview.",
-    templates: []
+    templates: [
+      { name: "Calculator preview", image: "showcase-android-studio.webp", caption: "LabMate Android workspace · Java activity code and the running calculator preview" },
+      { name: "Activity navigation", image: "showcase-android-navigation.webp", caption: "LabMate Android workspace · the second activity displays the name passed from the first" },
+    ]
   },
   {
     id: "docker", name: "Docker", icon: SiDocker, color: "#2496ED", status: "soon",
@@ -122,13 +125,16 @@ const labs: Lab[] = [
   {
     id: "power-bi", name: "Power BI", icon: BarChart3, color: "#E9BA13", href: "/power-bi", status: "available",
     description: "A Power BI Desktop workspace for CSV/Excel data import, interactive charts, DAX measures, and reports.",
-    templates: []
+    templates: [
+      { name: "Sales dashboard", image: "showcase-power-bi.webp", caption: "LabMate Power BI workspace · total sales and sales by region" },
+      { name: "DAX measures", image: "showcase-power-bi-measures.webp", caption: "LabMate Power BI workspace · total sales, quantity and average sale calculated from a sample dataset" },
+    ]
   },
   {
     id: "packet-tracer", name: "Cisco Packet Tracer", icon: Network, color: "#049FD9", href: "/networks/packet-tracer", status: "available",
     description: "Network topology workspace: place routers, switches, and workstations, configure interfaces, and inspect packet transmissions in simulation mode.",
     templates: [
-      { name: "Network topology", image: "showcase-packet-tracer.webp", caption: "Cisco Packet Tracer · three PCs connected in a star topology through a hub" },
+      { name: "Network topology", image: "showcase-packet-tracer.webp", caption: "LabMate Packet Tracer · a switched LAN with ARP and ICMP simulation events" },
       { name: "Device configuration", image: "showcase-packet-tracer-config.webp", caption: "Cisco Packet Tracer · inspecting a PC's network configuration" },
     ]
   },
@@ -188,6 +194,7 @@ export default function LabShowcase() {
             <h3>{lab.name}</h3>
             <span className={`${styles.status} ${styles[`status_${lab.status}`]}`}>{STATUS_LABEL[lab.status]}</span>
             {lab.href && lab.status !== "planned" && <Link href={lab.href} className={styles.openLab}>Open lab →</Link>}
+            {lab.workspaceHref && <Link href={lab.workspaceHref} className={styles.openLab}>Open IDLE workspace →</Link>}
           </div>
           <p className={styles.labDescription}>{lab.description}</p>
           {lab.status === "planned" && (

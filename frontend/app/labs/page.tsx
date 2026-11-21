@@ -53,6 +53,13 @@ const runtimeLabelMap: Record<string, string> = {
   networks: "Practice studios",
 };
 
+const practiceStudios = [
+  { name: "Cisco Packet Tracer", href: "/networks/packet-tracer", description: "Build topologies and trace packets through your network." },
+  { name: "Wireshark", href: "/networks/wireshark", description: "Open packet captures, apply filters, and inspect protocol details." },
+  { name: "Power BI", href: "/power-bi", description: "Import data, build reports, and calculate DAX measures." },
+  { name: "Android Studio", href: "/android-studio", description: "Edit Android projects and run activities in a browser device preview." },
+];
+
 function badgeClass(track: string) {
   if (track === "deep_learning") return styles.badgePurple;
   if (track === "distributed") return styles.badgeSky;
@@ -71,6 +78,9 @@ export default function LabsDirectoryPage() {
   const [selectedTag, setSelectedTag] = useState<string>("all");
 
   const categories = useMemo(() => getAllLabCategories(), []);
+  const visibleStudios = selectedTag === "all" || selectedTag === "systems"
+    ? practiceStudios.filter(studio => `${studio.name} ${studio.description}`.toLowerCase().includes(search.trim().toLowerCase()))
+    : [];
 
   const totalExperiments = useMemo(
     () => categories.reduce((sum, cat) => sum + cat.experiments.length, 0),
@@ -237,8 +247,21 @@ export default function LabsDirectoryPage() {
           </div>
         </div>
 
+        {visibleStudios.length > 0 && (
+          <section aria-labelledby="practice-studios-title" style={{ marginBlock: "1.5rem" }}>
+            <h2 id="practice-studios-title" className={styles.categoryCardTitle}>Practice workspaces</h2>
+            <div className={styles.categoryGrid} style={{ marginTop: ".75rem" }}>
+              {visibleStudios.map(studio => (
+                <Link key={studio.href} href={studio.href} className={styles.categoryCard}>
+                  <h3 className={styles.categoryCardTitle}>{studio.name}</h3>
+                  <p className={styles.categoryCardTagline}>{studio.description}</p>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
         {/* 3-Column Minimalist Cards Grid */}
-        {filteredCategories.length === 0 ? (
+        {filteredCategories.length === 0 && visibleStudios.length === 0 ? (
           <div className={styles.emptyFilterState}>
             <Layers size={28} />
             <h3>No matching lab sections</h3>
