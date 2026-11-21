@@ -182,7 +182,7 @@ def test_open_the_practice_capture_then_query_it(env):
     assert env.client.get(f"/api/netlab/wireshark/{token}/filter", params={"expr": "arp"}).json() == {"numbers": [1, 2], "count": 2}
     assert env.client.get(f"/api/netlab/wireshark/{token}/stream/2").json()["turns"] == 2
     bad = env.client.get(f"/api/netlab/wireshark/{token}/filter", params={"expr": "htp"})
-    assert bad.status_code == 422 and "neither a field nor a protocol" in bad.json()["detail"]
+    assert bad.status_code == 422 and "is not a valid protocol or protocol field" in bad.json()["detail"]
     assert env.client.get(f"/api/netlab/wireshark/{token}/packet/99").status_code == 404
     assert env.client.get(f"/api/netlab/wireshark/{token}/stream/99").status_code == 404
 

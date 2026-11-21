@@ -5,6 +5,7 @@ Errors are FilterError with Wireshark's wording, so the studio can show them the
 """
 import ipaddress
 import re
+from pathlib import Path
 
 from .dissect import Dissected
 
@@ -14,8 +15,9 @@ class FilterError(ValueError):
 
 
 PROTOCOLS = {"frame", "eth", "ethertype", "ip", "ipv6", "tcp", "udp", "icmp", "icmpv6", "arp", "dns", "mdns", "http", "tls", "ssdp", "dhcp",
-             "ntp", "quic", "urlencoded-form", "data-text-lines"}
-FIELDS = {
+             "ntp", "quic", "urlencoded-form", "data-text-lines", "data"}
+DEPRECATED = {"bootp": "dhcp"}      # Wireshark still accepts these names but warns (yellow filter bar)
+_BASE_FIELDS = {
     "frame.number", "frame.len", "frame.cap_len", "frame.time_relative",
     "eth.dst", "eth.src", "eth.addr", "eth.type", "eth.ig", "eth.lg", "eth.padding",
     "arp.opcode", "arp.hw.type", "arp.proto.type", "arp.hw.size", "arp.proto.size", "arp.src.hw_mac", "arp.src.proto_ipv4",
@@ -29,17 +31,30 @@ FIELDS = {
     "dns.id", "dns.flags.response", "dns.qry.name", "dns.qry.type", "dns.a",
     "http.request", "http.response", "http.request.method", "http.request.uri", "http.host", "http.user_agent", "http.response.code",
     "http.content_type", "http.file_data", "urlencoded-form.key", "urlencoded-form.value",
+    "icmp.resptime", "icmpv6.resptime",
 }
+
+
+def _dissector_fields():
+    """Every field name the dissector emits (details lines and filter values), read from its source so the two never drift."""
+    source = Path(__file__).with_name("dissect.py").read_text(encoding="utf-8")
+    names = set(re.findall(r'"([a-z][a-z0-9_-]*(?:\.[a-z0-9_]+)+)"', source))
+    return {name for name in names if name.split(".")[0] in PROTOCOLS | {"vlan"}}
+
+
+FIELDS = _BASE_FIELDS | _dissector_fields()
 BOOLEAN_FIELDS = {"tcp.flags.fin", "tcp.flags.syn", "tcp.flags.reset", "tcp.flags.push", "tcp.flags.ack", "tcp.flags.urg", "ip.flags.df",
                   "ip.flags.mf", "eth.ig", "eth.lg", "dns.flags.response", "http.request", "http.response"}
 WORD_OPERATORS = {"eq": "==", "ne": "!=", "gt": ">", "lt": "<", "ge": ">=", "le": "<=", "and": "and", "or": "or", "not": "not",
-                  "contains": "contains", "in": "in"}
+                  "contains": "contains", "in": "in", "matches": "matches", "any_eq": "==", "all_ne": "!="}
 TOKEN = re.compile(r"""\s*(?:
     (?P<string>"(?:[^"\\]|\\.)*")
-  | (?P<mac>[0-9A-Fa-f]{2}(?::[0-9A-Fa-f]{2}){5})
+  | (?P<mac>[0-9A-Fa-f]{2}(?::[0-9A-Fa-f]{2}){5}(?![0-9A-Fa-f:]))
   | (?P<ip>\d{1,3}(?:\.\d{1,3}){3}(?:/\d{1,2})?)
+  | (?P<ip6>(?=[0-9A-Fa-f]*:[0-9A-Fa-f]*:)[0-9A-Fa-f]{0,4}(?::[0-9A-Fa-f]{0,4}){2,7}(?:/\d{1,3})?)
+  | (?P<float>\d+\.\d+(?:[eE][-+]?\d+)?(?![.\d]))
   | (?P<number>0[xX][0-9A-Fa-f]+|\d+)
-  | (?P<op>==|!=|>=|<=|&&|\|\||>|<|&|!|\(|\)|\{|\}|,)
+  | (?P<op>===|!==|==|!=|>=|<=|&&|\|\||>|<|&|!|~|\(|\)|\{|\}|,)
   | (?P<word>[A-Za-z_][A-Za-z0-9_.\-]*)
 )""", re.X)
 
@@ -57,11 +72,19 @@ def tokenize(text):
         if kind == "word" and value.lower() in WORD_OPERATORS:
             tokens.append(("op", WORD_OPERATORS[value.lower()]))
         elif kind == "op":
-            tokens.append(("op", {"&&": "and", "||": "or", "!": "not"}.get(value, value)))
+            tokens.append(("op", {"&&": "and", "||": "or", "!": "not", "~": "matches", "===": "==", "!==": "!="}.get(value, value)))
+        elif kind == "ip6":
+            try:
+                ipaddress.ip_network(value, strict=False) if "/" in value else ipaddress.ip_address(value)
+            except ValueError:
+                raise FilterError('"%s" is not a valid IPv6 address.' % value)
+            tokens.append(("ip", value))
         elif kind == "string":
             tokens.append(("string", bytes(value[1:-1], "utf-8").decode("unicode_escape")))
         elif kind == "number":
             tokens.append(("number", int(value, 16) if value.lower().startswith("0x") else int(value)))
+        elif kind == "float":
+            tokens.append(("number", float(value)))
         else:
             tokens.append((kind, value))
     return tokens
@@ -70,6 +93,7 @@ def tokenize(text):
 class _Parser:
     def __init__(self, tokens):
         self.tokens, self.index = tokens, 0
+        self.warnings = []
 
     def peek(self):
         return self.tokens[self.index] if self.index < len(self.tokens) else (None, None)
@@ -119,13 +143,28 @@ class _Parser:
             return node
         if kind != "word":
             raise FilterError('"%s" was unexpected in this context.' % value)
-        name = value.lower() if value.lower() in PROTOCOLS else value
+        lowered = value.lower()
+        if lowered in DEPRECATED:
+            self.warnings.append('"%s" is deprecated or may have unexpected results. Did you mean "%s"?' % (value, DEPRECATED[lowered]))
+            lowered = DEPRECATED[lowered]
+        name = lowered if lowered in PROTOCOLS else value
         if name not in PROTOCOLS and name not in FIELDS:
-            raise FilterError('"%s" is neither a field nor a protocol name.' % value)
+            raise FilterError('"%s" is not a valid protocol or protocol field.' % value)
         operator = self.peek()
-        if operator[0] == "op" and operator[1] in {"==", "!=", ">", "<", ">=", "<=", "contains"}:
+        if operator[0] == "op" and operator[1] in {"==", "!=", ">", "<", ">=", "<=", "contains", "matches"}:
             self.take()
+            if name in PROTOCOLS and operator[1] not in {"contains", "matches"}:
+                raise FilterError('"%s" is a protocol and cannot be compared with "%s". Use one of its fields, for example %s.' % (
+                    value, operator[1], {"tcp": "tcp.port", "udp": "udp.port", "ip": "ip.addr", "eth": "eth.addr"}.get(name, name + ".<field>")))
             literal = self.literal()
+            if operator[1] == "matches":
+                if literal[0] != "string":
+                    raise FilterError('"matches" needs a quoted regular expression.')
+                try:
+                    pattern = re.compile(literal[1], re.I | re.S)
+                except re.error as error:
+                    raise FilterError('"%s" is not a valid regular expression: %s.' % (literal[1], error))
+                return _matches(name, pattern)
             return _comparison(name, operator[1], literal)
         if operator == ("op", "in"):
             self.take()
@@ -196,7 +235,11 @@ def _compare(kind, wanted, operator, value):
                 equal = address == ipaddress.ip_address(wanted)
             return equal if operator in {"==", "!="} else False
         if kind == "number":
-            number = value if isinstance(value, (int, float)) else int(str(value))
+            number = value if isinstance(value, (int, float)) else int(str(value), 0)
+            if isinstance(number, float) or isinstance(wanted, float):
+                close = abs(number - wanted) <= 5e-10 + 1e-9 * abs(wanted)      # times are shown to nine decimals
+                if operator in {"==", "!="}:
+                    return close if operator == "==" else not close
             return {"==": number == wanted, "!=": number != wanted, ">": number > wanted, "<": number < wanted,
                     ">=": number >= wanted, "<=": number <= wanted}[operator]
         if kind == "mac":
@@ -235,11 +278,35 @@ def _layer_bytes(packet, name):
     return packet.data
 
 
+def _matches(name, pattern):
+    def test(packet):
+        if name in PROTOCOLS:
+            if not _has_protocol(packet, name):
+                return False
+            raw = packet.data if name in {"frame", "eth", "ethertype"} else _layer_bytes(packet, name)
+            return bool(pattern.search(raw.decode("latin-1")))
+        return any(pattern.search(str(value)) for value in packet.fields.get(name, []))
+    return test
+
+
 def compile_filter(text):
     text = (text or "").strip()
     if not text:
         return lambda packet: True
     return _Parser(tokenize(text)).parse()
+
+
+def check_filter(text):
+    """How the filter bar should look: {"valid": bool, "error": message or "", "warning": message or ""}."""
+    text = (text or "").strip()
+    if not text:
+        return {"valid": True, "error": "", "warning": ""}
+    try:
+        parser = _Parser(tokenize(text))
+        parser.parse()
+    except FilterError as error:
+        return {"valid": False, "error": str(error), "warning": ""}
+    return {"valid": True, "error": "", "warning": " ".join(parser.warnings)}
 
 
 def apply_filter(session, text):

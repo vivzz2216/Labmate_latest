@@ -268,7 +268,9 @@ def test_display_filters(session, expression, expected):
 
 
 @pytest.mark.parametrize("expression, message", [
-    ("htp", 'neither a field nor a protocol'),
+    ("htp", 'is not a valid protocol or protocol field'),
+    ("tcp == 80", 'is a protocol and cannot be compared'),
+    ("ipv6.addr == fe80::zz", 'unexpected in this context'),
     ("ip.addr ==", "cannot be used as a value"),
     ("(arp", "to close the parenthesis"),
     ("arp and", "Unexpected end"),
