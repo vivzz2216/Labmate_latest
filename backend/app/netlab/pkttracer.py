@@ -337,7 +337,7 @@ class Host(IpNode):
 @dataclass
 class Route:
     network: ipaddress.IPv4Network
-    code: str                   # "C" connected | "R" RIP
+    code: str                   # "C" connected | "S" static | "R" RIP
     interface: str
     next_hop: str = ""
     metric: int = 0
@@ -354,6 +354,7 @@ class Router(IpNode):
         for interface in interfaces:
             self.add_port(interface)
         self.routes = {}
+        self.static_routes = []            # (network, next hop) pairs entered with 'ip route'
         self.rip_networks = []
         self.rip_started = False
         self.trigger_pending = False
@@ -362,6 +363,30 @@ class Router(IpNode):
         port = self.ports[interface]
         port.ip, port.mask = ip, mask
         self.refresh_connected()
+
+    def add_static_route(self, network, mask, next_hop):
+        self.static_routes.append((_network(network, mask), next_hop))
+        self.refresh_connected()
+
+    def install_static(self):
+        """A static route is in the table while its next hop lies on an interface that is up (administrative distance 1, so
+        it beats RIP but never a connected network)."""
+        changed = False
+        for network, next_hop in self.static_routes:
+            key = str(network)
+            existing = self.routes.get(key)
+            if existing is not None and existing.code == "C" and not existing.poisoned:
+                continue
+            port = next((p for p in self.ports.values() if p.ip and p.up and ipaddress.ip_address(next_hop) in p.network), None)
+            if port is None:
+                if existing is not None and existing.code == "S":
+                    del self.routes[key]
+                    changed = True
+                continue
+            if existing is None or existing.code != "S" or existing.interface != port.name or existing.next_hop != next_hop:
+                self.routes[key] = Route(network, "S", port.name, next_hop, 0, self.network.now)
+                changed = True
+        return changed
 
     def enable_rip(self, networks):
         self.rip_networks = [classful_network(n) for n in networks]
@@ -384,7 +409,7 @@ class Router(IpNode):
                     changed = True
         for key, route in list(self.routes.items()):
             port = self.ports.get(route.interface)
-            if route.poisoned:
+            if route.poisoned or route.code == "S":
                 continue
             if route.code == "C" and (port is None or not port.ip or str(port.network) != key):
                 del self.routes[key]
@@ -392,25 +417,29 @@ class Router(IpNode):
             elif port is not None and not port.up:
                 route.metric, route.poisoned, route.changed_at = RIP_INFINITY, True, now
                 changed = True
+        changed = self.install_static() or changed
         if changed and self.rip_networks:
             self.schedule_trigger()
         return changed
 
     def lookup(self, destination):
-        """Longest-prefix match; between equal prefixes a connected route beats RIP, then the lower metric wins."""
+        """Longest-prefix match; between equal prefixes the lower administrative distance wins (connected 0, static 1, RIP 120),
+        then the lower metric."""
         address = ipaddress.ip_address(destination)
         candidates = [r for r in self.routes.values() if not r.poisoned and address in r.network]
-        return min(candidates, key=lambda r: (-r.network.prefixlen, 0 if r.code == "C" else 1, r.metric), default=None)
+        return min(candidates, key=lambda r: (-r.network.prefixlen, {"C": 0, "S": 1}.get(r.code, RIP_DISTANCE), r.metric), default=None)
 
     def show_ip_route(self):
         """The table as the router's 'show ip route' prints it."""
-        lines = ["Codes: C - connected, R - RIP"]
+        lines = ["Codes: C - connected, S - static, R - RIP"]
         lines.append("")
         for route in sorted(self.routes.values(), key=lambda r: (int(r.network.network_address), r.network.prefixlen)):
             if route.poisoned:
                 continue
             if route.code == "C":
                 lines.append("C    %s is directly connected, %s" % (route.network, route.interface))
+            elif route.code == "S":
+                lines.append("S    %s [1/0] via %s" % (route.network, route.next_hop))
             else:
                 age = int(self.network.now - route.changed_at)
                 lines.append("R    %s [120/%d] via %s, 00:00:%02d, %s" % (route.network, route.metric, route.next_hop, age % 60, route.interface))
@@ -418,7 +447,7 @@ class Router(IpNode):
 
     def table(self):
         return [{"code": r.code, "network": str(r.network), "interface": r.interface, "next_hop": r.next_hop,
-                 "metric": r.metric, "distance": 0 if r.code == "C" else RIP_DISTANCE}
+                 "metric": r.metric, "distance": {"C": 0, "S": 1}.get(r.code, RIP_DISTANCE)}
                 for r in sorted(self.routes.values(), key=lambda r: (int(r.network.network_address), r.network.prefixlen)) if not r.poisoned]
 
     # ------------------------------------------------------------------ RIP
@@ -452,6 +481,8 @@ class Router(IpNode):
         for port in self.rip_ports():
             entries = []
             for route in self.routes.values():
+                if route.code == "S":
+                    continue                                              # static routes are not redistributed into RIP
                 if route.code == "R" and route.interface == port.name and not route.poisoned:
                     continue                                              # split horizon
                 if route.code == "C" and route.interface == port.name:
@@ -786,19 +817,35 @@ class Network:
 def build(spec):
     """A Network from a topology spec: {"devices": [...], "links": [...]} (see packettracer_lab for the experiments' specs)."""
     network = Network()
+    routers = []
     for item in spec.get("devices", []):
-        device = network.add(item["type"], item["name"])
-        if item["type"] == "pc":
+        kind = HOST_TYPES.get(item["type"], item["type"])
+        device = network.add(kind, item["name"])
+        if kind == "pc":
             device.configure(item.get("ip", ""), item.get("mask", "255.255.255.0"), item.get("gateway", ""))
-        elif item["type"] == "router":
+        elif kind == "router":
             for interface, config in (item.get("interfaces") or {}).items():
                 if interface not in device.ports:
                     device.add_port(interface)
-                device.configure(interface, config["ip"], config["mask"])
+                device.ports[interface].shutdown = bool(config.get("shutdown"))
+                device.configure(interface, config.get("ip", ""), config.get("mask", "255.255.255.0"))
             device.enable_rip(item.get("rip", []))
+            routers.append((device, item))
     for item in spec.get("links", []):
+        for end, port in ((item["a"], item["ap"]), (item["b"], item["bp"])):
+            device = network.devices.get(end)
+            if device is not None and device.type in {"switch", "hub", "router"} and port not in device.ports:
+                device.add_port(port)                  # models with more ports than the defaults (2960 GigabitEthernet uplinks, 1941 ...)
         network.connect(item["a"], item["ap"], item["b"], item["bp"], item.get("cable"))
+    for device, item in routers:      # routes need the cables in place to find the interface towards the next hop
+        device.refresh_connected()
+        for route in item.get("staticRoutes") or []:
+            device.add_static_route(route["network"], route.get("mask", "255.255.255.0"), route["nextHop"])
     return network
+
+
+# Laptops and servers are hosts like a PC as far as addressing, ARP and ping are concerned.
+HOST_TYPES = {"laptop": "pc", "server": "pc"}
 
 
 _NAME = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,23}$")
@@ -814,9 +861,10 @@ def validate(spec):
         if name in names:
             problems.append("The name %s is used twice." % name)
         names.add(name)
-        if item.get("type") not in {"pc", "hub", "switch", "router"}:
+        kind = HOST_TYPES.get(item.get("type"), item.get("type"))
+        if kind not in {"pc", "hub", "switch", "router"}:
             problems.append("%s has an unknown device type." % name)
-        configs = [(name, item.get("ip"), item.get("mask", "255.255.255.0"))] if item.get("type") == "pc" else \
+        configs = [(name, item.get("ip"), item.get("mask", "255.255.255.0"))] if kind == "pc" else \
             [(name + " " + interface, c.get("ip"), c.get("mask")) for interface, c in (item.get("interfaces") or {}).items()]
         for label, ip, mask in configs:
             if not ip:
@@ -831,7 +879,7 @@ def validate(spec):
                 problems.append("%s and %s share the address %s." % (label, addresses[ip], ip))
             addresses[ip] = label
             gateway = item.get("gateway")
-            if item.get("type") == "pc" and gateway:
+            if kind == "pc" and gateway:
                 try:
                     if ipaddress.ip_address(gateway) not in network:
                         problems.append("The gateway %s of %s is outside its network %s." % (gateway, name, network))

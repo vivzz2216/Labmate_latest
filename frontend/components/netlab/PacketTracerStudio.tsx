@@ -395,7 +395,12 @@ export function PacketTracerStudio({ capturePractical = false }: { capturePracti
         setReplay(response.data);
         setActions(next);
         setError("");
-      } catch {
+      } catch (problem) {
+        // The server engine refused the topology (for example two devices with one address, or a gateway outside its subnet).
+        // Say why, then still show what the browser engine computes so the student sees the effect of the mistake.
+        const detail = (problem as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+        // Device kinds the server engine does not model (wireless routers, tablets...) are simply checked by the browser engine.
+        const reason = typeof detail === "string" && !/unknown device type|is not a computer/.test(detail) ? detail : "";
         if (lastAct?.type === "ping") {
           const sim = simulateLocalPing(spec, String(lastAct.from), String(lastAct.to), localPdus.length + 1);
           setLocalEvents((prev) => [...prev, ...sim.events]);
@@ -410,7 +415,9 @@ export function PacketTracerStudio({ capturePractical = false }: { capturePracti
             },
           ]);
           setSimCursor(0);
-          setError(sim.error ?? "");
+          setError([reason, sim.error].filter(Boolean).join(" "));
+        } else if (reason) {
+          setError(reason);
         }
       }
     },
