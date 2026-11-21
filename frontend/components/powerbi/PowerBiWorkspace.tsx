@@ -134,9 +134,9 @@ export function PowerBiWorkspace({ capture = false }: { capture?: boolean }) {
       setShowDataPane(true);
       setShowVizPane(step.view === "report");
       setTransformOpen(Boolean(step.steps));
-      setCaptureFrame(step);
+      setCaptureFrame({ ...step });
     },
-  }, captureFrame?.id);
+  }, captureFrame);
   useEffect(() => {
     if (!capture) return;
     window.__labmatePractical = powerBiPractical;
