@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { connect, deleteDevice, dhcp, emptyProject, linkUp, makeDevice, MASK, ping, setDevice } from "../lib/netlab/networkProject";
-import type { Device, Project } from "../lib/netlab/networkProject";
-import { newSession, runCommand } from "../lib/netlab/networkConsole";
-import { buildSample, openProject } from "../lib/netlab/networkProjects";
+import { connect, deleteDevice, dhcp, emptyProject, linkUp, makeDevice, MASK, ping, setDevice } from "../lib/netlab/networkProject.ts";
+import type { Device, Project } from "../lib/netlab/networkProject.ts";
+import { newSession, runCommand } from "../lib/netlab/networkConsole.ts";
+import { buildSample, openProject } from "../lib/netlab/networkProjects.ts";
 
 function device(project: Project, id: string) {
   const match = project.devices.find((item) => item.id === id);

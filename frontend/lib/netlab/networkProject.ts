@@ -1,4 +1,4 @@
-import { intToIp, ipToInt, maskToCidr, netAddress, sameSubnet, syntheticMac } from "./ptEngine";
+import { intToIp, ipToInt, maskToCidr, netAddress, sameSubnet, syntheticMac } from "./ptEngine.ts";
 
 export type Model = keyof typeof MODELS;
 export type Medium = "straight" | "cross" | "console" | "fiber" | "wireless";

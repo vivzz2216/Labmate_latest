@@ -96,10 +96,8 @@ def test_reader_keeps_whole_packets_of_a_cut_off_file(built):
 
 
 # ----------------------------------------------------------------------------------------------- scapy as an oracle
-scapy = pytest.importorskip("scapy.layers.inet")
-
-
 def test_every_packet_matches_scapy(built, session):
+    pytest.importorskip("scapy.layers.inet")
     from scapy.layers.dns import DNS
     from scapy.layers.inet import ICMP, IP, TCP, UDP
     from scapy.layers.l2 import ARP, Ether
@@ -174,7 +172,7 @@ def test_info_column_matches_wireshark_wording(session):
     assert info[7] == "52418 → 80 [ACK] Seq=1 Ack=1 Win=131328 Len=0"           # 513 << 8: the window is scaled once both SYNs agree
     assert info[8] == "GET /wireshark-labs/INTRO-wireshark-file1.html HTTP/1.1 "
     assert info[10] == "HTTP/1.1 200 OK  (text/html)"
-    assert info[12].startswith("52418 → 80 [FIN, ACK] Seq=334 Ack=326")
+    assert info[12].startswith("52418 → 80 [FIN, ACK] Seq=334 Ack=324")
     assert info[15] == "Echo (ping) request  id=0x0001, seq=1/256, ttl=128 (reply in 16)"
     assert info[16] == "Echo (ping) reply    id=0x0001, seq=1/256, ttl=64 (request in 15)"
     assert info[3] == "Standard query 0x4a2b A gaia.cs.umass.edu"

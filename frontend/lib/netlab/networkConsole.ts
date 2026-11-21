@@ -1,5 +1,5 @@
-import { addressable, dhcp, linkUp, MASK, normalizeRoute, ping, portKinds, routerLike, setDevice, usableHost, validMask } from "./networkProject";
-import type { Device, PacketEvent, Project } from "./networkProject";
+import { addressable, dhcp, linkUp, MASK, normalizeRoute, ping, portKinds, routerLike, setDevice, usableHost, validMask } from "./networkProject.ts";
+import type { Device, PacketEvent, Project } from "./networkProject.ts";
 
 export interface Session { enabled: boolean; configuring: boolean; port: string }
 export const newSession = (): Session => ({ enabled: false, configuring: false, port: "" });

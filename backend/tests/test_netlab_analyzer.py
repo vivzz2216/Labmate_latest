@@ -8,9 +8,11 @@ from collections import Counter
 from pathlib import Path
 
 import pytest
-import pytest
-pytest.importorskip("scapy", reason="scapy is only used to cross-check the dissector")
-from scapy.all import ARP, BOOTP, DHCP, DNS, ICMP, IP, TCP, UDP, Ether, ICMPv6EchoRequest, IPerror, IPv6, TCPerror, UDPerror, rdpcap
+
+try:
+    from scapy.all import ARP, BOOTP, DHCP, DNS, ICMP, IP, TCP, UDP, Ether, ICMPv6EchoRequest, IPerror, IPv6, TCPerror, UDPerror, rdpcap
+except ImportError:  # scapy is optional; scapy cross-check tests skip when absent
+    ARP = BOOTP = DHCP = DNS = ICMP = IP = TCP = UDP = Ether = ICMPv6EchoRequest = IPerror = IPv6 = TCPerror = UDPerror = rdpcap = None
 
 from app.netlab import live, stats, tools, wireshark_lab
 from app.netlab.dfilter import FilterError, apply_filter, check_filter, compile_filter
@@ -28,6 +30,7 @@ def sessions():
 
 @pytest.fixture(scope="module")
 def scapy_packets():
+    pytest.importorskip("scapy", reason="scapy is only used to cross-check the dissector")
     return {name: rdpcap(str(SAMPLES / name)) for name in FILES}
 
 

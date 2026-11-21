@@ -1,9 +1,9 @@
 import {
   addressable, busyPort, compatibleMedia, connect, emptyProject, makeDevice, MASK, MAX_DEVICES, MODELS,
   normalizeRoute, portKinds, setDevice, usableHost, validMask, validPool,
-} from "./networkProject";
-import type { Device, Medium, Model, Pool, Project } from "./networkProject";
-import { ipToInt } from "./ptEngine";
+} from "./networkProject.ts";
+import type { Device, Medium, Model, Pool, Project } from "./networkProject.ts";
+import { ipToInt } from "./ptEngine.ts";
 
 export const WORLD = { width: 960, height: 560 };
 export const STORAGE_KEY = "labmate.network-workspace.v1";

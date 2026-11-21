@@ -140,7 +140,13 @@ class _Job:
         text = self.log.read_text(encoding="utf-8", errors="replace").strip() if self.log.exists() else ""
         if "permission" in text.lower() or "denied" in text.lower() or "privilege" in text.lower():
             self.error = text.splitlines()[-1]
-        self.log.unlink(missing_ok=True)
+        for attempt in range(3):
+            try:
+                self.log.unlink(missing_ok=True)
+                break
+            except PermissionError:
+                if attempt < 2:
+                    time.sleep(0.05)
 
 
 _jobs = {}

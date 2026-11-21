@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import type { LabCategory } from "../lib/labCatalog.ts";
 import * as labStudioLaunch from "../lib/labStudioLaunch.ts";
@@ -11,8 +12,10 @@ import {
   resolveTrackLanguage,
 } from "../lib/labStudioLaunch.ts";
 
+const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
 const categories = JSON.parse(
-  fs.readFileSync(path.resolve("frontend/lib/lab-catalog.json"), "utf-8").replace(/^\uFEFF/, ""),
+  fs.readFileSync(path.join(frontendRoot, "lib/lab-catalog.json"), "utf-8").replace(/^\uFEFF/, ""),
 ) as LabCategory[];
 
 const EXPECTED_TRACK_LANGUAGES: Record<string, string> = {
@@ -63,7 +66,7 @@ test("Deep Learning and Notebook tracks support Google Colab, Jupyter Notebook, 
 
 test("Code Studio opens clean for uploaded manuals and supports all three notebook environments", () => {
   const studioSrc = fs.readFileSync(
-    path.resolve("frontend/app/code-execution/page.tsx"),
+    path.join(frontendRoot, "app/code-execution/page.tsx"),
     "utf-8",
   );
   assert.ok(!studioSrc.includes("automatically loaded from catalog"));
@@ -75,23 +78,23 @@ test("Code Studio opens clean for uploaded manuals and supports all three notebo
 
 test("Lab Sections cards are non-clickable containers with explicit Open Code Studio buttons and no Lab details route", () => {
   const pageSrc = fs.readFileSync(
-    path.resolve("frontend/app/labs/page.tsx"),
+    path.join(frontendRoot, "app/labs/page.tsx"),
     "utf-8",
   );
   assert.ok(!/<Link[\s\S]{0,160}styles\.categoryCard/.test(pageSrc), "Card container must not be a Link");
   assert.ok(pageSrc.includes("<article"), "Each category card should be rendered as a semantic <article>");
   assert.ok(pageSrc.includes("Open Code Studio"), "Each card must have an explicit Open Code Studio button");
   assert.ok(!pageSrc.includes("Lab details"), "Lab details button must be removed");
-  assert.equal(fs.existsSync(path.resolve("frontend/app/labs/[slug]/page.tsx")), false, "/labs/[slug] page must be deleted");
+  assert.equal(fs.existsSync(path.join(frontendRoot, "app/labs/[slug]/page.tsx")), false, "/labs/[slug] page must be deleted");
 });
 
 test("Mumbai University catalogue cards replace Syllabus & Outlines with direct Open Code Studio links", () => {
   const cardSrc = fs.readFileSync(
-    path.resolve("frontend/components/catalogue/LabCard.tsx"),
+    path.join(frontendRoot, "components/catalogue/LabCard.tsx"),
     "utf-8",
   );
   const assocSrc = fs.readFileSync(
-    path.resolve("frontend/lib/mumbaiUniversity/labIdeAssociations.ts"),
+    path.join(frontendRoot, "lib/mumbaiUniversity/labIdeAssociations.ts"),
     "utf-8",
   );
   assert.ok(!cardSrc.includes("Syllabus &amp; Outlines"));
