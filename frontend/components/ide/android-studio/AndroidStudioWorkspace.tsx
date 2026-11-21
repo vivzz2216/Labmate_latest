@@ -24,6 +24,7 @@ import {
   extractPreviewTree,
   createInitialLogcatEntries,
   filterLogcatEntries,
+  logcatTime,
   executeStudioTerminal,
   createNewAndroidProject,
   createProjectFile,
@@ -48,6 +49,8 @@ import {
   toggleRuntimeCheckedValue,
   updateRuntimeInputValue,
 } from "@/lib/ide/androidActivityRuntime";
+import { AndroidRuntime, checkProject } from "@/lib/ide/kotlin/android";
+import type { ScreenState, ProjectFile } from "@/lib/ide/kotlin/android";
 import { StudioHeaderToolbar, RunConfigurationId } from "./StudioHeaderToolbar";
 import {
   StudioLeftStripe,
@@ -347,17 +350,112 @@ export const AndroidStudioWorkspace: React.FC<{ capture?: boolean }> = ({ captur
     [activePresetId, persistWorkspace]
   );
 
+  // The running "device" of a Kotlin project: a real execution of the student's Kotlin. null until Run succeeds.
+  const kotlinRtRef = useRef<AndroidRuntime | null>(null);
+  const kotlinLogClearRef = useRef<number>(0);
+  const [kotlinScreen, setKotlinScreen] = useState<ScreenState | null>(null);
+
   const staticProblems = useMemo(() => analyzeStudioProblems(files), [files]);
 
+  // Kotlin projects are compiled in the browser (lib/ide/kotlin): the Java compiler on the server cannot read them. Their
+  // Problems are the interpreter's own diagnostics (syntax, unresolved references, literal type mismatches, val reassignment).
+  const kotlinProject = useMemo(
+    () =>
+      !capture &&
+      files.some((f) => f.kind === "kotlin" && !f.isTest && /class\s+\w+\s*(\([^)]*\))?\s*:\s*[\w.]*Activity\b/.test(f.content)),
+    [files, capture]
+  );
+  const projectFilesForRuntime = useMemo<ProjectFile[]>(
+    () => files.map((f) => ({ path: f.path, name: f.tabTitle, kind: f.kind, content: f.content, isTest: f.isTest })),
+    [files]
+  );
+  const kotlinProblems = useMemo<StudioProblem[]>(() => {
+    if (!kotlinProject) return [];
+    const idByName: Record<string, string> = {};
+    files.forEach((f) => {
+      idByName[f.tabTitle] = f.id;
+    });
+    let diags: ReturnType<typeof checkProject> = [];
+    try {
+      diags = checkProject(projectFilesForRuntime);
+    } catch {
+      diags = [];
+    }
+    return diags.map((d, i) => ({
+      id: `ck-${i}-${d.line}-${d.col}`,
+      fileId: idByName[d.file] ?? "",
+      fileName: d.file,
+      line: d.line,
+      column: d.col,
+      severity: d.severity,
+      message: d.message,
+    }));
+  }, [kotlinProject, files, projectFilesForRuntime]);
+
+
+  // Compose @Preview: run the first @Preview function of the project with the same engine as the emulator.
+  const previewRtRef = useRef<AndroidRuntime | null>(null);
+  const [composePreview, setComposePreview] = useState<{ screen: ScreenState | null; fn: string | null; message: string | null }>({ screen: null, fn: null, message: null });
+  const activeFileTitle = files.find((f) => f.id === activeFileId)?.tabTitle;
+  const refreshComposePreview = useCallback(() => {
+    const kt = projectFilesForRuntime.filter((f) => f.kind === "kotlin" && !f.isTest);
+    const ordered = kt.filter((f) => f.name === activeFileTitle).concat(kt.filter((f) => f.name !== activeFileTitle));
+    let fn: string | null = null;
+    for (let i = 0; i < ordered.length && !fn; i++) {
+      const m = /@Preview[^\n]*\n(?:\s*@\w+[^\n]*\n)*\s*fun\s+(\w+)\s*\(/.exec(ordered[i].content);
+      if (m) fn = m[1];
+    }
+    if (!fn) {
+      previewRtRef.current = null;
+      setComposePreview({ screen: null, fn: null, message: null });
+      return;
+    }
+    try {
+      const rt = new AndroidRuntime(projectFilesForRuntime);
+      const diags = rt.build().filter((d) => d.severity === "error");
+      if (diags.length) {
+        previewRtRef.current = null;
+        setComposePreview({ screen: null, fn, message: `Preview unavailable: fix the ${diags.length} error(s) in Problems first (first: ${diags[0].file}:${diags[0].line} ${diags[0].message}).` });
+        return;
+      }
+      rt.startPreview(fn);
+      previewRtRef.current = rt;
+      setComposePreview({ screen: rt.previewScreen(), fn, message: null });
+    } catch (e) {
+      previewRtRef.current = null;
+      setComposePreview({ screen: null, fn, message: "Preview unavailable: " + (e instanceof Error ? e.message : String(e)) });
+    }
+  }, [projectFilesForRuntime, activeFileTitle]);
+  useEffect(() => {
+    if (!kotlinProject) return;
+    const t = setTimeout(refreshComposePreview, 450);
+    return () => clearTimeout(t);
+  }, [kotlinProject, refreshComposePreview, composeClickCount]);
+  const syncPreview = useCallback(() => {
+    const rt = previewRtRef.current;
+    if (rt) setComposePreview((prev) => ({ ...prev, screen: rt.previewScreen() }));
+  }, []);
+
   const combinedProblems = useMemo(() => {
-    const merged: StudioProblem[] = [...staticProblems];
+    const kindById: Record<string, string> = {};
+    files.forEach((f) => {
+      kindById[f.id] = f.kind;
+    });
+    // The older line-based checker keeps its XML and TODO findings; for Kotlin sources the real checker decides.
+    const merged: StudioProblem[] = kotlinProject
+      ? staticProblems.filter((p) => kindById[p.fileId] !== "kotlin" || p.severity !== "error" || p.id.indexOf("-unresolved-") >= 0)
+      : [...staticProblems];
+    for (let i = 0; i < kotlinProblems.length; i++) {
+      const kp = kotlinProblems[i];
+      if (!merged.some((sp) => sp.fileId === kp.fileId && sp.line === kp.line && sp.message === kp.message)) merged.push(kp);
+    }
     for (let i = 0; i < backendProblems.length; i++) {
       const bp = backendProblems[i];
       const dup = merged.some((sp) => sp.fileId === bp.fileId && sp.line === bp.line && sp.message === bp.message);
       if (!dup) merged.push(bp);
     }
     return merged;
-  }, [staticProblems, backendProblems]);
+  }, [staticProblems, backendProblems, kotlinProject, kotlinProblems, files]);
 
   const filteredLogcat = useMemo(
     () => filterLogcatEntries(logcatEntries, logcatQuery, activePreset.packageName),
@@ -400,6 +498,9 @@ export const AndroidStudioWorkspace: React.FC<{ capture?: boolean }> = ({ captur
       const launched = launchProject(target);
       setRuntimeSession(launched.session);
       setLogcatEntries(launched.logs);
+      kotlinRtRef.current = null;
+      kotlinLogClearRef.current = 0;
+      setKotlinScreen(null);
       setIsRunning(false);
       persistWorkspace(projects, presetId);
       setStatusMessage(`Opened project ${target.name}`);
@@ -478,6 +579,9 @@ export const AndroidStudioWorkspace: React.FC<{ capture?: boolean }> = ({ captur
       const launched = launchAndroidRuntimeSession(created.files, created.packageName);
       setRuntimeSession(launched.session);
       setLogcatEntries(launched.logs);
+      kotlinRtRef.current = null;
+      kotlinLogClearRef.current = 0;
+      setKotlinScreen(null);
       persistWorkspace(nextProjects, created.id);
       setStatusMessage(`Created new project '${created.name}' (${created.packageName})`);
       pushNotification("Project Created", `${created.name} (${created.template}) ready.`);
@@ -501,9 +605,97 @@ export const AndroidStudioWorkspace: React.FC<{ capture?: boolean }> = ({ captur
     setStatusMessage(`Reset ${activePreset.name} files to baseline snapshot`);
   }, [updateCurrentProject, activePreset.name]);
 
+  // Pull the Kotlin runtime's current screen and log into React state.
+  const syncKotlin = useCallback(() => {
+    const rt = kotlinRtRef.current;
+    if (!rt) return;
+    const sc = rt.screen();
+    setKotlinScreen(sc);
+    const from = kotlinLogClearRef.current;
+    const pkg = activePreset.packageName;
+    setLogcatEntries(
+      rt.logs.slice(from).map((l, i) => ({
+        id: `lc-${from + i}`,
+        timestamp: logcatTime(l.ts),
+        pid: 4242,
+        tid: 4242,
+        tag: l.tag,
+        packageName: l.tag === "ActivityManager" || l.tag === "ActivityTaskManager" ? "system_process" : pkg,
+        level: l.level,
+        message: l.message,
+        isCrash: l.crash,
+      }))
+    );
+    setIsRunning(sc.crash === null && !sc.finished);
+  }, [activePreset.packageName]);
+
+  // Toasts disappear by themselves.
+  useEffect(() => {
+    if (!kotlinScreen || kotlinScreen.toasts.length === 0) return;
+    const t = setTimeout(syncKotlin, 2600);
+    return () => clearTimeout(t);
+  }, [kotlinScreen, syncKotlin]);
+
+  // Compile the Kotlin project in the browser. Returns the runtime when the build succeeded.
+  const compileKotlin = useCallback(
+    (label: string): { rt: AndroidRuntime | null; lines: string[]; steps: GradleBuildStep[] } => {
+      const t0 = Date.now();
+      const rt = new AndroidRuntime(projectFilesForRuntime);
+      const diags = rt.build();
+      const kotlinCount = projectFilesForRuntime.filter((f) => f.kind === "kotlin" && !f.isTest).length;
+      const xmlErrors = staticProblems.filter((p) => p.severity === "error" && p.id.indexOf("xml") >= 0);
+      const errors = diags.filter((d) => d.severity === "error");
+      const ms = Math.max(1, Date.now() - t0);
+      const lines: string[] = [
+        `Executing: ${label}`,
+        `Compiling ${kotlinCount} Kotlin source file(s) in the browser (LabMate does not use Gradle or the real Kotlin compiler)`,
+      ];
+      const steps: GradleBuildStep[] = [];
+      if (xmlErrors.length) {
+        lines.push("> Task :app:processDebugResources FAILED");
+        xmlErrors.forEach((p) => lines.push(`e: ${p.fileName}:${p.line}:${p.column} ${p.message}`));
+        steps.push({ id: "s-res", label: ":app:processDebugResources", status: "failed", durationMs: ms });
+      }
+      lines.push("> Task :app:compileDebugKotlin" + (errors.length ? " FAILED" : ""));
+      diags.forEach((d) => lines.push(`${d.severity === "error" ? "e" : "w"}: ${d.file}:${d.line}:${d.col} ${d.message}`));
+      steps.push({ id: "s-kt", label: ":app:compileDebugKotlin", status: errors.length ? "failed" : "success", durationMs: ms });
+      const failed = errors.length + xmlErrors.length;
+      lines.push("");
+      if (failed) {
+        lines.push(`BUILD FAILED in ${ms}ms`, `${failed} error(s). Fix them in the Problems tab.`);
+        return { rt: null, lines, steps };
+      }
+      lines.push(`BUILD SUCCESSFUL in ${ms}ms`);
+      return { rt, lines, steps };
+    },
+    [projectFilesForRuntime, staticProblems]
+  );
+
   // Real Backend Isolated Build (with honest offline/unauthenticated reporting)
   const handleBuildTask = useCallback(
     async (task: AndroidBuildTask): Promise<string[]> => {
+      if (kotlinProject) {
+        setBottomTab("build");
+        setApkArtifact(null);
+        setBackendProblems([]);
+        if (task === "clean" || task === "test") {
+          const note =
+            task === "clean"
+              ? ["Nothing to clean: LabMate keeps no build output for Kotlin projects."]
+              : ["LabMate does not run JUnit tests for Kotlin projects. Use Run to compile and start the app in the emulator."];
+          setBuildSteps([]);
+          setBuildConsoleLines(note);
+          setBuildStatus("idle");
+          setStatusMessage(note[0]);
+          return note;
+        }
+        const built = compileKotlin(`:app:${task}`);
+        setBuildSteps(built.steps);
+        setBuildConsoleLines(built.lines);
+        setBuildStatus(built.rt ? "success" : "failed");
+        setStatusMessage(built.rt ? "Build successful (Kotlin compiled in the browser; no APK is produced)" : "Build failed. See Build Output / Problems");
+        return built.lines;
+      }
       setBuildStatus("building");
       setBottomTab("build");
       setStatusMessage(`Running :app:${task}...`);
@@ -576,7 +768,7 @@ export const AndroidStudioWorkspace: React.FC<{ capture?: boolean }> = ({ captur
       pushNotification("Backend Build Unavailable", outcome.message);
       return lines;
     },
-    [files, activePreset.packageName, staticProblems, pushNotification]
+    [files, activePreset.packageName, staticProblems, pushNotification, kotlinProject, compileKotlin]
   );
 
   const handleDownloadApk = useCallback(() => {
@@ -608,6 +800,34 @@ export const AndroidStudioWorkspace: React.FC<{ capture?: boolean }> = ({ captur
           "Launch aborted due to project errors:",
           ...blockingErrors.map((e) => `  ${e.fileName}:${e.line}: ${e.message}`),
         ]);
+        return;
+      }
+
+      if (kotlinProject) {
+        const built = compileKotlin(`compile and run :app on the LabMate emulator${mode === "debug" ? " (debug)" : ""}`);
+        setBuildSteps(built.steps);
+        setBuildConsoleLines(built.lines);
+        if (!built.rt) {
+          setIsRunning(false);
+          setBuildStatus("failed");
+          setBottomTab("build");
+          setStatusMessage("Build failed. See Build Output / Problems");
+          return;
+        }
+        const rt = built.rt;
+        rt.start();
+        kotlinRtRef.current = rt;
+        kotlinLogClearRef.current = 0;
+        setBuildStatus("success");
+        setRunConsoleLines([
+          `Launching 'app' on ${activeDevice.name}`,
+          `$ am start -n ${activePreset.packageName}/.MainActivity`,
+          "The compiled app runs inside LabMate (a Kotlin interpreter, not a real Android device). Output appears in Logcat.",
+        ]);
+        syncKotlin();
+        setRightTab("runningDevices");
+        setBottomTab("logcat");
+        setStatusMessage(rt.crash ? `App crashed on launch: ${rt.crash.message}` : `Launched ${activePreset.packageName} on ${activeDevice.name}`);
         return;
       }
 
@@ -647,7 +867,7 @@ export const AndroidStudioWorkspace: React.FC<{ capture?: boolean }> = ({ captur
           : `${mode === "debug" ? "Debugging" : "Running"} ${activePreset.packageName} on ${activeDevice.name}`
       );
     },
-    [combinedProblems, activePreset, activeDevice.name]
+    [combinedProblems, activePreset, activeDevice.name, kotlinProject, compileKotlin, syncKotlin]
   );
 
   // Keyboard shortcuts
@@ -959,6 +1179,23 @@ export const AndroidStudioWorkspace: React.FC<{ capture?: boolean }> = ({ captur
               previewTree={previewTree}
               composeClickCount={composeClickCount}
               onIncrementComposeCounter={() => setComposeClickCount((c) => c + 1)}
+              composePreview={kotlinProject ? composePreview : undefined}
+              onPreviewClick={(uid) => {
+                if (previewRtRef.current) previewRtRef.current.click(uid);
+                syncPreview();
+              }}
+              onPreviewInput={(uid, text) => {
+                if (previewRtRef.current) previewRtRef.current.input(uid, text);
+                syncPreview();
+              }}
+              onPreviewToggle={(uid, checked) => {
+                if (previewRtRef.current) previewRtRef.current.toggle(uid, checked);
+                syncPreview();
+              }}
+              onPreviewDialogButton={(id) => {
+                if (previewRtRef.current) previewRtRef.current.click("dlg:" + id);
+                syncPreview();
+              }}
               onRunFromGutter={() => handleRunApp("run")}
               onDeployPreviewToDevice={() => handleRunApp("run")}
               problems={combinedProblems}
@@ -1041,6 +1278,29 @@ export const AndroidStudioWorkspace: React.FC<{ capture?: boolean }> = ({ captur
             setActiveDeviceId(newId);
             setStatusMessage(`Added virtual device profile '${name}'`);
           }}
+          kotlinProject={kotlinProject}
+          kotlinScreen={kotlinScreen}
+          onKotlinClick={(uid) => {
+            if (kotlinRtRef.current) kotlinRtRef.current.click(uid);
+            syncKotlin();
+          }}
+          onKotlinInput={(uid, text) => {
+            if (kotlinRtRef.current) kotlinRtRef.current.input(uid, text);
+            syncKotlin();
+          }}
+          onKotlinToggle={(uid, checked) => {
+            if (kotlinRtRef.current) kotlinRtRef.current.toggle(uid, checked);
+            syncKotlin();
+          }}
+          onKotlinDialogButton={(id) => {
+            if (kotlinRtRef.current) kotlinRtRef.current.click("dlg:" + id);
+            syncKotlin();
+          }}
+          onKotlinDismissCrash={() => {
+            if (kotlinRtRef.current) kotlinRtRef.current.closeApp();
+            syncKotlin();
+            setIsRunning(false);
+          }}
           runtimeSession={runtimeSession}
           previewTree={previewTree}
           activeAppRunning={isRunning}
@@ -1096,6 +1356,15 @@ export const AndroidStudioWorkspace: React.FC<{ capture?: boolean }> = ({ captur
             });
           }}
           onPressBack={() => {
+            if (kotlinProject) {
+              if (kotlinRtRef.current) {
+                kotlinRtRef.current.back();
+                syncKotlin();
+              } else {
+                setStatusMessage("No app is running");
+              }
+              return;
+            }
             const step = navigateRuntimeBack(runtimeSession);
             setRuntimeSession(step.session);
             if (step.logs.length > 0) setLogcatEntries((prev) => [...prev, ...step.logs]);

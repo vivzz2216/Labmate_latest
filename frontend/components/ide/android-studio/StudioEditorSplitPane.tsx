@@ -2,6 +2,8 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import styles from "./androidStudio.module.css";
+import type { ScreenState } from "@/lib/ide/kotlin/android";
+import { EmulatorScreen } from "./EmulatorScreen";
 import {
   DesignSurfaceMode,
   EditorSplitMode,
@@ -64,6 +66,12 @@ interface StudioEditorSplitPaneProps {
   previewTree: PreviewWidgetNode;
   composeClickCount: number;
   onIncrementComposeCounter: () => void;
+  /** Kotlin projects: the @Preview function run by the same engine as the emulator. Undefined for Java/XML projects. */
+  composePreview?: { screen: ScreenState | null; fn: string | null; message: string | null };
+  onPreviewClick?: (uid: string) => void;
+  onPreviewInput?: (uid: string, text: string) => void;
+  onPreviewToggle?: (uid: string, checked: boolean) => void;
+  onPreviewDialogButton?: (id: number) => void;
   onRunFromGutter: () => void;
   onDeployPreviewToDevice: () => void;
   problems: StudioProblem[];
@@ -322,6 +330,11 @@ export function StudioEditorSplitPane({
   previewTree,
   composeClickCount,
   onIncrementComposeCounter,
+  composePreview,
+  onPreviewClick,
+  onPreviewInput,
+  onPreviewToggle,
+  onPreviewDialogButton,
   onRunFromGutter,
   onDeployPreviewToDevice,
   problems,
@@ -1615,6 +1628,34 @@ export function StudioEditorSplitPane({
                   </div>
                 </div>
 
+                {composePreview ? (
+                <div className={styles.composeCanvasArea}>
+                  <div className={styles.previewCardFrame} style={{ width: 292 }}>
+                    <div className={styles.previewCardTitle}>
+                      <span>{composePreview.fn ? `${composePreview.fn} (@Preview)` : "Preview"}</span>
+                      <span style={{ color: "#3DDC84" }}>LabMate preview</span>
+                    </div>
+                    {composePreview.screen ? (
+                      <div style={{ height: 340, background: "#FFFBFE", borderRadius: 12, overflow: "hidden", border: "1px solid #D0BCFF", display: "flex", flexDirection: "column" }}>
+                        <EmulatorScreen
+                          screen={composePreview.screen}
+                          onClick={(uid) => interactivePreview && onPreviewClick && onPreviewClick(uid)}
+                          onInput={(uid, text) => interactivePreview && onPreviewInput && onPreviewInput(uid, text)}
+                          onToggle={(uid, checked) => interactivePreview && onPreviewToggle && onPreviewToggle(uid, checked)}
+                          onDialogButton={(id) => onPreviewDialogButton && onPreviewDialogButton(id)}
+                          onDismissCrash={() => onIncrementComposeCounter()}
+                        />
+                      </div>
+                    ) : (
+                      <div style={{ padding: 16, fontSize: 12, lineHeight: 1.5, color: "#625B71", background: "#FEF7FF", borderRadius: 12, border: "1px solid #D0BCFF" }}>
+                        {composePreview.message
+                          ? composePreview.message
+                          : "No @Preview function found. Add @Preview @Composable fun MyPreview() { ... } to see it here."}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                ) : (
                 <div className={styles.composeCanvasArea}>
                   <div className={styles.previewCardFrame} style={{ width: 292 }}>
                     <div className={styles.previewCardTitle}>
@@ -1668,6 +1709,7 @@ export function StudioEditorSplitPane({
                     </div>
                   </div>
                 </div>
+                )}
               </>
             )}
           </div>

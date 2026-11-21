@@ -1,5 +1,7 @@
 "use client";
 
+import type { ScreenState } from "@/lib/ide/kotlin/android";
+import { EmulatorScreen } from "./EmulatorScreen";
 import React, { useMemo, useState } from "react";
 import styles from "./androidStudio.module.css";
 import { RightToolId } from "./StudioStripes";
@@ -54,6 +56,14 @@ export interface NotificationItem {
 }
 
 interface StudioRightPanelProps {
+  /** Screen of the Kotlin interpreter (lib/ide/kotlin) when a Kotlin project is running; the Java/XML runtime draws the rest. */
+  kotlinScreen?: ScreenState | null;
+  kotlinProject?: boolean;
+  onKotlinClick?: (uid: string) => void;
+  onKotlinInput?: (uid: string, text: string) => void;
+  onKotlinToggle?: (uid: string, checked: boolean) => void;
+  onKotlinDialogButton?: (id: number) => void;
+  onKotlinDismissCrash?: () => void;
   activeTab: RightToolId | null;
   projectName: string;
   files: StudioFile[];
@@ -83,6 +93,13 @@ interface StudioRightPanelProps {
 }
 
 export const StudioRightPanel: React.FC<StudioRightPanelProps> = ({
+  kotlinScreen,
+  kotlinProject,
+  onKotlinClick,
+  onKotlinInput,
+  onKotlinToggle,
+  onKotlinDialogButton,
+  onKotlinDismissCrash,
   activeTab,
   projectName,
   files,
@@ -473,6 +490,21 @@ export const StudioRightPanel: React.FC<StudioRightPanelProps> = ({
                   >
                     Wake Screen
                   </button>
+                ) : kotlinProject ? (
+                  kotlinScreen ? (
+                    <EmulatorScreen
+                      screen={kotlinScreen}
+                      onClick={(uid) => onKotlinClick && onKotlinClick(uid)}
+                      onInput={(uid, text) => onKotlinInput && onKotlinInput(uid, text)}
+                      onToggle={(uid, checked) => onKotlinToggle && onKotlinToggle(uid, checked)}
+                      onDialogButton={(id) => onKotlinDialogButton && onKotlinDialogButton(id)}
+                      onDismissCrash={() => onKotlinDismissCrash && onKotlinDismissCrash()}
+                    />
+                  ) : (
+                    <div style={{ margin: "auto", padding: 16, textAlign: "center", color: "#79747E", fontSize: 12 }}>
+                      No app is running. Press Run (Shift+F10) to compile the Kotlin project and start it here.
+                    </div>
+                  )
                 ) : runtimeSession.crashError ? (
                   <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 8, margin: "auto" }}>
                     <div
