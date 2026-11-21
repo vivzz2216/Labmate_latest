@@ -120,7 +120,7 @@ def programming_lines(lines, mode: str = "code_only"):
                 excluded = False
                 output.append(line)
                 continue
-            if ((post_lab and re.match(r"^questions?\s*:?\s*$", heading, re.I)) or
+            if ((post_lab and re.match(r"^(?:questions?(?:\s*/\s*programs?)?|programming\s+(?:questions?|exercises?)|programs?)\s*:?\s*$", heading, re.I)) or
                     re.match(r"^result\s*/\s*observation\s*/\s*program\s+code\b|^dataset\s*:", heading, re.I)):
                 excluded = False
                 practical = True

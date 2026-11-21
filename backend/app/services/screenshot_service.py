@@ -819,6 +819,7 @@ class ScreenshotService:
         )
 
         html_content = template.render(
+            compact_report=bool(kwargs.get('compact_report')),
             code_content=Markup(highlighted_code),
             highlighted_code=Markup(highlighted_code),
             output_content=output_content,

@@ -498,6 +498,7 @@ async def process(upload_id: int, data: ProcessInput, request: Request, backgrou
     if len({q.id for q in data.questions}) != len(data.questions):
         raise HTTPException(400, 'Question IDs must be unique; original experiment numbers are preserved.')
     questions = []
+    extracted_by_id = {item['id']: item for item in (workflow.questions or [])}
     for q in data.questions:
         eff_lang = (
             ("python" if q.language == "auto" else q.language)
@@ -518,6 +519,12 @@ async def process(upload_id: int, data: ProcessInput, request: Request, backgrou
             **({'rstudio_theme': q.rstudio_theme} if eff_lang == 'r' else {}),
             **({'browser_theme': q.browser_theme} if q.browser_theme == 'chrome' or eff_lang in {'html', 'react', 'node'} else {}),
         })
+        original = extracted_by_id.get(q.id, {})
+        if original.get('text', '').strip() == q.text.strip():
+            # Source locations are server-owned extraction metadata, not client input.
+            for key in ('source_question', 'source_line', 'source_section', 'experiment_number', 'experiment_label', 'extraction_method'):
+                if key in original:
+                    questions[-1][key] = original[key]
     if sum(sum(len(name)+len(content) for name,content in q.datasets.items()) for q in data.questions)>8*1024*1024:
         raise HTTPException(400,'Dataset upload exceeds 8 MiB.')
     from ..services.lab_availability import blocked_message
@@ -526,7 +533,14 @@ async def process(upload_id: int, data: ProcessInput, request: Request, backgrou
         raise HTTPException(422, blocked)
     # Parts the lab itself declared (kind) keep that decision; only undeclared questions go through the heuristics.
     undeclared = [question for question in questions if not question.get("kind")]
-    filtered = filter_lab_tasks(undeclared, mode=data.mode)
+    filtered = []
+    for question in undeclared:
+        if question.get('extraction_method') == 'original_academic_exercise' and question.get('source_question') == question['text']:
+            # A topic in an explicit aim list inherits its programming verb
+            # from the manual. Do not reclassify it as a standalone theory title.
+            filtered.append({**question, 'is_theory': False})
+        else:
+            filtered.extend(filter_lab_tasks([question], mode=data.mode))
     if len(filtered) != len(undeclared):
         raise HTTPException(400, "Only valid laboratory questions can be processed. Handwritten exercises are excluded.")
     classified_rows = iter(filtered)

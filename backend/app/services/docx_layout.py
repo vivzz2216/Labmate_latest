@@ -311,6 +311,8 @@ def create_report_document(upload, landscape=False, append_section=True, include
 
     if source_is_docx:
         document = Document(file_path)
+        if not append_section:
+            return document, True
         report_section = document.add_section(WD_SECTION.NEW_PAGE) if append_section else document.sections[-1]
     else:
         document = Document()
@@ -367,9 +369,53 @@ def _norm_question_text(text: str) -> str:
     return cleaned.strip()
 
 
-def find_question_anchor(document, question_text: str, start_index: int = 0):
+def find_question_anchor(document, question_text: str, start_index: int = 0, *, strict=False, source_line=None):
     """Locate the paragraph (or table cell) in an uploaded .docx that asks `question_text`."""
     import re
+    if strict:
+        # Match the complete question across wrapped paragraphs. Return its end
+        # so evidence follows all of its requirements, including continuation lines.
+        target = ' '.join(str(question_text or '').split()).casefold()
+        if not target:
+            return None
+        positions = {}
+        if source_line is not None:
+            from docx.table import Table
+            from docx.text.paragraph import Paragraph
+            line_number = 0
+            for child in document.element.body.iterchildren():
+                if child.tag.endswith('}p'):
+                    paragraph = Paragraph(child, document)
+                    positions[paragraph._p] = line_number
+                    line_number += paragraph.text.count('\n') + 1
+                elif child.tag.endswith('}tbl'):
+                    seen = set()
+                    for row in Table(child, document).rows:
+                        for cell in row.cells:
+                            if cell._tc in seen:
+                                continue
+                            seen.add(cell._tc)
+                            for paragraph in cell.paragraphs:
+                                positions[paragraph._p] = line_number
+                                line_number += paragraph.text.count('\n') + 1
+        containers = [("paragraph", document.paragraphs)]
+        containers.extend(("cell", cell.paragraphs) for table in document.tables for row in table.rows for cell in row.cells)
+        for kind, paragraphs in containers:
+            first = max(0, start_index) if kind == 'paragraph' else 0
+            for index in range(first, len(paragraphs)):
+                if source_line is not None and positions.get(paragraphs[index]._p) != source_line:
+                    continue
+                combined = ''
+                for end in range(index, len(paragraphs)):
+                    paragraph = paragraphs[end]
+                    if paragraph._p.xpath('.//w:drawing'):
+                        break
+                    combined = ' '.join((combined + ' ' + paragraph.text).split()).casefold()
+                    if combined == target:
+                        return ('paragraph', end if kind == 'paragraph' else None, paragraph)
+                    if not target.startswith(combined):
+                        break
+        return None
     raw_first = next((line.strip() for line in str(question_text or "").splitlines() if line.strip()), "")
     if not raw_first:
         return None
@@ -526,13 +572,35 @@ def embed_screenshot(document, image_path, caption=None, reserved_height=0.8, ma
     return first_shape
 
 
-def embed_screenshots_after(document, anchor, paths, captions=(), max_width=None):
+def embed_screenshots_after(document, anchor, paths, captions=(), max_width=None, question_text=''):
     """Insert one or more screenshots sequentially right under a matched .docx question anchor."""
     kind, _, target = anchor
     cursor = target if kind == "paragraph" else None
     cell = target if kind == "cell" else None
+    if cursor is not None:
+        cursor.paragraph_format.keep_with_next = True
+        cursor.paragraph_format.keep_together = True
+        if question_text:
+            from docx.text.paragraph import Paragraph
+            target_text = ' '.join(question_text.split()).casefold()
+            combined = ''
+            paragraphs = []
+            element = cursor._p
+            while element is not None and element.tag.endswith('}p'):
+                paragraph = Paragraph(element, cursor._parent)
+                combined = ' '.join((paragraph.text + ' ' + combined).split()).casefold()
+                if not target_text.endswith(combined):
+                    break
+                paragraphs.append(paragraph)
+                if combined == target_text:
+                    for paragraph in paragraphs:
+                        paragraph.paragraph_format.keep_with_next = True
+                        paragraph.paragraph_format.keep_together = True
+                    break
+                element = element.getprevious()
     for idx, path in enumerate(paths):
         cap = captions[idx] if idx < len(captions) else None
+        boundary = cursor._p.getnext() if cursor is not None else None
         embed_screenshot(
             document,
             path,
@@ -543,7 +611,7 @@ def embed_screenshots_after(document, anchor, paths, captions=(), max_width=None
         )
         if cursor is not None:
             next_el = cursor._p.getnext()
-            while next_el is not None and (next_el.xpath('.//w:drawing') or (cap and ''.join(next_el.itertext()).strip() == cap)):
+            while next_el is not None and next_el is not boundary:
                 from docx.text.paragraph import Paragraph
                 cursor = Paragraph(next_el, cursor._parent)
                 next_el = cursor._p.getnext()

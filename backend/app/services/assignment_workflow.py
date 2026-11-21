@@ -1248,6 +1248,13 @@ async def _process_assignment(workflow_id: int):
                         )
                         from .substitutions import GENERATION_RULE
                         code_instruction += GENERATION_RULE
+                        if language == 'python' and re.search(r'\b(?:exceptions?|exception[- ]handling)\b', question['text'], re.I):
+                            code_instruction += (
+                                '\nFor this exception-handling exercise, demonstrate a successful operation and each requested exception '
+                                'by actually invoking the implemented function with suitable inputs. Catch the errors and print their '
+                                'messages. When the manual leaves the exception types unspecified, use numeric conversion and division '
+                                'to demonstrate ValueError and ZeroDivisionError as well as valid division. Do not just print canned errors.'
+                            )
                         if (identity_question != question['text'] and language in {'python', 'c', 'cpp', 'java'}
                                 and profile_name_required(identity_question, student_name)):
                             code_instruction += ("\nThe manual requires the current student's full profile name in the report. "
@@ -1383,7 +1390,7 @@ async def _process_assignment(workflow_id: int):
                 group = f"workflow_{workflow.id}_{uuid.uuid4().hex[:8]}"
                 
                 # Build student-like filename for IDE and runtime
-                src_filename = student_friendly_filename(question["text"], actual_language, index)
+                src_filename = student_friendly_filename(question["text"], actual_language, question.get('experiment_number', index + 1) - 1)
                 if actual_language in {'java', 'distributed'}:
                     from .runtime_engine import java_class_name
                     class_name = java_class_name(code)
@@ -1593,7 +1600,7 @@ async def _process_assignment(workflow_id: int):
                         candidates = (list((verification or {}).get('evidence_frames') or []) if (verification or {}).get('evidence_frames') else [{'path':p,'kind':category,'caption':f"MySQL Workbench-style rendered interface connected to real {(verification or {}).get('engine', 'MySQL')}" if category=='database' else 'Actual local Python notebook evidence'} for p in browser_captures])
                     project_files=(project_config or {}).get('project_files')
                     capture_files=project_files
-                    source_policy=planned.get('source_policy','selected')
+                    source_policy='complete' if question.get('source_question') else planned.get('source_policy','selected')
                     if actual_language == 'distributed':
                         from .dc_runtime import split_java_files
                         capture_files=split_java_files(code)
@@ -1648,6 +1655,7 @@ async def _process_assignment(workflow_id: int):
                             project_files=project_files_for_shot,
                             screenshot_style=screenshot_style,
                             stdin_data=stdin_data, input_echoed=input_echoed, view_mode=capture_view,
+                            compact_report=bool(question.get('source_question')),
                             presentation="vscode_evidence" if actual_language == 'distributed' or use_vscode_terminal else "ide_evidence" if actual_language in {"python", "java", "c", "cpp"} and not actual_http else "evidence", language='java' if actual_language == 'distributed' else actual_language,
                             palette=question.get("jupyter_theme", "light") if theme == "jupyter" else "dark" if use_vscode_terminal or screenshot_style == "style_2" else "light",
                             evidence_kind="http" if actual_http else "terminal",
@@ -1687,6 +1695,7 @@ async def _process_assignment(workflow_id: int):
                     verification.update(required=True, status="failed", error="Required interactions were not tested.")
                     success = False
                 result = {"id": question["id"], "question": question["text"], "language": actual_language,
+                          **{key: question[key] for key in ('source_question', 'source_line', 'source_section', 'experiment_number') if key in question},
                           "answer": answer, "code": code, "output": output, "error": error,
                           **({'stdin':stdin_data or ''} if actual_language=='ubuntu' else {}),
                           "status": "completed" if success else "failed", "screenshot_paths": screenshots,
@@ -1945,7 +1954,11 @@ def build_word_report(upload, workflow):
             result = {**result, "screenshot_paths": filtered_paths, "screenshot_captions": filtered_caps}
         is_theory = result.get("is_theory") or result.get("language") == "theory"
         if can_paste_inline and not is_theory and result.get("status") == "completed":
-            anchor = find_question_anchor(document, result.get("question", ""), start_index=anchor_cursor)
+            original_question = result.get('source_question')
+            anchor = find_question_anchor(document, original_question or result.get("question", ""),
+                                          start_index=0 if original_question else anchor_cursor, strict=bool(original_question))
+            if original_question and anchor is None:
+                raise ValueError('Report needs review: could not locate the complete original question for exercise ' + str(result['id']) + '.')
             if anchor:
                 valid_paths = [p for p in (result.get("screenshot_paths") or []) if os.path.isfile(p)]
                 if valid_paths:

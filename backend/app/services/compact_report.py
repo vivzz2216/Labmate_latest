@@ -139,7 +139,8 @@ def build_compact_report(upload,workflow):
     )
     ensure_heading_style(document)
     section=document.sections[-1]
-    section.top_margin=section.bottom_margin=Inches(.6)
+    if not source_is_docx:
+        section.top_margin=section.bottom_margin=Inches(.6)
     languages={r.get('language') for r in workflow.results}
     if languages == {'sql'}:
         section.left_margin=section.right_margin=Inches(.55)
@@ -188,6 +189,9 @@ def build_compact_report(upload,workflow):
                 # The notebook screenshots already contain their content; avoid
                 # redundant per-slice labels and fit two readable frames per page.
                 caption = None
+            if result.get('source_question') and result.get('language') in {'python', 'java', 'c', 'cpp', 'r'}:
+                source = bool(re.search(r'program|source|code', caption or '', re.I))
+                caption = 'Code' if source else 'Output'
             resolved_captions.append(caption)
         return paths, resolved_captions
 
@@ -225,6 +229,14 @@ def build_compact_report(upload,workflow):
         placed = set(anchors)
 
     anchor_cursor = 0
+    exact_anchors = {}
+    if can_paste_inline:
+        for index, result in enumerate(workflow.results):
+            if result.get('source_question'):
+                anchor = find_question_anchor(document, result['source_question'], strict=True, source_line=result.get('source_line'))
+                if anchor is None:
+                    raise ValueError('Report needs review: could not locate the complete original question for exercise ' + str(result['id']) + '.')
+                exact_anchors[index] = anchor
     appended_started = False
     for index,result in enumerate(workflow.results):
         if index in placed:
@@ -233,7 +245,7 @@ def build_compact_report(upload,workflow):
         paths, resolved_captions = prepare(result)
 
         if can_paste_inline and not (result.get('is_theory') or result.get('language') == 'theory'):
-            anchor = find_question_anchor(document, result.get('question', ''), start_index=anchor_cursor)
+            anchor = exact_anchors.get(index) or find_question_anchor(document, result.get('question', ''), start_index=anchor_cursor)
             if anchor:
                 if not paths and result.get('status') == 'completed':
                     raise ValueError('Cannot export a completed exercise without its required screenshots.')
@@ -257,6 +269,7 @@ def build_compact_report(upload,workflow):
                         paths,
                         captions=[None if (prefs.output_only_screenshots and prefs.no_extra_questions) else c for c in resolved_captions],
                         max_width=6.25 if result.get('language') == 'colab' else None,
+                        question_text=result.get('source_question', ''),
                     )
                 if anchor[0] == 'paragraph' and anchor[1] is not None:
                     anchor_cursor = anchor[1] + 1

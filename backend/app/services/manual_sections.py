@@ -233,11 +233,109 @@ def numbered_experiments(text):
         relevant_global=[line for line in global_lines if language=='node' or not re.search(r'For the Node\.js experiment',line,re.I)]
         if relevant_global:body += "\nGeneral requirements\n" + "\n".join(relevant_global)
         if len(body) > 15000: raise ManualStructureError(f"Experiment {match.group(1)} exceeds the supported question length.")
+        exercises = academic_exercises(lines[start:end], language, match.group(1), start)
+        if exercises:
+            results.extend(exercises)
+            continue
         results.append({"id": index + 1 if any(re.search(r"[A-Z]$", number) for number in numbers) else int(match.group(1)), "text": body,
                         "language": language,
                         "experiment_number": int(re.match(r"\d+", match.group(1)).group()), "experiment_label": match.group(1).upper(), "title": title or block[0],
                         "extraction_method": "original_numbered_section"})
+    if any(item.get('extraction_method') == 'original_academic_exercise' for item in results):
+        for index, item in enumerate(results, 1):
+            item['id'] = index
     return results
+
+
+def academic_exercises(lines, language, experiment_label, offset=0):
+    """Separate independent programs in structured practical and post-lab sections.
+
+    Keep multi-step projects and SQL scripts together. Only an explicit aim list
+    or programming section establishes individual exercise boundaries.
+    """
+    from .lab_question_filter import is_actionable_lab_question, model_labelled_task
+
+    if language not in {'python', 'java', 'c', 'cpp', 'r', 'colab'}:
+        return []
+    if not any(re.search(r'\b(?:laboratory\s+exercise|post[- ]?(?:experiments?|lab)|after[- ]?lab)\b', line, re.I) for line in lines):
+        return []
+    prefix = re.compile(r'^\s*(?:(?:\d+|[A-Z]|[ivxlcdm]+)[.)]\s*)', re.I)
+    items = []
+    section = ''
+    post_lab = False
+    aim_list = False
+    current = None
+    aim_index = None
+
+    def flush():
+        nonlocal current
+        if current:
+            start, end = current
+            question = '\n'.join(lines[start:end + 1]).strip()
+            items.append({'text': question, 'source_question': question,
+                          'source_line': offset + start, 'source_section': section,
+                          'language': language, 'experiment_label': experiment_label,
+                          'experiment_number': int(re.match(r'\d+', experiment_label).group()),
+                          'extraction_method': 'original_academic_exercise'})
+            current = None
+
+    for index, raw in enumerate(lines):
+        line = raw.strip()
+        heading = prefix.sub('', line).strip()
+        if not line:
+            continue
+        if re.match(r'^aim\s*:', heading, re.I):
+            flush()
+            section = 'Aim'
+            aim_list = True
+            aim_index = index
+            continue
+        if re.match(r'^to\s+(?:implement|write|define).+\bfollowing\s*:', heading, re.I):
+            flush()
+            aim_list = section == 'Aim'
+            continue
+        if re.match(r'^(?:post[- ]?experiments?(?:al)?|post[- ]?lab|after[- ]?lab)\b', heading, re.I):
+            flush()
+            section = 'Post-lab'
+            post_lab = True
+            aim_list = False
+            continue
+        if re.fullmatch(r'(?:questions?(?:\s*/\s*programs?)?|extended\s+lab\s+work\s*\(questions?\s*/\s*programs?\)|programming\s+(?:questions?|exercises?)|programs?)\s*:?', heading, re.I):
+            flush()
+            section = 'Post-lab programs' if post_lab else 'Programs'
+            continue
+        if re.match(r'^(?:laboratory\s+exercise|practical\s+exercises?)\b', heading, re.I):
+            flush()
+            section = 'Laboratory exercise'
+            aim_list = False
+            continue
+        if re.match(r'^(?:prerequisites?|objectives?|outcomes?|requirements?|pre[- ]?experiment|(?:extended\s+)?theory|procedure|results?|observations?|conclusions?|references?|program\s+(?:code|output))\b', heading, re.I):
+            if section == 'Aim' and current is None and not items and aim_index is not None:
+                aim = re.sub(r'^aim\s*:\s*', '', lines[aim_index].strip(), flags=re.I)
+                if is_actionable_lab_question(aim, language):
+                    current = (aim_index, aim_index)
+            flush()
+            section = 'Excluded'
+            aim_list = False
+            continue
+        allowed = aim_list or section in {'Post-lab programs', 'Programs', 'Laboratory exercise'}
+        if not allowed:
+            continue
+        actionable = is_actionable_lab_question(heading, language) or model_labelled_task(heading, language)
+        # A list under "define functions for the following" can name an
+        # algorithm without repeating the shared action verb.
+        named_topic = aim_list and bool(re.search(r'\b(?:algorithm|search|sort|function)\b', heading, re.I))
+        new_program = bool(prefix.match(line) or re.match(r'^(?:write|create|develop|implement)\s+(?:a\s+|an\s+)?(?:\w+\s+)?(?:program|script|function)\b', heading, re.I)
+                           or (aim_list and re.match(r'^(?:if\b|print\s+pattern\b)', heading, re.I)))
+        if (actionable or named_topic) and (current is None or new_program):
+            if re.search(r'\b(?:given aim|own comments|neat indentation)\b', heading, re.I):
+                continue
+            flush()
+            current = (index, index)
+        elif current:
+            current = (current[0], index)
+    flush()
+    return items if len(items) > 1 else []
 
 
 _VIVA_SECTION_HEAD = re.compile(

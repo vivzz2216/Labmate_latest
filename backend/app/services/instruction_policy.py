@@ -57,7 +57,7 @@ def parse_instruction_preferences(raw: str | None) -> InstructionPreferences:
     # does not.
     placement = re.compile(
         r"\b(?:paste(?:d)?|put|place|insert|attach|add|include|show|screenshots?)\b.{0,60}?\b(?:under|below|beneath|after|next\s+to)\s+"
-        r"(?:the\s+|each\s+|its\s+|their\s+|every\s+)?(?:own\s+|corresponding\s+|respective\s+|relevant\s+|matching\s+)?"
+        r"(?:the\s+|that\s+|this\s+|each\s+|its\s+|their\s+|every\s+)?(?:own\s+|corresponding\s+|respective\s+|relevant\s+|matching\s+)?"
         r"(?:questions?|experiments?|programs?|practicals?|exercises?|outputs?|tasks?)\b"
     )
     paste_under = any(

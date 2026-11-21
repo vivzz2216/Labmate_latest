@@ -354,6 +354,9 @@
     .idle-workspace .win-body, .idle-workspace .win-body-inner { overflow: visible; }
     .idle-workspace .win-body { min-height: 165px; }
     .idle-workspace .shell-window .win-body { min-height: 270px; }
+    {% if compact_report %}
+    .idle-workspace .shell-window .win-body { min-height: 0; }
+    {% endif %}
     .shell-input { color: #000000; white-space: pre-wrap; }
     .shell-stdout, .shell-stderr { display: inline; white-space: pre-wrap; }
   </style>
