@@ -847,7 +847,7 @@
    STREAMLINED OVERVIEW HEADER
    ======================================================== */
 .welcomeCard {
-  padding: 20px 24px;
+  padding: 10px 16px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -864,7 +864,7 @@
 .welcomeCopy {
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: 3px;
   min-width: 0;
   flex: 1;
 }
@@ -872,7 +872,7 @@
 .welcomeTitleRow {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
@@ -880,10 +880,10 @@
   margin: 0;
   font-family: var(--font-heading, -apple-system, sans-serif);
   color: var(--text-heading);
-  font-size: clamp(20px, 1.8vw, 26px);
-  font-weight: 650;
-  letter-spacing: -0.035em;
-  line-height: 1.15;
+  font-size: 15.5px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
 }
 
 .welcomeCredit {
@@ -893,18 +893,18 @@
 
 .welcomeCredit :global(p) {
   margin: 0;
-  padding: 5px 10px;
+  padding: 2px 8px;
   border-radius: 9999px;
   background: var(--surface-elevated);
   border: 1px solid var(--panel-header-border);
-  font-size: 12px;
-  font-weight: 550;
+  font-size: 11px;
+  font-weight: 500;
   color: var(--text-muted);
   line-height: 1.35;
 }
 
 .welcomeCredit :global(a) {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--link-color);
   text-decoration: none;
@@ -913,8 +913,8 @@
 .welcomeCopy > p {
   margin: 0;
   color: var(--text-muted);
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: 12px;
+  line-height: 1.45;
   max-width: 620px;
 }
 
@@ -1889,7 +1889,7 @@
     width: 100%;
   }
   .welcomeCopy h2 {
-    font-size: 21px;
+    font-size: 15px;
   }
   .welcomeCopy > p {
     max-width: 100%;
@@ -2085,10 +2085,10 @@
     gap: 12px;
   }
   .welcomeCopy h2 {
-    font-size: 20px;
+    font-size: 14.5px;
   }
   .welcomeCopy > p {
-    font-size: 12px;
+    font-size: 11.5px;
   }
   .primaryButton,
   .secondaryButton {
