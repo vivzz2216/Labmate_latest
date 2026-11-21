@@ -125,6 +125,9 @@ export function ChartContainer({
     return q ? vals.filter((v) => v.toLowerCase().includes(q)) : vals;
   }, [visual.type, allRowsForTable, sliceColName, slicerSearch]);
 
+  // What CALCULATE may widen to: the table after the report filters and slicers, and the whole table.
+  const measureScope = useMemo(() => ({ scope: scopedRows, all: allRowsForTable }), [scopedRows, allRowsForTable]);
+
   const grouped = useMemo(
     () =>
       aggregateByDimension(
@@ -141,9 +144,10 @@ export function ChartContainer({
           measures: tableMeasures,
           columns,
           palette: themePalette,
+          scope: measureScope,
         },
       ),
-    [scopedRows, visual, tableMeasures, columns, themePalette],
+    [scopedRows, visual, tableMeasures, columns, themePalette, measureScope],
   );
 
   // ---------- TEXT BOX VISUAL ----------
@@ -296,7 +300,7 @@ export function ChartContainer({
     const meta = columns.find((c) => c.name === field);
     const measureMeta = tableMeasures.find((m) => m.name === field);
     const agg = visual.perFieldAggregations?.[field] || visual.aggregation;
-    const val = aggregateKpi(scopedRows, field, agg, tableMeasures, columns);
+    const val = aggregateKpi(scopedRows, field, agg, tableMeasures, columns, measureScope);
     return (
       <MetricCard
         value={val}
@@ -320,6 +324,7 @@ export function ChartContainer({
       visual.aggregation,
       tableMeasures,
       columns,
+      measureScope,
     );
     return (
       <MatrixVisual

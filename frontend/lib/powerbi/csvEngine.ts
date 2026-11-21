@@ -1,4 +1,5 @@
 import { evaluateCalculatedColumn, evaluateMeasure } from "./formulaEngine.ts";
+import type { MeasureScope } from "./formulaEngine.ts";
 import { POWERBI_SERIES_PALETTE } from "./palette.ts";
 import type {
   AggregationFn,
@@ -507,12 +508,13 @@ export function aggregateKpi(
   aggregation: AggregationFn = "sum",
   measures?: MeasureDef[],
   columns?: ColumnMeta[],
+  scope?: MeasureScope,
 ): number {
   if (!field) return 0;
   if (measures && measures.length > 0) {
     const matched = measures.find((m) => m.name === field);
     if (matched) {
-      return evaluateMeasure(matched.formula, rows, columns || [], measures).value;
+      return evaluateMeasure(matched.formula, rows, columns || [], measures, [], scope).value;
     }
   }
   if (rows.length === 0) return 0;
@@ -542,6 +544,13 @@ export interface AggregateOptions {
   measures?: MeasureDef[];
   columns?: ColumnMeta[];
   palette?: readonly string[];
+  /** Rows CALCULATE may widen to (see MeasureScope); without it a measure only sees the cell's own rows. */
+  scope?: MeasureScope;
+}
+
+/** The scope CALCULATE sees for a cell defined by these columns. */
+function scopeFor(scope: MeasureScope | undefined, groupBy: (string | undefined)[]): MeasureScope | undefined {
+  return scope ? { ...scope, groupBy: groupBy.filter((g): g is string => Boolean(g)) } : undefined;
 }
 
 export function aggregateByDimension(
@@ -587,7 +596,7 @@ export function aggregateByDimension(
       else legendBuckets.set(lv, [rows[i]]);
     }
     Array.from(legendBuckets.entries()).forEach(([lv, lRows]) => {
-      legendTotals.set(lv, aggregateKpi(lRows, metricField, effAgg, options.measures, options.columns));
+      legendTotals.set(lv, aggregateKpi(lRows, metricField, effAgg, options.measures, options.columns, scopeFor(options.scope, [options.legendCol])));
     });
 
     const sortedLegendKeys = Array.from(legendTotals.entries())
@@ -620,7 +629,7 @@ export function aggregateByDimension(
         const sk = finalSeriesKeys[s];
         const subRows = subMap.get(sk) || [];
         const val = subRows.length
-          ? aggregateKpi(subRows, metricField, effAgg, options.measures, options.columns)
+          ? aggregateKpi(subRows, metricField, effAgg, options.measures, options.columns, scopeFor(options.scope, [xAxis, options.legendCol]))
           : 0;
         values[sk] = val;
         total += val;
@@ -652,7 +661,7 @@ export function aggregateByDimension(
       const f = fields[i];
       const baseAgg = options.perFieldAggregations?.[f] || aggregation;
       const effAgg = isRateOrPercentageColumn(f) && baseAgg === "sum" ? "average" : baseAgg;
-      const val = aggregateKpi(groupRows, f, effAgg, options.measures, options.columns);
+      const val = aggregateKpi(groupRows, f, effAgg, options.measures, options.columns, scopeFor(options.scope, [xAxis]));
       values[f] = val;
       total += val;
     }
@@ -712,6 +721,7 @@ export function buildPivotMatrix(
   aggregation: AggregationFn = "sum",
   measures?: MeasureDef[],
   columns?: ColumnMeta[],
+  scope?: MeasureScope,
 ): PivotMatrixResult {
   const effRowField = rowField || columns?.find((c) => !c.isNumeric)?.name;
   const effValField = valueField || columns?.find((c) => c.isNumeric)?.name;
@@ -774,6 +784,7 @@ export function buildPivotMatrix(
       effAgg,
       measures,
       columns,
+      scopeFor(scope, [effRowField]),
     );
   });
 
@@ -785,6 +796,7 @@ export function buildPivotMatrix(
       effAgg,
       measures,
       columns,
+      scopeFor(scope, [colField]),
     );
   });
 
@@ -804,12 +816,12 @@ export function buildPivotMatrix(
       const ck = colHeaders[c];
       const cellRows = rMap?.get(ck) || [];
       cells[rk][ck] = cellRows.length
-        ? aggregateKpi(cellRows, effValField, effAgg, measures, columns)
+        ? aggregateKpi(cellRows, effValField, effAgg, measures, columns, scopeFor(scope, [effRowField, colField]))
         : 0;
     }
   }
 
-  const grandTotal = aggregateKpi(rows, effValField, effAgg, measures, columns);
+  const grandTotal = aggregateKpi(rows, effValField, effAgg, measures, columns, scopeFor(scope, []));
   return { rowHeaders, colHeaders, cells, rowTotals, colTotals, grandTotal };
 }
 

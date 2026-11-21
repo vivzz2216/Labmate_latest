@@ -58,6 +58,7 @@ import { RelationshipsModal } from "./RelationshipsModal";
 import { Sidebar } from "./Sidebar";
 import { Tabs } from "./Tabs";
 import { TransformDataModal } from "./TransformDataModal";
+import { applyTableStep } from "@/lib/powerbi/tableSteps";
 import { useStudioHook } from "../netlab/studioHook";
 import { powerBiPractical, type PowerBiPracticalFrame } from "@/lib/powerbi/practicals";
 import { VisualizationsPane } from "./VisualizationsPane";
@@ -1939,6 +1940,14 @@ export function PowerBiWorkspace({ capture = false }: { capture?: boolean }) {
         onCleanMissing={(tableId, colName, strat) =>
           mutateTable(tableId, (t) => handleMissingValues(t, colName, strat))
         }
+        onApplyStep={(tableId, step) => {
+          const target = tables.find((t) => (t.id || t.name) === tableId);
+          if (!target) return "Table not found";
+          const outcome = applyTableStep(target, step);
+          if (outcome.error) return outcome.error;
+          mutateTable(tableId, () => outcome.table);
+          return undefined;
+        }}
       />
 
       <FormulaModal

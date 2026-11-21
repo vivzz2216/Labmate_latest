@@ -30,6 +30,8 @@ const MEASURE_TEMPLATES = [
   { label: "DIVIDE", snippet: "DIVIDE(SUM([profit]), SUM([revenue]), 0)" },
   { label: "COUNTROWS", snippet: "COUNTROWS()" },
   { label: "DISTINCTCOUNT", snippet: "DISTINCTCOUNT([platform])" },
+  { label: "CALCULATE", snippet: 'CALCULATE(SUM([revenue]), [platform] = "Instagram")' },
+  { label: "SUMX", snippet: "SUMX(Sales, [price] * [quantity])" },
 ];
 
 /** Guided Calculated Column / Measure builder dialog with live validation & column chips. */

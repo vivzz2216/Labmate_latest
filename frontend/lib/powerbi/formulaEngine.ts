@@ -165,6 +165,11 @@ function tokenize(formula: string): Token[] {
       while (j < n && /[A-Za-z0-9_.]/.test(formula[j])) j++;
       const word = formula.slice(i, j);
       const upper = word.toUpperCase();
+      if (formula[j] === "[") {
+        // Sales[Region]: the table name only qualifies the column, which is looked up in the table the measure belongs to.
+        i = j;
+        continue;
+      }
       if (upper === "TRUE" || upper === "FALSE") {
         tokens.push({ kind: "bool", value: upper, pos: i });
       } else if (KEYWORDS_LOGICAL.has(upper)) {
@@ -576,14 +581,80 @@ export function evaluateCalculatedColumn(
 }
 
 const AGG_FNS = new Set(["SUM", "AVERAGE", "AVG", "COUNT", "COUNTROWS", "DISTINCTCOUNT", "MIN", "MAX"]);
+const ITERATOR_FNS = new Set(["SUMX", "AVERAGEX", "MINX", "MAXX", "COUNTX"]);
+
+/**
+ * The rows a measure sees. `rows` is the filter context of the cell being drawn (a visual's category, a card's whole data).
+ * `scope` is the table after the report, page, slicer and cross filters but without the visual's own grouping, and `all` is the
+ * whole table: CALCULATE needs them to replace or remove filters, as DAX does.
+ */
+export interface MeasureScope {
+  scope: DataRow[];
+  all: DataRow[];
+  /** The columns that define the cell being drawn (a visual's category, legend, matrix row and column). Without them the cell is
+   *  taken to be the whole scope. */
+  groupBy?: string[];
+}
+
+interface MeasureCtx {
+  rows: DataRow[];
+  sc: MeasureScope;
+}
+
+function collectFields(node: ExprNode, out: Set<string>) {
+  if (node.kind === "field") out.add(node.name);
+  else if (node.kind === "unary") collectFields(node.arg, out);
+  else if (node.kind === "binary") {
+    collectFields(node.left, out);
+    collectFields(node.right, out);
+  } else if (node.kind === "call") node.args.forEach((a) => collectFields(a, out));
+}
+
+/** The rows a CALCULATE filter on `replaced` columns starts from: the context with the filters on those columns removed.
+ *  The context is rebuilt from the columns that hold a single value in it (a visual's category); when it cannot be rebuilt
+ *  that way the current rows are kept, so slicer selections are never lost. */
+function widenContext(ctx: MeasureCtx, replaced: Set<string>, columns: ColumnMeta[]): DataRow[] {
+  const base = ctx.sc.scope;
+  const groupBy = (ctx.sc.groupBy ?? []).map((g) => findColumnCaseInsensitive(g, columns)).filter((g): g is string => Boolean(g));
+  if (groupBy.length === 0 || ctx.rows.length === 0) return ctx.rows.length === base.length || groupBy.length === 0 ? base : ctx.rows;
+  // The cell is fixed by its grouping columns. Dropping the ones CALCULATE names (and keeping the rest) gives the rows it starts from.
+  const kept = groupBy.filter((c) => !replaced.has(c));
+  const row = ctx.rows[0];
+  return base.filter((r) => kept.every((c) => String(r[c]) === String(row[c])));
+}
+
+function isTableReference(node: ExprNode, columns: ColumnMeta[], measures: MeasureDef[]): boolean {
+  return node.kind === "field" && !findColumnCaseInsensitive(node.name, columns) && !findMeasureCaseInsensitive(node.name, measures);
+}
+
+/** A table expression: the table name, FILTER(table, condition), ALL(...) or ALLSELECTED(...). */
+function evalTable(node: ExprNode, ctx: MeasureCtx, columns: ColumnMeta[], measures: MeasureDef[]): DataRow[] {
+  if (isTableReference(node, columns, measures)) return ctx.rows;
+  if (node.kind === "call") {
+    if (node.fn === "ALL" || node.fn === "REMOVEFILTERS") {
+      const arg = node.args[0];
+      if (arg && !isTableReference(arg, columns, measures)) return widenContext(ctx, new Set([findColumnCaseInsensitive((arg as { name: string }).name, columns) ?? ""]), columns);
+      return ctx.sc.all;
+    }
+    if (node.fn === "ALLSELECTED") return ctx.sc.scope;
+    if (node.fn === "FILTER") {
+      if (node.args.length !== 2) throw new Error("FILTER takes a table and a condition: FILTER(Table, [Column] > 10)");
+      const base = evalTable(node.args[0], ctx, columns, measures);
+      return base.filter((row) => toBool(evalRowAst(node.args[1], row, columns)));
+    }
+  }
+  throw new Error("A table is expected here: the table name, FILTER(...), ALL(...) or ALLSELECTED(...).");
+}
 
 function evalMeasureAst(
   node: ExprNode,
-  rows: DataRow[],
+  ctx: MeasureCtx,
   columns: ColumnMeta[],
   measures: MeasureDef[],
   visited: string[],
 ): Scalar {
+  const rows = ctx.rows;
+  const again = (n: ExprNode, c: MeasureCtx = ctx) => evalMeasureAst(n, c, columns, measures, visited);
   switch (node.kind) {
     case "literal":
       return node.value;
@@ -594,20 +665,14 @@ function evalMeasureAst(
           throw new Error(`Circular reference detected in measure '[${measure.name}]'`);
         }
         const nestedAst = parseFormulaAst(measure.formula);
-        return evalMeasureAst(
-          nestedAst,
-          rows,
-          columns,
-          measures,
-          [...visited, measure.name.toLowerCase()],
-        );
+        return evalMeasureAst(nestedAst, ctx, columns, measures, [...visited, measure.name.toLowerCase()]);
       }
       throw new Error(
         `Column '[${node.name}]' cannot be referenced without an aggregation like SUM([${node.name}]) inside a measure.`,
       );
     }
     case "unary": {
-      const v = evalMeasureAst(node.arg, rows, columns, measures, visited);
+      const v = again(node.arg);
       if (node.op === "NOT") return !toBool(v);
       const n = toNum(v);
       if (n === null) return null;
@@ -615,8 +680,8 @@ function evalMeasureAst(
     }
     case "binary": {
       const op = node.op;
-      const lv = evalMeasureAst(node.left, rows, columns, measures, visited);
-      const rv = evalMeasureAst(node.right, rows, columns, measures, visited);
+      const lv = again(node.left);
+      const rv = again(node.right);
       if (op === "&&" || op === "AND") return toBool(lv) && toBool(rv);
       if (op === "||" || op === "OR") return toBool(lv) || toBool(rv);
       if (op === "=" || op === "==") return compareScalars(lv, rv) === 0;
@@ -639,7 +704,45 @@ function evalMeasureAst(
     case "call": {
       const fn = node.fn;
       if (fn === "COUNTROWS") {
-        return rows.length;
+        if (node.args.length === 0) return rows.length;
+        return evalTable(node.args[0], ctx, columns, measures).length;
+      }
+      if (fn === "CALCULATE") {
+        if (node.args.length < 1) throw new Error("CALCULATE needs an expression: CALCULATE(SUM([Sales]), [Region] = \"North\")");
+        let scoped = rows;
+        const conditions: ExprNode[] = [];
+        for (const filter of node.args.slice(1)) {
+          const isTableFn = filter.kind === "call" && (filter.fn === "ALL" || filter.fn === "REMOVEFILTERS" || filter.fn === "ALLSELECTED" || filter.fn === "FILTER");
+          if (isTableFn) scoped = evalTable(filter, { rows: scoped, sc: ctx.sc }, columns, measures);
+          else conditions.push(filter);
+        }
+        if (conditions.length > 0) {
+          // Column conditions replace any filter already on the columns they name (all of them together), then must all hold.
+          const replaced = new Set<string>();
+          conditions.forEach((condition) => {
+            const used = new Set<string>();
+            collectFields(condition, used);
+            used.forEach((name) => {
+              const col = findColumnCaseInsensitive(name, columns);
+              if (col) replaced.add(col);
+            });
+          });
+          const start = scoped === rows && replaced.size > 0 ? widenContext({ rows, sc: ctx.sc }, replaced, columns) : scoped;
+          scoped = start.filter((row) => conditions.every((condition) => toBool(evalRowAst(condition, row, columns))));
+        }
+        return evalMeasureAst(node.args[0], { rows: scoped, sc: ctx.sc }, columns, measures, visited);
+      }
+      if (ITERATOR_FNS.has(fn)) {
+        if (node.args.length !== 2) throw new Error(`${fn} takes a table and an expression: ${fn}(Table, [Price] * [Qty])`);
+        const tableRows = evalTable(node.args[0], ctx, columns, measures);
+        const picked: Scalar[] = tableRows.map((row) => evalRowAst(node.args[1], row, columns));
+        if (fn === "COUNTX") return picked.filter((v) => v !== null && v !== undefined && v !== "").length;
+        const nums = picked.map(toNum).filter((n): n is number => n !== null);
+        if (nums.length === 0) return 0;
+        if (fn === "SUMX") return nums.reduce((a, b) => a + b, 0);
+        if (fn === "AVERAGEX") return nums.reduce((a, b) => a + b, 0) / nums.length;
+        if (fn === "MINX") return Math.min(...nums);
+        return Math.max(...nums);
       }
       if (AGG_FNS.has(fn)) {
         if (node.args.length !== 1) {
@@ -678,28 +781,36 @@ function evalMeasureAst(
 
       if (fn === "DIVIDE") {
         if (node.args.length < 2) throw new Error("DIVIDE requires 2 or 3 arguments");
-        const num = toNum(evalMeasureAst(node.args[0], rows, columns, measures, visited));
-        const den = toNum(evalMeasureAst(node.args[1], rows, columns, measures, visited));
-        const alt = node.args[2] ? toNum(evalMeasureAst(node.args[2], rows, columns, measures, visited)) ?? 0 : 0;
+        const num = toNum(again(node.args[0]));
+        const den = toNum(again(node.args[1]));
+        const alt = node.args[2] ? toNum(again(node.args[2])) ?? 0 : 0;
         if (num === null || den === null || den === 0) return alt;
         return num / den;
       }
       if (fn === "IF") {
         if (node.args.length < 2) throw new Error("IF requires at least 2 arguments");
-        const cond = toBool(evalMeasureAst(node.args[0], rows, columns, measures, visited));
-        if (cond) return evalMeasureAst(node.args[1], rows, columns, measures, visited);
-        return node.args[2] ? evalMeasureAst(node.args[2], rows, columns, measures, visited) : 0;
+        const cond = toBool(again(node.args[0]));
+        if (cond) return again(node.args[1]);
+        return node.args[2] ? again(node.args[2]) : 0;
       }
       if (fn === "ROUND") {
-        const v = toNum(evalMeasureAst(node.args[0], rows, columns, measures, visited));
-        const d = node.args[1] ? toNum(evalMeasureAst(node.args[1], rows, columns, measures, visited)) ?? 0 : 0;
+        const v = toNum(again(node.args[0]));
+        const d = node.args[1] ? toNum(again(node.args[1])) ?? 0 : 0;
         if (v === null) return 0;
         const factor = Math.pow(10, Math.round(d));
         return Math.round(v * factor) / factor;
       }
       if (fn === "ABS") {
-        const v = toNum(evalMeasureAst(node.args[0], rows, columns, measures, visited));
+        const v = toNum(again(node.args[0]));
         return v === null ? 0 : Math.abs(v);
+      }
+      if (fn === "SQRT") {
+        const v = toNum(again(node.args[0]));
+        return v === null || v < 0 ? 0 : Math.sqrt(v);
+      }
+      if (fn === "ISBLANK") {
+        const v = again(node.args[0]);
+        return v === null || v === undefined || v === "";
       }
       throw new Error(`Unsupported measure function '${fn}'.`);
     }
@@ -712,10 +823,11 @@ export function evaluateMeasure(
   columns: ColumnMeta[],
   measures: MeasureDef[] = [],
   visited: string[] = [],
+  scope?: MeasureScope,
 ): { value: number; error?: string } {
   try {
     const ast = parseFormulaAst(formula);
-    const res = evalMeasureAst(ast, rows, columns, measures, visited);
+    const res = evalMeasureAst(ast, { rows, sc: scope ?? { scope: rows, all: rows } }, columns, measures, visited);
     const num = toNum(res);
     return { value: num ?? 0 };
   } catch (err) {

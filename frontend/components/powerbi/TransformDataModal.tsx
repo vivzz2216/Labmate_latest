@@ -3,6 +3,8 @@
 import React, { useState } from "react";
 import { Eraser, Trash2 } from "lucide-react";
 import type { ColumnType, DatasetModel } from "@/lib/powerbi/types";
+import { FILTER_OPS, describeTableStep } from "@/lib/powerbi/tableSteps";
+import type { FilterOp, TableStep } from "@/lib/powerbi/tableSteps";
 import { DataTable } from "./DataTable";
 import { Modal } from "./Modal";
 
@@ -20,6 +22,8 @@ interface TransformDataModalProps {
     colName: string,
     strategy: "drop" | "fillZero" | "fillAverage" | "fillText",
   ) => void;
+  /** Filter, sort, remove duplicates, replace values, keep top rows. Returns the reason when the step cannot be applied. */
+  onApplyStep?: (tableId: string, step: TableStep) => string | undefined;
 }
 
 /** Simplified Power Query Transform Data Editor: rename columns, set types, clean missing values & preview. */
@@ -33,6 +37,7 @@ export function TransformDataModal({
   onChangeColumnType,
   onRemoveColumn,
   onCleanMissing,
+  onApplyStep,
 }: TransformDataModalProps) {
   const [selectedTableId, setSelectedTableId] = useState(activeTableId);
   const [appliedSteps, setAppliedSteps] = useState<string[]>(["Source", "Changed Type"]);
@@ -43,6 +48,31 @@ export function TransformDataModal({
   const tableId = table ? table.id || table.name : "";
 
   const pushStep = (desc: string) => setAppliedSteps((prev) => [...prev, desc]);
+
+  // Row transformations
+  const [stepKind, setStepKind] = useState<TableStep["kind"]>("filterRows");
+  const [stepColumn, setStepColumn] = useState("");
+  const [stepOp, setStepOp] = useState<FilterOp>("equals");
+  const [stepValue, setStepValue] = useState("");
+  const [stepValue2, setStepValue2] = useState("");
+  const [stepDesc, setStepDesc] = useState(false);
+  const [stepError, setStepError] = useState("");
+  const stepColumnName = table?.columns.some((c) => c.name === stepColumn) ? stepColumn : table?.columns[0]?.name || "";
+
+  const applyRowStep = () => {
+    if (!onApplyStep || !table) return;
+    let step: TableStep;
+    if (stepKind === "filterRows") step = { kind: "filterRows", column: stepColumnName, op: stepOp, value: stepValue };
+    else if (stepKind === "sortRows") step = { kind: "sortRows", column: stepColumnName, desc: stepDesc };
+    else if (stepKind === "replaceValues") step = { kind: "replaceValues", column: stepColumnName, find: stepValue, replace: stepValue2 };
+    else if (stepKind === "keepTopRows") step = { kind: "keepTopRows", count: Number(stepValue) };
+    else step = { kind: "removeDuplicates" };
+    const problem = onApplyStep(tableId, step);
+    setStepError(problem ?? "");
+    if (!problem) pushStep(describeTableStep(step));
+  };
+  const needsColumn = stepKind !== "removeDuplicates" && stepKind !== "keepTopRows";
+  const fieldStyle: React.CSSProperties = { height: 26, padding: "0 6px", border: "1px solid #c8c6c4", borderRadius: 2, fontSize: 11.5, background: "#ffffff" };
 
   return (
     <Modal
@@ -300,6 +330,71 @@ export function TransformDataModal({
               </div>
             </div>
           </div>
+
+          {onApplyStep && !recordedSteps ? (
+            <div
+              role="group"
+              aria-label="Transform rows"
+              style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 6, padding: 8, border: "1px solid #e1dfdd", borderRadius: 3, background: "#faf9f8" }}
+            >
+              <span style={{ fontSize: 11, fontWeight: 700, color: "#252423" }}>TRANSFORM ROWS</span>
+              <select aria-label="Transform step" value={stepKind} onChange={(e) => setStepKind(e.target.value as TableStep["kind"])} style={fieldStyle}>
+                <option value="filterRows">Filter rows</option>
+                <option value="sortRows">Sort rows</option>
+                <option value="removeDuplicates">Remove duplicates</option>
+                <option value="replaceValues">Replace values</option>
+                <option value="keepTopRows">Keep top rows</option>
+              </select>
+              {needsColumn ? (
+                <select aria-label="Step column" value={stepColumnName} onChange={(e) => setStepColumn(e.target.value)} style={fieldStyle}>
+                  {table.columns.map((c) => (
+                    <option key={c.name} value={c.name}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              ) : null}
+              {stepKind === "filterRows" ? (
+                <select aria-label="Filter condition" value={stepOp} onChange={(e) => setStepOp(e.target.value as FilterOp)} style={fieldStyle}>
+                  {FILTER_OPS.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              ) : null}
+              {stepKind === "sortRows" ? (
+                <select aria-label="Sort direction" value={stepDesc ? "desc" : "asc"} onChange={(e) => setStepDesc(e.target.value === "desc")} style={fieldStyle}>
+                  <option value="asc">Ascending</option>
+                  <option value="desc">Descending</option>
+                </select>
+              ) : null}
+              {(stepKind === "filterRows" && stepOp !== "notBlank") || stepKind === "replaceValues" || stepKind === "keepTopRows" ? (
+                <input
+                  aria-label={stepKind === "replaceValues" ? "Value to find" : stepKind === "keepTopRows" ? "Number of rows" : "Filter value"}
+                  value={stepValue}
+                  onChange={(e) => setStepValue(e.target.value)}
+                  placeholder={stepKind === "replaceValues" ? "Find" : stepKind === "keepTopRows" ? "Rows" : "Value"}
+                  style={{ ...fieldStyle, width: 110 }}
+                />
+              ) : null}
+              {stepKind === "replaceValues" ? (
+                <input aria-label="Replace with" value={stepValue2} onChange={(e) => setStepValue2(e.target.value)} placeholder="Replace with" style={{ ...fieldStyle, width: 110 }} />
+              ) : null}
+              <button
+                type="button"
+                onClick={applyRowStep}
+                style={{ height: 26, padding: "0 12px", border: "1px solid #117865", background: "#117865", color: "#ffffff", fontWeight: 600, borderRadius: 2, cursor: "pointer", fontSize: 11.5 }}
+              >
+                Apply step
+              </button>
+              {stepError ? (
+                <span role="alert" style={{ fontSize: 11.5, color: "#a4262c" }}>
+                  {stepError}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
 
           <DataTable columns={table.columns} rows={table.rows.slice(0, 10)} compact pageSize={10} />
         </div>
