@@ -1,17 +1,18 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Play } from "lucide-react";
-import { aggregateKpi, formatPowerBiNumber } from "@/lib/powerbi/csvEngine";
+import { DaxError, runQuery, type DaxResult } from "@/lib/powerbi/daxEngine";
 import type { DatasetModel } from "@/lib/powerbi/types";
 
 interface DaxTmdlViewProps {
   mode: "dax" | "tmdl";
   dataset: DatasetModel;
+  measures?: Record<string, string>;
 }
 
 /** Authentic read/run semantic preview for Power BI Desktop's DAX query view & TMDL view. */
-export function DaxTmdlView({ mode, dataset }: DaxTmdlViewProps) {
+export function DaxTmdlView({ mode, dataset, measures = {} }: DaxTmdlViewProps) {
   const numericCols = dataset.columns.filter((c) => c.isNumeric).slice(0, 4);
   const dimCol = dataset.columns.find((c) => !c.isNumeric)?.name || dataset.columns[0]?.name || "Category";
 
@@ -33,7 +34,36 @@ export function DaxTmdlView({ mode, dataset }: DaxTmdlViewProps) {
   }, [dataset.columns, dataset.fileName, dataset.name]);
 
   const [queryText, setQueryText] = useState(generatedDax);
-  const [ranCount, setRanCount] = useState(1);
+  const [ranCount, setRanCount] = useState(0);
+  const [result, setResult] = useState<DaxResult | null>(null);
+  const [queryError, setQueryError] = useState<string | null>(null);
+  const [elapsedMs, setElapsedMs] = useState(0);
+
+  const run = useCallback(() => {
+    const started = performance.now();
+    try {
+      const out = runQuery(queryText, {
+        table: dataset.name,
+        columns: dataset.columns.map((c) => c.name),
+        rows: dataset.rows,
+        measures,
+      });
+      setResult(out);
+      setQueryError(null);
+    } catch (error) {
+      setResult(null);
+      setQueryError(error instanceof DaxError ? error.message : "The query could not be evaluated.");
+    }
+    setElapsedMs(Math.round(performance.now() - started));
+    setRanCount((c) => c + 1);
+  }, [queryText, dataset, measures]);
+
+  // Run the generated query once when the view opens, as Power BI Desktop does.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => run(), []);
+
+  const show = (value: number | string | null) =>
+    value === null ? "" : typeof value === "number" ? (Number.isInteger(value) ? value.toLocaleString() : value.toLocaleString(undefined, { maximumFractionDigits: 4 })) : value;
 
   if (mode === "tmdl") {
     return (
@@ -100,7 +130,7 @@ export function DaxTmdlView({ mode, dataset }: DaxTmdlViewProps) {
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <button
             type="button"
-            onClick={() => setRanCount((c) => c + 1)}
+            onClick={run}
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -120,7 +150,7 @@ export function DaxTmdlView({ mode, dataset }: DaxTmdlViewProps) {
             <span>Run</span>
           </button>
           <span style={{ fontSize: 11.5, color: "#605e5c" }}>
-            Query 1 · Executed ({ranCount}) · {dataset.rows.length} source rows
+            Query 1 · {queryError ? "Error" : `Executed (${ranCount}) in ${elapsedMs} ms`} · {dataset.rows.length.toLocaleString()} source rows
           </span>
         </div>
       </div>
@@ -143,31 +173,37 @@ export function DaxTmdlView({ mode, dataset }: DaxTmdlViewProps) {
         }}
       />
 
-      <div style={{ flex: 1, overflow: "auto", padding: 12, background: "#fafafa" }}>
-        <div style={{ fontSize: 11.5, fontWeight: 600, marginBottom: 8, color: "#605e5c" }}>
-          Results preview
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
-          {numericCols.map((col) => {
-            const val = aggregateKpi(dataset.rows, col.name, "sum");
-            return (
-              <div
-                key={col.name}
-                style={{
-                  background: "#ffffff",
-                  border: "1px solid #e1dfdd",
-                  borderRadius: 4,
-                  padding: "10px 12px",
-                }}
-              >
-                <div style={{ fontSize: 11, color: "#605e5c" }}>Total {col.label}</div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: "#252423", marginTop: 4 }}>
-                  {formatPowerBiNumber(val, col.name)}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+      <div style={{ flex: 1, overflow: "auto", padding: 12, background: "#fafafa" }} aria-label="Results">
+        <div style={{ fontSize: 11.5, fontWeight: 600, marginBottom: 8, color: "#605e5c" }}>Results</div>
+        {queryError ? (
+          <div role="alert" style={{ color: "#a4262c", background: "#fde7e9", border: "1px solid #f1bbbc", padding: "8px 10px", fontSize: 12.5 }}>
+            {queryError}
+          </div>
+        ) : result ? (
+          <table style={{ borderCollapse: "collapse", background: "#ffffff", fontSize: 12.5, minWidth: 320 }}>
+            <thead>
+              <tr>
+                {result.columns.map((c) => (
+                  <th key={c} style={{ textAlign: "left", padding: "4px 10px", borderBottom: "1px solid #e1dfdd", background: "#f3f2f1", fontWeight: 600 }}>
+                    {c}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {result.rows.map((row, i) => (
+                <tr key={i}>
+                  {row.map((value, j) => (
+                    <td key={j} style={{ padding: "3px 10px", borderBottom: "1px solid #f3f2f1", textAlign: typeof value === "number" ? "right" : "left" }}>
+                      {show(value)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : null}
+        {result ? <div style={{ fontSize: 11, color: "#605e5c", marginTop: 6 }}>{result.rows.length} row{result.rows.length === 1 ? "" : "s"}</div> : null}
       </div>
     </div>
   );

@@ -70,6 +70,7 @@ export default function AdminDashboardPage() {
     <header className={styles.header}>
       <Link href="/" aria-label="LabMate home" className={styles.brand}><LabMateLogo theme="light" /></Link>
       <span className={styles.owner}><ShieldCheck size={16} /> Owner dashboard</span>
+      <Link href="/admin/community" className={styles.back}>Polls &amp; updates</Link>
       <Link href="/dashboard" className={styles.back}><ArrowLeft size={15} /> Student workspace</Link>
     </header>
     {checkingAccess ? <main className={styles.gate} aria-busy="true"><p>Checking your session…</p></main> : !allowed ?

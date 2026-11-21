@@ -5,6 +5,8 @@ export interface ColumnMeta {
   label: string;
   type: ColumnType;
   isNumeric: boolean;
+  /** A DAX measure created with New measure (not a column of the file). */
+  isMeasure?: boolean;
   uniqueCount: number;
   min?: number;
   max?: number;

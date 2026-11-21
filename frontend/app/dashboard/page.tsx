@@ -28,6 +28,7 @@ import DashboardShell, {
 } from "@/components/dashboard/DashboardShell";
 import { useAuth } from "@/contexts/BasicAuthContext";
 import CreditStatus from "@/components/billing/CreditStatus";
+import RateLabMate from "@/components/feedback/RateLabMate";
 import { apiService } from "@/lib/api";
 import { errorMessage, saveReport } from "@/lib/workflow";
 import styles from "./dashboard.module.css";
@@ -425,6 +426,16 @@ export default function DashboardPage() {
               ) : (
                 <ReportList reports={reports} />
               )}
+            </section>
+
+            <section className={styles.panel} aria-label="Rate LabMate">
+              <div className={styles.panelHeader}>
+                <div>
+                  <h2>Rate LabMate</h2>
+                  <p>Tell us what works and what does not</p>
+                </div>
+              </div>
+              <RateLabMate padded />
             </section>
           </aside>
         </div>

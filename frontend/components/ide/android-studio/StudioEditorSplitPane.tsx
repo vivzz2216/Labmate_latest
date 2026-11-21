@@ -2,6 +2,8 @@
 
 import React, { useState, useRef } from "react";
 import styles from "./androidStudio.module.css";
+import type { ScreenState } from "@/lib/ide/kotlin/android";
+import { EmulatorScreen } from "./EmulatorScreen";
 import {
   DesignSurfaceMode,
   EditorSplitMode,
@@ -44,6 +46,11 @@ interface StudioEditorSplitPaneProps {
   previewTree: PreviewWidgetNode;
   composeClickCount: number;
   onIncrementComposeCounter: () => void;
+  composePreview?: { screen: ScreenState | null; fn: string | null; message: string | null };
+  onPreviewClick?: (uid: string) => void;
+  onPreviewInput?: (uid: string, text: string) => void;
+  onPreviewToggle?: (uid: string, checked: boolean) => void;
+  onPreviewDialogButton?: (id: number) => void;
   onRunFromGutter: () => void;
   onDeployPreviewToDevice: () => void;
   problems: StudioProblem[];
@@ -230,6 +237,11 @@ export function StudioEditorSplitPane({
   previewTree,
   composeClickCount,
   onIncrementComposeCounter,
+  composePreview,
+  onPreviewClick,
+  onPreviewInput,
+  onPreviewToggle,
+  onPreviewDialogButton,
   onRunFromGutter,
   onDeployPreviewToDevice,
   problems,
@@ -799,79 +811,31 @@ export function StudioEditorSplitPane({
                   </div>
                 </div>
 
-                {/* Jetpack Compose @Preview Canvas */}
+                {/* Jetpack Compose @Preview canvas: the @Preview function is run by the same engine as the emulator */}
                 <div className={styles.composeCanvasArea}>
                   <div className={styles.previewCardFrame} style={{ width: 292 }}>
                     <div className={styles.previewCardTitle}>
-                      <span>GreetingPreview (@Preview)</span>
-                      <span style={{ color: "#3DDC84" }}>API 35 · Material3</span>
+                      <span>{composePreview && composePreview.fn ? `${composePreview.fn} (@Preview)` : "Preview"}</span>
+                      <span style={{ color: "#3DDC84" }}>LabMate preview</span>
                     </div>
-
-                    <div
-                      style={{
-                        borderRadius: 12,
-                        background: "#FEF7FF",
-                        color: "#1D1B20",
-                        padding: 18,
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 12,
-                        border: "1px solid #D0BCFF",
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          fontSize: 11,
-                          color: "#6650A4",
-                          fontWeight: 600,
-                        }}
-                      >
-                        <span>Scaffold · Surface</span>
-                        <span>Compose 1.7.5</span>
+                    {composePreview && composePreview.screen ? (
+                      <div style={{ height: 340, background: "#FFFBFE", borderRadius: 12, overflow: "hidden", border: "1px solid #D0BCFF", display: "flex", flexDirection: "column" }}>
+                        <EmulatorScreen
+                          screen={composePreview.screen}
+                          onClick={(uid) => interactivePreview && onPreviewClick && onPreviewClick(uid)}
+                          onInput={(uid, text) => interactivePreview && onPreviewInput && onPreviewInput(uid, text)}
+                          onToggle={(uid, checked) => interactivePreview && onPreviewToggle && onPreviewToggle(uid, checked)}
+                          onDialogButton={(id) => onPreviewDialogButton && onPreviewDialogButton(id)}
+                          onDismissCrash={() => (onIncrementComposeCounter ? onIncrementComposeCounter() : undefined)}
+                        />
                       </div>
-
-                      {(previewTree.children || []).map((node) =>
-                        node.type === "Button" ? (
-                          <button
-                            key={node.id}
-                            type="button"
-                            onClick={onIncrementComposeCounter}
-                            style={{
-                              padding: "9px 16px",
-                              borderRadius: 999,
-                              border: "none",
-                              background: "#6650A4",
-                              color: "#FFFFFF",
-                              fontWeight: 600,
-                              fontSize: 12.5,
-                              cursor: "pointer",
-                              alignSelf: "flex-start",
-                              boxShadow: "0 2px 6px rgba(102,80,164,0.35)",
-                            }}
-                          >
-                            {node.text}
-                          </button>
-                        ) : (
-                          <div
-                            key={node.id}
-                            style={{
-                              fontSize: 15,
-                              fontWeight: 600,
-                              color: "#1D1B20",
-                            }}
-                          >
-                            {node.text}
-                          </div>
-                        )
-                      )}
-
-                      <div style={{ fontSize: 11, color: "#625B71" }}>
-                        Recomposition count: {composeClickCount + 1} · Click button to test state
+                    ) : (
+                      <div style={{ padding: 16, fontSize: 12, lineHeight: 1.5, color: "#625B71", background: "#FEF7FF", borderRadius: 12, border: "1px solid #D0BCFF" }}>
+                        {composePreview && composePreview.message
+                          ? composePreview.message
+                          : "No @Preview function found. Add @Preview @Composable fun MyPreview() { ... } to see it here."}
                       </div>
-                    </div>
+                    )}
                   </div>
                 </div>
               </>

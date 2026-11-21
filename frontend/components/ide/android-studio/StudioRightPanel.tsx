@@ -7,6 +7,8 @@ import {
   StudioDeviceProfile,
   PreviewWidgetNode,
 } from "@/lib/ide/androidStudioEngine";
+import type { ScreenState } from "@/lib/ide/kotlin/android";
+import { EmulatorScreen } from "./EmulatorScreen";
 import {
   AndroidHeadIcon,
   RunningDevicesStripeIcon,
@@ -49,6 +51,12 @@ interface StudioRightPanelProps {
   previewTree: PreviewWidgetNode;
   activeAppRunning: boolean;
   onTriggerEmulatorInteraction: (message: string) => void;
+  screen?: ScreenState | null;
+  onEmuClick?: (uid: string) => void;
+  onEmuInput?: (uid: string, text: string) => void;
+  onEmuToggle?: (uid: string, checked: boolean) => void;
+  onEmuDialogButton?: (id: number) => void;
+  onEmuDismissCrash?: () => void;
   gradleTasks: GradleTaskItem[];
   onExecuteGradleTask: (taskName: string) => void;
   onSyncGradle: () => void;
@@ -65,6 +73,12 @@ export const StudioRightPanel: React.FC<StudioRightPanelProps> = ({
   previewTree,
   activeAppRunning,
   onTriggerEmulatorInteraction,
+  screen,
+  onEmuClick,
+  onEmuInput,
+  onEmuToggle,
+  onEmuDialogButton,
+  onEmuDismissCrash,
   gradleTasks,
   onExecuteGradleTask,
   onSyncGradle,
@@ -223,7 +237,7 @@ export const StudioRightPanel: React.FC<StudioRightPanelProps> = ({
               title="Take Screenshot"
               onClick={() =>
                 onTriggerEmulatorInteraction(
-                  "Saved screenshot to Screenshot_Pixel_8_Pro_API_35.png"
+                  "LabMate cannot save emulator screenshots: use your operating system's screenshot tool"
                 )
               }
             >
@@ -245,46 +259,21 @@ export const StudioRightPanel: React.FC<StudioRightPanelProps> = ({
                 <span>9:41</span>
                 <span>5G 100%</span>
               </div>
-              <div className={styles.emulatorScreenContent}>
-                <div className={styles.emulatorAppBar}>
-                  <AndroidHeadIcon size={16} />
-                  <span>LabMate Compose</span>
-                </div>
-                <div className={styles.emulatorCard}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "#1C1B1F" }}>
-                    {greetingText}
+              <div className={styles.emulatorScreenContent} style={{ padding: 0, overflow: "hidden" }}>
+                {screen ? (
+                  <EmulatorScreen
+                    screen={screen}
+                    onClick={(uid) => onEmuClick && onEmuClick(uid)}
+                    onInput={(uid, text) => onEmuInput && onEmuInput(uid, text)}
+                    onToggle={(uid, checked) => onEmuToggle && onEmuToggle(uid, checked)}
+                    onDialogButton={(id) => onEmuDialogButton && onEmuDialogButton(id)}
+                    onDismissCrash={() => onEmuDismissCrash && onEmuDismissCrash()}
+                  />
+                ) : (
+                  <div style={{ margin: "auto", padding: 16, textAlign: "center", color: "#79747E", fontSize: 12 }}>
+                    No app is running. Press Run (Shift+F10) to compile the project and start it here.
                   </div>
-                  <div style={{ fontSize: 11, color: "#49454F" }}>
-                    {subtitleText}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: 10.5,
-                      color: "#006C4C",
-                      background: "#E8F5E9",
-                      padding: "3px 7px",
-                      borderRadius: 6,
-                      alignSelf: "flex-start",
-                    }}
-                  >
-                    {activeAppRunning
-                      ? `Live APK Running • Taps: ${emuClicks}`
-                      : "Instant Preview Synced"}
-                  </div>
-                  <button
-                    type="button"
-                    className={styles.emulatorInteractiveBtn}
-                    onClick={() => {
-                      const next = emuClicks + 1;
-                      setEmuClicks(next);
-                      onTriggerEmulatorInteraction(
-                        `Button("${buttonLabel}") clicked -> count=${next}`
-                      );
-                    }}
-                  >
-                    {buttonLabel} ({emuClicks})
-                  </button>
-                </div>
+                )}
               </div>
               <div className={styles.emulatorGesturePill} />
             </div>

@@ -589,14 +589,23 @@ export function PowerBiSvgCharts({
                       onMouseLeave={() => setHover(EMPTY_HOVER)}
                     />
                   ))}
+                {visual.format.showDataLabels
+                  ? coords
+                      .filter((_, idx) => rows.length <= 18 || idx % Math.ceil(rows.length / 18) === 0 || idx === rows.length - 1)
+                      .map((c) => (
+                        <text key={"lbl-" + c.cat} x={c.x} y={c.y - 7} textAnchor="middle" fontSize={9} fill="#252423">
+                          {formatPowerBiNumber(c.val, s.key)}
+                        </text>
+                      ))
+                  : null}
               </g>
             );
           })}
 
-          {/* Sparse X axis ticks */}
+          {/* X axis ticks: every category when there are few, otherwise first / middle / last */}
           {rows
             .map((r, i) => ({ r, i }))
-            .filter(({ i }) => i === 0 || i === Math.floor(rows.length / 2) || i === rows.length - 1)
+            .filter(({ i }) => rows.length <= 8 || i === 0 || i === Math.floor(rows.length / 2) || i === rows.length - 1)
             .map(({ r, i }) => {
               const x = padL + (rows.length <= 1 ? plotW / 2 : (i / (rows.length - 1)) * plotW);
               const anchor =

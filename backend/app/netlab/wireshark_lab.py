@@ -4,6 +4,7 @@ Every value here is read from the capture's packets. Nothing is estimated or wri
 is always what Wireshark would show for that packet.
 """
 import re
+from pathlib import Path
 
 from .dfilter import apply_filter
 from .dissect import ETHERTYPES, mac_with_name, open_session
@@ -11,6 +12,34 @@ from .scenario import build_scenario
 
 PASSWORD_KEY = re.compile(r"pass|pwd|secret", re.I)
 INTERFACES = ["Ethernet", "Wi-Fi", "Loopback: Adapter for loopback traffic capture"]
+SAMPLES_DIR = Path(__file__).with_name("samples")
+# The analyser's sample captures (built by backend/scripts/netlab_make_samples.py with scapy). "practice" is the Experiment 5
+# practice capture that the report screenshots use.
+SAMPLE_CAPTURES = {
+    "practice": {"file": "practice-capture.pcap", "title": "Lab practice capture",
+                 "description": "ARP, DNS, ICMP, a TCP handshake, HTTP GET and an HTTP login form (POST) sent in clear text"},
+    "dhcp-arp": {"file": "dhcp-arp.pcapng", "title": "Joining a network: DHCP and ARP",
+                 "description": "DHCP Discover/Offer/Request/ACK, ARP probes and announcement, ARP for the gateway, lease renewal and release"},
+    "dns": {"file": "dns-queries.pcapng", "title": "DNS lookups",
+            "description": "A, AAAA, MX and PTR queries, a CNAME chain, an NXDOMAIN answer, a query over IPv6 and a retried query"},
+    "http": {"file": "http-browsing.pcap", "title": "Web browsing over HTTP",
+             "description": "TCP three-way handshake, GET with 200 and 404 responses, a login POST, FIN teardown and a refused connection (RST)"},
+    "icmp": {"file": "icmp-ping-traceroute.pcapng", "title": "Ping and traceroute",
+             "description": "ARP, four pings, a traceroute with TTL exceeded replies, port unreachable, IPv6 neighbour discovery and ping6"},
+}
+SAMPLE_NOTE = ("Sample capture built packet by packet with scapy (constructed, not recorded from a live network). Every header, "
+               "length and checksum is real and the analyser decodes it exactly as it decodes your own capture.")
+
+
+def sample_bytes(sample_id):
+    """(file name, capture bytes) of a sample capture. KeyError for an unknown id."""
+    entry = SAMPLE_CAPTURES[sample_id]
+    if sample_id == "practice":
+        data, _facts = build_scenario()
+        return entry["file"], data
+    return entry["file"], (SAMPLES_DIR / entry["file"]).read_bytes()
+
+
 PRACTICE_NOTE = "LabMate practice environment (not Wireshark)"
 
 

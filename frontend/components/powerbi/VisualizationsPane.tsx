@@ -143,13 +143,15 @@ export function VisualizationsPane({
                   <button
                     key={tile.id}
                     type="button"
-                    title={tile.label}
+                    title={tile.isPrimaryForType ? tile.label : `${tile.label}: not available in the LabMate practice lab`}
                     aria-label={tile.label}
+                    disabled={!tile.isPrimaryForType}
                     onClick={() => {
                       setActiveTileId(tile.id);
                       onSelectVisualType(tile.targetType);
                     }}
                     className={`${styles.vizTileBtn} ${isSelected ? styles.vizTileActive : ""}`}
+                    style={tile.isPrimaryForType ? undefined : { opacity: 0.38, cursor: "not-allowed" }}
                   >
                     <DesktopVizTileGlyph tileId={tile.id} />
                   </button>
@@ -157,11 +159,11 @@ export function VisualizationsPane({
               })}
               <button
                 type="button"
-                title="Get more visuals"
+                title="Get more visuals: not available in the LabMate practice lab"
                 aria-label="Get more visuals"
-                onClick={() => onSelectVisualType("clusteredColumn")}
+                disabled
                 className={styles.vizTileBtn}
-                style={{ fontSize: 12, fontWeight: 700, color: "#605e5c" }}
+                style={{ fontSize: 12, fontWeight: 700, color: "#605e5c", opacity: 0.38, cursor: "not-allowed" }}
               >
                 ···
               </button>

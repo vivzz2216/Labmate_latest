@@ -259,6 +259,7 @@ export function aggregateByDimension(
   yFields: string[],
   aggregation: AggregationFn = "sum",
   primaryColor: string = POWERBI_SERIES_PALETTE[0],
+  measureEval?: (field: string, rows: DataRow[]) => number | null,
 ): GroupedAggregationResult {
   const fields = yFields.length > 0 ? yFields : [];
   const buckets = new Map<string, DataRow[]>();
@@ -286,7 +287,8 @@ export function aggregateByDimension(
     let total = 0;
     for (const f of fields) {
       const effAgg = isRateOrPercentageColumn(f) && aggregation === "sum" ? "average" : aggregation;
-      const val = aggregateKpi(groupRows, f, effAgg);
+      const measured = measureEval ? measureEval(f, groupRows) : null;
+      const val = measured !== null ? measured : aggregateKpi(groupRows, f, effAgg);
       values[f] = val;
       total += val;
     }

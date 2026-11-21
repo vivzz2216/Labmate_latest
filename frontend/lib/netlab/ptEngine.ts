@@ -329,11 +329,164 @@ export function resolveDnsName(spec: PtSpec, source: PtDevice, hostOrIp: string)
   return byDevName?.ip ?? null;
 }
 
+/* =========================================================================
+ * Layer-3 forwarding used by ping, tracert and Simple PDUs in free practice.
+ *
+ * A packet is delivered hop by hop as a real network would: a host sends to the destination directly when it is in the
+ * host's own subnet, otherwise to its default gateway; each router looks the destination up in its routing table
+ * (longest prefix match over connected, static and RIP routes) and forwards to the next hop on the matching interface.
+ * Every hop must be reachable over active cables inside one Layer-2 segment (switches and hubs pass frames; routers and
+ * end devices end a segment). The reply makes the same journey back, so a missing return route fails the ping too.
+ * ========================================================================= */
+
+function isEndpoint(dev: PtDevice): boolean {
+  return dev.type === "router" || isEndLike(dev.type);
+}
+
+interface Hop {
+  device: string;
+  port: string;
+}
+
+/** Endpoints (hosts and router interfaces) reachable from one device port through switches and hubs, with the device path. */
+function segmentFrom(spec: PtSpec, deviceName: string, port: string | null): Map<string, { port: string; path: string[] }> {
+  const found = new Map<string, { port: string; path: string[] }>();
+  const queue: { name: string; path: string[]; viaPort: string | null }[] = [];
+  const visitedL2 = new Set<string>();
+  for (const cable of spec.links) {
+    if (!isLinkUp(spec, cable)) continue;
+    let peer: string | null = null;
+    let peerPort = "";
+    if (cable.a === deviceName && (port === null || cable.ap === port)) {
+      peer = cable.b;
+      peerPort = cable.bp;
+    } else if (cable.b === deviceName && (port === null || cable.bp === port)) {
+      peer = cable.a;
+      peerPort = cable.ap;
+    }
+    if (peer) queue.push({ name: peer, path: [deviceName, peer], viaPort: peerPort });
+  }
+  while (queue.length) {
+    const cur = queue.shift()!;
+    const dev = spec.devices.find((d) => d.name === cur.name);
+    if (!dev || dev.power === false) continue;
+    if (isEndpoint(dev)) {
+      if (cur.name !== deviceName && !found.has(cur.name)) found.set(cur.name, { port: cur.viaPort ?? "", path: cur.path });
+      continue;
+    }
+    if (visitedL2.has(cur.name)) continue;
+    visitedL2.add(cur.name);
+    for (const cable of spec.links) {
+      if (!isLinkUp(spec, cable)) continue;
+      if (cable.a === cur.name && !cur.path.includes(cable.b)) queue.push({ name: cable.b, path: [...cur.path, cable.b], viaPort: cable.bp });
+      else if (cable.b === cur.name && !cur.path.includes(cable.a)) queue.push({ name: cable.a, path: [...cur.path, cable.a], viaPort: cable.ap });
+    }
+  }
+  return found;
+}
+
+/** The device (and port) that owns an IPv4 address. */
+function ownerOf(spec: PtSpec, ip: string): Hop | null {
+  for (const d of spec.devices) {
+    if (d.power === false) continue;
+    if (d.ip === ip) return { device: d.name, port: hostPort(spec, d) };
+    for (const [port, cfg] of Object.entries(d.interfaces ?? {})) {
+      if (cfg.ip === ip && !cfg.shutdown && (d.type === "router" || !d.ip)) return { device: d.name, port };
+    }
+  }
+  return null;
+}
+
+function hostPort(spec: PtSpec, dev: PtDevice): string {
+  const cable = spec.links.find((l) => l.a === dev.name || l.b === dev.name);
+  if (cable) return cable.a === dev.name ? cable.ap : cable.bp;
+  return "FastEthernet0";
+}
+
+function longestMatch(table: PtRouteRow[], ip: string): PtRouteRow | null {
+  const target = ipToInt(ip);
+  if (target === null) return null;
+  let best: PtRouteRow | null = null;
+  let bestBits = -1;
+  for (const row of table) {
+    const [net, bitsText] = row.network.split("/");
+    const bits = Number(bitsText);
+    const netInt = ipToInt(net);
+    if (netInt === null) continue;
+    const mask = bits === 0 ? 0 : (0xffffffff << (32 - bits)) >>> 0;
+    if (((target & mask) >>> 0) === ((netInt & mask) >>> 0) && bits > bestBits) {
+      best = row;
+      bestBits = bits;
+    }
+  }
+  return best;
+}
+
+/** One direction of travel. Returns the device path and the routers crossed, or the reason it stops. */
+function forward(spec: PtSpec, fromName: string, srcIp: string, dstIp: string): { ok: boolean; path: string[]; routers: string[]; error?: string } {
+  const src = spec.devices.find((d) => d.name === fromName)!;
+  const target = ownerOf(spec, dstIp);
+  const path: string[] = [fromName];
+  const routers: string[] = [];
+  let current = src;
+  let egress: string | null = null;
+  let nextHopIp: string;
+
+  if (current.type === "router") {
+    nextHopIp = dstIp;
+  } else {
+    const mask = current.mask || "255.255.255.0";
+    if (!current.ip) return { ok: false, path, routers, error: "Request timed out." };
+    if (sameSubnet(current.ip, dstIp, mask)) nextHopIp = dstIp;
+    else if (!current.gateway) return { ok: false, path, routers, error: "Request timed out." };
+    else if (!sameSubnet(current.ip, current.gateway, mask)) return { ok: false, path, routers, error: "Request timed out." };
+    else nextHopIp = current.gateway;
+  }
+
+  for (let hops = 0; hops < 30; hops++) {
+    if (current.type === "router") {
+      // A router that owns the destination answers itself.
+      if (Object.values(current.interfaces ?? {}).some((c) => c.ip === dstIp && !c.shutdown)) return { ok: true, path, routers };
+      const route = longestMatch(buildRouterTable(spec, current), dstIp);
+      if (!route) return { ok: false, path, routers, error: `Reply from ${firstIp(current)}: Destination host unreachable.` };
+      if (route.code === "C") {
+        egress = route.interface;
+        nextHopIp = dstIp;
+      } else {
+        nextHopIp = route.next_hop;
+        const out = Object.entries(current.interfaces ?? {}).find(
+          ([, c]) => c.ip && !c.shutdown && sameSubnet(c.ip, nextHopIp, c.mask || "255.255.255.0"),
+        );
+        if (!out) return { ok: false, path, routers, error: `Reply from ${firstIp(current)}: Destination host unreachable.` };
+        egress = out[0];
+      }
+    }
+    const reachable = segmentFrom(spec, current.name, current.type === "router" ? egress : null);
+    const owner = ownerOf(spec, nextHopIp);
+    const step = owner ? reachable.get(owner.device) : undefined;
+    if (!owner || !step) {
+      return { ok: false, path, routers, error: current.type === "router" ? `Reply from ${firstIp(current)}: Destination host unreachable.` : "Request timed out." };
+    }
+    path.push(...step.path.slice(1));
+    const next = spec.devices.find((d) => d.name === owner.device)!;
+    if (target && next.name === target.device) return { ok: true, path, routers };
+    if (next.type !== "router") return { ok: false, path, routers, error: "Request timed out." };
+    routers.push(next.name);
+    current = next;
+    nextHopIp = dstIp;
+  }
+  return { ok: false, path, routers, error: "TTL expired in transit." };
+}
+
+function firstIp(dev: PtDevice): string {
+  return dev.ip || Object.values(dev.interfaces ?? {}).find((c) => c.ip)?.ip || "0.0.0.0";
+}
+
 export function simulateLocalPing(
   spec: PtSpec,
   sourceName: string,
   targetHostOrIp: string,
-  pduNum = 1
+  pduNum = 1,
 ): {
   success: boolean;
   targetIp: string;
@@ -341,6 +494,8 @@ export function simulateLocalPing(
   path: string[];
   events: PtEvent[];
   error?: string;
+  ttl?: number;
+  routers?: string[];
 } {
   const src = spec.devices.find((d) => d.name === sourceName);
   if (!src || src.power === false) {
@@ -348,88 +503,34 @@ export function simulateLocalPing(
   }
   const targetIp = resolveDnsName(spec, src, targetHostOrIp) ?? targetHostOrIp;
   if (ipToInt(targetIp) === null) {
-    return { success: false, targetIp, targetName: "?", path: [sourceName], events: [], error: `Ping request could not find host ${targetHostOrIp}.` };
+    return { success: false, targetIp, targetName: "?", path: [sourceName], events: [], error: `Ping request could not find host ${targetHostOrIp}. Please check the name and try again.` };
   }
-  const targetDev = spec.devices.find(
-    (d) =>
-      d.power !== false &&
-      (d.ip === targetIp || Object.values(d.interfaces ?? {}).some((cfg) => cfg.ip === targetIp && !cfg.shutdown))
-  );
-  if (!targetDev) {
-    return { success: false, targetIp, targetName: "?", path: [sourceName], events: [], error: "Request timed out." };
+  const srcIp = firstIp(src);
+  const owner = ownerOf(spec, targetIp);
+  const there = forward(spec, src.name, srcIp, targetIp);
+  if (!there.ok || !owner) {
+    return { success: false, targetIp, targetName: owner?.device ?? "?", path: there.path, events: [], error: there.error ?? "Request timed out." };
   }
-
-  // BFS shortest active path across green cables
-  const adj = new Map<string, string[]>();
-  for (const cable of spec.links) {
-    if (!isLinkUp(spec, cable)) continue;
-    if (!adj.has(cable.a)) adj.set(cable.a, []);
-    if (!adj.has(cable.b)) adj.set(cable.b, []);
-    adj.get(cable.a)!.push(cable.b);
-    adj.get(cable.b)!.push(cable.a);
+  const back = forward(spec, owner.device, targetIp, srcIp);
+  if (!back.ok) {
+    return { success: false, targetIp, targetName: owner.device, path: there.path, events: [], error: "Request timed out." };
   }
-
-  const queue: string[][] = [[src.name]];
-  const visited = new Set([src.name]);
-  let foundPath: string[] | null = null;
-  while (queue.length > 0) {
-    const path = queue.shift()!;
-    const tail = path[path.length - 1];
-    if (tail === targetDev.name) {
-      foundPath = path;
-      break;
-    }
-    for (const next of adj.get(tail) ?? []) {
-      if (!visited.has(next)) {
-        visited.add(next);
-        queue.push([...path, next]);
-      }
-    }
-  }
-
-  // Check L3 reachability if path crosses a router or stays within subnet
-  if (!foundPath) {
-    return { success: false, targetIp, targetName: targetDev.name, path: [src.name], events: [], error: "Destination host unreachable (no active physical link)." };
-  }
-
-  const hasRouter = foundPath.slice(1, -1).some((n) => spec.devices.find((d) => d.name === n)?.type === "router");
-  if (!hasRouter && src.ip && targetDev.ip && !sameSubnet(src.ip, targetIp, src.mask || "255.255.255.0")) {
-    return { success: false, targetIp, targetName: targetDev.name, path: [src.name], events: [], error: "No route to host (different subnet, no router/gateway)." };
-  }
-  if (hasRouter && src.type !== "router" && !src.gateway) {
-    return { success: false, targetIp, targetName: targetDev.name, path: [src.name], events: [], error: "No default gateway configured on host." };
-  }
-
   const events: PtEvent[] = [];
-  let t = 0.0;
-  const srcIp = src.ip || Object.values(src.interfaces ?? {})[0]?.ip || "0.0.0.0";
+  let t = 0;
   events.push({ time: t, pdu: pduNum, last: "", at: src.name, type: "ICMP", info: `Echo request to ${targetIp}`, action: "created" });
-  for (let i = 1; i < foundPath.length; i++) {
+  for (let i = 1; i < there.path.length; i++) {
     t += 0.002;
-    events.push({
-      time: t,
-      pdu: pduNum,
-      last: foundPath[i - 1],
-      at: foundPath[i],
-      type: "ICMP",
-      info: `Echo request ${srcIp} -> ${targetIp} ttl=${128 - i + 1}`,
-      action: i === foundPath.length - 1 ? "accepted" : "forwarded",
-    });
+    events.push({ time: t, pdu: pduNum, last: there.path[i - 1], at: there.path[i], type: "ICMP", info: `Echo request ${srcIp} -> ${targetIp}`,
+                  action: i === there.path.length - 1 ? "accepted" : "forwarded" });
   }
-  for (let i = foundPath.length - 2; i >= 0; i--) {
+  for (let i = 1; i < back.path.length; i++) {
     t += 0.002;
-    events.push({
-      time: t,
-      pdu: pduNum,
-      last: foundPath[i + 1],
-      at: foundPath[i],
-      type: "ICMP",
-      info: `Echo reply ${targetIp} -> ${srcIp}`,
-      action: i === 0 ? "accepted" : "forwarded",
-    });
+    events.push({ time: t, pdu: pduNum, last: back.path[i - 1], at: back.path[i], type: "ICMP", info: `Echo reply ${targetIp} -> ${srcIp}`,
+                  action: i === back.path.length - 1 ? "accepted" : "forwarded" });
   }
-
-  return { success: true, targetIp, targetName: targetDev.name, path: foundPath, events };
+  const owned = spec.devices.find((d) => d.name === owner.device);
+  const startTtl = owned?.type === "router" ? 255 : 128;
+  return { success: true, targetIp, targetName: owner.device, path: there.path, events, ttl: startTtl - back.routers.length, routers: there.routers };
 }
 
 /* =========================================================================
@@ -743,41 +844,51 @@ export function executePcCommand(spec: PtSpec, deviceName: string, command: stri
   if (head === "ping" && parts[1]) {
     const sim = simulateLocalPing(spec, dev.name, parts[1]);
     if (!sim.success) {
+      if ((sim.error || "").startsWith("Ping request could not find host")) return [sim.error as string];
+      const line = sim.error || "Request timed out.";
       return [
-        `Pinging ${parts[1]} with 32 bytes of data:`,
-        sim.error || "Request timed out.",
-        sim.error || "Request timed out.",
-        "Ping statistics: Sent = 2, Received = 0, Lost = 2 (100% loss)",
+        `Pinging ${sim.targetIp} with 32 bytes of data:`,
+        "",
+        line,
+        line,
+        line,
+        line,
+        "",
+        `Ping statistics for ${sim.targetIp}:`,
+        "    Packets: Sent = 4, Received = 0, Lost = 4 (100% loss),",
       ];
     }
+    const ttl = sim.ttl ?? 128;
     return [
       `Pinging ${sim.targetIp} with 32 bytes of data:`,
-      `Reply from ${sim.targetIp}: bytes=32 time=2ms TTL=128`,
-      `Reply from ${sim.targetIp}: bytes=32 time=1ms TTL=128`,
-      `Reply from ${sim.targetIp}: bytes=32 time=2ms TTL=128`,
-      `Reply from ${sim.targetIp}: bytes=32 time=1ms TTL=128`,
-      `Ping statistics for ${sim.targetIp}: Sent = 4, Received = 4, Lost = 0 (0% loss)`,
+      "",
+      `Reply from ${sim.targetIp}: bytes=32 time<1ms TTL=${ttl}`,
+      `Reply from ${sim.targetIp}: bytes=32 time<1ms TTL=${ttl}`,
+      `Reply from ${sim.targetIp}: bytes=32 time<1ms TTL=${ttl}`,
+      `Reply from ${sim.targetIp}: bytes=32 time<1ms TTL=${ttl}`,
+      "",
+      `Ping statistics for ${sim.targetIp}:`,
+      "    Packets: Sent = 4, Received = 4, Lost = 0 (0% loss),",
     ];
   }
 
   if (head === "tracert" && parts[1]) {
     const sim = simulateLocalPing(spec, dev.name, parts[1]);
-    if (!sim.success) {
-      return [`Tracing route to ${parts[1]}:`, `  1   *   ${sim.error || "Destination unreachable."}`];
-    }
-    const hops = sim.path
-      .slice(1)
-      .filter((n) => {
-        const d = spec.devices.find((x) => x.name === n);
-        return d && (d.type === "router" || n === sim.targetName);
-      });
     const out = [`Tracing route to ${sim.targetIp} over a maximum of 30 hops:`, ""];
+    const hops = sim.routers ?? [];
     hops.forEach((h, i) => {
       const hd = spec.devices.find((x) => x.name === h);
-      const ip = hd?.ip || Object.values(hd?.interfaces ?? {})[0]?.ip || sim.targetIp;
-      out.push(`  ${String(i + 1).padStart(2)}    1 ms    1 ms    1 ms  ${ip}  [${h}]`);
+      // The address a router answers from is the interface the probe arrived on: the one facing the previous hop.
+      const ip = Object.values(hd?.interfaces ?? {}).find((c) => c.ip && dev.ip && (i === 0 ? sameSubnet(c.ip, dev.gateway || "", c.mask || "255.255.255.0") : true))?.ip
+        || Object.values(hd?.interfaces ?? {})[0]?.ip || "";
+      out.push(`  ${String(i + 1).padStart(2)}   0 ms      0 ms      0 ms      ${ip}`);
     });
-    out.push("", "Trace complete.");
+    if (sim.success) {
+      out.push(`  ${String(hops.length + 1).padStart(2)}   0 ms      0 ms      0 ms      ${sim.targetIp}`);
+      out.push("", "Trace complete.");
+    } else {
+      out.push(`  ${String(hops.length + 1).padStart(2)}   *         *         *         ${sim.error || "Request timed out."}`);
+    }
     return out;
   }
 

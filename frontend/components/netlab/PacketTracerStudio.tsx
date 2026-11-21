@@ -106,6 +106,8 @@ type MasterCat = "network" | "end" | "components" | "connections" | "misc" | "mu
 type NetSubCat = "routers" | "switches" | "hubs" | "wireless" | "security" | "wan";
 type CanvasTool = "select" | "inspect" | "delete" | "resize" | "note" | "draw" | "simple-pdu" | "complex-pdu";
 
+const DRAFT_KEY = "labmate.packettracer.draft";
+
 export function PacketTracerStudio() {
   const [spec, setSpec] = useState<PtSpec | null>(null);
   const [undoStack, setUndoStack] = useState<PtSpec[]>([]);
@@ -160,6 +162,8 @@ export function PacketTracerStudio() {
 
   const svgRef = useRef<SVGSVGElement>(null);
   const recorded = useRef(false);
+  const openInput = useRef<HTMLInputElement>(null);
+  const restoredDraft = useRef(false);
 
   const commitSpec = useCallback(
     (next: PtSpec) => {
@@ -171,6 +175,30 @@ export function PacketTracerStudio() {
     },
     [spec],
   );
+
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("capture")) return;
+    try {
+      const saved = JSON.parse(window.localStorage.getItem(DRAFT_KEY) || "null");
+      if (saved?.spec && Array.isArray(saved.spec.devices) && saved.spec.devices.length) {
+        restoredDraft.current = true;
+        setSpec(saved.spec);
+        setName(saved.name || "Restored topology");
+        setMode("free");
+      }
+    } catch {
+      /* no stored draft, or storage blocked */
+    }
+  }, []);
+
+  useEffect(() => {
+    if (mode !== "free" || !spec || recorded.current) return;
+    try {
+      window.localStorage.setItem(DRAFT_KEY, JSON.stringify({ name, spec }));
+    } catch {
+      /* storage full or blocked: autosave is a convenience */
+    }
+  }, [mode, spec, name]);
 
   useStudioHook<Frozen, Frame>(
     {
@@ -208,6 +236,10 @@ export function PacketTracerStudio() {
 
   useEffect(() => {
     if (!experiment || recorded.current) return;
+    if (restoredDraft.current) {
+      restoredDraft.current = false;           // keep the student's autosaved topology; choosing an experiment again loads it
+      return;
+    }
     api
       .get(`/api/netlab/packettracer/run/${experiment}`)
       .then((response) => {
@@ -241,8 +273,11 @@ export function PacketTracerStudio() {
         setReplay(response.data);
         setActions(next);
         setError("");
-      } catch {
-        // Local fallback when user placed custom equipment types (Server-PT, 2911, etc.) not in minimal Python validator
+      } catch (problem) {
+        // The server engine refused the topology (for example two devices with one address, or a gateway outside its subnet).
+        // Say why, then still show what the browser engine computes so the student sees the effect of the mistake.
+        const detail = (problem as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+        const reason = typeof detail === "string" ? detail : "The server could not check this topology.";
         const lastAct = next[next.length - 1];
         if (lastAct?.type === "ping") {
           const sim = simulateLocalPing(spec, String(lastAct.from), String(lastAct.to), localPdus.length + 1);
@@ -252,7 +287,9 @@ export function PacketTracerStudio() {
             { pdu: prev.length + 1, source: String(lastAct.from), destination: sim.targetName !== "?" ? sim.targetName : String(lastAct.to), status: sim.success ? "Successful" : "Failed" },
           ]);
           setSimCursor(0);
-          setError(sim.error ?? "");
+          setError([reason, sim.error].filter(Boolean).join(" "));
+        } else {
+          setError(reason);
         }
       }
     },
@@ -596,6 +633,36 @@ export function PacketTracerStudio() {
     setSpec(next);
   };
 
+  function saveTopology() {
+    if (!spec) return;
+    const blob = new Blob([JSON.stringify({ format: "labmate-topology", version: 1, name, spec }, null, 2)], { type: "application/json" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `${(name || "topology").toLowerCase().replace(/[^a-z0-9]+/g, "-")}.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(link.href), 4000);
+  }
+
+  async function openTopology(file: File) {
+    try {
+      const parsed = JSON.parse(await file.text());
+      const loaded: PtSpec = parsed?.spec ?? parsed;
+      if (!loaded || !Array.isArray(loaded.devices) || !Array.isArray(loaded.links)) throw new Error("shape");
+      commitSpec(loaded);
+      setName(parsed?.name || file.name.replace(/\.json$/i, ""));
+      setMode("free");
+      setActions([]);
+      setReplay(null);
+      setLocalEvents([]);
+      setLocalPdus([]);
+      setError("");
+    } catch {
+      setError("This file is not a topology saved by LabMate (File > Save Topology JSON).");
+    }
+  }
+
   const getMenuEntries = (item: string): Array<{ divider: true } | { label: string; action: () => void; disabled?: boolean }> => {
     if (item === "File")
       return [
@@ -607,17 +674,8 @@ export function PacketTracerStudio() {
             setMode("free");
           },
         },
-        {
-          label: "Save Topology JSON",
-          action: () => {
-            if (!spec) return;
-            const blob = new Blob([JSON.stringify(spec, null, 2)], { type: "application/json" });
-            const a = document.createElement("a");
-            a.href = URL.createObjectURL(blob);
-            a.download = `${(name || "topology").toLowerCase().replace(/[^a-z0-9]+/g, "-")}.json`;
-            a.click();
-          },
-        },
+        { label: "Open Topology JSON…", action: () => openInput.current?.click() },
+        { label: "Save Topology JSON", action: saveTopology },
         { divider: true },
         { label: "Print Topology", action: () => window.print() },
       ];
@@ -759,12 +817,24 @@ export function PacketTracerStudio() {
         >
           <PtNewIcon />
         </button>
-        <button type="button" className={styles.tbBtn} title="Open">
+        <button type="button" className={styles.tbBtn} title="Open" onClick={() => openInput.current?.click()}>
           <PtOpenIcon />
         </button>
-        <button type="button" className={styles.tbBtn} title="Save" onClick={() => getMenuEntries("File")[1]}>
+        <button type="button" className={styles.tbBtn} title="Save" onClick={saveTopology}>
           <PtSaveIcon />
         </button>
+        <input
+          ref={openInput}
+          type="file"
+          accept=".json,application/json"
+          hidden
+          aria-label="Open topology file"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            event.target.value = "";
+            if (file) void openTopology(file);
+          }}
+        />
         <button type="button" className={styles.tbBtn} title="Print" onClick={() => window.print()}>
           <PtPrintIcon />
         </button>

@@ -33,6 +33,8 @@ interface ChartContainerProps {
   onToggleSlicerValue: (column: string, value: string) => void;
   onClearSlicerColumn: (column: string) => void;
   onDateRangeChange: (next: DateRangeFilter | null) => void;
+  /** Value of a DAX measure over a set of rows, or null when the field is not a measure. */
+  measureEval?: (field: string, rows: DataRow[]) => number | null;
 }
 
 /** Dispatches each PowerBiVisual with real live aggregation, slicing, and cross-filtering. */
@@ -49,6 +51,7 @@ export function ChartContainer({
   onToggleSlicerValue,
   onClearSlicerColumn,
   onDateRangeChange,
+  measureEval,
 }: ChartContainerProps) {
   const [slicerSearch, setSlicerSearch] = useState("");
 
@@ -87,8 +90,9 @@ export function ChartContainer({
         visual.yAxis,
         visual.aggregation,
         visual.format.accentColor,
+        measureEval,
       ),
-    [scopedRows, visual.xAxis, visual.yAxis, visual.aggregation, visual.format.accentColor],
+    [scopedRows, visual.xAxis, visual.yAxis, visual.aggregation, visual.format.accentColor, measureEval],
   );
 
   // ---------- SLICER VISUAL ----------
@@ -184,7 +188,8 @@ export function ChartContainer({
   if (visual.type === "card") {
     const field = visual.yAxis[0] || visual.xAxis || "";
     const meta = columns.find((c) => c.name === field);
-    const val = aggregateKpi(scopedRows, field, visual.aggregation);
+    const measured = measureEval ? measureEval(field, scopedRows) : null;
+    const val = measured !== null ? measured : aggregateKpi(scopedRows, field, visual.aggregation);
     return (
       <MetricCard
         value={val}

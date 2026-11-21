@@ -39,7 +39,7 @@ interface StudioBottomWindowProps {
   onChangeLogcatQuery: (q: string) => void;
   onClearLogcat: () => void;
   onRestartLogcat: () => void;
-  onEmitSampleCrash: () => void;
+  onEmitSampleCrash?: () => void;
   buildSteps: GradleBuildStep[];
   buildConsoleLines: string[];
   runConsoleLines: string[];
@@ -276,14 +276,9 @@ export function StudioBottomWindow({
               >
                 level:ERROR
               </button>
-              <button
-                type="button"
-                className={styles.segmentedBtn}
-                title="Simulate AndroidRuntime Crash Log"
-                onClick={onEmitSampleCrash}
-              >
-                + Test Crash Log
-              </button>
+              {onEmitSampleCrash && (
+              <button type="button" className={styles.segmentedBtn} title="Simulate AndroidRuntime Crash Log" onClick={onEmitSampleCrash}>+ Test Crash Log</button>
+              )}
             </div>
           </div>
 

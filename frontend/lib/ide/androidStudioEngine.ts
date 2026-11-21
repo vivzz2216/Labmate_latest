@@ -1875,13 +1875,7 @@ export function executeStudioTerminal(
     return { lines: ["app/    build.gradle.kts    gradle/    gradle.properties    gradlew*    gradlew.bat    settings.gradle.kts"] };
   }
   if (lower === "git status") {
-    return {
-      lines: [
-        `On branch ${preset.branch}`,
-        "Your branch is up to date with 'origin/" + preset.branch + "'.",
-        "nothing to commit, working tree clean",
-      ],
-    };
+    return { lines: ["fatal: not a git repository (LabMate keeps your project in the browser, not in a git working tree)"] };
   }
   if (lower === "adb devices") {
     const active = devices.filter((d) => d.booted);
@@ -1908,24 +1902,16 @@ export function executeStudioTerminal(
     };
   }
   if (lower === "./gradlew test" || lower === "gradlew test") {
-    return {
-      lines: [
-        "> Task :app:compileDebugUnitTestKotlin",
-        "> Task :app:testDebugUnitTest",
-        "ExampleUnitTest > addition_isCorrect PASSED",
-        "",
-        "BUILD SUCCESSFUL in 840ms",
-      ],
-    };
+    return { lines: ["LabMate does not run JUnit tests. Use the Run button to compile and run the app in the emulator."] };
   }
   if (lower === "help") {
     return {
       lines: [
-        "Available commands: pwd, ls, git status, adb devices, ./gradlew assembleDebug, ./gradlew test, clear",
+        "Available commands: pwd, ls, adb devices, adb logcat -d, ./gradlew assembleDebug (compiles in the browser), clear",
       ],
     };
   }
   return {
-    lines: [`zsh: command output ready for '${trimmed}' (try 'help', 'adb devices', './gradlew assembleDebug')`],
+    lines: [`${trimmed.split(/\s+/)[0]}: command not found (this is a small LabMate shell: try 'help')`],
   };
 }

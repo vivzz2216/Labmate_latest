@@ -131,7 +131,9 @@ export function DataPane({
                         style={{ accentColor: "#252423", width: 12, height: 12, flexShrink: 0 }}
                       />
                       <span className={styles.sigmaGlyph}>
-                        {col.isNumeric ? (
+                        {col.isMeasure ? (
+                          "fx"
+                        ) : col.isNumeric ? (
                           "Σ"
                         ) : col.type === "date" ? (
                           <Calendar size={11} color="#605e5c" />

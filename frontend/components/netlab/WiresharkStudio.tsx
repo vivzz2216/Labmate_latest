@@ -1,12 +1,58 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type JSX,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 import api from "@/lib/api";
-import { buildEducationalHttpsDnsCapture, evaluateSampleFilter } from "@/lib/netlab/wsSampleCapture";
 import { PracticeBanner } from "./PracticeBanner";
-import { WsPacketDiagram } from "./WsPacketDiagram";
 import { useStudioHook } from "./studioHook";
 import styles from "./wireshark.module.css";
+import {
+  AboutDialog,
+  CaptureOptionsDialog,
+  ExportDialog,
+  FilterReferenceDialog,
+  HierarchyDialog,
+  PropertiesDialog,
+  TrafficDialog,
+  type CaptureSettings,
+  type ExportChoice,
+  type ExportMode,
+  type HierarchyRow,
+  type PropertiesData,
+} from "./WsDialogs";
+import {
+  COMMON_FILTERS,
+  TIME_FORMATS,
+  address,
+  allKeys,
+  ancestors,
+  conversationFilters,
+  deepestAt,
+  download,
+  errorText,
+  fieldStatus,
+  formatTime,
+  nodeAt,
+  type BrowserPage,
+  type CaptureMeta,
+  type Detail,
+  type FrozenState,
+  type LiveInterface,
+  type Row,
+  type SampleCapture,
+  type Step,
+  type StreamData,
+  type TimeFormat,
+  type TreeNode,
+} from "./wsModel";
 import {
   WiresharkLogoIcon,
   WsApplyFilterArrowIcon,
@@ -22,13 +68,11 @@ import {
   WsExpertStatusCircle,
   WsFindIcon,
   WsFirstPacketIcon,
-  WsFollowStreamIcon,
   WsGoToPacketIcon,
   WsInterfaceTypeIcon,
   WsLastPacketIcon,
   WsNextPacketIcon,
   WsOpenFolderIcon,
-  WsPacketDiagramIcon,
   WsPrevPacketIcon,
   WsReloadIcon,
   WsResizeColsIcon,
@@ -38,314 +82,391 @@ import {
   WsZoomResetIcon,
 } from "./WiresharkIcons";
 
-interface Row {
-  no: number;
-  time: number;
-  source: string;
-  destination: string;
-  protocol: string;
-  length: number;
-  info: string;
-  stream: number;
-  color: { rule: string; bg: string; fg: string };
-}
-interface TreeNode {
-  label: string;
-  start: number;
-  end: number;
-  children: TreeNode[];
-}
-interface Detail {
-  no: number;
-  tree: TreeNode[];
-  hex: { offset: number; hex: string[]; ascii: string }[];
-  bytes: number;
-  row: Row;
-}
-interface StreamData {
-  stream: number;
-  packets: number[];
-  client: string;
-  server: string;
-  client_packets: number;
-  server_packets: number;
-  turns: number;
-  chunks: { side: "c" | "s"; text: string; bytes: number }[];
-}
-interface BrowserPage {
-  host: string;
-  uri: string;
-  fields: string[];
-  values: Record<string, string>;
-}
-interface Step {
-  id: string;
-  view: "welcome" | "main" | "browser" | "follow";
-  filter?: string;
-  select?: number;
-  expand?: string[];
-  host?: string;
-  uri?: string;
-  stream?: number;
-  title: string;
-}
-interface FrozenState {
-  tool: "wireshark";
-  source: string;
-  packets: Row[];
-  details: Record<string, Detail>;
-  filters: Record<string, number[]>;
-  streams: Record<string, StreamData>;
-  pages: Record<string, BrowserPage>;
-  interfaces: string[];
-  file: string;
+type MenuEntry =
+  | { divider: true }
+  | { label: string; shortcut?: string; disabled?: boolean; checked?: boolean; action?: () => void; submenu?: MenuEntry[] };
+
+type DialogState =
+  | { kind: "properties"; data: PropertiesData }
+  | { kind: "hierarchy"; rows: HierarchyRow[] }
+  | { kind: "conversations" }
+  | { kind: "endpoints" }
+  | { kind: "capture" }
+  | { kind: "export"; mode: ExportMode; format?: string }
+  | { kind: "about" }
+  | { kind: "reference"; data: { protocols: string[]; fields: string[] } | null }
+  | null;
+
+interface LiveInfo {
+  available: boolean;
+  reason: string;
+  interfaces: LiveInterface[];
 }
 
-const MENU_ITEMS = ["File", "Edit", "View", "Go", "Capture", "Analyze", "Statistics", "Telephony", "Wireless", "Tools", "Help"];
-const QUICK_FILTERS = ["arp", "http", "tcp", "udp", "icmp", "dns", 'ip.addr == 192.168.1.1', "tcp.port == 443", 'dns.qry.name contains "google"', 'http.request.method == "POST"'];
+const MENU_NAMES = ["File", "Edit", "View", "Go", "Capture", "Analyze", "Statistics", "Telephony", "Wireless", "Tools", "Help"];
+const COLUMNS = ["No.", "Time", "Source", "Destination", "Protocol", "Length", "Info"] as const;
+const PANES = ["list", "details", "bytes"] as const;
+const DEFAULT_WIDTHS = [64, 104, 200, 200, 78, 62, 760];
+const NOT_HERE = "Not available in this simplified analyzer";
+const RECENT_KEY = "labmate.analyzer.recentFilters";
 
-function Spark({ seed, selected }: { seed: number; selected?: boolean }) {
-  const pts: string[] = [];
-  for (let i = 0; i < 32; i++) {
-    const val = Math.abs(Math.sin(i * 0.68 + seed * 1.4) * 0.65 + Math.cos(i * 1.3 + seed) * 0.35);
-    const y = 18 - Math.round(val * 14);
-    pts.push(`${i * 4.5},${y}`);
+function readRecent(): string[] {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(RECENT_KEY) || "[]");
+    return Array.isArray(parsed) ? parsed.filter((item) => typeof item === "string").slice(0, 12) : [];
+  } catch {
+    return [];
   }
-  const poly = pts.join(" ");
-  return (
-    <svg width="144" height="20" aria-hidden="true">
-      <polyline points={poly} fill="none" stroke={selected ? "#0F4C81" : "#1D6FD8"} strokeWidth="1.25" />
-    </svg>
-  );
 }
 
-function nodeKey(path: number[]) {
-  return path.join(".");
+function writeRecent(items: string[]) {
+  try {
+    window.localStorage.setItem(RECENT_KEY, JSON.stringify(items.slice(0, 12)));
+  } catch {
+    /* storage may be unavailable; recent filters are a convenience */
+  }
 }
 
-function findByPrefix(tree: TreeNode[], names: string[]): { key: string; node: TreeNode }[] {
-  const found: { key: string; node: TreeNode }[] = [];
-  tree.forEach((node, index) => {
-    if (names.some((name) => node.label.startsWith(name))) found.push({ key: nodeKey([index]), node });
-  });
-  return found;
+function combine(current: string, piece: string, how: "replace" | "and" | "or" | "andnot" | "ornot" | "not") {
+  const cur = current.trim();
+  if (how === "replace") return piece;
+  if (how === "not") return `!(${piece})`;
+  const join = how === "and" || how === "andnot" ? "&&" : "||";
+  const neg = how === "andnot" || how === "ornot";
+  if (!cur) return neg ? `!(${piece})` : piece;
+  return `(${cur}) ${join} ${neg ? "!" : ""}(${piece})`;
 }
 
 export function WiresharkStudio() {
+  // ------------------------------------------------------------------ capture state
   const [view, setView] = useState<Step["view"]>("welcome");
   const [rows, setRows] = useState<Row[]>([]);
   const [file, setFile] = useState("");
-  const [interfaces, setInterfaces] = useState<string[]>(["Ethernet", "Wi-Fi", "Loopback: Adapter for loopback traffic capture"]);
-  const [selectedIface, setSelectedIface] = useState(0);
+  const [meta, setMeta] = useState<CaptureMeta | null>(null);
+  const [frozenInterfaces, setFrozenInterfaces] = useState<string[]>([]);
+  const [live, setLive] = useState<LiveInfo>({ available: false, reason: "", interfaces: [] });
+  const [samples, setSamples] = useState<SampleCapture[]>([]);
+  const [sampleNote, setSampleNote] = useState("");
+  const [recentFiles, setRecentFiles] = useState<string[]>([]);
+  const [selectedIface, setSelectedIface] = useState("");
+  const [captureFilter, setCaptureFilter] = useState("");
+  const [captureLimits, setCaptureLimits] = useState({ maxPackets: 1000, maxSeconds: 60 });
+  const [capturing, setCapturing] = useState<{ job: string; interface: string; started: number } | null>(null);
+  const [isCaptureMode, setIsCaptureMode] = useState(false);
+
+  // ------------------------------------------------------------------ display state
   const [filterText, setFilterText] = useState("");
   const [applied, setApplied] = useState("");
-  const [filterError, setFilterError] = useState("");
+  const [filterState, setFilterState] = useState<"empty" | "valid" | "invalid" | "warn">("empty");
+  const [filterMessage, setFilterMessage] = useState("");
   const [visible, setVisible] = useState<number[] | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [pickedNode, setPickedNode] = useState<string | null>(null);
+  const [byteRange, setByteRange] = useState<{ start: number; end: number } | null>(null);
+  const [marked, setMarked] = useState<Set<number>>(new Set());
+  const [timeFormat, setTimeFormat] = useState<TimeFormat>("relative");
+  const [resolveMac, setResolveMac] = useState(true);
+  const [colorize, setColorize] = useState(true);
+  const [autoScroll, setAutoScroll] = useState(true);
+  const [zoom, setZoom] = useState(0);
+  const [show, setShow] = useState({ mainToolbar: true, filterToolbar: true, statusBar: true, list: true, details: true, bytes: true });
+  const [sizes, setSizes] = useState([0.46, 0.32, 0.22]);
+  const [widths, setWidths] = useState<number[]>(DEFAULT_WIDTHS);
+  const [sort, setSort] = useState<{ col: number; dir: 1 | -1 } | null>(null);
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
+  const [hoverSub, setHoverSub] = useState<string | null>(null);
+  const [context, setContext] = useState<{ x: number; y: number; entries: MenuEntry[] } | null>(null);
+  const [recentOpen, setRecentOpen] = useState(false);
+  const [recentFilters, setRecentFilters] = useState<string[]>([]);
+  const [findOpen, setFindOpen] = useState(false);
+  const [find, setFind] = useState({ mode: "filter", scope: "list", query: "", caseSensitive: false });
+  const [gotoOpen, setGotoOpen] = useState(false);
+  const [gotoText, setGotoText] = useState("");
+  const [dialog, setDialog] = useState<DialogState>(null);
   const [follow, setFollow] = useState<StreamData | null>(null);
+  const [followDirection, setFollowDirection] = useState("entire");
+  const [followFind, setFollowFind] = useState("");
   const [page, setPage] = useState<BrowserPage | null>(null);
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
   const [tick, setTick] = useState(0);
 
-  // Authentic Wireshark UI interactive toggles
-  const [colorize, setColorize] = useState(true);
-  const [autoScroll, setAutoScroll] = useState(true);
-  const [showDiagram, setShowDiagram] = useState(false);
-  const [diagramRange, setDiagramRange] = useState<{ start: number; end: number } | null>(null);
-  const [localSampleMode, setLocalSampleMode] = useState(false);
-  const [statsModal, setStatsModal] = useState<"hierarchy" | "properties" | null>(null);
-  const [zoomDelta, setZoomDelta] = useState(0);
-  const [openMenu, setOpenMenu] = useState<string | null>(null);
-  const [showBookmarks, setShowBookmarks] = useState(false);
-  const [findOpen, setFindOpen] = useState(false);
-  const [findQuery, setFindQuery] = useState("");
-  const [followFind, setFollowFind] = useState("");
-  const [followDirection, setFollowDirection] = useState("entire");
-  const [isCaptureMode, setIsCaptureMode] = useState(false);
-
-  const localDetailsRef = useRef<Record<string, Detail>>({});
-  const localStreamsRef = useRef<Record<string, StreamData>>({});
-
   const frozen = useRef<FrozenState | null>(null);
   const token = useRef<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const panesRef = useRef<HTMLDivElement>(null);
   const upload = useRef<HTMLInputElement>(null);
+  const filterInput = useRef<HTMLInputElement>(null);
+  const findInput = useRef<HTMLInputElement>(null);
+  const detailsRef = useRef<HTMLDivElement>(null);
+  const bytesRef = useRef<HTMLDivElement>(null);
+  const rowsRef = useRef<Row[]>([]);
+  rowsRef.current = rows;
 
+  const inCaptureView = view === "main" || view === "follow";
+  const hasFile = Boolean(token.current) && inCaptureView;
+
+  // ------------------------------------------------------------------ start-up
   useEffect(() => {
-    setIsCaptureMode(new URLSearchParams(window.location.search).get("capture") === "1");
+    const capture = new URLSearchParams(window.location.search).get("capture") === "1";
+    setIsCaptureMode(capture);
+    setRecentFilters(readRecent());
+    if (capture) return;
+    api.get("/api/netlab/wireshark/samples").then((r) => (setSamples(r.data.samples), setSampleNote(r.data.note))).catch(() => undefined);
+    api
+      .get("/api/netlab/wireshark/capture/interfaces")
+      .then((r) => {
+        setLive({ available: r.data.available, reason: r.data.reason, interfaces: r.data.interfaces });
+        if (r.data.interfaces?.length) setSelectedIface(r.data.interfaces[0].id);
+      })
+      .catch(() => setLive({ available: false, reason: "The capture service could not be reached.", interfaces: [] }));
   }, []);
 
   useEffect(() => {
-    if (!openMenu && !showBookmarks) return;
+    if (!openMenu && !context && !recentOpen) return;
     const close = () => {
       setOpenMenu(null);
-      setShowBookmarks(false);
+      setHoverSub(null);
+      setContext(null);
+      setRecentOpen(false);
     };
-    window.addEventListener("click", close);
-    return () => window.removeEventListener("click", close);
-  }, [openMenu, showBookmarks]);
+    window.addEventListener("mousedown", close);
+    return () => window.removeEventListener("mousedown", close);
+  }, [openMenu, context, recentOpen]);
 
-  const selectPacket = useCallback(
-    async (number: number, expandNames?: string[]) => {
-      setDiagramRange(null);
-      let next: Detail | undefined;
-      if (frozen.current) next = frozen.current.details[String(number)];
-      else if (localSampleMode) next = localDetailsRef.current[String(number)];
-      else if (token.current) {
-        try {
-          next = (await api.get(`/api/netlab/wireshark/${token.current}/packet/${number}`)).data;
-        } catch {
-          setMessage("The capture is no longer open on the server. Open the file again.");
-        }
+  // ------------------------------------------------------------------ packets
+  const selectPacket = useCallback(async (number: number, expandNames?: string[], pick?: string | null) => {
+    let next: Detail | undefined;
+    if (frozen.current) next = frozen.current.details[String(number)];
+    else if (token.current) {
+      try {
+        next = (await api.get(`/api/netlab/wireshark/${token.current}/packet/${number}`)).data;
+      } catch {
+        setMessage("The capture is no longer open on the server. Open the file again.");
       }
-      if (!next) return;
+    } else {
       setSelected(number);
-      setDetail(next);
-      const wanted = findByPrefix(next.tree, expandNames ?? []);
-      setOpen(new Set(wanted.map((item) => item.key)));
-      setPickedNode(wanted.length ? wanted[0].key : null);
-    },
-    [localSampleMode],
-  );
+      return;
+    }
+    if (!next) return;
+    setSelected(number);
+    setDetail(next);
+    setByteRange(null);
+    if (expandNames) {
+      const keys = next.tree.map((node, index) => (expandNames.some((name) => node.label.startsWith(name)) ? String(index) : "")).filter(Boolean);
+      setOpen(new Set(keys));
+      setPickedNode(keys[0] ?? null);
+    } else if (pick !== undefined) {
+      setPickedNode(pick);
+      if (pick) setOpen((prev) => new Set([...Array.from(prev), ...ancestors(pick)]));
+    } else {
+      setPickedNode((prev) => (prev && nodeAt(next!.tree, prev) ? prev : null));
+    }
+  }, []);
 
-  const applyFilter = useCallback(async (expression: string) => {
-    const text = expression.trim();
-    setFilterError("");
-    if (!text) {
-      setApplied("");
-      setVisible(null);
-      return;
-    }
-    if (localSampleMode) {
-      const res = evaluateSampleFilter(rows, text);
-      if (res.ok) {
-        setApplied(text);
-        setVisible(res.numbers ?? []);
-      } else {
-        setFilterError(res.error ?? "Invalid filter syntax.");
-      }
-      return;
-    }
-    if (frozen.current) {
-      const hit = frozen.current.filters[text];
-      if (hit) {
-        setApplied(text);
-        setVisible(hit);
-      } else {
-        setFilterError("This filter is not available in the recorded view.");
-      }
-      return;
-    }
-    if (!token.current) return;
-    try {
-      const response = await api.get(`/api/netlab/wireshark/${token.current}/filter`, { params: { expr: text } });
-      setApplied(text);
-      setVisible(response.data.numbers);
-    } catch (error: unknown) {
-      const detailText = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setFilterError(typeof detailText === "string" ? detailText : "The filter could not be applied.");
-    }
-  }, [localSampleMode, rows]);
-
-  const openGoogleDnsSample = useCallback(() => {
-    const sample = buildEducationalHttpsDnsCapture();
-    token.current = null;
-    frozen.current = null;
-    localDetailsRef.current = sample.details;
-    localStreamsRef.current = sample.streams;
-    setLocalSampleMode(true);
-    setRows(sample.packets);
-    setFile(sample.file);
+  const resetView = useCallback(() => {
     setApplied("");
     setFilterText("");
-    setFilterError("");
+    setFilterState("empty");
+    setFilterMessage("");
     setVisible(null);
-    setSelected(1);
-    setDetail(sample.details["1"]);
+    setSelected(null);
+    setDetail(null);
+    setOpen(new Set());
+    setPickedNode(null);
+    setMarked(new Set());
     setFollow(null);
-    setMessage("");
-    setView("main");
+    setSort(null);
   }, []);
 
-  const openCapture = useCallback(async (picked?: File) => {
-    setBusy("Reading the capture…");
-    setMessage("");
-    try {
-      const form = new FormData();
-      if (picked) form.append("file", picked);
-      else form.append("scenario", "true");
-      const response = await api.post("/api/netlab/wireshark/open", form, { headers: { "Content-Type": "multipart/form-data" } });
-      token.current = response.data.token;
+  const opened = useCallback(
+    (data: { token: string; rows: Row[]; file: string; meta: CaptureMeta; warning?: string }) => {
+      token.current = data.token;
       frozen.current = null;
-      setLocalSampleMode(false);
-      setRows(response.data.rows);
-      setFile(response.data.file);
-      setInterfaces(response.data.interfaces);
-      setApplied("");
-      setFilterText("");
-      setFilterError("");
-      setVisible(null);
-      setSelected(null);
-      setDetail(null);
-      setFollow(null);
+      setRows(data.rows);
+      setFile(data.file);
+      setMeta(data.meta);
+      resetView();
       setView("main");
-      if (response.data.rows?.length) {
-        const firstNo = response.data.rows[0].no;
-        setTimeout(async () => {
-          if (!token.current) return;
-          try {
-            const firstDetail = (await api.get(`/api/netlab/wireshark/${token.current}/packet/${firstNo}`)).data;
-            setSelected(firstNo);
-            setDetail(firstDetail);
-            setOpen(new Set());
-            setPickedNode(null);
-          } catch {
-            /* ignore initial auto-select failure */
-          }
-        }, 0);
+      setMessage(data.warning || "");
+      setRecentFiles((prev) => [data.file, ...prev.filter((name) => name !== data.file)].slice(0, 6));
+      if (data.rows.length) void selectPacket(data.rows[0].no);
+    },
+    [resetView, selectPacket],
+  );
+
+  const openCapture = useCallback(
+    async (source: { file?: File; sample?: string }) => {
+      setBusy("Loading…");
+      setMessage("");
+      try {
+        const form = new FormData();
+        if (source.file) form.append("file", source.file);
+        if (source.sample) form.append("sample", source.sample);
+        const response = await api.post("/api/netlab/wireshark/open", form, { headers: { "Content-Type": "multipart/form-data" } });
+        opened(response.data);
+      } catch (error) {
+        setMessage(errorText(error, "The capture could not be opened."));
+      } finally {
+        setBusy("");
       }
-    } catch (error: unknown) {
-      const detailText = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setMessage(typeof detailText === "string" ? detailText : "The capture could not be opened.");
-    } finally {
-      setBusy("");
-    }
-  }, []);
+    },
+    [opened],
+  );
 
   const closeCapture = useCallback(() => {
     token.current = null;
     frozen.current = null;
-    setLocalSampleMode(false);
     setRows([]);
     setFile("");
-    setApplied("");
-    setFilterText("");
-    setFilterError("");
-    setVisible(null);
-    setSelected(null);
-    setDetail(null);
-    setFollow(null);
+    setMeta(null);
+    resetView();
     setMessage("");
     setView("welcome");
-  }, []);
+  }, [resetView]);
 
-  const followStream = useCallback(async (index: number) => {
-    if (frozen.current) {
-      const s = frozen.current.streams[String(index)] ?? null;
-      if (s) {
-        setFollow(s);
-        setView("follow");
+  // ------------------------------------------------------------------ live capture
+  const startCapture = useCallback(
+    async (settings?: CaptureSettings) => {
+      const iface = settings?.interface ?? selectedIface;
+      if (!live.available || !iface) {
+        setDialog({ kind: "capture" });
+        return;
       }
+      setDialog(null);
+      try {
+        const response = await api.post("/api/netlab/wireshark/capture/start", {
+          interface: iface,
+          capture_filter: settings?.filter ?? captureFilter,
+          max_packets: settings?.maxPackets ?? captureLimits.maxPackets,
+          max_seconds: settings?.maxSeconds ?? captureLimits.maxSeconds,
+        });
+        token.current = null;
+        frozen.current = null;
+        setRows([]);
+        setFile("");
+        setMeta(null);
+        resetView();
+        setView("main");
+        const name = live.interfaces.find((item) => item.id === iface)?.name ?? iface;
+        setCapturing({ job: response.data.job, interface: name, started: Date.now() });
+        setMessage("");
+      } catch (error) {
+        setMessage(errorText(error, "The capture could not be started."));
+      }
+    },
+    [captureFilter, captureLimits, live, resetView, selectedIface],
+  );
+
+  const stopCapture = useCallback(async () => {
+    if (!capturing) return;
+    const job = capturing.job;
+    setCapturing(null);
+    try {
+      const response = await api.post(`/api/netlab/wireshark/capture/${job}/stop`);
+      opened(response.data);
+    } catch (error) {
+      setMessage(errorText(error, "The capture could not be stopped."));
+      setView(rows.length ? "main" : "welcome");
+    }
+  }, [capturing, opened, rows.length]);
+
+  useEffect(() => {
+    if (!capturing) return;
+    let cancelled = false;
+    const timer = window.setInterval(async () => {
+      try {
+        const response = await api.get(`/api/netlab/wireshark/capture/${capturing.job}`, { params: { since: rowsRef.current.length } });
+        if (cancelled) return;
+        if (response.data.rows.length) setRows((prev) => [...Array.from(prev), ...response.data.rows]);
+        if (!response.data.running) void stopCapture();
+      } catch (error) {
+        if (!cancelled) {
+          setMessage(errorText(error, "The capture stopped."));
+          setCapturing(null);
+        }
+      }
+    }, 1000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [capturing, stopCapture]);
+
+  // ------------------------------------------------------------------ display filter
+  useEffect(() => {
+    const text = filterText.trim();
+    if (!text) {
+      setFilterState("empty");
+      setFilterMessage("");
       return;
     }
-    if (localSampleMode) {
-      const s = localStreamsRef.current[String(index)] ?? null;
-      if (s) {
-        setFollow(s);
+    if (frozen.current) {
+      setFilterState(frozen.current.filters[text] ? "valid" : "invalid");
+      return;
+    }
+    const handle = window.setTimeout(async () => {
+      try {
+        const result = (await api.get("/api/netlab/wireshark/check", { params: { expr: text } })).data;
+        setFilterState(result.valid ? (result.warning ? "warn" : "valid") : "invalid");
+        setFilterMessage(result.error || result.warning || "");
+      } catch {
+        /* the check is only cosmetic; Apply reports real errors */
+      }
+    }, 180);
+    return () => window.clearTimeout(handle);
+  }, [filterText]);
+
+  const applyFilter = useCallback(
+    async (expression: string) => {
+      const text = expression.trim();
+      setFilterText(text);
+      setRecentOpen(false);
+      if (!text) {
+        setApplied("");
+        setVisible(null);
+        setFilterMessage("");
+        return;
+      }
+      if (frozen.current) {
+        const hit = frozen.current.filters[text];
+        if (hit) {
+          setApplied(text);
+          setVisible(hit);
+        } else setFilterMessage("This filter is not available in the recorded view.");
+        return;
+      }
+      if (!token.current) {
+        setFilterMessage(capturing ? "Stop the capture to apply a display filter." : "Open a capture file first.");
+        return;
+      }
+      try {
+        const response = await api.get(`/api/netlab/wireshark/${token.current}/filter`, { params: { expr: text } });
+        setApplied(text);
+        setVisible(response.data.numbers);
+        setFilterMessage("");
+        const next = [text, ...recentFilters.filter((item) => item !== text)].slice(0, 12);
+        setRecentFilters(next);
+        writeRecent(next);
+        if (selected !== null && !response.data.numbers.includes(selected) && response.data.numbers.length) {
+          void selectPacket(response.data.numbers[0]);
+        }
+      } catch (error) {
+        setFilterState("invalid");
+        setFilterMessage(errorText(error, "The filter could not be applied."));
+      }
+    },
+    [capturing, recentFilters, selectPacket, selected],
+  );
+
+  // ------------------------------------------------------------------ follow stream
+  const followStream = useCallback(async (index: number) => {
+    if (frozen.current) {
+      const stream = frozen.current.streams[String(index)];
+      if (stream) {
+        setFollow(stream);
         setView("follow");
       }
       return;
@@ -354,13 +475,18 @@ export function WiresharkStudio() {
     try {
       const data = (await api.get(`/api/netlab/wireshark/${token.current}/stream/${index}`)).data;
       setFollow(data);
+      setFollowDirection("entire");
       setView("follow");
+      setFilterText(`tcp.stream eq ${index}`);
+      const filtered = await api.get(`/api/netlab/wireshark/${token.current}/filter`, { params: { expr: `tcp.stream eq ${index}` } });
+      setApplied(`tcp.stream eq ${index}`);
+      setVisible(filtered.data.numbers);
     } catch {
       setMessage("The stream could not be loaded.");
     }
-  }, [localSampleMode]);
+  }, []);
 
-  // --- Capture hook for automated LabMate screenshots ---
+  // ------------------------------------------------------------------ report capture hook (backend studio_capture.py)
   useStudioHook<FrozenState, Step>(
     {
       load: (state) => {
@@ -368,7 +494,7 @@ export function WiresharkStudio() {
         token.current = null;
         setRows(state.packets);
         setFile(state.file);
-        setInterfaces(state.interfaces);
+        setFrozenInterfaces(state.interfaces);
         setTick((n) => n + 1);
       },
       show: (step) => {
@@ -376,102 +502,643 @@ export function WiresharkStudio() {
         if (!state) return;
         setView(step.view);
         setFollow(null);
-        setFilterError("");
+        setFilterMessage("");
+        setFindOpen(false);
+        setGotoOpen(false);
         if (step.view === "main" || step.view === "follow") {
           const expression = step.view === "follow" ? `tcp.stream eq ${step.stream}` : step.filter ?? "";
           const numbers = step.view === "follow" ? state.streams[String(step.stream)]?.packets ?? null : state.filters[step.filter ?? ""] ?? null;
           setFilterText(expression);
           setApplied(expression);
           setVisible(expression ? numbers : null);
-          if (step.select) void selectPacket(step.select, step.expand);
+          if (step.select) void selectPacket(step.select, step.expand ?? []);
           if (step.view === "follow" && step.stream !== undefined) setFollow(state.streams[String(step.stream)] ?? null);
         }
         if (step.view === "browser" && step.host) setPage(state.pages[step.host] ?? null);
         setTick((n) => n + 1);
       },
     },
-    `${tick}:${view}:${selected}:${applied}:${detail?.no}`,
+    `${tick}:${view}:${selected}:${applied}:${detail?.no}:${filterState}`,
+  );
+
+  // ------------------------------------------------------------------ derived views
+  const shown = useMemo(() => {
+    const keep = visible ? new Set(visible) : null;
+    const list = keep ? rows.filter((row) => keep.has(row.no)) : rows;
+    if (!sort) return list;
+    const key = (row: Row): string | number =>
+      [row.no, row.epoch, row.source, row.destination, row.protocol, row.length, row.info][sort.col] as string | number;
+    return [...list].sort((a, b) => {
+      const x = key(a);
+      const y = key(b);
+      return (typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y), undefined, { numeric: true })) * sort.dir || a.no - b.no;
+    });
+  }, [rows, visible, sort]);
+
+  const rowIndex = useMemo(() => new Map(rows.map((row, index) => [row.no, index])), [rows]);
+
+  useEffect(() => {
+    if (selected !== null) listRef.current?.querySelector(`[data-no="${selected}"]`)?.scrollIntoView({ block: "nearest" });
+  }, [selected, visible, view]);
+
+  useEffect(() => {
+    if (capturing && autoScroll && listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
+  }, [rows.length, capturing, autoScroll]);
+
+  useEffect(() => {
+    detailsRef.current?.querySelector("[data-picked='1']")?.scrollIntoView({ block: "nearest" });
+  }, [pickedNode, detail]);
+
+  const picked = detail ? nodeAt(detail.tree, pickedNode) : null;
+  const highlight = useMemo(
+    () => byteRange ?? (picked && picked.end > picked.start ? { start: picked.start, end: picked.end } : null),
+    [byteRange, picked],
   );
 
   useEffect(() => {
-    if (selected !== null) listRef.current?.querySelector(`[data-no="${selected}"]`)?.scrollIntoView({ block: "center" });
-  }, [selected, visible, view]);
+    if (highlight) bytesRef.current?.querySelector(`[data-offset="${highlight.start}"]`)?.scrollIntoView({ block: "nearest" });
+  }, [highlight]);
 
-  const shown = useMemo(() => {
-    if (!visible) return rows;
-    const keep = new Set(visible);
-    return rows.filter((row) => keep.has(row.no));
-  }, [rows, visible]);
-
-  const jumpRelative = useCallback(
-    (delta: number | "first" | "last") => {
+  const jump = useCallback(
+    (to: number | "first" | "last") => {
       if (!shown.length) return;
-      if (delta === "first") {
-        void selectPacket(shown[0].no);
-        return;
-      }
-      if (delta === "last") {
-        void selectPacket(shown[shown.length - 1].no);
-        return;
-      }
-      const curIdx = shown.findIndex((r) => r.no === selected);
-      const targetIdx = curIdx < 0 ? 0 : Math.max(0, Math.min(shown.length - 1, curIdx + delta));
-      void selectPacket(shown[targetIdx].no);
+      if (to === "first") return void selectPacket(shown[0].no);
+      if (to === "last") return void selectPacket(shown[shown.length - 1].no);
+      const at = shown.findIndex((row) => row.no === selected);
+      const target = at < 0 ? 0 : Math.max(0, Math.min(shown.length - 1, at + to));
+      void selectPacket(shown[target].no);
     },
     [shown, selected, selectPacket],
   );
 
-  const runFind = useCallback(() => {
-    const q = findQuery.trim().toLowerCase();
-    if (!q || !shown.length) return;
-    const startIdx = Math.max(0, shown.findIndex((r) => r.no === selected) + 1);
-    const ordered = [...shown.slice(startIdx), ...shown.slice(0, startIdx)];
-    const match = ordered.find(
-      (r) =>
-        (/^\d+$/.test(q) && r.no === Number(q)) ||
-        r.info.toLowerCase().includes(q) ||
-        r.protocol.toLowerCase().includes(q) ||
-        r.source.toLowerCase().includes(q) ||
-        r.destination.toLowerCase().includes(q),
-    );
-    if (match) void selectPacket(match.no);
-    else setMessage(`No packet matching "${findQuery}" found.`);
-  }, [findQuery, shown, selected, selectPacket]);
+  const jumpConversation = useCallback(
+    (delta: 1 | -1) => {
+      const current = rows.find((row) => row.no === selected);
+      if (!current) return;
+      const same = (row: Row) =>
+        (current.stream >= 0 && row.stream === current.stream) ||
+        ((current.udp_stream ?? -1) >= 0 && row.udp_stream === current.udp_stream) ||
+        (!!current.ip_src && [row.ip_src, row.ip_dst].sort().join() === [current.ip_src, current.ip_dst].sort().join());
+      const at = shown.findIndex((row) => row.no === selected);
+      for (let i = at + delta; i >= 0 && i < shown.length; i += delta) {
+        if (same(shown[i])) return void selectPacket(shown[i].no);
+      }
+    },
+    [rows, selected, shown, selectPacket],
+  );
 
-  const highlight = useMemo(() => {
-    if (diagramRange) return diagramRange;
-    if (!detail || pickedNode === null) return null;
-    let nodes = detail.tree;
-    let node: TreeNode | undefined;
-    for (const part of pickedNode.split(".").map(Number)) {
-      node = nodes[part];
-      if (!node) return null;
-      nodes = node.children;
+  const gotoPacket = useCallback(
+    (text: string) => {
+      const number = Number(text);
+      if (!Number.isInteger(number) || !rowIndex.has(number)) {
+        setMessage(`There is no packet number ${text}.`);
+        return;
+      }
+      if (visible && !visible.includes(number)) {
+        setMessage(`Packet ${number} is not shown by the current display filter.`);
+        return;
+      }
+      setGotoOpen(false);
+      void selectPacket(number);
+    },
+    [rowIndex, visible, selectPacket],
+  );
+
+  const linkedPacket = useMemo(() => {
+    if (!picked) return null;
+    const match = picked.label.match(/(?:frame|In|in): (\d+)\]$/);
+    return match ? Number(match[1]) : null;
+  }, [picked]);
+
+  const runFind = useCallback(
+    async (backward = false) => {
+      if (!find.query.trim()) return;
+      if (frozen.current || !token.current) return;
+      try {
+        const response = await api.get(`/api/netlab/wireshark/${token.current}/find`, {
+          params: { q: find.query, mode: find.mode, scope: find.scope, after: selected ?? 0, backward, case: find.caseSensitive, expr: applied },
+        });
+        if (!response.data.found) {
+          setMessage(`No packet contained ${find.mode === "filter" ? "the filter" : "the " + find.mode} "${find.query}".`);
+          return;
+        }
+        setMessage("");
+        await selectPacket(response.data.number, undefined, response.data.path ?? null);
+        setByteRange(response.data.range ? { start: response.data.range[0], end: response.data.range[1] } : null);
+      } catch (error) {
+        setMessage(errorText(error, "The search could not be run."));
+      }
+    },
+    [applied, find, selectPacket, selected],
+  );
+
+  // ------------------------------------------------------------------ marks, statistics, export
+  const toggleMark = useCallback((number: number | null) => {
+    if (number === null) return;
+    setMarked((prev) => {
+      const next = new Set(prev);
+      if (next.has(number)) next.delete(number);
+      else next.add(number);
+      return next;
+    });
+  }, []);
+
+  const jumpMark = useCallback(
+    (delta: 1 | -1) => {
+      const at = shown.findIndex((row) => row.no === selected);
+      for (let i = at + delta; i >= 0 && i < shown.length; i += delta) {
+        if (marked.has(shown[i].no)) return void selectPacket(shown[i].no);
+      }
+    },
+    [marked, selected, shown, selectPacket],
+  );
+
+  const openStats = useCallback(
+    async (which: "properties" | "hierarchy" | "conversations" | "endpoints") => {
+      if (!token.current) {
+        setMessage(frozen.current ? "Statistics are not part of the recorded view." : "Open a capture file first.");
+        return;
+      }
+      if (which === "conversations" || which === "endpoints") return setDialog({ kind: which });
+      try {
+        const response = await api.get(`/api/netlab/wireshark/${token.current}/stats/${which}`, { params: { expr: applied, marked: marked.size } });
+        setDialog(which === "properties" ? { kind: "properties", data: response.data } : { kind: "hierarchy", rows: response.data.rows });
+      } catch (error) {
+        setMessage(errorText(error, "The statistics could not be computed."));
+      }
+    },
+    [applied, marked.size],
+  );
+
+  const loadTraffic = useCallback(
+    (mode: "conversations" | "endpoints") => async (kind: string, limit: boolean) =>
+      (await api.get(`/api/netlab/wireshark/${token.current}/stats/${mode}`, { params: { kind, expr: limit ? applied : "" } })).data,
+    [applied],
+  );
+  const loadConversations = useMemo(() => loadTraffic("conversations"), [loadTraffic]);
+  const loadEndpoints = useMemo(() => loadTraffic("endpoints"), [loadTraffic]);
+
+  const runExport = useCallback(
+    async (mode: ExportMode, choice: ExportChoice) => {
+      if (!token.current) return;
+      const params = { which: mode === "save" ? "all" : choice.which, expr: applied, marked: Array.from(marked).join(","), format: choice.format };
+      try {
+        const path = mode === "dissections" ? "dissections" : "export";
+        const response = await api.get(`/api/netlab/wireshark/${token.current}/${path}`, {
+          params: mode === "dissections" ? { ...params, details: choice.details, bytes: choice.bytes } : params,
+          responseType: "blob",
+        });
+        const disposition = String(response.headers["content-disposition"] ?? "");
+        const name = disposition.match(/filename="([^"]+)"/)?.[1] ?? `capture.${choice.format}`;
+        download(response.data, name);
+        setDialog(null);
+        setMessage(`Saved ${name}.`);
+      } catch (error) {
+        setMessage(errorText(error, "The file could not be written."));
+      }
+    },
+    [applied, marked],
+  );
+
+  const exportBytes = useCallback(() => {
+    if (!detail) return;
+    const bytes = new Uint8Array(detail.hex.flatMap((line) => line.hex.map((byte) => parseInt(byte, 16))));
+    const range = highlight ?? { start: 0, end: bytes.length };
+    download(new Blob([bytes.slice(range.start, range.end)], { type: "application/octet-stream" }), `packet-${detail.no}.bin`);
+  }, [detail, highlight]);
+
+  const copy = useCallback((text: string) => {
+    void navigator.clipboard?.writeText(text).then(() => setMessage("Copied to the clipboard."), () => setMessage("The clipboard is not available."));
+  }, []);
+
+  const summaryText = useCallback(
+    (row: Row) => `${row.no}\t${formatTime(row, timeFormat)}\t${address(row, "source", resolveMac)}\t${address(row, "destination", resolveMac)}\t${row.protocol}\t${row.length}\t${row.info}`,
+    [resolveMac, timeFormat],
+  );
+
+  // ------------------------------------------------------------------ tree actions
+  const subtreeKeys = useCallback((key: string) => {
+    if (!detail) return [];
+    const node = nodeAt(detail.tree, key);
+    if (!node) return [];
+    return [key, ...allKeys(node.children, key.split(".").map(Number))];
+  }, [detail]);
+
+  const filterFromNode = useCallback(
+    (how: "replace" | "and" | "or" | "andnot" | "ornot" | "not", apply: boolean) => {
+      if (!picked?.filter) {
+        setMessage("This line has no field that a display filter can match.");
+        return;
+      }
+      const text = combine(applied || filterText, picked.filter, how);
+      setFilterText(text);
+      if (apply) void applyFilter(text);
+      else filterInput.current?.focus();
+    },
+    [applied, applyFilter, filterText, picked],
+  );
+
+  const filterSubmenu = (apply: boolean): MenuEntry[] => [
+    { label: "Selected", action: () => filterFromNode("replace", apply), disabled: !picked?.filter },
+    { label: "Not Selected", action: () => filterFromNode("not", apply), disabled: !picked?.filter },
+    { label: "…and Selected", action: () => filterFromNode("and", apply), disabled: !picked?.filter },
+    { label: "…or Selected", action: () => filterFromNode("or", apply), disabled: !picked?.filter },
+    { label: "…and not Selected", action: () => filterFromNode("andnot", apply), disabled: !picked?.filter },
+    { label: "…or not Selected", action: () => filterFromNode("ornot", apply), disabled: !picked?.filter },
+  ];
+
+  const currentRow = rows.find((row) => row.no === selected) ?? null;
+  const conversationSubmenu: MenuEntry[] = currentRow
+    ? conversationFilters(currentRow).map((item) => ({ label: item.label, action: () => void applyFilter(item.filter), disabled: !hasFile }))
+    : [{ label: "No packet selected", disabled: true }];
+  const canFollow = Boolean(currentRow && currentRow.stream >= 0);
+
+  // ------------------------------------------------------------------ menus
+  const off = (label: string, shortcut?: string): MenuEntry => ({ label, shortcut, disabled: true });
+  const menus: Record<string, MenuEntry[]> = {
+    File: [
+      { label: "Open…", shortcut: "Ctrl+O", action: () => upload.current?.click(), disabled: !!capturing },
+      { label: "Open Recent", submenu: recentFiles.length ? recentFiles.map((name) => ({ label: name, disabled: true })) : [{ label: "No recent files", disabled: true }] },
+      {
+        label: "Open Sample Capture",
+        submenu: samples.length
+          ? samples.map((sample) => ({ label: `${sample.file} — ${sample.title}`, action: () => void openCapture({ sample: sample.id }), disabled: !!capturing }))
+          : [{ label: "No sample captures", disabled: true }],
+      },
+      off("Merge…"),
+      off("Import from Hex Dump…"),
+      { label: "Close", shortcut: "Ctrl+W", action: closeCapture, disabled: !inCaptureView || !!capturing },
+      { divider: true },
+      off("Save", "Ctrl+S"),
+      { label: "Save As…", shortcut: "Ctrl+Shift+S", action: () => setDialog({ kind: "export", mode: "save" }), disabled: !hasFile },
+      { divider: true },
+      off("File Set"),
+      { label: "Export Specified Packets…", action: () => setDialog({ kind: "export", mode: "export" }), disabled: !hasFile },
+      {
+        label: "Export Packet Dissections",
+        submenu: [
+          { label: "As Plain Text…", action: () => setDialog({ kind: "export", mode: "dissections" }), disabled: !hasFile },
+          { label: "As CSV…", action: () => setDialog({ kind: "export", mode: "dissections", format: "csv" }), disabled: !hasFile },
+        ],
+      },
+      { label: "Export Packet Bytes…", shortcut: "Ctrl+Shift+X", action: exportBytes, disabled: !detail },
+      off("Export Objects"),
+      { divider: true },
+      off("Print…", "Ctrl+P"),
+      { divider: true },
+      off("Quit", "Ctrl+Q"),
+    ],
+    Edit: [
+      {
+        label: "Copy",
+        submenu: [
+          { label: "Summary as Text", shortcut: "Ctrl+Alt+C", action: () => currentRow && copy(summaryText(currentRow)), disabled: !currentRow },
+          { label: "…as CSV", action: () => currentRow && copy(summaryText(currentRow).split("\t").map((v) => `"${v.replace(/"/g, '""')}"`).join(",")), disabled: !currentRow },
+          { divider: true },
+          { label: "Description", action: () => picked && copy(picked.label), disabled: !picked },
+          { label: "Field Name", action: () => picked?.abbrev && copy(picked.abbrev), disabled: !picked?.abbrev },
+          { label: "Value", action: () => picked?.value !== undefined && copy(String(picked.value)), disabled: picked?.value === undefined },
+          { label: "As Filter", shortcut: "Ctrl+Shift+C", action: () => picked?.filter && copy(picked.filter), disabled: !picked?.filter },
+        ],
+      },
+      { divider: true },
+      { label: "Find Packet…", shortcut: "Ctrl+F", action: () => (setFindOpen(true), setTimeout(() => findInput.current?.focus(), 0)), disabled: !hasFile },
+      { label: "Find Next", shortcut: "Ctrl+N", action: () => void runFind(false), disabled: !hasFile || !find.query },
+      { label: "Find Previous", shortcut: "Ctrl+B", action: () => void runFind(true), disabled: !hasFile || !find.query },
+      { divider: true },
+      { label: "Mark/Unmark Packet", shortcut: "Ctrl+M", action: () => toggleMark(selected), disabled: selected === null },
+      { label: "Mark All Displayed", shortcut: "Ctrl+Shift+M", action: () => setMarked(new Set(shown.map((row) => row.no))), disabled: !shown.length },
+      { label: "Unmark All Displayed", shortcut: "Ctrl+Alt+M", action: () => setMarked((prev) => new Set(Array.from(prev).filter((n) => !shown.some((row) => row.no === n)))), disabled: !marked.size },
+      { label: "Next Mark", shortcut: "Ctrl+Shift+N", action: () => jumpMark(1), disabled: !marked.size },
+      { label: "Previous Mark", shortcut: "Ctrl+Shift+B", action: () => jumpMark(-1), disabled: !marked.size },
+      { divider: true },
+      off("Ignore/Unignore Packet", "Ctrl+D"),
+      off("Set/Unset Time Reference", "Ctrl+T"),
+      off("Time Shift…"),
+      off("Packet Comments"),
+      { divider: true },
+      off("Configuration Profiles…", "Ctrl+Shift+A"),
+      off("Preferences…", "Ctrl+Shift+P"),
+    ],
+    View: [
+      { label: "Main Toolbar", checked: show.mainToolbar, action: () => setShow((s) => ({ ...s, mainToolbar: !s.mainToolbar })) },
+      { label: "Filter Toolbar", checked: show.filterToolbar, action: () => setShow((s) => ({ ...s, filterToolbar: !s.filterToolbar })) },
+      { label: "Status Bar", checked: show.statusBar, action: () => setShow((s) => ({ ...s, statusBar: !s.statusBar })) },
+      { divider: true },
+      { label: "Full Screen", shortcut: "F11", action: () => void (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.()) },
+      { divider: true },
+      { label: "Packet List", checked: show.list, action: () => setShow((s) => ({ ...s, list: !s.list })) },
+      { label: "Packet Details", checked: show.details, action: () => setShow((s) => ({ ...s, details: !s.details })) },
+      { label: "Packet Bytes", checked: show.bytes, action: () => setShow((s) => ({ ...s, bytes: !s.bytes })) },
+      { divider: true },
+      { label: "Time Display Format", submenu: TIME_FORMATS.map((f) => ({ label: f.label, shortcut: f.shortcut, checked: timeFormat === f.id, action: () => setTimeFormat(f.id) })) },
+      {
+        label: "Name Resolution",
+        submenu: [
+          { label: "Resolve Physical Addresses", checked: resolveMac, action: () => setResolveMac((v) => !v) },
+          off("Resolve Network Addresses"),
+          off("Resolve Transport Addresses"),
+        ],
+      },
+      {
+        label: "Zoom",
+        submenu: [
+          { label: "Zoom In", shortcut: "Ctrl++", action: () => setZoom((z) => Math.min(6, z + 1)) },
+          { label: "Zoom Out", shortcut: "Ctrl+-", action: () => setZoom((z) => Math.max(-3, z - 1)) },
+          { label: "Normal Size", shortcut: "Ctrl+0", action: () => setZoom(0) },
+        ],
+      },
+      { divider: true },
+      { label: "Expand Subtrees", shortcut: "Shift+Right", action: () => pickedNode && setOpen((p) => new Set([...Array.from(p), ...subtreeKeys(pickedNode)])), disabled: !pickedNode },
+      { label: "Collapse Subtrees", shortcut: "Shift+Left", action: () => pickedNode && setOpen((p) => new Set(Array.from(p).filter((k) => !subtreeKeys(pickedNode).includes(k)))), disabled: !pickedNode },
+      { label: "Expand All", shortcut: "Ctrl+Right", action: () => detail && setOpen(new Set(allKeys(detail.tree))), disabled: !detail },
+      { label: "Collapse All", shortcut: "Ctrl+Left", action: () => setOpen(new Set()), disabled: !detail },
+      { divider: true },
+      { label: "Colorize Packet List", checked: colorize, action: () => setColorize((v) => !v) },
+      off("Coloring Rules…"),
+      { divider: true },
+      { label: "Resize Columns", shortcut: "Ctrl+Shift+R", action: () => setWidths(DEFAULT_WIDTHS) },
+      { divider: true },
+      { label: "Reload", shortcut: "Ctrl+R", action: () => token.current && void selectPacket(selected ?? rows[0]?.no ?? 1), disabled: !hasFile },
+    ],
+    Go: [
+      { label: "Go to Packet…", shortcut: "Ctrl+G", action: () => setGotoOpen(true), disabled: !shown.length },
+      { label: "Go to Linked Packet", action: () => linkedPacket && gotoPacket(String(linkedPacket)), disabled: !linkedPacket },
+      { label: "Next Packet", shortcut: "Ctrl+Down", action: () => jump(1), disabled: !shown.length },
+      { label: "Previous Packet", shortcut: "Ctrl+Up", action: () => jump(-1), disabled: !shown.length },
+      { label: "Next Packet In Conversation", shortcut: "Ctrl+.", action: () => jumpConversation(1), disabled: selected === null },
+      { label: "Previous Packet In Conversation", shortcut: "Ctrl+,", action: () => jumpConversation(-1), disabled: selected === null },
+      { label: "First Packet", shortcut: "Ctrl+Home", action: () => jump("first"), disabled: !shown.length },
+      { label: "Last Packet", shortcut: "Ctrl+End", action: () => jump("last"), disabled: !shown.length },
+      { divider: true },
+      { label: "Auto Scroll in Live Capture", checked: autoScroll, action: () => setAutoScroll((v) => !v) },
+    ],
+    Capture: [
+      { label: "Options…", shortcut: "Ctrl+K", action: () => setDialog({ kind: "capture" }), disabled: !!capturing || isCaptureMode },
+      { label: "Start", shortcut: "Ctrl+E", action: () => void startCapture(), disabled: !!capturing || !live.available },
+      { label: "Stop", shortcut: "Ctrl+E", action: () => void stopCapture(), disabled: !capturing },
+      { label: "Restart", shortcut: "Ctrl+R", action: () => void stopCapture().then(() => startCapture()), disabled: !capturing },
+      off("Capture Filters…"),
+      {
+        label: "Refresh Interfaces",
+        shortcut: "F5",
+        action: () =>
+          void api
+            .get("/api/netlab/wireshark/capture/interfaces")
+            .then((r) => setLive({ available: r.data.available, reason: r.data.reason, interfaces: r.data.interfaces }))
+            .catch(() => undefined),
+      },
+    ],
+    Analyze: [
+      { label: "Display Filters…", action: () => void openReference(), disabled: false },
+      off("Display Filter Macros…"),
+      { divider: true },
+      off("Apply as Column", "Ctrl+Shift+I"),
+      { label: "Apply as Filter", submenu: filterSubmenu(true) },
+      { label: "Prepare as Filter", submenu: filterSubmenu(false) },
+      { label: "Conversation Filter", submenu: conversationSubmenu },
+      { divider: true },
+      off("Enabled Protocols…", "Ctrl+Shift+E"),
+      off("Decode As…", "Ctrl+Shift+U"),
+      { divider: true },
+      {
+        label: "Follow",
+        submenu: [
+          { label: "TCP Stream", shortcut: "Ctrl+Alt+Shift+T", action: () => currentRow && void followStream(currentRow.stream), disabled: !canFollow },
+          off("UDP Stream", "Ctrl+Alt+Shift+U"),
+          off("TLS Stream", "Ctrl+Alt+Shift+S"),
+          off("HTTP Stream", "Ctrl+Alt+Shift+H"),
+        ],
+      },
+      { divider: true },
+      off("Expert Information"),
+    ],
+    Statistics: [
+      { label: "Capture File Properties", shortcut: "Ctrl+Alt+Shift+C", action: () => void openStats("properties"), disabled: !hasFile },
+      off("Resolved Addresses"),
+      { label: "Protocol Hierarchy", action: () => void openStats("hierarchy"), disabled: !hasFile },
+      { label: "Conversations", action: () => void openStats("conversations"), disabled: !hasFile },
+      { label: "Endpoints", action: () => void openStats("endpoints"), disabled: !hasFile },
+      off("Packet Lengths"),
+      off("I/O Graphs"),
+      off("Service Response Time"),
+      { divider: true },
+      off("Flow Graph"),
+      off("HTTP"),
+      off("DNS"),
+    ],
+    Telephony: [off("VoIP Calls"), off("RTP"), off("SIP Flows"), off("SIP Statistics")],
+    Wireless: [off("Bluetooth ATT Server Attributes"), off("Bluetooth Devices"), off("WLAN Traffic")],
+    Tools: [off("Firewall ACL Rules"), off("Credentials"), off("Lua")],
+    Help: [
+      { label: "Display Filter Reference", action: () => void openReference() },
+      {
+        label: "Sample Captures",
+        submenu: samples.length
+          ? samples.map((sample) => ({ label: `${sample.file} — ${sample.title}`, action: () => void openCapture({ sample: sample.id }), disabled: !!capturing }))
+          : [{ label: "No sample captures", disabled: true }],
+      },
+      { divider: true },
+      { label: "About this analyzer", action: () => setDialog({ kind: "about" }) },
+    ],
+  };
+
+  async function openReference() {
+    setDialog({ kind: "reference", data: null });
+    try {
+      const data = (await api.get("/api/netlab/wireshark/fields")).data;
+      setDialog({ kind: "reference", data });
+    } catch {
+      setDialog({ kind: "reference", data: { protocols: [], fields: [] } });
     }
-    return node && node.end > node.start ? { start: node.start, end: node.end } : null;
-  }, [detail, pickedNode, diagramRange]);
+  }
+
+  // ------------------------------------------------------------------ keyboard
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (dialog) return;
+      const target = event.target as HTMLElement;
+      const typing = target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT";
+      const ctrl = event.ctrlKey || event.metaKey;
+      const k = event.key.toLowerCase();
+      const run = (fn: () => void) => {
+        event.preventDefault();
+        fn();
+      };
+      if (ctrl && k === "o" && !event.shiftKey) return run(() => upload.current?.click());
+      if (ctrl && k === "/") return run(() => filterInput.current?.focus());
+      if (ctrl && k === "f" && hasFile) return run(() => (setFindOpen(true), setTimeout(() => findInput.current?.focus(), 0)));
+      if (ctrl && k === "g" && shown.length) return run(() => setGotoOpen(true));
+      if (ctrl && k === "e") return run(() => void (capturing ? stopCapture() : startCapture()));
+      if (ctrl && k === "k" && !isCaptureMode) return run(() => setDialog({ kind: "capture" }));
+      if (ctrl && k === "w" && inCaptureView && !capturing) return run(closeCapture);
+      if (ctrl && event.shiftKey && k === "s" && hasFile) return run(() => setDialog({ kind: "export", mode: "save" }));
+      if (typing) return;
+      if (ctrl && k === "m" && !event.shiftKey && !event.altKey) return run(() => toggleMark(selected));
+      if (ctrl && k === "n") return run(() => void runFind(false));
+      if (ctrl && k === "b") return run(() => void runFind(true));
+      if (ctrl && event.key === "ArrowDown") return run(() => jump(1));
+      if (ctrl && event.key === "ArrowUp") return run(() => jump(-1));
+      if (ctrl && event.key === "Home") return run(() => jump("first"));
+      if (ctrl && event.key === "End") return run(() => jump("last"));
+      if (ctrl && event.key === "ArrowRight" && detail) return run(() => setOpen(new Set(allKeys(detail.tree))));
+      if (ctrl && event.key === "ArrowLeft") return run(() => setOpen(new Set()));
+      if (ctrl && (event.key === "+" || event.key === "=")) return run(() => setZoom((z) => Math.min(6, z + 1)));
+      if (ctrl && event.key === "-") return run(() => setZoom((z) => Math.max(-3, z - 1)));
+      if (ctrl && event.key === "0") return run(() => setZoom(0));
+      if (ctrl && event.key === ".") return run(() => jumpConversation(1));
+      if (ctrl && event.key === ",") return run(() => jumpConversation(-1));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [capturing, closeCapture, detail, dialog, hasFile, inCaptureView, isCaptureMode, jump, jumpConversation, runFind, selected, shown.length, startCapture, stopCapture, toggleMark]);
+
+  // ------------------------------------------------------------------ splitters and columns
+  const panesShown = PANES.filter((key) => show[key]);
+  const startDrag = (a: number, b: number) => (event: ReactMouseEvent) => {
+    event.preventDefault();
+    const box = panesRef.current?.getBoundingClientRect();
+    if (!box) return;
+    const startY = event.clientY;
+    const initial = [...sizes];
+    const shownTotal = panesShown.reduce((sum, key) => sum + initial[PANES.indexOf(key)], 0);
+    const onMove = (move: MouseEvent) => {
+      const delta = ((move.clientY - startY) / box.height) * shownTotal;
+      const next = [...initial];
+      const total = initial[a] + initial[b];
+      next[a] = Math.max(0.08, Math.min(total - 0.08, initial[a] + delta));
+      next[b] = total - next[a];
+      setSizes(next);
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
+
+  const startColumnDrag = (index: number) => (event: ReactMouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX;
+    const initial = widths[index];
+    const onMove = (move: MouseEvent) => setWidths((prev) => prev.map((w, i) => (i === index ? Math.max(30, initial + move.clientX - startX) : w)));
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
+
+  // ------------------------------------------------------------------ rendering helpers
+  const fontSize = 12.5 + zoom;
+  const renderMenu = (entries: MenuEntry[], path: string): JSX.Element => (
+    <div className={path.includes("/") ? `${styles.menuDropdown} ${styles.subMenu}` : styles.menuDropdown} role="menu" onMouseDown={(event) => event.stopPropagation()}>
+      {entries.map((entry, index) => {
+        if ("divider" in entry) return <div key={index} className={styles.menuDivider} />;
+        const key = `${path}/${entry.label}`;
+        const openSub = entry.submenu && hoverSub?.startsWith(key);
+        return (
+          <div key={key} style={{ position: "relative" }} onMouseEnter={() => setHoverSub(entry.submenu ? key : path)}>
+            <button
+              type="button"
+              role="menuitem"
+              className={`${styles.menuDropItem} ${openSub ? styles.menuDropItemOpen : ""}`}
+              disabled={entry.disabled}
+              title={entry.disabled && !entry.submenu ? NOT_HERE : undefined}
+              onClick={() => {
+                if (entry.submenu) return setHoverSub(key);
+                setOpenMenu(null);
+                setContext(null);
+                setHoverSub(null);
+                entry.action?.();
+              }}
+            >
+              <span className={styles.menuCheck}>{entry.checked ? "✓" : ""}</span>
+              <span>{entry.label}</span>
+              <span className={styles.menuShortcut}>{entry.shortcut ?? ""}</span>
+              <span className={styles.menuArrow}>{entry.submenu ? "▶" : ""}</span>
+            </button>
+            {openSub && entry.submenu ? renderMenu(entry.submenu, key) : null}
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  const showContext = (event: ReactMouseEvent, entries: MenuEntry[]) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setOpenMenu(null);
+    setHoverSub("ctx");
+    setContext({ x: Math.min(event.clientX, window.innerWidth - 260), y: Math.min(event.clientY, window.innerHeight - 320), entries });
+  };
 
   const renderNode = (node: TreeNode, path: number[], depth: number): JSX.Element[] => {
-    const key = nodeKey(path);
+    const key = path.join(".");
     const expandable = node.children.length > 0;
     const isOpen = open.has(key);
     const out: JSX.Element[] = [
       <div
         key={key}
         className={`${styles.treeNode} ${pickedNode === key ? styles.treeNodeSelected : ""}`}
-        style={{ paddingLeft: 6 + depth * 15, fontSize: `${11.5 + zoomDelta}px` }}
-        onClick={() => {
-          setDiagramRange(null);
+        data-picked={pickedNode === key ? "1" : undefined}
+        style={{ paddingLeft: 4 + depth * 16, fontSize, height: 18 + zoom }}
+        onMouseDown={() => {
+          setByteRange(null);
           setPickedNode(key);
-          if (expandable) {
+        }}
+        onClick={(event) => {
+          if (!expandable) return;
+          const toggleArea = (event.target as HTMLElement).dataset.toggle === "1";
+          if (toggleArea) {
             const next = new Set(open);
             if (isOpen) next.delete(key);
             else next.add(key);
             setOpen(next);
           }
         }}
+        onDoubleClick={() => {
+          if (expandable) {
+            const next = new Set(open);
+            if (isOpen) next.delete(key);
+            else next.add(key);
+            setOpen(next);
+          }
+          const target = node.label.match(/(?:frame|In|in): (\d+)\]$/);
+          if (target) gotoPacket(target[1]);
+        }}
+        onContextMenu={(event) => {
+          setPickedNode(key);
+          showContext(event, [
+            { label: "Expand Subtrees", shortcut: "Shift+Right", action: () => setOpen((p) => new Set([...Array.from(p), ...subtreeKeys(key)])), disabled: !expandable },
+            { label: "Collapse Subtrees", shortcut: "Shift+Left", action: () => setOpen((p) => new Set(Array.from(p).filter((k) => !subtreeKeys(key).includes(k)))), disabled: !expandable },
+            { label: "Expand All", shortcut: "Ctrl+Right", action: () => detail && setOpen(new Set(allKeys(detail.tree))) },
+            { label: "Collapse All", shortcut: "Ctrl+Left", action: () => setOpen(new Set()) },
+            { divider: true },
+            { label: "Apply as Filter", submenu: filterSubmenuFor(node, true) },
+            { label: "Prepare as Filter", submenu: filterSubmenuFor(node, false) },
+            { divider: true },
+            {
+              label: "Copy",
+              submenu: [
+                { label: "Description", action: () => copy(node.label) },
+                { label: "Field Name", action: () => node.abbrev && copy(node.abbrev), disabled: !node.abbrev },
+                { label: "Value", action: () => node.value !== undefined && copy(String(node.value)), disabled: node.value === undefined },
+                { label: "As Filter", action: () => node.filter && copy(node.filter), disabled: !node.filter },
+              ],
+            },
+            { label: "Export Packet Bytes…", action: exportBytes },
+            { divider: true },
+            { label: "Go to Linked Packet", action: () => linkedPacket && gotoPacket(String(linkedPacket)), disabled: !node.label.match(/(?:frame|In|in): \d+\]$/) },
+          ]);
+        }}
       >
-        <span className={styles.treeToggle}>{expandable ? (isOpen ? "▼" : "▶") : ""}</span>
+        <span className={styles.treeToggle} data-toggle="1">
+          {expandable ? (isOpen ? "▾" : "▸") : ""}
+        </span>
         <span>{node.label}</span>
       </div>,
     ];
@@ -479,17 +1146,54 @@ export function WiresharkStudio() {
     return out;
   };
 
+  function filterSubmenuFor(node: TreeNode, apply: boolean): MenuEntry[] {
+    const make = (how: "replace" | "and" | "or" | "andnot" | "ornot" | "not") => () => {
+      if (!node.filter) return;
+      const text = combine(applied || filterText, node.filter, how);
+      setFilterText(text);
+      if (apply) void applyFilter(text);
+      else filterInput.current?.focus();
+    };
+    const disabled = !node.filter;
+    return [
+      { label: "Selected", action: make("replace"), disabled },
+      { label: "Not Selected", action: make("not"), disabled },
+      { label: "…and Selected", action: make("and"), disabled },
+      { label: "…or Selected", action: make("or"), disabled },
+      { label: "…and not Selected", action: make("andnot"), disabled },
+      { label: "…or not Selected", action: make("ornot"), disabled },
+    ];
+  }
+
   const renderHex = () => {
     if (!detail) return null;
     return detail.hex.map((line) => {
-      const cells = line.hex.map((byte, i) => {
+      const cells: JSX.Element[] = [];
+      line.hex.forEach((byte, i) => {
         const position = line.offset + i;
         const on = highlight && position >= highlight.start && position < highlight.end;
-        return (
-          <span key={i} className={on ? styles.hexHl : undefined}>
+        const nextOn = highlight && position + 1 >= highlight.start && position + 1 < highlight.end && i !== 7 && i !== line.hex.length - 1;
+        cells.push(
+          <span
+            key={`h${i}`}
+            data-offset={position}
+            className={`${styles.hexByte} ${on ? styles.hexHl : ""}`}
+            onMouseDown={() => {
+              const key = deepestAt(detail.tree, position);
+              setByteRange(null);
+              if (key) {
+                setOpen((prev) => new Set([...Array.from(prev), ...ancestors(key)]));
+                setPickedNode(key);
+              }
+            }}
+          >
             {byte}
+          </span>,
+        );
+        cells.push(
+          <span key={`s${i}`} className={on && nextOn ? styles.hexHl : undefined}>
             {i === 7 ? "  " : " "}
-          </span>
+          </span>,
         );
       });
       const pad = line.hex.length < 16 ? " ".repeat((16 - line.hex.length) * 3 + (line.hex.length <= 8 ? 1 : 0)) : "";
@@ -497,15 +1201,21 @@ export function WiresharkStudio() {
         const position = line.offset + i;
         const on = highlight && position >= highlight.start && position < highlight.end;
         return (
-          <span key={i} className={on ? styles.hexHl : undefined}>
+          <span key={i} className={`${styles.hexByte} ${on ? styles.hexHl : ""}`} onMouseDown={() => {
+            const key = deepestAt(detail.tree, position);
+            if (key) {
+              setOpen((prev) => new Set([...Array.from(prev), ...ancestors(key)]));
+              setPickedNode(key);
+            }
+          }}>
             {char}
           </span>
         );
       });
       return (
-        <div key={line.offset} className={styles.hexRow} style={{ fontSize: `${11.5 + zoomDelta}px` }}>
+        <div key={line.offset} className={styles.hexRow} style={{ fontSize, height: 18 + zoom, lineHeight: `${18 + zoom}px` }}>
           <span className={styles.hexOffset}>{line.offset.toString(16).padStart(4, "0")}</span>
-          {"  "}
+          {"   "}
           {cells}
           {pad}
           {"  "}
@@ -515,486 +1225,407 @@ export function WiresharkStudio() {
     });
   };
 
-  const canFollowStream = Boolean(detail && detail.row.stream >= 0 && detail.row.protocol !== "ARP");
-  const filterClass = filterError ? styles.filterInvalid : applied ? styles.filterValid : "";
-  const pct = rows.length ? ((shown.length / rows.length) * 100).toFixed(1) : "0.0";
-  const inCaptureView = view === "main" || view === "follow";
-
-  const getMenuEntries = (
-    name: string,
-  ): Array<{ divider: true } | { label: string; shortcut?: string; disabled?: boolean; action: () => void }> => {
-    if (name === "File")
-      return [
-        { label: "Open...", shortcut: "Ctrl+O", action: () => upload.current?.click() },
-        { label: "Open Practice Capture (HTTP/ARP)", shortcut: "", action: () => void openCapture() },
-        { label: "Open Sample: DNS (google.com) + TLS :443", shortcut: "", action: openGoogleDnsSample },
-        { divider: true },
-        { label: "Close", shortcut: "Ctrl+W", disabled: !inCaptureView, action: closeCapture },
-      ];
-    if (name === "Edit")
-      return [
-        { label: "Find Packet...", shortcut: "Ctrl+F", disabled: !inCaptureView, action: () => setFindOpen((v) => !v) },
-      ];
-    if (name === "View")
-      return [
-        { label: colorize ? "✓ Colorize Packet List" : "Colorize Packet List", shortcut: "", action: () => setColorize((v) => !v) },
-        { label: showDiagram ? "✓ Packet Diagram" : "Packet Diagram", shortcut: "", action: () => setShowDiagram((v) => !v) },
-        { divider: true },
-        { label: "Expand All Layers", shortcut: "", disabled: !detail, action: () => detail && setOpen(new Set(detail.tree.map((_, i) => String(i)))) },
-        { label: "Collapse All Layers", shortcut: "", disabled: !detail, action: () => setOpen(new Set()) },
-        { divider: true },
-        { label: "Zoom In", shortcut: "Ctrl++", action: () => setZoomDelta((z) => Math.min(4, z + 1)) },
-        { label: "Zoom Out", shortcut: "Ctrl+-", action: () => setZoomDelta((z) => Math.max(-2, z - 1)) },
-        { label: "Normal Size", shortcut: "Ctrl+=", action: () => setZoomDelta(0) },
-      ];
-    if (name === "Statistics")
-      return [
-        { label: "Capture File Properties", disabled: !inCaptureView, action: () => setStatsModal("properties") },
-        { label: "Protocol Hierarchy", disabled: !inCaptureView, action: () => setStatsModal("hierarchy") },
-      ];
-    if (name === "Go")
-      return [
-        { label: "Previous Packet", shortcut: "Ctrl+Up", disabled: !shown.length, action: () => jumpRelative(-1) },
-        { label: "Next Packet", shortcut: "Ctrl+Down", disabled: !shown.length, action: () => jumpRelative(1) },
-        { label: "First Packet", shortcut: "Ctrl+Home", disabled: !shown.length, action: () => jumpRelative("first") },
-        { label: "Last Packet", shortcut: "Ctrl+End", disabled: !shown.length, action: () => jumpRelative("last") },
-      ];
-    if (name === "Capture")
-      return [
-        { label: "Start", shortcut: "Ctrl+E", action: () => void openCapture() },
-        { label: "Stop", shortcut: "Ctrl+E", disabled: view === "welcome", action: closeCapture },
-        { label: "Restart", shortcut: "Ctrl+R", disabled: view === "welcome", action: () => void openCapture() },
-      ];
-    if (name === "Analyze")
-      return [
-        { label: "Apply Display Filter", shortcut: "Enter", disabled: !inCaptureView, action: () => void applyFilter(filterText) },
-        { label: "Clear Display Filter", shortcut: "", disabled: !inCaptureView, action: () => { setFilterText(""); void applyFilter(""); } },
-        { divider: true },
-        { label: "Follow > TCP Stream", shortcut: "Ctrl+Alt+Shift+T", disabled: !canFollowStream, action: () => detail && void followStream(detail.row.stream) },
-      ];
-    return [{ label: `${name} options (practice workspace)`, disabled: true, action: () => {} }];
+  const listKeyDown = (event: ReactKeyboardEvent) => {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      jump(event.key === "ArrowDown" ? 1 : -1);
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      jump("first");
+    } else if (event.key === "End") {
+      event.preventDefault();
+      jump("last");
+    }
   };
 
+  const treeKeyDown = (event: ReactKeyboardEvent) => {
+    if (!pickedNode || !detail) return;
+    const node = nodeAt(detail.tree, pickedNode);
+    if (!node) return;
+    if (event.key === "ArrowRight" && node.children.length) {
+      event.preventDefault();
+      setOpen((prev) => new Set([...Array.from(prev), ...(event.shiftKey ? subtreeKeys(pickedNode) : [pickedNode])]));
+    } else if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      if (open.has(pickedNode)) setOpen((prev) => new Set(Array.from(prev).filter((k) => (event.shiftKey ? !subtreeKeys(pickedNode).includes(k) : k !== pickedNode))));
+      else if (pickedNode.includes(".")) setPickedNode(pickedNode.split(".").slice(0, -1).join("."));
+    } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      const order: string[] = [];
+      const walk = (nodes: TreeNode[], path: number[]) =>
+        nodes.forEach((child, index) => {
+          const key = [...path, index].join(".");
+          order.push(key);
+          if (open.has(key)) walk(child.children, [...path, index]);
+        });
+      walk(detail.tree, []);
+      const at = order.indexOf(pickedNode);
+      const next = order[Math.max(0, Math.min(order.length - 1, at + (event.key === "ArrowDown" ? 1 : -1)))];
+      if (next) {
+        setByteRange(null);
+        setPickedNode(next);
+      }
+    }
+  };
+
+  // ------------------------------------------------------------------ status bar text
+  const pct = rows.length ? ((shown.length / rows.length) * 100).toFixed(1) : "0.0";
+  const statusText = capturing
+    ? `Capturing from ${capturing.interface}`
+    : filterMessage && filterState !== "valid"
+      ? filterMessage
+      : message || (picked && inCaptureView ? fieldStatus(picked) : file && inCaptureView ? `File: "${file}"${meta ? ` ${(meta.length / 1024).toFixed(0)} kB` : ""}` : "Ready to load or capture");
+  const statusIsError = !capturing && ((Boolean(filterMessage) && filterState === "invalid") || (/could not|no longer|There is no|is not shown/.test(message) && !picked));
+  const filterClass = filterState === "invalid" ? styles.filterInvalid : filterState === "warn" ? styles.filterWarn : filterState === "valid" ? styles.filterValid : "";
+  const title = capturing ? `Capturing from ${capturing.interface}` : file && inCaptureView ? file : "The Wireshark Network Analyzer";
+  const interfacesForWelcome: LiveInterface[] = frozen.current
+    ? frozenInterfaces.map((name) => ({ id: name, name, description: "", flags: "" }))
+    : live.interfaces;
+
+  // ------------------------------------------------------------------ render
   return (
     <div className={styles.wsRoot}>
       <PracticeBanner tool="Wireshark" />
 
       {view !== "browser" ? (
         <>
-          {/* Windows Title Bar */}
           <div className={styles.titleBar}>
             <div className={styles.titleLeft}>
-              <WiresharkLogoIcon size={17} />
-              <span className={styles.titleText}>
-                {file ? `${file} — Wireshark` : "The Wireshark Network Analyzer"}
-              </span>
+              <WiresharkLogoIcon size={16} />
+              <span className={styles.titleText}>{title}</span>
             </div>
             <div className={styles.winCaptions} aria-hidden="true">
-              <button type="button" className={styles.winBtn} tabIndex={-1}>
-                ─
-              </button>
-              <button type="button" className={styles.winBtn} tabIndex={-1}>
-                ☐
-              </button>
-              <button type="button" className={`${styles.winBtn} ${styles.winClose}`} tabIndex={-1}>
-                ✕
-              </button>
+              <button type="button" className={styles.winBtn} tabIndex={-1}>─</button>
+              <button type="button" className={styles.winBtn} tabIndex={-1}>☐</button>
+              <button type="button" className={`${styles.winBtn} ${styles.winClose}`} tabIndex={-1}>✕</button>
             </div>
           </div>
 
-          {/* Menu Bar */}
-          <div className={styles.menuBar} role="menubar" aria-label="Wireshark menu bar">
-            {MENU_ITEMS.map((item) => (
-              <div key={item} className={styles.menuItemWrap} onClick={(e) => e.stopPropagation()}>
+          <div className={styles.menuBar} role="menubar" aria-label="Menu bar">
+            {MENU_NAMES.map((name) => (
+              <div key={name} className={styles.menuItemWrap} onMouseDown={(event) => event.stopPropagation()}>
                 <button
                   type="button"
                   role="menuitem"
-                  className={`${styles.menuBtn} ${openMenu === item ? styles.menuBtnOpen : ""}`}
-                  onClick={() => setOpenMenu((cur) => (cur === item ? null : item))}
+                  className={`${styles.menuBtn} ${openMenu === name ? styles.menuBtnOpen : ""}`}
+                  onClick={() => {
+                    setContext(null);
+                    setHoverSub(name);
+                    setOpenMenu((cur) => (cur === name ? null : name));
+                  }}
+                  onMouseEnter={() => openMenu && openMenu !== name && (setOpenMenu(name), setHoverSub(name))}
                 >
-                  {item}
+                  {name}
                 </button>
-                {openMenu === item && (
-                  <div className={styles.menuDropdown} role="menu">
-                    {getMenuEntries(item).map((entry, idx) => {
-                      if ("divider" in entry) {
-                        return <div key={idx} className={styles.menuDivider} />;
-                      }
-                      return (
-                        <button
-                          key={entry.label}
-                          type="button"
-                          role="menuitem"
-                          className={styles.menuDropItem}
-                          disabled={entry.disabled}
-                          onClick={() => {
-                            setOpenMenu(null);
-                            entry.action();
-                          }}
-                        >
-                          <span>{entry.label}</span>
-                          {entry.shortcut ? <span className={styles.menuShortcut}>{entry.shortcut}</span> : null}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
+                {openMenu === name ? renderMenu(menus[name], name) : null}
               </div>
             ))}
           </div>
 
-          {/* Main Toolbar */}
-          <div className={styles.mainToolbar} role="toolbar" aria-label="Main Toolbar">
-            <button className={styles.toolBtn} title="Start capturing packets" aria-label="Start capturing packets" onClick={() => void openCapture()}>
-              <WsCaptureStartIcon size={18} />
-            </button>
-            <button className={styles.toolBtn} title="Stop capturing packets" aria-label="Stop capture" disabled={view === "welcome"} onClick={closeCapture}>
-              <WsCaptureStopIcon size={17} />
-            </button>
-            <button className={styles.toolBtn} title="Restart current capture" aria-label="Restart capture" disabled={view === "welcome"} onClick={() => void openCapture()}>
-              <WsCaptureRestartIcon size={18} />
-            </button>
-            <button className={styles.toolBtn} title="Capture options" aria-label="Capture options" onClick={() => setMessage(`Selected interface: ${interfaces[selectedIface] ?? "Ethernet"}`)}>
-              <WsCaptureOptionsIcon size={17} />
-            </button>
+          {show.mainToolbar ? (
+            <div className={styles.mainToolbar} role="toolbar" aria-label="Main toolbar">
+              <button className={styles.toolBtn} title={live.available ? "Start capturing packets" : live.reason || "Start capturing packets"} aria-label="Start capturing packets" disabled={!!capturing || isCaptureMode} onClick={() => void startCapture()}>
+                <WsCaptureStartIcon size={17} active={!!capturing} />
+              </button>
+              <button className={styles.toolBtn} title="Stop capturing packets" aria-label="Stop capturing packets" disabled={!capturing} onClick={() => void stopCapture()}>
+                <WsCaptureStopIcon size={16} />
+              </button>
+              <button className={styles.toolBtn} title="Restart current capture" aria-label="Restart current capture" disabled={!capturing} onClick={() => void stopCapture().then(() => startCapture())}>
+                <WsCaptureRestartIcon size={17} />
+              </button>
+              <button className={styles.toolBtn} title="Capture options" aria-label="Capture options" disabled={!!capturing || isCaptureMode} onClick={() => setDialog({ kind: "capture" })}>
+                <WsCaptureOptionsIcon size={16} />
+              </button>
+              <div className={styles.toolSep} />
+              <button className={styles.toolBtn} title="Open a capture file" aria-label="Open a capture file" disabled={!!capturing} onClick={() => upload.current?.click()}>
+                <WsOpenFolderIcon size={17} />
+              </button>
+              <button className={styles.toolBtn} title="Save this capture file" aria-label="Save this capture file" disabled={!hasFile} onClick={() => setDialog({ kind: "export", mode: "save" })}>
+                <WsSaveIcon size={16} />
+              </button>
+              <button className={styles.toolBtn} title="Close this capture file" aria-label="Close this capture file" disabled={!inCaptureView || !!capturing} onClick={closeCapture}>
+                <WsCloseFileIcon size={16} />
+              </button>
+              <button className={styles.toolBtn} title="Reload this file" aria-label="Reload this file" disabled={!hasFile} onClick={() => selected !== null && void selectPacket(selected)}>
+                <WsReloadIcon size={16} />
+              </button>
+              <div className={styles.toolSep} />
+              <button className={`${styles.toolBtn} ${findOpen ? styles.toolBtnActive : ""}`} title="Find a packet" aria-label="Find a packet" disabled={!hasFile} onClick={() => (setFindOpen((v) => !v), setTimeout(() => findInput.current?.focus(), 0))}>
+                <WsFindIcon size={16} />
+              </button>
+              <button className={styles.toolBtn} title="Go to the previous packet" aria-label="Go to the previous packet" disabled={!shown.length} onClick={() => jump(-1)}>
+                <WsPrevPacketIcon size={16} />
+              </button>
+              <button className={styles.toolBtn} title="Go to the next packet" aria-label="Go to the next packet" disabled={!shown.length} onClick={() => jump(1)}>
+                <WsNextPacketIcon size={16} />
+              </button>
+              <button className={`${styles.toolBtn} ${gotoOpen ? styles.toolBtnActive : ""}`} title="Go to specified packet" aria-label="Go to specified packet" disabled={!shown.length} onClick={() => setGotoOpen((v) => !v)}>
+                <WsGoToPacketIcon size={16} />
+              </button>
+              <button className={styles.toolBtn} title="Go to the first packet" aria-label="Go to the first packet" disabled={!shown.length} onClick={() => jump("first")}>
+                <WsFirstPacketIcon size={16} />
+              </button>
+              <button className={styles.toolBtn} title="Go to the last packet" aria-label="Go to the last packet" disabled={!shown.length} onClick={() => jump("last")}>
+                <WsLastPacketIcon size={16} />
+              </button>
+              <button className={`${styles.toolBtn} ${autoScroll ? styles.toolBtnActive : ""}`} title="Automatically scroll to the last packet during a live capture" aria-label="Auto scroll" onClick={() => setAutoScroll((v) => !v)}>
+                <WsAutoScrollIcon size={16} />
+              </button>
+              <div className={styles.toolSep} />
+              <button className={`${styles.toolBtn} ${colorize ? styles.toolBtnActive : ""}`} title="Draw packets using your coloring rules" aria-label="Colorize packet list" onClick={() => setColorize((v) => !v)}>
+                <WsColorizeIcon size={16} />
+              </button>
+              <div className={styles.toolSep} />
+              <button className={styles.toolBtn} title="Enlarge the main window text" aria-label="Zoom in" onClick={() => setZoom((z) => Math.min(6, z + 1))}>
+                <WsZoomInIcon size={16} />
+              </button>
+              <button className={styles.toolBtn} title="Shrink the main window text" aria-label="Zoom out" onClick={() => setZoom((z) => Math.max(-3, z - 1))}>
+                <WsZoomOutIcon size={16} />
+              </button>
+              <button className={styles.toolBtn} title="Return the main window text to its normal size" aria-label="Normal size" onClick={() => setZoom(0)}>
+                <WsZoomResetIcon size={16} />
+              </button>
+              <button className={styles.toolBtn} title="Resize packet list columns to fit contents" aria-label="Resize columns" disabled={!inCaptureView} onClick={() => setWidths(DEFAULT_WIDTHS)}>
+                <WsResizeColsIcon size={16} />
+              </button>
+              <input
+                ref={upload}
+                type="file"
+                accept=".pcap,.pcapng,.cap"
+                hidden
+                aria-label="Open capture file"
+                onChange={(event) => {
+                  const chosen = event.target.files?.[0];
+                  if (chosen) void openCapture({ file: chosen });
+                  event.target.value = "";
+                }}
+              />
+            </div>
+          ) : null}
 
-            <div className={styles.toolSep} />
-
-            <button className={styles.toolBtn} title="Open a capture file" aria-label="Open a capture file" onClick={() => upload.current?.click()}>
-              <WsOpenFolderIcon size={18} />
-            </button>
-            <button className={styles.toolBtn} title="Save this capture file" aria-label="Save capture file" disabled={!rows.length}>
-              <WsSaveIcon size={17} />
-            </button>
-            <button className={styles.toolBtn} title="Close this capture file" aria-label="Close capture file" disabled={!inCaptureView} onClick={closeCapture}>
-              <WsCloseFileIcon size={17} />
-            </button>
-            <button className={styles.toolBtn} title="Reload this file" aria-label="Reload file" disabled={!inCaptureView} onClick={() => void openCapture()}>
-              <WsReloadIcon size={17} />
-            </button>
-
-            <div className={styles.toolSep} />
-
-            <button className={`${styles.toolBtn} ${findOpen ? styles.toolBtnActive : ""}`} title="Find a packet" aria-label="Find packet" disabled={!inCaptureView} onClick={() => setFindOpen((v) => !v)}>
-              <WsFindIcon size={17} />
-            </button>
-            <button className={styles.toolBtn} title="Go to previous packet" aria-label="Previous packet" disabled={!shown.length} onClick={() => jumpRelative(-1)}>
-              <WsPrevPacketIcon size={17} />
-            </button>
-            <button className={styles.toolBtn} title="Go to next packet" aria-label="Next packet" disabled={!shown.length} onClick={() => jumpRelative(1)}>
-              <WsNextPacketIcon size={17} />
-            </button>
-            <button className={styles.toolBtn} title="Go to specified packet" aria-label="Go to packet" disabled={!shown.length} onClick={() => setFindOpen(true)}>
-              <WsGoToPacketIcon size={17} />
-            </button>
-            <button className={styles.toolBtn} title="Go to the first packet" aria-label="First packet" disabled={!shown.length} onClick={() => jumpRelative("first")}>
-              <WsFirstPacketIcon size={17} />
-            </button>
-            <button className={styles.toolBtn} title="Go to the last packet" aria-label="Last packet" disabled={!shown.length} onClick={() => jumpRelative("last")}>
-              <WsLastPacketIcon size={17} />
-            </button>
-            <button className={`${styles.toolBtn} ${autoScroll ? styles.toolBtnActive : ""}`} title="Auto scroll in live capture" aria-label="Auto scroll" onClick={() => setAutoScroll((v) => !v)}>
-              <WsAutoScrollIcon size={17} />
-            </button>
-
-            <div className={styles.toolSep} />
-
-            <button className={`${styles.toolBtn} ${colorize ? styles.toolBtnActive : ""}`} title="Colorize Packet List" aria-label="Colorize Packet List" onClick={() => setColorize((v) => !v)}>
-              <WsColorizeIcon size={17} />
-            </button>
-            <button className={styles.toolBtn} title="Zoom In" aria-label="Zoom In" onClick={() => setZoomDelta((z) => Math.min(4, z + 1))}>
-              <WsZoomInIcon size={17} />
-            </button>
-            <button className={styles.toolBtn} title="Zoom Out" aria-label="Zoom Out" onClick={() => setZoomDelta((z) => Math.max(-2, z - 1))}>
-              <WsZoomOutIcon size={17} />
-            </button>
-            <button className={styles.toolBtn} title="Normal Size" aria-label="Normal Size" onClick={() => setZoomDelta(0)}>
-              <WsZoomResetIcon size={17} />
-            </button>
-            <button className={styles.toolBtn} title="Resize packet list columns to fit contents" aria-label="Resize columns" disabled={!inCaptureView}>
-              <WsResizeColsIcon size={17} />
-            </button>
-
-            <div className={styles.toolSep} />
-
-            <button
-              className={styles.toolBtn}
-              title="Follow TCP Stream"
-              aria-label="Follow TCP stream"
-              disabled={!canFollowStream}
-              onClick={() => detail && void followStream(detail.row.stream)}
-            >
-              <WsFollowStreamIcon size={17} />
-            </button>
-            <button
-              className={`${styles.toolBtn} ${showDiagram ? styles.toolBtnActive : ""}`}
-              title="Toggle Packet Diagram Pane"
-              aria-label="Toggle Packet Diagram"
-              disabled={!inCaptureView}
-              onClick={() => setShowDiagram((v) => !v)}
-            >
-              <WsPacketDiagramIcon size={17} />
-            </button>
-
-            <input
-              ref={upload}
-              type="file"
-              accept=".pcap,.pcapng,.cap"
-              hidden
-              aria-label="Open capture file"
-              onChange={(event) => {
-                const picked = event.target.files?.[0];
-                if (picked) void openCapture(picked);
-                event.target.value = "";
-              }}
-            />
-          </div>
-
-          {/* Display Filter Toolbar */}
-          <div className={styles.filterToolbar}>
-            <div style={{ position: "relative" }} onClick={(e) => e.stopPropagation()}>
+          {show.filterToolbar ? (
+            <div className={styles.filterToolbar}>
               <button
                 type="button"
                 className={styles.filterBookmarkBtn}
-                title="Display filter bookmarks"
+                title="Manage saved bookmarks."
                 aria-label="Display filter bookmarks"
-                onClick={() => setShowBookmarks((v) => !v)}
+                onMouseDown={(event) => event.stopPropagation()}
+                onClick={(event) =>
+                  showContext(event, [
+                    ...COMMON_FILTERS.map((expression) => ({ label: expression, action: () => void applyFilter(expression) })),
+                    { divider: true },
+                    { label: "Display Filter Reference…", action: () => void openReference() },
+                  ])
+                }
               >
                 <WsBookmarkIcon size={15} />
               </button>
-              {showBookmarks && (
-                <div className={styles.menuDropdown} style={{ minWidth: 230 }}>
-                  {QUICK_FILTERS.map((expr) => (
-                    <button
-                      key={expr}
-                      type="button"
-                      className={styles.menuDropItem}
-                      style={{ paddingLeft: 12 }}
-                      onClick={() => {
-                        setShowBookmarks(false);
-                        setFilterText(expr);
-                        if (inCaptureView) void applyFilter(expr);
-                      }}
-                    >
-                      <span>{expr}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className={`${styles.filterInputBox} ${filterClass}`}>
-              <input
-                className={styles.filterInput}
-                aria-label="Display filter"
-                value={filterText}
-                placeholder="Apply a display filter ... <Ctrl-/>"
-                onChange={(event) => setFilterText(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") void applyFilter(filterText);
-                }}
-              />
-              {filterText ? (
+              <div className={`${styles.filterInputBox} ${filterClass}`}>
+                <input
+                  ref={filterInput}
+                  className={styles.filterInput}
+                  aria-label="Display filter"
+                  spellCheck={false}
+                  value={filterText}
+                  placeholder="Apply a display filter … <Ctrl-/>"
+                  style={{ fontSize }}
+                  onChange={(event) => setFilterText(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") void applyFilter(filterText);
+                    if (event.key === "Escape") setRecentOpen(false);
+                  }}
+                />
+                {filterText ? (
+                  <button type="button" className={styles.filterInlineBtn} title="Clear display filter" aria-label="Clear display filter" onClick={() => void applyFilter("")}>
+                    <WsClearFilterIcon size={13} />
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   className={styles.filterInlineBtn}
-                  title="Clear display filter"
-                  aria-label="Clear"
-                  onClick={() => {
-                    setFilterText("");
-                    void applyFilter("");
-                  }}
+                  title="Recent display filters"
+                  aria-label="Recent display filters"
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onClick={() => setRecentOpen((v) => !v)}
                 >
-                  <WsClearFilterIcon size={14} />
+                  <span style={{ fontSize: 9, color: "#444" }}>▾</span>
                 </button>
+                <button type="button" className={styles.filterInlineBtn} style={{ width: 28 }} title="Apply display filter" aria-label="Apply display filter" onClick={() => void applyFilter(filterText)}>
+                  <WsApplyFilterArrowIcon size={26} />
+                </button>
+              </div>
+              <button type="button" className={styles.filterPlusBtn} title="Add a display filter button." aria-label="Add a filter button" onClick={() => void openReference()}>
+                +
+              </button>
+              {recentOpen ? (
+                <div className={styles.filterRecent} onMouseDown={(event) => event.stopPropagation()}>
+                  {recentFilters.length ? <div className={styles.filterRecentHeading}>Recent</div> : null}
+                  {recentFilters.map((expression) => (
+                    <button key={`r-${expression}`} type="button" className={styles.filterRecentItem} onClick={() => void applyFilter(expression)}>
+                      {expression}
+                    </button>
+                  ))}
+                  <div className={styles.filterRecentHeading}>Common filters</div>
+                  {COMMON_FILTERS.map((expression) => (
+                    <button key={expression} type="button" className={styles.filterRecentItem} onClick={() => void applyFilter(expression)}>
+                      {expression}
+                    </button>
+                  ))}
+                </div>
               ) : null}
-              <button
-                type="button"
-                className={styles.filterInlineBtn}
-                title="Filter History"
-                aria-label="Filter History"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowBookmarks((v) => !v);
-                }}
-              >
-                <span style={{ fontSize: 9, color: "#555753" }}>▾</span>
-              </button>
-              <button
-                type="button"
-                className={styles.filterInlineBtn}
-                style={{ width: 29, height: 22 }}
-                title="Apply display filter"
-                aria-label="Apply"
-                onClick={() => void applyFilter(filterText)}
-              >
-                <WsApplyFilterArrowIcon size={28} />
-              </button>
             </div>
+          ) : null}
 
-            <button
-              type="button"
-              className={styles.filterActionBtn}
-              title="Display filter presets"
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowBookmarks((v) => !v);
-              }}
-            >
-              Expression…
-            </button>
-            {filterText && (
-              <button
-                type="button"
-                className={styles.filterActionBtn}
-                onClick={() => {
-                  setFilterText("");
-                  void applyFilter("");
-                }}
-              >
-                Clear
-              </button>
-            )}
-          </div>
-
-          {findOpen && inCaptureView && (
-            <div className={styles.filterToolbar} style={{ background: "#eef3f8" }}>
-              <span style={{ fontWeight: 600 }}>Find:</span>
+          {findOpen && inCaptureView ? (
+            <div className={styles.searchBar}>
+              <select className={styles.searchSelect} value={find.scope} onChange={(event) => setFind({ ...find, scope: event.target.value })} disabled={find.mode === "filter"} aria-label="Search in">
+                <option value="list">Packet list</option>
+                <option value="details">Packet details</option>
+                <option value="bytes">Packet bytes</option>
+              </select>
+              <select className={styles.searchSelect} disabled aria-label="Character width">
+                <option>Narrow (UTF-8 / ASCII)</option>
+              </select>
+              <label className={styles.qtCheck}>
+                <input type="checkbox" checked={find.caseSensitive} onChange={(event) => setFind({ ...find, caseSensitive: event.target.checked })} />
+                Case sensitive
+              </label>
+              <select className={styles.searchSelect} value={find.mode} onChange={(event) => setFind({ ...find, mode: event.target.value })} aria-label="Search type">
+                <option value="filter">Display filter</option>
+                <option value="hex">Hex value</option>
+                <option value="string">String</option>
+                <option value="regex">Regular Expression</option>
+              </select>
               <input
-                className={styles.filterInputBox}
-                style={{ maxWidth: 320, padding: "0 8px", background: "#fff" }}
-                placeholder="Search packet Info, Protocol, or IP…"
-                value={findQuery}
-                onChange={(e) => setFindQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") runFind();
+                ref={findInput}
+                className={styles.searchInput}
+                value={find.query}
+                spellCheck={false}
+                placeholder={find.mode === "filter" ? "Enter a display filter" : find.mode === "hex" ? "Enter hex bytes, e.g. 00:1b:21" : "Enter text to find"}
+                onChange={(event) => setFind({ ...find, query: event.target.value })}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") void runFind(event.shiftKey);
+                  if (event.key === "Escape") setFindOpen(false);
                 }}
               />
-              <button type="button" className={styles.filterActionBtn} onClick={runFind}>
+              <button type="button" className={`${styles.qtButton} ${styles.qtButtonDefault}`} onClick={() => void runFind(false)}>
                 Find
               </button>
-              <button type="button" className={styles.filterActionBtn} onClick={() => setFindOpen(false)}>
-                Close
+              <button type="button" className={styles.qtButton} onClick={() => setFindOpen(false)}>
+                Cancel
               </button>
             </div>
-          )}
+          ) : null}
 
-          {filterError ? <div className={styles.filterErrorStrip}>{filterError}</div> : null}
+          {gotoOpen && inCaptureView ? (
+            <div className={styles.searchBar}>
+              <span>Go to packet:</span>
+              <input
+                className={styles.searchInput}
+                style={{ flex: "0 0 120px", minWidth: 0 }}
+                autoFocus
+                value={gotoText}
+                onChange={(event) => setGotoText(event.target.value.replace(/\D/g, ""))}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") gotoPacket(gotoText);
+                  if (event.key === "Escape") setGotoOpen(false);
+                }}
+              />
+              <button type="button" className={`${styles.qtButton} ${styles.qtButtonDefault}`} onClick={() => gotoPacket(gotoText)}>
+                Go to packet
+              </button>
+              <button type="button" className={styles.qtButton} onClick={() => setGotoOpen(false)}>
+                Cancel
+              </button>
+            </div>
+          ) : null}
         </>
       ) : null}
 
-      {/* =================================================================
-       * View 1: Authentic Wireshark 4.x Welcome / Interface Window
-       * ================================================================= */}
+      {/* ------------------------------------------------------------ welcome page */}
       {view === "welcome" ? (
         <div className={styles.welcomeWrap}>
-          <div className={styles.welcomeHeroBand}>
-            <div className={styles.welcomeBrandRow}>
-              <WiresharkLogoIcon size={26} />
-              <h1>Welcome to Wireshark</h1>
-            </div>
-            <p className={styles.welcomeSubtitle}>LabMate Practice Capture Engine · Version 4.2</p>
+          <div className={styles.welcomeHeader}>
+            <WiresharkLogoIcon size={30} />
+            <h1>Welcome to Wireshark</h1>
           </div>
-
           <div className={styles.welcomeBody}>
-            <div>
-              <h2 className={styles.welcomeHeading}>Capture</h2>
-              <div className={styles.captureFilterRow}>
-                <span>…using this filter:</span>
-                <WsBookmarkIcon size={14} />
-                <input
-                  className={styles.captureFilterInput}
-                  placeholder="Enter a capture filter …"
-                  readOnly
-                />
-                <select className={styles.followSelect} defaultValue="all" aria-label="Interface filter" style={{ height: 24 }}>
-                  <option value="all">All interfaces shown</option>
-                  <option value="wired">Wired</option>
-                </select>
-              </div>
-
-              <div className={styles.ifaceList} role="listbox" aria-label="Capture interfaces">
-                {interfaces.map((name, index) => (
-                  <div
-                    key={name}
-                    role="option"
-                    aria-selected={selectedIface === index}
-                    className={`${styles.ifaceRow} ${selectedIface === index ? styles.ifaceSelected : ""}`}
-                    onClick={() => setSelectedIface(index)}
-                    onDoubleClick={() => void openCapture()}
-                  >
-                    <div className={styles.ifaceNameWrap}>
-                      <WsInterfaceTypeIcon name={name} />
-                      <span className={styles.ifaceName}>{name}</span>
-                    </div>
-                    <Spark seed={index + 1} selected={selectedIface === index} />
-                  </div>
-                ))}
-              </div>
-
-              {!isCaptureMode && (
-                <div className={styles.welcomeActions}>
-                  <button type="button" className={styles.btnPrimary} onClick={() => void openCapture()} disabled={!!busy}>
-                    Start a practice capture
-                  </button>
-                  <button type="button" className={styles.btnSecondary} onClick={() => upload.current?.click()} disabled={!!busy}>
-                    Open a .pcap or .pcapng file
-                  </button>
-                </div>
-              )}
-
-              {busy ? <p style={{ marginTop: 10 }}>{busy}</p> : null}
-              {message ? (
-                <p role="alert" style={{ color: "#b00020", marginTop: 10 }}>
-                  {message}
-                </p>
+            {!isCaptureMode ? <h2 className={styles.welcomeHeading}>Open</h2> : null}
+            <div className={styles.recentList}>
+              {!isCaptureMode
+                ? samples.map((sample) => (
+                    <button key={sample.id} type="button" className={styles.recentLink} onClick={() => void openCapture({ sample: sample.id })} disabled={!!busy}>
+                      <span>{sample.file}</span>
+                      <span>{sample.title}: {sample.description}</span>
+                    </button>
+                  ))
+                : null}
+              {!isCaptureMode ? (
+                <button type="button" className={styles.recentLink} onClick={() => upload.current?.click()}>
+                  <span>Open a .pcap or .pcapng file…</span>
+                  <span>(Ctrl+O)</span>
+                </button>
               ) : null}
             </div>
+            {sampleNote && !isCaptureMode ? <p className={styles.welcomeNote}>{sampleNote}</p> : null}
 
-            <div>
-              <h2 className={styles.welcomeHeading}>Open</h2>
-              <div className={styles.recentList}>
-                <button type="button" className={styles.recentLink} onClick={() => void openCapture()}>
-                  <WsOpenFolderIcon size={15} />
-                  <span>practice-capture.pcap (Built-in ARP, DNS, ICMP, TCP &amp; HTTP lab capture · 40 packets)</span>
-                </button>
-                <button type="button" className={styles.recentLink} onClick={openGoogleDnsSample}>
-                  <WsOpenFolderIcon size={15} />
-                  <span>google-dns-tls-sample.pcapng [Simulated] (DNS query for www.google.com + TCP/TLS port 443 · 12 packets)</span>
-                </button>
-                <button type="button" className={styles.recentLink} onClick={() => upload.current?.click()}>
-                  <WsOpenFolderIcon size={15} />
-                  <span>Browse for your own .pcap or .pcapng file…</span>
-                </button>
-              </div>
+            <h2 className={styles.welcomeHeading}>Capture</h2>
+            <div className={styles.captureFilterRow}>
+              <span>…using this filter:</span>
+              <WsBookmarkIcon size={14} />
+              <input
+                className={styles.captureFilterInput}
+                value={captureFilter}
+                spellCheck={false}
+                placeholder="Enter a capture filter …"
+                onChange={(event) => setCaptureFilter(event.target.value)}
+                disabled={!live.available}
+              />
+              <select className={styles.searchSelect} defaultValue="all" aria-label="Interfaces shown">
+                <option value="all">All interfaces shown</option>
+              </select>
             </div>
+            <div className={styles.ifaceList} role="listbox" aria-label="Capture interfaces">
+              {interfacesForWelcome.map((item) => (
+                <div
+                  key={item.id}
+                  role="option"
+                  aria-selected={selectedIface === item.id}
+                  className={`${styles.ifaceRow} ${selectedIface === item.id ? styles.ifaceSelected : ""}`}
+                  onClick={() => setSelectedIface(item.id)}
+                  onDoubleClick={() => live.available && void startCapture({ interface: item.id, filter: captureFilter, ...captureLimits })}
+                  title={item.id}
+                >
+                  <div className={styles.ifaceNameWrap}>
+                    <WsInterfaceTypeIcon name={item.name} />
+                    <span>{item.name}</span>
+                  </div>
+                  <span />
+                </div>
+              ))}
+              {!interfacesForWelcome.length ? (
+                <div className={styles.ifaceEmpty}>
+                  <strong>No interfaces found.</strong>
+                  {live.reason || "Checking for capture interfaces…"}
+                </div>
+              ) : null}
+            </div>
+            {busy ? <p className={styles.welcomeNote}>{busy}</p> : null}
+            {message ? <p className={`${styles.welcomeNote} ${styles.statusError}`} role="alert">{message}</p> : null}
 
-            <div className={styles.learnBox}>
-              <h2 className={styles.welcomeHeading} style={{ marginTop: 0 }}>
-                Learn
-              </h2>
-              <div className={styles.learnLinks}>
-                <span>User&apos;s Guide</span>
-                <span>·</span>
-                <span>Wiki</span>
-                <span>·</span>
-                <span>Questions and Answers</span>
-                <span>·</span>
-                <span>Mailing Lists</span>
-              </div>
-              <p>
-                Double-click an interface above (or click the blue shark fin in the toolbar) to inspect packet traffic. Use{" "}
-                <code>arp</code>, <code>http</code>, <code>tcp</code>, <code>icmp</code>, <code>dns</code>, or{" "}
-                <code>ip.addr == 192.168.1.1</code>.
-              </p>
+            <h2 className={styles.welcomeHeading}>Learn</h2>
+            <div className={styles.learnLinks}>
+              <button type="button" className={styles.recentLink} onClick={() => void openReference()}>Display Filter Reference</button>
+              <span>·</span>
+              <button type="button" className={styles.recentLink} onClick={() => setDialog({ kind: "about" })}>About this analyzer</button>
             </div>
+            <p className={styles.welcomeNote}>You are running the LabMate packet analyzer, a practice environment laid out like Wireshark.</p>
           </div>
         </div>
       ) : null}
 
-      {/* =================================================================
-       * View 2: Authentic Windows 11 Microsoft Edge Login Page
-       * ================================================================= */}
+      {/* ------------------------------------------------------------ browser page (report step) */}
       {view === "browser" ? (
         <div className={styles.browserBackdrop}>
           <div className={styles.browserWin}>
@@ -1004,15 +1635,9 @@ export function WiresharkStudio() {
                 <span style={{ opacity: 0.6 }}>✕</span>
               </div>
               <div className={styles.winCaptions} aria-hidden="true">
-                <button type="button" className={styles.winBtn} tabIndex={-1}>
-                  ─
-                </button>
-                <button type="button" className={styles.winBtn} tabIndex={-1}>
-                  ☐
-                </button>
-                <button type="button" className={`${styles.winBtn} ${styles.winClose}`} tabIndex={-1}>
-                  ✕
-                </button>
+                <button type="button" className={styles.winBtn} tabIndex={-1}>─</button>
+                <button type="button" className={styles.winBtn} tabIndex={-1}>☐</button>
+                <button type="button" className={`${styles.winBtn} ${styles.winClose}`} tabIndex={-1}>✕</button>
               </div>
             </div>
             <div className={styles.browserToolbar}>
@@ -1052,148 +1677,122 @@ export function WiresharkStudio() {
         </div>
       ) : null}
 
-      {/* =================================================================
-       * View 3: Main 3-Pane Packet Dissection View (List + Tree + Bytes)
-       * ================================================================= */}
+      {/* ------------------------------------------------------------ packet list, details, bytes */}
       {inCaptureView ? (
-        <div className={`${styles.panes} ${open.size > 0 ? styles.panesDeep : ""}`}>
-          <div className={styles.packetListPane} ref={listRef}>
-            <table className={styles.packetTable} style={{ fontSize: `${11.5 + zoomDelta}px` }}>
-              <colgroup>
-                <col style={{ width: 62 }} />
-                <col style={{ width: 96 }} />
-                <col style={{ width: 185 }} />
-                <col style={{ width: 185 }} />
-                <col style={{ width: 88 }} />
-                <col style={{ width: 68 }} />
-                <col />
-              </colgroup>
-              <thead>
-                <tr>
-                  <th>No.</th>
-                  <th>Time</th>
-                  <th>Source</th>
-                  <th>Destination</th>
-                  <th>Protocol</th>
-                  <th>Length</th>
-                  <th>Info</th>
-                </tr>
-              </thead>
-              <tbody>
-                {shown.map((row) => {
-                  const bg = colorize ? row.color.bg : "#ffffff";
-                  const fg = colorize ? row.color.fg : "#111111";
-                  return (
-                    <tr
-                      key={row.no}
-                      data-no={row.no}
-                      className={`${styles.packetRow} ${selected === row.no ? styles.packetRowSelected : ""}`}
-                      onClick={() => void selectPacket(row.no)}
-                    >
-                      <td style={{ background: bg, color: fg }}>{row.no}</td>
-                      <td style={{ background: bg, color: fg }}>{row.time.toFixed(6)}</td>
-                      <td style={{ background: bg, color: fg }}>{row.source}</td>
-                      <td style={{ background: bg, color: fg }}>{row.destination}</td>
-                      <td style={{ background: bg, color: fg }}>{row.protocol}</td>
-                      <td style={{ background: bg, color: fg }}>{row.length}</td>
-                      <td style={{ background: bg, color: fg }} title={row.info}>
-                        {row.info}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          <div className={styles.packetDetailsPane} aria-label="Packet details">
-            {detail ? (
-              detail.tree.flatMap((node, index) => renderNode(node, [index], 0))
-            ) : (
-              <div style={{ padding: "8px 12px", color: "#777777" }}>Select a packet to inspect its protocol layers.</div>
-            )}
-          </div>
-
-          <div className={styles.packetBytesPane} aria-label="Packet bytes" style={{ display: "flex", gap: 0, padding: 0 }}>
-            <div style={{ flex: 1, minWidth: 0, overflow: "auto", padding: "4px 10px" }}>
-              {renderHex()}
-            </div>
-            {showDiagram && detail ? (
-              <div style={{ flex: 1, minWidth: 0, borderLeft: "1px solid #cbd5e1", background: "#ffffff", overflow: "auto" }} aria-label="Packet diagram">
-                <WsPacketDiagram
-                  layersText={detail.tree.map((t) => t.label)}
-                  protocol={detail.row.protocol}
-                  highlightRange={highlight}
-                  onSelectRange={(start, end) => setDiagramRange({ start, end })}
-                />
+        <div className={styles.panes} ref={panesRef}>
+          {panesShown.map((pane, position) => {
+            const weight = sizes[PANES.indexOf(pane)];
+            const total = panesShown.reduce((sum, key) => sum + sizes[PANES.indexOf(key)], 0);
+            const splitterAfter = position < panesShown.length - 1;
+            const nextPane = splitterAfter ? panesShown[position + 1] : pane;
+            return (
+              <div key={pane} style={{ display: "contents" }}>
+                {pane === "list" ? (
+                  <div className={styles.pane} style={{ flex: `${weight / total} 1 0` }} ref={listRef} tabIndex={0} onKeyDown={listKeyDown} aria-label="Packet list">
+                    <table className={styles.packetTable} style={{ fontSize }}>
+                      <colgroup>
+                        {widths.map((width, index) => (
+                          <col key={index} style={{ width }} />
+                        ))}
+                      </colgroup>
+                      <thead>
+                        <tr>
+                          {COLUMNS.map((name, index) => (
+                            <th
+                              key={name}
+                              style={{ position: "sticky", textAlign: index === 0 || index === 5 ? "right" : "left" }}
+                              onClick={() => setSort((prev) => (prev && prev.col === index ? (prev.dir === 1 ? { col: index, dir: -1 } : null) : { col: index, dir: 1 }))}
+                            >
+                              {sort?.col === index ? <span className={styles.sortMark}>{sort.dir === 1 ? "▲" : "▼"}</span> : null}
+                              {name}
+                              <span className={styles.colResize} onMouseDown={startColumnDrag(index)} onClick={(event) => event.stopPropagation()} />
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {shown.map((row, index) => {
+                          const isMarked = marked.has(row.no);
+                          const bg = colorize ? row.color.bg : "#ffffff";
+                          const fg = colorize ? row.color.fg : "#000000";
+                          const previousCaptured = rows[(rowIndex.get(row.no) ?? 0) - 1];
+                          const previousDisplayed = shown[index - 1];
+                          return (
+                            <tr
+                              key={row.no}
+                              data-no={row.no}
+                              className={`${styles.packetRow} ${selected === row.no ? styles.packetRowSelected : ""} ${isMarked ? styles.packetRowMarked : ""}`}
+                              style={{ height: 18 + zoom }}
+                              onMouseDown={() => void selectPacket(row.no)}
+                              onDoubleClick={() => setShow((s) => ({ ...s, details: true }))}
+                              onContextMenu={(event) => {
+                                void selectPacket(row.no);
+                                showContext(event, [
+                                  { label: isMarked ? "Unmark Packet" : "Mark Packet", shortcut: "Ctrl+M", action: () => toggleMark(row.no) },
+                                  off("Ignore Packet", "Ctrl+D"),
+                                  off("Set Time Reference", "Ctrl+T"),
+                                  { divider: true },
+                                  { label: "Conversation Filter", submenu: conversationFilters(row).map((item) => ({ label: item.label, action: () => void applyFilter(item.filter), disabled: !hasFile })) },
+                                  { divider: true },
+                                  {
+                                    label: "Follow",
+                                    submenu: [{ label: "TCP Stream", shortcut: "Ctrl+Alt+Shift+T", action: () => void followStream(row.stream), disabled: row.stream < 0 }],
+                                  },
+                                  { divider: true },
+                                  {
+                                    label: "Copy",
+                                    submenu: [
+                                      { label: "Summary as Text", action: () => copy(summaryText(row)) },
+                                      { label: "…as CSV", action: () => copy(summaryText(row).split("\t").map((v) => `"${v.replace(/"/g, '""')}"`).join(",")) },
+                                    ],
+                                  },
+                                ]);
+                              }}
+                            >
+                              {[
+                                row.no,
+                                formatTime(row, timeFormat, previousCaptured, previousDisplayed),
+                                address(row, "source", resolveMac),
+                                address(row, "destination", resolveMac),
+                                row.protocol,
+                                row.length,
+                                row.info,
+                              ].map((value, cell) => (
+                                <td key={cell} className={cell === 0 || cell === 5 ? styles.numCell : undefined} style={{ background: bg, color: fg }} title={cell === 6 ? row.info : undefined}>
+                                  {value}
+                                </td>
+                              ))}
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                    {capturing && !rows.length ? <div className={styles.emptyPane}>Waiting for packets on {capturing.interface}…</div> : null}
+                    {!capturing && !shown.length && rows.length ? <div className={styles.emptyPane}>No packets match the display filter.</div> : null}
+                  </div>
+                ) : null}
+                {pane === "details" ? (
+                  <div className={styles.pane} style={{ flex: `${weight / total} 1 0` }} ref={detailsRef} tabIndex={0} onKeyDown={treeKeyDown} aria-label="Packet details">
+                    {detail ? (
+                      detail.tree.flatMap((node, index) => renderNode(node, [index], 0))
+                    ) : (
+                      <div className={styles.emptyPane}>{capturing ? "Packet details are shown when the capture is stopped." : "No packet selected."}</div>
+                    )}
+                  </div>
+                ) : null}
+                {pane === "bytes" ? (
+                  <div className={`${styles.pane} ${styles.bytesPane}`} style={{ flex: `${weight / total} 1 0` }} ref={bytesRef} aria-label="Packet bytes">
+                    {renderHex()}
+                  </div>
+                ) : null}
+                {splitterAfter ? <div className={styles.splitter} onMouseDown={startDrag(PANES.indexOf(pane), PANES.indexOf(nextPane))} /> : null}
               </div>
-            ) : null}
-          </div>
+            );
+          })}
         </div>
       ) : null}
 
-      {/* =================================================================
-       * Modal: Statistics (Protocol Hierarchy / Capture File Properties)
-       * ================================================================= */}
-      {statsModal ? (
-        <div className={styles.modalOverlay} onClick={() => setStatsModal(null)}>
-          <div className={styles.followDialog} style={{ width: 560, height: 380 }} onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Wireshark Statistics">
-            <div className={styles.followTitleBar}>
-              <div className={styles.followTitleLeft}>
-                <WiresharkLogoIcon size={15} />
-                <span>{statsModal === "hierarchy" ? `Protocol Hierarchy Statistics · ${file}` : `Capture File Properties · ${file}`}</span>
-              </div>
-              <button type="button" className={`${styles.winBtn} ${styles.winClose}`} onClick={() => setStatsModal(null)}>✕</button>
-            </div>
-            <div style={{ flex: 1, background: "#fff", margin: 10, border: "1px solid #cbd5e1", padding: 12, overflow: "auto", fontSize: 12 }}>
-              {statsModal === "properties" ? (
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                  <tbody>
-                    {[
-                      ["File name", file || "practice-capture.pcap"],
-                      ["Capture source", localSampleMode ? "Simulated Lab Sample Dataset" : "LabMate Practice Packet Engine"],
-                      ["Total packets", String(rows.length)],
-                      ["Displayed packets", `${shown.length} (${pct}%)`],
-                      ["Active display filter", applied || "(none)"],
-                      ["Data link encapsulation", "Ethernet (LINKTYPE_ETHERNET)"],
-                    ].map(([k, v]) => (
-                      <tr key={k} style={{ borderBottom: "1px solid #e2e8f0" }}>
-                        <td style={{ padding: "5px 8px", fontWeight: 600, width: 190 }}>{k}</td>
-                        <td style={{ padding: "5px 8px" }}>{v}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : (
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                  <thead>
-                    <tr style={{ background: "#eef2f6", textAlign: "left" }}>
-                      <th style={{ padding: "5px 8px" }}>Protocol</th>
-                      <th style={{ padding: "5px 8px" }}>Packets</th>
-                      <th style={{ padding: "5px 8px" }}>Percent Packets</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Array.from(
-                      rows.reduce((map, r) => map.set(r.protocol, (map.get(r.protocol) ?? 0) + 1), new Map<string, number>()),
-                    ).map(([proto, count]) => (
-                      <tr key={proto} style={{ borderBottom: "1px solid #e2e8f0" }}>
-                        <td style={{ padding: "5px 8px", fontWeight: 600 }}>{proto}</td>
-                        <td style={{ padding: "5px 8px" }}>{count}</td>
-                        <td style={{ padding: "5px 8px" }}>{rows.length ? ((count / rows.length) * 100).toFixed(1) : "0.0"}%</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {/* =================================================================
-       * Modal: Follow TCP Stream
-       * ================================================================= */}
+      {/* ------------------------------------------------------------ Follow TCP Stream */}
       {view === "follow" && follow ? (
         <div className={styles.modalOverlay}>
           <div className={styles.followDialog} role="dialog" aria-label="Follow TCP Stream">
@@ -1201,134 +1800,90 @@ export function WiresharkStudio() {
               <div className={styles.followTitleLeft}>
                 <WiresharkLogoIcon size={15} />
                 <span>
-                  Follow TCP Stream (tcp.stream eq {follow.stream}) · {file}
+                  Wireshark · Follow TCP Stream (tcp.stream eq {follow.stream}) · {file}
                 </span>
               </div>
-              <div className={styles.winCaptions} aria-hidden="true">
-                <button type="button" className={`${styles.winBtn} ${styles.winClose}`} onClick={() => setView("main")}>
+              <div className={styles.winCaptions}>
+                <button type="button" className={`${styles.winBtn} ${styles.winClose}`} onClick={() => setView("main")} aria-label="Close">
                   ✕
                 </button>
               </div>
             </div>
-
             <pre className={styles.followPre}>
               {follow.chunks
-                .filter((c) => followDirection === "entire" || c.side === followDirection)
+                .filter((chunk) => followDirection === "entire" || chunk.side === followDirection)
                 .map((chunk, index) => (
                   <span key={index} className={chunk.side === "c" ? styles.chunkClient : styles.chunkServer}>
                     {chunk.text}
                   </span>
                 ))}
             </pre>
-
             <div className={styles.followMetaRow}>
               <span>
                 {follow.client_packets} client pkts, {follow.server_packets} server pkts, {follow.turns} turns.
               </span>
-              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                <span style={{ color: "#800000", fontWeight: 600 }}>■ Client ({follow.client})</span>
-                <span style={{ color: "#000080", fontWeight: 600 }}>■ Server ({follow.server})</span>
-              </div>
             </div>
-
             <div className={styles.followControlsRow}>
-              <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <select
-                  className={styles.followSelect}
-                  value={followDirection}
-                  onChange={(e) => setFollowDirection(e.target.value)}
-                >
-                  <option value="entire">
-                    Entire conversation ({follow.chunks.reduce((total, chunk) => total + chunk.bytes, 0)} bytes)
-                  </option>
-                  <option value="c">
-                    {follow.client} → {follow.server}
-                  </option>
-                  <option value="s">
-                    {follow.server} → {follow.client}
-                  </option>
-                </select>
-              </label>
-
-              <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span>Show and save data as:</span>
-                <select className={styles.followSelect} defaultValue="ASCII">
-                  <option value="ASCII">ASCII</option>
-                  <option value="UTF-8">UTF-8</option>
-                  <option value="Hex Dump">Hex Dump</option>
-                  <option value="Raw">Raw</option>
-                </select>
-              </label>
-
-              <label style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <span>Stream</span>
-                <input
-                  type="number"
-                  min={0}
-                  max={10}
-                  value={follow.stream}
-                  onChange={(e) => void followStream(Number(e.target.value))}
-                  className={styles.followSelect}
-                  style={{ width: 46 }}
-                />
-              </label>
-
-              <div style={{ display: "flex", alignItems: "center", gap: 5, marginLeft: "auto" }}>
-                <span>Find:</span>
-                <input
-                  className={styles.followFindInput}
-                  value={followFind}
-                  onChange={(e) => setFollowFind(e.target.value)}
-                  placeholder="Find text…"
-                />
-                <button
-                  type="button"
-                  className={styles.followBtn}
-                  onClick={() => {
-                    if (!followFind) return;
-                    const fullText = follow.chunks.map((c) => c.text).join("");
-                    if (fullText.toLowerCase().includes(followFind.toLowerCase())) {
-                      setMessage(`Found "${followFind}" in TCP stream ${follow.stream}.`);
-                    } else {
-                      setMessage(`"${followFind}" not found in TCP stream ${follow.stream}.`);
-                    }
-                  }}
-                >
-                  Find Next
-                </button>
-              </div>
+              <select className={styles.followSelect} value={followDirection} onChange={(event) => setFollowDirection(event.target.value)} aria-label="Direction">
+                <option value="entire">Entire conversation ({follow.chunks.reduce((total, chunk) => total + chunk.bytes, 0)} bytes)</option>
+                <option value="c">
+                  {follow.client} → {follow.server} ({follow.chunks.filter((c) => c.side === "c").reduce((t, c) => t + c.bytes, 0)} bytes)
+                </option>
+                <option value="s">
+                  {follow.server} → {follow.client} ({follow.chunks.filter((c) => c.side === "s").reduce((t, c) => t + c.bytes, 0)} bytes)
+                </option>
+              </select>
+              <span>Show data as</span>
+              <select className={styles.followSelect} defaultValue="ASCII" aria-label="Show data as">
+                <option value="ASCII">ASCII</option>
+              </select>
+              <span style={{ marginLeft: "auto" }}>Stream</span>
+              <input
+                type="number"
+                min={0}
+                value={follow.stream}
+                onChange={(event) => void followStream(Number(event.target.value))}
+                className={styles.followSelect}
+                style={{ width: 54 }}
+                aria-label="Stream"
+              />
             </div>
-
-            <div className={styles.followButtonBar}>
-              <button type="button" className={styles.followBtn}>
-                Help
+            <div className={styles.followControlsRow}>
+              <span>Find:</span>
+              <input className={styles.followFindInput} style={{ flex: 1 }} value={followFind} onChange={(event) => setFollowFind(event.target.value)} />
+              <button
+                type="button"
+                className={styles.followBtn}
+                onClick={() => {
+                  if (!followFind) return;
+                  const text = follow.chunks.map((chunk) => chunk.text).join("");
+                  setMessage(text.toLowerCase().includes(followFind.toLowerCase()) ? `Found "${followFind}" in TCP stream ${follow.stream}.` : `"${followFind}" is not in TCP stream ${follow.stream}.`);
+                }}
+              >
+                Find Next
               </button>
+            </div>
+            <div className={styles.followButtonBar}>
               <span style={{ flex: 1 }} />
               <button
                 type="button"
                 className={styles.followBtn}
                 onClick={() => {
-                  const nextFilter = `!(tcp.stream eq ${follow.stream})`;
-                  setFilterText(nextFilter);
-                  void applyFilter(nextFilter);
                   setView("main");
+                  void applyFilter(`!(tcp.stream eq ${follow.stream})`);
                 }}
               >
                 Filter Out This Stream
               </button>
-              <button type="button" className={styles.followBtn} onClick={() => window.print()}>
-                Print
-              </button>
               <button
                 type="button"
                 className={styles.followBtn}
-                onClick={() => {
-                  const txt = follow.chunks.map((c) => c.text).join("");
-                  const a = document.createElement("a");
-                  a.href = URL.createObjectURL(new Blob([txt], { type: "text/plain" }));
-                  a.download = `tcp-stream-${follow.stream}.txt`;
-                  a.click();
-                }}
+                onClick={() =>
+                  download(
+                    new Blob([follow.chunks.filter((c) => followDirection === "entire" || c.side === followDirection).map((c) => c.text).join("")], { type: "text/plain" }),
+                    `tcp-stream-${follow.stream}.txt`,
+                  )
+                }
               >
                 Save as…
               </button>
@@ -1343,24 +1898,76 @@ export function WiresharkStudio() {
         </div>
       ) : null}
 
-      {/* =================================================================
-       * Status Bar
-       * ================================================================= */}
-      {view !== "browser" ? (
+      {/* ------------------------------------------------------------ dialogs */}
+      {dialog?.kind === "properties" ? <PropertiesDialog data={dialog.data} filter={applied} onClose={() => setDialog(null)} /> : null}
+      {dialog?.kind === "hierarchy" ? (
+        <HierarchyDialog rows={dialog.rows} filter={applied} file={file} onClose={() => setDialog(null)} onApply={(abbrev) => (setDialog(null), void applyFilter(abbrev))} />
+      ) : null}
+      {dialog?.kind === "conversations" || dialog?.kind === "endpoints" ? (
+        <TrafficDialog
+          mode={dialog.kind}
+          file={file}
+          filter={applied}
+          load={dialog.kind === "conversations" ? loadConversations : loadEndpoints}
+          onClose={() => setDialog(null)}
+          onApply={(text) => (setDialog(null), void applyFilter(text))}
+          onFollow={(stream) => (setDialog(null), void followStream(stream))}
+        />
+      ) : null}
+      {dialog?.kind === "capture" ? (
+        <CaptureOptionsDialog
+          interfaces={live.interfaces}
+          reason={live.reason}
+          initial={{ interface: selectedIface, filter: captureFilter, ...captureLimits }}
+          onClose={() => setDialog(null)}
+          onStart={(settings) => {
+            setSelectedIface(settings.interface);
+            setCaptureFilter(settings.filter);
+            setCaptureLimits({ maxPackets: settings.maxPackets, maxSeconds: settings.maxSeconds });
+            void startCapture(settings);
+          }}
+        />
+      ) : null}
+      {dialog?.kind === "export" ? (
+        <ExportDialog
+          mode={dialog.mode}
+          defaultFormat={dialog.format}
+          file={file}
+          counts={{ all: rows.length, displayed: shown.length, marked: marked.size }}
+          onClose={() => setDialog(null)}
+          onExport={(choice) => void runExport(dialog.mode, choice)}
+        />
+      ) : null}
+      {dialog?.kind === "about" ? <AboutDialog onClose={() => setDialog(null)} /> : null}
+      {dialog?.kind === "reference" ? (
+        <FilterReferenceDialog
+          data={dialog.data}
+          onClose={() => setDialog(null)}
+          onUse={(text) => {
+            setDialog(null);
+            setFilterText((prev) => (prev ? `${prev} ${text}` : text));
+            filterInput.current?.focus();
+          }}
+        />
+      ) : null}
+
+      {context ? (
+        <div className={styles.contextMenu} style={{ left: context.x, top: context.y }} onMouseDown={(event) => event.stopPropagation()}>
+          <div style={{ position: "relative" }}>{renderMenu(context.entries, "ctx")}</div>
+        </div>
+      ) : null}
+
+      {/* ------------------------------------------------------------ status bar */}
+      {view !== "browser" && show.statusBar ? (
         <div className={styles.statusBar}>
-          <div className={styles.statusLeft}>
-            <WsExpertStatusCircle level={filterError ? "error" : rows.length ? "ok" : "warn"} />
-            <span>{message || (file ? `File: "${file}"` : "Ready to load or capture")}</span>
+          <div className={`${styles.statusLeft} ${statusIsError ? styles.statusError : ""}`}>
+            <WsExpertStatusCircle level={filterState === "invalid" ? "error" : filterState === "warn" ? "warn" : "none"} />
+            <span>{statusText}</span>
           </div>
-          <div className={styles.statusRight}>
-            <span>
-              {rows.length
-                ? `Packets: ${rows.length} · Displayed: ${shown.length} (${pct}%)`
-                : "No packets"}
-            </span>
-            <span className={styles.statusDivider}>|</span>
-            <span>Profile: Default</span>
+          <div className={styles.statusMid}>
+            {(rows.length && inCaptureView) || capturing ? `Packets: ${rows.length} · Displayed: ${shown.length} (${pct}%)${marked.size ? ` · Marked: ${marked.size}` : ""}` : "No Packets"}
           </div>
+          <div className={styles.statusRight}>Profile: Default</div>
         </div>
       ) : null}
     </div>

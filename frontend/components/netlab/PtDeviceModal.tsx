@@ -42,6 +42,10 @@ const PHYSICAL_MODULES: Record<string, { desc: string; ports: string }> = {
   },
 };
 
+function escapeHtml(text: string): string {
+  return text.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] as string);
+}
+
 export function PtDeviceModal({ spec, device, onUpdateDevice, onClose }: PtDeviceModalProps) {
   const isNetworkCli = ["router", "switch", "security"].includes(device.type);
   const isEnd = ["pc", "laptop", "server", "tablet", "smartphone", "printer"].includes(device.type);
@@ -130,12 +134,12 @@ export function PtDeviceModal({ spec, device, onUpdateDevice, onClose }: PtDevic
         (d.ip === resolvedIp || Object.values(d.interfaces ?? {}).some((c) => c.ip === resolvedIp))
     );
     if (!srv) {
-      setBrowserHtml(`<p style="color:#b91c1c"><b>Host Name Unresolved / Request Timeout:</b> Could not reach <code>${cleanHost}</code>.</p>`);
+      setBrowserHtml(`<p style="color:#b91c1c"><b>Host Name Unresolved / Request Timeout:</b> Could not reach <code>${escapeHtml(cleanHost)}</code>.</p>`);
       return;
     }
     const srvSvc = srv.services ?? defaultServerServices();
     if (!srvSvc.httpEnabled) {
-      setBrowserHtml(`<p style="color:#b91c1c"><b>Connection Refused:</b> HTTP service is turned OFF on ${srv.name}.</p>`);
+      setBrowserHtml(`<p style="color:#b91c1c"><b>Connection Refused:</b> HTTP service is turned OFF on ${escapeHtml(srv.name)}.</p>`);
       return;
     }
     setBrowserHtml(srvSvc.httpHtml);
@@ -925,11 +929,14 @@ export function PtDeviceModal({ spec, device, onUpdateDevice, onClose }: PtDevic
                           Go
                         </button>
                       </div>
-                      <div
-                        style={{ flex: 1, padding: 16, overflow: "auto" }}
-                        dangerouslySetInnerHTML={{
-                          __html: browserHtml || "<p>Enter a Server IP or DNS name above and click <b>Go</b>.</p>",
-                        }}
+                      {/* The page comes from the student-edited HTTP service: show it in a sandbox where scripts cannot run. */}
+                      <iframe
+                        title="Web Browser page"
+                        sandbox=""
+                        srcDoc={`<body style="font-family:Segoe UI,Arial,sans-serif;font-size:13px;margin:16px">${
+                          browserHtml || "<p>Enter a Server IP or DNS name above and click <b>Go</b>.</p>"
+                        }</body>`}
+                        style={{ flex: 1, border: 0, width: "100%", background: "#ffffff" }}
                       />
                     </div>
                   )}

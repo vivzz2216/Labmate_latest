@@ -1,0 +1,103 @@
+.wrap {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  height: 440px;
+}
+
+@media (max-width: 700px) {
+  .wrap {
+    grid-template-columns: minmax(0, 1fr);
+    height: 380px;
+  }
+
+  .wrap > .column + .column {
+    display: none;
+  }
+}
+
+.column {
+  position: relative;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 9%, #000 91%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 9%, #000 91%, transparent 100%);
+}
+
+.track {
+  display: grid;
+  gap: 12px;
+  padding: 6px 0;
+}
+
+.down {
+  animation: drift-down linear infinite;
+}
+
+.up {
+  animation: drift-up linear infinite;
+}
+
+.column:hover .track,
+.column:focus-within .track {
+  animation-play-state: paused;
+}
+
+@keyframes drift-up {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-50%);
+  }
+}
+
+@keyframes drift-down {
+  from {
+    transform: translateY(-50%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .down,
+  .up {
+    animation: none;
+  }
+
+  .column {
+    overflow-y: auto;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+}
+
+.card {
+  padding: 14px 16px;
+  border: 1px solid var(--panel-border, #d0d7de);
+  border-radius: 14px;
+  background: var(--panel-bg, #fff);
+  box-shadow: var(--card-shadow, 0 1px 3px rgba(16, 24, 40, 0.06));
+  display: grid;
+  gap: 6px;
+  color: var(--text-heading, #1f2328);
+  font-size: 13px;
+}
+
+.card p {
+  margin: 0;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.card small {
+  color: var(--panel-subtext, #5b6470);
+  font-size: 11.5px;
+}
+
+.stars {
+  display: inline-flex;
+  gap: 2px;
+  color: #e3a008;
+}

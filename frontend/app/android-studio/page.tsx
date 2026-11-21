@@ -2,9 +2,9 @@ import React from "react";
 import { AndroidStudioWorkspace } from "@/components/ide/android-studio/AndroidStudioWorkspace";
 
 export const metadata = {
-  title: "Android Studio Ladybug | New UI Dark Clone — LabMate",
+  title: "Android Studio practice lab — LabMate",
   description:
-    "Interactive 100% pixel-faithful Google Android Studio (Ladybug / Meerkat New UI Dark) clone with Jetpack Compose @Preview, XML Layout Designer, Logcat, Gradle, and Running Devices Android Emulator.",
+    "Practice Android and Kotlin in the browser: edit layouts and Compose code, build, run in an emulator and read Logcat. A teaching simulation of Android Studio, not the real IDE.",
 };
 
 export default function AndroidStudioPage() {

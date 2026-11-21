@@ -30,6 +30,7 @@ import { Network } from "lucide-react";
 import { FaJava } from "react-icons/fa";
 import LabMateLogo from "@/components/brand/LabMateLogo";
 import { useAuth } from "@/contexts/BasicAuthContext";
+import AccountMenu from "@/components/community/AccountMenu";
 import styles from "@/app/dashboard/dashboard.module.css";
 
 export interface Assignment {
@@ -467,34 +468,13 @@ export default function DashboardShell({
             <LogOut size={16} strokeWidth={1.8} />
             {!sidebarCollapsed && <span>Sign out</span>}
           </button>
-          <div
-            className={styles.account}
-            onClick={() => go("/user-dashboard?tab=settings")}
-            role="button"
-            tabIndex={0}
-            data-tooltip={sidebarCollapsed ? displayName : undefined}
-            title={sidebarCollapsed ? `${displayName} (${user?.email || "Account"})` : undefined}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                go("/user-dashboard?tab=settings");
-              }
-            }}
-            aria-label="Account and settings"
-          >
-            <span className={styles.accountAvatar}>
-              {displayName.charAt(0).toUpperCase()}
-            </span>
-            {!sidebarCollapsed && (
-              <>
-                <span className={styles.accountText}>
-                  <strong>{displayName}</strong>
-                  <small>{user?.email || "Student Account"}</small>
-                </span>
-                <ChevronRight size={14} strokeWidth={2} />
-              </>
-            )}
-          </div>
+          <AccountMenu
+            displayName={displayName}
+            email={user?.email}
+            collapsed={sidebarCollapsed}
+            go={go}
+            onSignOut={handleLogout}
+          />
         </div>
       </aside>
 

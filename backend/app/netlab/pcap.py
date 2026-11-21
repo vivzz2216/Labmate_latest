@@ -134,14 +134,46 @@ def _tick(options, order):
     return 1e-6
 
 
+def _split_micro(timestamp):
+    seconds = int(timestamp)
+    micro = int(round((timestamp - seconds) * 1_000_000))
+    if micro >= 1_000_000:
+        seconds, micro = seconds + 1, micro - 1_000_000
+    return seconds, micro
+
+
 def write_pcap(frames, linktype=LINKTYPE_ETHERNET):
-    """Classic little-endian microsecond pcap bytes from (timestamp, frame_bytes) pairs."""
+    """Classic little-endian microsecond pcap bytes from (timestamp, frame_bytes) or (timestamp, frame_bytes, wire_length)."""
     out = [struct.pack("<IHHiIII", 0xA1B2C3D4, 2, 4, 0, 0, 262144, linktype)]
-    for timestamp, payload in frames:
-        seconds = int(timestamp)
-        micro = int(round((timestamp - seconds) * 1_000_000))
-        if micro >= 1_000_000:
-            seconds, micro = seconds + 1, micro - 1_000_000
-        out.append(struct.pack("<IIII", seconds, micro, len(payload), len(payload)))
+    for frame in frames:
+        timestamp, payload = frame[0], frame[1]
+        wire = frame[2] if len(frame) > 2 else len(payload)
+        seconds, micro = _split_micro(timestamp)
+        out.append(struct.pack("<IIII", seconds, micro, len(payload), max(wire, len(payload))))
         out.append(payload)
+    return b"".join(out)
+
+
+def _block(kind, body):
+    padded = body + b"\x00" * (-len(body) % 4)
+    total = 12 + len(padded)
+    return struct.pack("<II", kind, total) + padded + struct.pack("<I", total)
+
+
+def _option(code, value):
+    return struct.pack("<HH", code, len(value)) + value + b"\x00" * (-len(value) % 4)
+
+
+def write_pcapng(frames, linktype=LINKTYPE_ETHERNET, application="LabMate packet analyzer", comment=""):
+    """pcapng bytes (one section, one interface, microsecond timestamps) from the same frame tuples as write_pcap."""
+    shb_options = _option(4, application.encode()) + (_option(1, comment.encode()) if comment else b"") + _option(0, b"")
+    out = [_block(0x0A0D0D0A, struct.pack("<IHHq", 0x1A2B3C4D, 1, 0, -1) + shb_options),
+           _block(1, struct.pack("<HHI", linktype, 0, 262144) + _option(9, b"\x06") + _option(0, b""))]
+    for frame in frames:
+        timestamp, payload = frame[0], frame[1]
+        wire = frame[2] if len(frame) > 2 else len(payload)
+        seconds, micro = _split_micro(timestamp)
+        stamp = seconds * 1_000_000 + micro
+        out.append(_block(6, struct.pack("<IIIII", 0, stamp >> 32, stamp & 0xFFFFFFFF, len(payload), max(wire, len(payload)))
+                          + payload + b"\x00" * (-len(payload) % 4)))
     return b"".join(out)

@@ -348,8 +348,8 @@ export function WsInterfaceTypeIcon({ name }: { name: string }) {
   );
 }
 
-export function WsExpertStatusCircle({ level = "ok" }: { level?: "ok" | "warn" | "error" }) {
-  const fill = level === "error" ? "#FF5C5C" : level === "warn" ? "#F7F253" : "#B7F774";
+export function WsExpertStatusCircle({ level = "ok" }: { level?: "ok" | "warn" | "error" | "none" }) {
+  const fill = level === "error" ? "#FF5C5C" : level === "warn" ? "#F7F253" : level === "none" ? "#D3D3D3" : "#B7F774";
   return (
     <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
       <circle cx="6" cy="6" r="5" fill={fill} stroke="#2B3440" strokeWidth="0.9" />

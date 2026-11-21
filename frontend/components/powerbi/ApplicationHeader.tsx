@@ -92,6 +92,10 @@ interface ApplicationHeaderProps {
   onUpdateSelectedFormat: (patch: Partial<PowerBiVisual["format"]>, newTitle?: string) => void;
   onOpenExportHelp: () => void;
   onOpenDaxView: () => void;
+  onNewMeasure: () => void;
+  onQuickMeasure: () => void;
+  onSaveReport: () => void;
+  onOpenReportFile: () => void;
   onOpenModelView: () => void;
   onOpenCopilotModal: () => void;
   onSwitchToService: (mode: "home" | "create") => void;
@@ -142,6 +146,10 @@ export function ApplicationHeader({
   onUpdateSelectedFormat,
   onOpenExportHelp,
   onOpenDaxView,
+  onNewMeasure,
+  onQuickMeasure,
+  onSaveReport,
+  onOpenReportFile,
   onOpenModelView,
   onOpenCopilotModal,
   onSwitchToService,
@@ -164,9 +172,10 @@ export function ApplicationHeader({
           <button
             type="button"
             className={styles.qatBtn}
-            title="Save project snapshot"
+            title="Save report (downloads a .labmate-report.json file and keeps a copy in this browser)"
             aria-label="Save report"
-            onClick={onOpenExportHelp}
+            disabled={!hasDataset}
+            onClick={onSaveReport}
           >
             <SaveIcon size={14} />
           </button>
@@ -182,7 +191,7 @@ export function ApplicationHeader({
           </button>
 
           <span className={styles.docTitle}>
-            {documentName ? `${documentName} - Power BI Desktop` : "Untitled - Power BI Desktop"}
+            {documentName ? `${documentName} - Power BI practice environment (LabMate)` : "Untitled - Power BI practice environment (LabMate)"}
           </span>
         </div>
 
@@ -355,6 +364,19 @@ export function ApplicationHeader({
                   </div>
                   <div className={styles.ribbonGroup}>
                     <div className={styles.ribbonGroupItems}>
+                      <button type="button" className={styles.ribbonLgBtn} disabled={!hasDataset} onClick={onSaveReport}>
+                        <SaveIcon size={20} />
+                        <span>Save report</span>
+                      </button>
+                      <button type="button" className={styles.ribbonLgBtn} onClick={onOpenReportFile}>
+                        <ExcelWorkbookIcon size={22} />
+                        <span>Open report</span>
+                      </button>
+                    </div>
+                    <span className={styles.ribbonGroupLabel}>Report file</span>
+                  </div>
+                  <div className={styles.ribbonGroup}>
+                    <div className={styles.ribbonGroupItems}>
                       <button type="button" className={styles.ribbonLgBtn} onClick={() => onSwitchToService("home")}>
                         <PowerBiLogoMark size={20} />
                         <span>Service Home</span>
@@ -524,7 +546,8 @@ export function ApplicationHeader({
                       <button
                         type="button"
                         className={styles.ribbonLgBtn}
-                        disabled={!hasDataset}
+                        disabled
+                        title="Visual calculations are not available in the LabMate practice lab. Use New measure or Quick measure."
                         onClick={onOpenDaxView}
                       >
                         <VisualCalcRibbonIcon size={22} />
@@ -534,7 +557,7 @@ export function ApplicationHeader({
                         type="button"
                         className={styles.ribbonLgBtn}
                         disabled={!hasDataset}
-                        onClick={onOpenDaxView}
+                        onClick={onNewMeasure}
                       >
                         <CalculatorRibbonIcon size={22} />
                         <span>New<br />measure</span>
@@ -543,7 +566,7 @@ export function ApplicationHeader({
                         type="button"
                         className={styles.ribbonLgBtn}
                         disabled={!hasDataset}
-                        onClick={onOpenDaxView}
+                        onClick={onQuickMeasure}
                       >
                         <CalculatorRibbonIcon size={22} lightning />
                         <span>Quick<br />measure</span>
@@ -602,12 +625,13 @@ export function ApplicationHeader({
                         type="button"
                         className={styles.ribbonLgBtn}
                         onClick={onOpenCopilotModal}
+                        title="Dataset summary: totals of the numeric columns (no AI is involved)"
                       >
                         <CopilotRibbonIcon size={22} />
-                        <span>Copilot</span>
+                        <span>Data<br />summary</span>
                       </button>
                     </div>
-                    <span className={styles.ribbonGroupLabel}>Copilot</span>
+                    <span className={styles.ribbonGroupLabel}>Summary</span>
                   </div>
                 </>
               ) : null}

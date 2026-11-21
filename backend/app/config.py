@@ -367,6 +367,11 @@ class Settings(BaseSettings):
     # Where the Computer Networks studios (/networks/wireshark, /networks/packet-tracer) are served, for the automatic screenshots.
     # Falls back to POWERBI_STUDIO_URL, then FRONTEND_URL, then the local dev server.
     STUDIO_URL: str = os.getenv("STUDIO_URL", "")
+    # Live packet capture in the packet analyser. Off by default and never for a shared server: the capture sees every packet on
+    # the chosen interface of the machine the backend runs on. Turn it on only for a backend running on the student's own
+    # computer (with Wireshark's dumpcap, or tcpdump, installed and allowed to capture).
+    NETLAB_LIVE_CAPTURE: bool = False
+    NETLAB_CAPTURE_TOOL: str = ""   # path to dumpcap or tcpdump; found on PATH when empty
 
     @field_validator('RATE_LIMIT_ENABLED', mode='before')
     @classmethod

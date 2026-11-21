@@ -12,10 +12,13 @@ import {
 } from "@/lib/powerbi/csvEngine";
 import { POWERBI_SERIES_PALETTE } from "@/lib/powerbi/palette";
 import { RETAIL_SAMPLE_CSV, SOCIAL_KPI_POWERBI_CSV } from "@/lib/powerbi/sampleCsv";
+import { applyQuerySteps, type QueryStep } from "@/lib/powerbi/powerQuery";
+import { DaxError, evaluateMeasure, parseMeasureDefinition, type DaxModel } from "@/lib/powerbi/daxEngine";
 import type {
   AggregationFn,
   ColumnMeta,
   CrossFilterSelection,
+  DataRow,
   DatasetModel,
   DateRangeFilter,
   PowerBiVisual,
@@ -36,10 +39,13 @@ import { LoadingState } from "./LoadingState";
 import { Modal } from "./Modal";
 import { ModelView } from "./ModelView";
 import { PowerBiServiceView } from "./PowerBiServiceView";
+import { PowerQueryEditor } from "./PowerQueryEditor";
 import { Sidebar } from "./Sidebar";
 import { Tabs } from "./Tabs";
 import { VisualizationsPane } from "./VisualizationsPane";
 import styles from "./powerbi.module.css";
+
+const REPORT_KEY = "labmate.powerbi.report.v1";
 
 /** Full interactive Microsoft Power BI Desktop & Service replica tailored for manual CSV datasets. */
 export function PowerBiWorkspace() {
@@ -85,6 +91,21 @@ export function PowerBiWorkspace() {
   const [transformOpen, setTransformOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [copilotOpen, setCopilotOpen] = useState(false);
+  const [measures, setMeasures] = useState<Record<string, string>>({});
+  const [measureOpen, setMeasureOpen] = useState(false);
+  const [measureDraft, setMeasureDraft] = useState("");
+  const [measureError, setMeasureError] = useState<string | null>(null);
+  const [saveNote, setSaveNote] = useState<string | null>(null);
+  // Power Query: the untouched table and the ordered steps applied to it (Applied Steps)
+  const [sourceDataset, setSourceDataset] = useState<DatasetModel | null>(null);
+  const [querySteps, setQuerySteps] = useState<QueryStep[]>([]);
+  const [quickOpen, setQuickOpen] = useState(false);
+  const [quickKind, setQuickKind] = useState("sum");
+  const [quickColumn, setQuickColumn] = useState("");
+  const [quickName, setQuickName] = useState("");
+  const [quickError, setQuickError] = useState<string | null>(null);
+  const reportInputRef = useRef<HTMLInputElement | null>(null);
+  const restoredReport = useRef(false);
   const [pasteName, setPasteName] = useState("CustomTable");
   const [pasteText, setPasteText] = useState(
     "category,region,sales,units\nElectronics,North,42000,120\nSoftware,West,68500,95\nServices,East,31200,80",
@@ -136,8 +157,233 @@ export function PowerBiWorkspace() {
     [activePage, selectedVisualId],
   );
 
+  const daxModel: DaxModel | null = useMemo(
+    () => (dataset ? { table: dataset.name, columns: dataset.columns.map((c) => c.name), rows: dataset.rows, measures } : null),
+    [dataset, measures],
+  );
+
+  const measureEval = useCallback(
+    (field: string, rows: DataRow[]): number | null => {
+      if (!daxModel || !(field in measures)) return null;
+      try {
+        return evaluateMeasure(daxModel, field, rows);
+      } catch {
+        return null;
+      }
+    },
+    [daxModel, measures],
+  );
+
+  const fieldList: ColumnMeta[] = useMemo(
+    () => [
+      ...(dataset?.columns ?? []),
+      ...Object.keys(measures).map((name) => ({ name, label: name, type: "number" as const, isNumeric: true, isMeasure: true, uniqueCount: 0, sampleValues: [] })),
+    ],
+    [dataset, measures],
+  );
+
+  const commitMeasure = (draftText: string = measureDraft) => {
+    if (!daxModel) return;
+    try {
+      const { name, expression } = parseMeasureDefinition(draftText, daxModel);
+      setMeasures((prev) => ({ ...prev, [name]: expression }));
+      setMeasureOpen(false);
+      setQuickOpen(false);
+      setMeasureDraft("");
+      setMeasureError(null);
+      setQuickError(null);
+    } catch (error) {
+      const message = error instanceof DaxError ? error.message : "The measure could not be created.";
+      setMeasureError(message);
+      setQuickError(message);
+    }
+  };
+
+  // Quick measure: pick a calculation and a column, and the DAX is written for you.
+  const quickTemplates: { id: string; label: string; needsColumn: boolean; numericOnly: boolean }[] = [
+    { id: "sum", label: "Sum", needsColumn: true, numericOnly: true },
+    { id: "average", label: "Average", needsColumn: true, numericOnly: true },
+    { id: "min", label: "Minimum", needsColumn: true, numericOnly: true },
+    { id: "max", label: "Maximum", needsColumn: true, numericOnly: true },
+    { id: "count", label: "Count (non-blank)", needsColumn: true, numericOnly: false },
+    { id: "distinct", label: "Distinct count", needsColumn: true, numericOnly: false },
+    { id: "rows", label: "Count of rows", needsColumn: false, numericOnly: false },
+    { id: "pct", label: "Percent of grand total", needsColumn: true, numericOnly: true },
+  ];
+  const quickDax = (): { name: string; text: string } | null => {
+    if (!dataset) return null;
+    const t = dataset.name;
+    const tpl = quickTemplates.filter((q) => q.id === quickKind)[0];
+    if (!tpl) return null;
+    const c = quickColumn;
+    if (tpl.needsColumn && !c) return null;
+    const col = `${t}[${c}]`;
+    const defaults: Record<string, string> = {
+      sum: `Sum of ${c}`, average: `Average of ${c}`, min: `Min of ${c}`, max: `Max of ${c}`, count: `Count of ${c}`,
+      distinct: `Distinct count of ${c}`, rows: `Row count`, pct: `${c} % of total`,
+    };
+    const expr: Record<string, string> = {
+      sum: `SUM(${col})`, average: `AVERAGE(${col})`, min: `MIN(${col})`, max: `MAX(${col})`, count: `COUNT(${col})`,
+      distinct: `DISTINCTCOUNT(${col})`, rows: `COUNTROWS(${t})`, pct: `DIVIDE(SUM(${col}), CALCULATE(SUM(${col}), ALL(${t})))`,
+    };
+    return { name: quickName.trim() || defaults[quickKind], text: `${quickName.trim() || defaults[quickKind]} = ${expr[quickKind]}` };
+  };
+
+  // Apply the Power Query steps to the source table and keep the report consistent with the new columns.
+  const applyQuery = (steps: QueryStep[]) => {
+    if (!sourceDataset) return;
+    const res = applyQuerySteps(sourceDataset, steps);
+    if (res.error) return;
+    const keep: Record<string, boolean> = {};
+    res.dataset.columns.forEach((c) => (keep[c.name] = true));
+    // Visuals use the column names of the table as it is NOW (after the previously applied steps), so the rename map goes
+    // from those names to the names after the new steps: previous name -> new name, for every source column.
+    const prev = applyQuerySteps(sourceDataset, querySteps);
+    const nameMap: Record<string, string> = {};
+    sourceDataset.columns.forEach((sc) => {
+      if (prev.removed.indexOf(sc.name) >= 0 || res.removed.indexOf(sc.name) >= 0) return;
+      nameMap[prev.renames[sc.name] || sc.name] = res.renames[sc.name] || sc.name;
+    });
+    const ren = (n: string | undefined): string | undefined => (n === undefined ? undefined : nameMap[n] !== undefined ? nameMap[n] : n);
+    const measureNames = Object.keys(measures);
+    const alive = (n: string | undefined): boolean => n !== undefined && (Boolean(keep[n]) || measureNames.indexOf(n) >= 0);
+    const mapKeys = (f: Record<string, string[]>): Record<string, string[]> => {
+      const out: Record<string, string[]> = {};
+      Object.keys(f).forEach((k) => {
+        const nk = ren(k) as string;
+        if (alive(nk)) out[nk] = f[k];
+      });
+      return out;
+    };
+    setPages((prev) =>
+      prev.map((p) => ({
+        ...p,
+        pageFilters: mapKeys(p.pageFilters),
+        visuals: p.visuals
+          .map((v) => ({
+            ...v,
+            xAxis: alive(ren(v.xAxis)) ? ren(v.xAxis) : undefined,
+            yAxis: v.yAxis.map((y) => ren(y) as string).filter((y) => alive(y)),
+            legend: alive(ren(v.legend)) ? ren(v.legend) : undefined,
+            tooltipFields: v.tooltipFields ? v.tooltipFields.map((y) => ren(y) as string).filter((y) => alive(y)) : v.tooltipFields,
+            visualFilters: mapKeys(v.visualFilters),
+          }))
+          .filter((v) => v.yAxis.length > 0 || Boolean(v.xAxis)),
+      })),
+    );
+    setReportFilters((f) => mapKeys(f));
+    setSlicerFilters((f) => mapKeys(f));
+    setCrossFilter((c) => (c && alive(ren(c.column)) ? { ...c, column: ren(c.column) as string } : null));
+    setDateRange((d) => (d && alive(ren(d.column)) ? { ...d, column: ren(d.column) as string } : null));
+    setDataset(res.dataset);
+    setQuerySteps(steps);
+    setTransformOpen(false);
+    setSaveNote(
+      steps.length
+        ? `Power Query applied: ${res.dataset.rows.length.toLocaleString()} rows x ${res.dataset.columns.length} columns after ${steps.length} step(s).`
+        : "Power Query steps cleared: the table is back to the loaded file.",
+    );
+  };
+
+  const saveReportFile = () => {
+    if (!dataset) return;
+    const payload = {
+      app: "LabMate Power BI practice lab",
+      version: 1,
+      dataset: sourceDataset || dataset,
+      querySteps,
+      pages,
+      activePageId,
+      measures,
+    };
+    try {
+      const blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${dataset.name || "report"}.labmate-report.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setSaveNote(`Saved ${a.download} to your Downloads folder (and a copy stays in this browser).`);
+    } catch {
+      setSaveNote("The report file could not be created in this browser.");
+    }
+  };
+
+  const openReportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const saved = JSON.parse(typeof reader.result === "string" ? reader.result : "");
+        if (saved?.app !== "LabMate Power BI practice lab" || !saved.dataset?.rows || !Array.isArray(saved.pages)) throw new Error("not a report");
+        const steps: QueryStep[] = Array.isArray(saved.querySteps) ? saved.querySteps : [];
+        const derived = steps.length ? applyQuerySteps(saved.dataset, steps).dataset : saved.dataset;
+        setSourceDataset(saved.dataset);
+        setQuerySteps(steps);
+        setDataset(derived);
+        setPages(saved.pages);
+        setActivePageId(saved.activePageId || saved.pages[0]?.id || "page-1");
+        setMeasures(saved.measures || {});
+        setActiveView("report");
+        setSurfaceMode("desktop");
+        const wide = window.innerWidth > 900;
+        setShowFiltersPane(wide);
+        setShowDataPane(wide);
+        setShowVizPane(wide);
+        setSaveNote(`Opened ${file.name}.`);
+      } catch {
+        setUploadError(`${file.name} is not a LabMate report file. Open a file created with Save report.`);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  // Keep the student's report in this browser, so a reload or a closed tab does not lose the work.
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(window.localStorage.getItem(REPORT_KEY) || "null");
+      if (saved?.dataset?.rows && Array.isArray(saved.pages)) {
+        restoredReport.current = true;
+        setDataset(saved.dataset);
+        setSourceDataset(saved.source || saved.dataset);
+        setQuerySteps(Array.isArray(saved.querySteps) ? saved.querySteps : []);
+        setPages(saved.pages);
+        setActivePageId(saved.activePageId || saved.pages[0]?.id || "page-1");
+        setMeasures(saved.measures || {});
+        setShowFiltersPane(window.innerWidth > 900);
+        setShowDataPane(window.innerWidth > 900);
+        setSaveNote(`Restored ${saved.dataset.fileName} from your last session in this browser.`);
+      }
+    } catch {
+      /* nothing saved, or storage blocked */
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!dataset) return;
+    const handle = window.setTimeout(() => {
+      try {
+        window.localStorage.setItem(REPORT_KEY, JSON.stringify({ dataset, source: querySteps.length ? sourceDataset : undefined, querySteps, pages, activePageId, measures }));
+      } catch {
+        setSaveNote("This dataset is too large to keep in the browser between visits; export your screenshots before closing.");
+      }
+    }, 400);
+    return () => window.clearTimeout(handle);
+  }, [dataset, pages, activePageId, measures, sourceDataset, querySteps]);
+
   const loadCsvIntoModel = useCallback((csvText: string, tableName: string, fileName: string) => {
     setUploadError(null);
+    const sample = csvText.slice(0, 4096);
+    const control = (sample.match(/[\u0000-\u0008\u000e-\u001f]/g) || []).length;
+    if (sample.includes("\u0000") || control > sample.length * 0.02) {
+      setUploadError(`${fileName} is not a text CSV file. Save the sheet as CSV (comma delimited) and import it again.`);
+      return;
+    }
     setLoadingMsg(`Loading ${fileName}...`);
 
     window.setTimeout(() => {
@@ -149,6 +395,9 @@ export function PowerBiWorkspace() {
           return;
         }
         const generated = createDefaultReportPages(parsed);
+        setMeasures({});
+        setSourceDataset(parsed);
+        setQuerySteps([]);
         setDataset(parsed);
         setPages(generated);
         setActivePageId(generated[0].id);
@@ -456,6 +705,7 @@ export function PowerBiWorkspace() {
         />
       ) : (
         <div className={styles.workspaceRoot}>
+          <input ref={reportInputRef} type="file" accept=".json,application/json" aria-label="Open report file" onChange={openReportFile} style={{ display: "none" }} />
           <ApplicationHeader
             documentName={dataset?.name || ""}
             activeTab={activeTab}
@@ -517,6 +767,20 @@ export function PowerBiWorkspace() {
             }}
             onOpenExportHelp={() => setShareOpen(true)}
             onOpenDaxView={() => setActiveView("dax")}
+            onNewMeasure={() => {
+              setMeasureError(null);
+              setMeasureDraft(dataset ? `Measure = ` : "");
+              setMeasureOpen(true);
+            }}
+            onQuickMeasure={() => {
+              setQuickError(null);
+              setQuickName("");
+              setQuickKind("sum");
+              setQuickColumn((dataset?.columns.filter((c) => c.isNumeric)[0] || dataset?.columns[0])?.name || "");
+              setQuickOpen(true);
+            }}
+            onSaveReport={saveReportFile}
+            onOpenReportFile={() => reportInputRef.current?.click()}
             onOpenModelView={() => setActiveView("model")}
             onOpenCopilotModal={() => setCopilotOpen(true)}
             onSwitchToService={(m) =>
@@ -638,7 +902,8 @@ export function PowerBiWorkspace() {
                         >
                           <ChartContainer
                             visual={visual}
-                            columns={dataset.columns}
+                            measureEval={measureEval}
+                            columns={fieldList}
                             allRows={dataset.rows}
                             reportFilters={reportFilters}
                             pageFilters={activePage.pageFilters}
@@ -745,7 +1010,7 @@ export function PowerBiWorkspace() {
 
           {activeView === "dax" || activeView === "tmdl" ? (
             dataset ? (
-              <DaxTmdlView mode={activeView} dataset={dataset} />
+              <DaxTmdlView mode={activeView} dataset={dataset} measures={measures} />
             ) : (
               <div style={{ flex: 1, background: "#ffffff" }}>
                 <EmptyState
@@ -833,7 +1098,7 @@ export function PowerBiWorkspace() {
             <VisualizationsPane
               expanded={showVizPane}
               onToggleExpand={() => toggleRightPane("viz")}
-              columns={dataset?.columns || []}
+              columns={fieldList}
               selectedVisual={selectedVisual}
               onSelectVisualType={(type) => {
                 if (!dataset) return;
@@ -876,7 +1141,7 @@ export function PowerBiWorkspace() {
               expanded={showDataPane}
               onToggleExpand={() => toggleRightPane("data")}
               tableName={dataset?.name || "Tables"}
-              columns={dataset?.columns || []}
+              columns={fieldList}
               selectedVisual={selectedVisual}
               onToggleFieldOnVisual={handleToggleFieldOnVisual}
             />
@@ -1064,21 +1329,104 @@ export function PowerBiWorkspace() {
         </div>
       </Modal>
 
-      <Modal
-        open={transformOpen}
-        title={`Power Query Schema Preview — ${dataset?.name || "Dataset"}`}
-        onClose={() => setTransformOpen(false)}
-        width={680}
-      >
-        {dataset ? (
-          <div style={{ display: "grid", gap: 12 }}>
-            <div style={{ fontSize: 12, color: "#605e5c" }}>
-              Loaded <strong>{dataset.rows.length}</strong> rows across{" "}
-              <strong>{dataset.columns.length}</strong> columns from <code>{dataset.fileName}</code>.
-            </div>
-            <DataTable columns={dataset.columns} rows={dataset.rows.slice(0, 12)} compact pageSize={12} />
+      <Modal open={measureOpen} title="New measure" onClose={() => setMeasureOpen(false)} width={640}>
+        <div style={{ display: "grid", gap: 10, fontSize: 12.5 }}>
+          <div style={{ color: "#605e5c" }}>
+            Write the measure as <code>Name = expression</code>, for example{" "}
+            <code>Margin % = DIVIDE(SUM({dataset?.name || "Table"}[profit]), SUM({dataset?.name || "Table"}[revenue]))</code>. It appears in the Data pane
+            (fx) and can be added to cards and charts, where it follows every filter and slicer.
           </div>
-        ) : null}
+          <textarea
+            aria-label="Measure formula"
+            value={measureDraft}
+            onChange={(e) => setMeasureDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                commitMeasure();
+              }
+            }}
+            rows={3}
+            style={{ fontFamily: "Consolas, 'Courier New', monospace", fontSize: 12.5, padding: 8, border: "1px solid #c8c6c4", borderRadius: 2 }}
+          />
+          {measureError ? (
+            <div role="alert" style={{ color: "#a4262c" }}>
+              {measureError}
+            </div>
+          ) : null}
+          {Object.keys(measures).length ? (
+            <div style={{ color: "#605e5c" }}>
+              Measures: {Object.entries(measures).map(([n, e]) => `${n} = ${e}`).join("  ·  ")}
+            </div>
+          ) : null}
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+            <button type="button" onClick={() => setMeasureOpen(false)} style={{ height: 28, padding: "0 12px" }}>
+              Cancel
+            </button>
+            <button type="button" onClick={() => commitMeasure()} style={{ height: 28, padding: "0 14px", background: "#117865", color: "#fff", border: 0, borderRadius: 2 }}>
+              Commit
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <PowerQueryEditor open={transformOpen} source={sourceDataset} steps={querySteps} onClose={() => setTransformOpen(false)} onApply={applyQuery} />
+
+      <Modal open={quickOpen} title="Quick measure" onClose={() => setQuickOpen(false)} width={520}>
+        <div style={{ display: "grid", gap: 10, fontSize: 12.5 }}>
+          <label style={{ display: "grid", gap: 3 }}>
+            Calculation
+            <select aria-label="Quick measure calculation" value={quickKind} onChange={(e) => setQuickKind(e.target.value)} style={{ height: 28 }}>
+              {quickTemplates.map((q) => (
+                <option key={q.id} value={q.id}>
+                  {q.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          {quickTemplates.filter((q) => q.id === quickKind)[0]?.needsColumn ? (
+            <label style={{ display: "grid", gap: 3 }}>
+              Base value
+              <select aria-label="Quick measure column" value={quickColumn} onChange={(e) => setQuickColumn(e.target.value)} style={{ height: 28 }}>
+                {(dataset?.columns || [])
+                  .filter((c) => !quickTemplates.filter((q) => q.id === quickKind)[0]?.numericOnly || c.isNumeric)
+                  .map((c) => (
+                    <option key={c.name} value={c.name}>
+                      {c.name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+          ) : null}
+          <label style={{ display: "grid", gap: 3 }}>
+            Measure name (optional)
+            <input aria-label="Quick measure name" value={quickName} onChange={(e) => setQuickName(e.target.value)} style={{ height: 28, padding: "0 6px" }} />
+          </label>
+          <div style={{ color: "#605e5c" }}>
+            DAX: <code>{quickDax()?.text || "choose a column"}</code>
+          </div>
+          {quickError ? (
+            <div role="alert" style={{ color: "#a4262c" }}>
+              {quickError}
+            </div>
+          ) : null}
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+            <button type="button" onClick={() => setQuickOpen(false)} style={{ height: 28, padding: "0 12px" }}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={!quickDax()}
+              onClick={() => {
+                const q = quickDax();
+                if (q) commitMeasure(q.text);
+              }}
+              style={{ height: 28, padding: "0 14px", background: "#117865", color: "#fff", border: 0, borderRadius: 2 }}
+            >
+              OK
+            </button>
+          </div>
+        </div>
       </Modal>
 
       <Modal
@@ -1136,7 +1484,7 @@ export function PowerBiWorkspace() {
 
       <Modal
         open={copilotOpen}
-        title="Copilot — Report Summary"
+        title="Dataset summary"
         onClose={() => setCopilotOpen(false)}
       >
         {dataset ? (
