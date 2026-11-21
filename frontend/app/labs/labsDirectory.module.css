@@ -628,3 +628,21 @@
     transform: none;
   }
 }
+
+/* ---------------------------------------------------------------- practice workspaces */
+.studioSection {
+  margin-bottom: 22px;
+}
+
+.sectionTitle {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ls-text-3);
+}
+
+.studioSection .card {
+  gap: 0;
+}

@@ -61,6 +61,7 @@ import {
 } from "@/lib/labStudioLaunch";
 import { LAB_IDE_ASSOCIATIONS, resolveLabIde, labIdeHref } from "@/lib/mumbaiUniversity/labIdeAssociations";
 import LabIdeSelector from "@/components/catalogue/LabIdeSelector";
+import RateLabMate from "@/components/feedback/RateLabMate";
 
 const languages: { value: LabLanguage; label: string }[] = [
   { value: "auto", label: "Use detected languages" },
@@ -1502,6 +1503,9 @@ function AssignmentContent() {
                       <a href="#assignment-setup" className={styles.mobileJumpLink}>
                         View assignment details ↓
                       </a>
+                      <div style={{ marginTop: 14 }}>
+                        <RateLabMate prompt="Your report is ready. How was it?" rememberSent />
+                      </div>
                     </>
                   )}
 

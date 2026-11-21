@@ -77,7 +77,11 @@ def test_dataset_download_route_serves_only_registered_files():
     for bad in ("nope.csv", "..%2Fconfig.py", "%2e%2e%2fconfig.py"):
         assert client.get("/api/labs/datasets/" + bad).status_code in {404, 422}
     sma = client.get("/api/labs/social-media-analytics").json()
-    assert sma["track"] == "sma" and sma["experiment_count"] == 9
+    assert sma["track"] == "sma"
+    import json
+    catalogue = json.loads((Path(__file__).resolve().parents[2] / "frontend" / "lib" / "lab-catalog.json").read_text(encoding="utf-8"))
+    hardcoded = len(next(c for c in catalogue if c["track"] == "sma")["experiments"])
+    assert sma["experiment_count"] == hardcoded  # 9 in catalogue mode, 0 in manual-first mode
 
 
 # ----------------------------------------------------------------------------- notebook allowlists
@@ -634,7 +638,10 @@ def test_registry_ids_match_the_catalogue_slots():
     catalogue = json.loads((Path(__file__).resolve().parents[2] / "frontend" / "lib" / "lab-catalog.json").read_text(encoding="utf-8"))
     category = next(c for c in catalogue if c['track']=='sma')
     used = {slot['id'] for e in category['experiments'] for part in e.get('parts',[]) for slot in part.get('evidenceSlots',[])}
-    assert used and used <= SLOT_IDS, used - SLOT_IDS
+    if category['experiments']:  # manual-first catalogues carry no hard-coded evidence slots; manuals declare their own
+        assert used and used <= SLOT_IDS, used - SLOT_IDS
+    else:
+        assert not used
 
 
 def test_upload_flow_accepts_extracted_evidence_parts_on_any_track():

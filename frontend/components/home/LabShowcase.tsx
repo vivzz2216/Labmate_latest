@@ -55,10 +55,10 @@ const labs: Lab[] = [
     ]
   },
   {
-    id: "python", name: "Python", icon: SiPython, color: "#3776AB", href: "/code-execution?lab=python&track=python", status: "available",
-    description: "Python source and execution output in LabMate’s IDLE editor and shell templates. Jupyter templates are also available.",
+    id: "python", name: "Python", icon: SiPython, color: "#3776AB", href: "/code-execution?lab=python&track=python", workspaceHref: "/python-idle", status: "available",
+    description: "Write and run Python in one workspace with both the IDLE editor and shell. Jupyter report templates are also available.",
     templates: [
-      { name: "IDLE Editor + Shell", image: "showcase-python-idle-editor.webp", outputImage: "showcase-python-idle-shell.webp", caption: "LabMate IDLE editor and shell · square(5) produces Square: 25" },
+      { name: "IDLE Editor + Shell", image: "showcase-python-idle-workspace.webp", caption: "LabMate Python workspace · editor and shell showing the result of the same function" },
       { name: "Jupyter · Light", image: "showcase-python-jupyter-light.webp", caption: "Jupyter notebook in light mode · a function and its executed output" },
       { name: "Jupyter · Dark", image: "showcase-python-jupyter-dark.webp", caption: "Jupyter notebook in dark mode · attendance statistics from an executed cell" },
     ]

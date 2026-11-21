@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Check, ChevronRight, FileText, Layers, Plus, Search, Terminal, Upload } from "lucide-react";
 import DashboardShell from "@/components/dashboard/DashboardShell";
-import LabIcon from "@/components/labs/LabIcon";
+import LabIcon, { StudioIcon } from "@/components/labs/LabIcon";
 import { getAllLabCategories } from "@/lib/labCatalog";
 import { getCategoryCodeStudioHref } from "@/lib/labStudioLaunch";
 import styles from "./labsDirectory.module.css";
@@ -23,6 +23,13 @@ const runtimeLabelMap: Record<string, string> = {
   sma: "Social Media Analytics",
   networks: "Practice studios",
 };
+
+const practiceStudios = [
+  { key: "packet-tracer", name: "Cisco Packet Tracer", href: "/networks/packet-tracer", description: "Build topologies and trace packets through your network." },
+  { key: "wireshark", name: "Wireshark", href: "/networks/wireshark", description: "Open packet captures, apply filters, and inspect protocol details." },
+  { key: "power-bi", name: "Power BI", href: "/power-bi", description: "Import data, build reports, and calculate DAX measures." },
+  { key: "android-studio", name: "Android Studio", href: "/android-studio", description: "Edit Android projects and run activities in a browser device preview." },
+];
 
 const FILTERS: { id: string; label: string }[] = [
   { id: "all", label: "All Sections" },
@@ -44,7 +51,6 @@ export default function LabsDirectoryPage() {
   const [selectedTag, setSelectedTag] = useState<string>("all");
 
   const categories = useMemo(() => getAllLabCategories(), []);
-
   const filteredCategories = useMemo(() => {
     const query = search.trim().toLowerCase();
     return categories.filter((cat) => {
@@ -65,6 +71,11 @@ export default function LabsDirectoryPage() {
       return matchesSearch && matchesTag;
     });
   }, [categories, search, selectedTag]);
+
+  const visibleStudios =
+    selectedTag === "all" || selectedTag === "systems"
+      ? practiceStudios.filter((studio) => `${studio.name} ${studio.description}`.toLowerCase().includes(search.trim().toLowerCase()))
+      : [];
 
   return (
     <DashboardShell
@@ -156,13 +167,44 @@ export default function LabsDirectoryPage() {
           </div>
         </div>
 
-        {filteredCategories.length === 0 ? (
+        {visibleStudios.length > 0 && (
+          <section aria-labelledby="practice-studios-title" className={styles.studioSection}>
+            <h2 id="practice-studios-title" className={styles.sectionTitle}>
+              Practice workspaces
+            </h2>
+            <div className={styles.grid}>
+              {visibleStudios.map((studio) => (
+                <article key={studio.key} className={styles.card} data-studio={studio.key}>
+                  <div className={styles.cardHead}>
+                    <span className={styles.iconTile}>
+                      <StudioIcon studio={studio.key} size={22} />
+                    </span>
+                    <div className={styles.headText}>
+                      <h3 className={styles.cardTitle}>{studio.name}</h3>
+                    </div>
+                  </div>
+                  <p className={styles.description}>{studio.description}</p>
+                  <div className={styles.cardBottom}>
+                    <div className={styles.cardActions}>
+                      <Link href={studio.href} className={`${styles.btn} ${styles.btnPrimary}`}>
+                        <span>Open workspace</span>
+                        <ArrowRight size={14} className={styles.btnArrow} aria-hidden="true" />
+                      </Link>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {filteredCategories.length === 0 && visibleStudios.length === 0 ? (
           <div className={styles.empty}>
             <Layers size={26} strokeWidth={1.5} aria-hidden="true" />
             <h3>No matching lab sections</h3>
             <p>Try clearing your search query or switching back to All Sections.</p>
           </div>
-        ) : (
+        ) : filteredCategories.length === 0 ? null : (
           <div className={styles.grid}>
             {filteredCategories.map((category) => {
               const badgeText = shortBadge(category.badge);
